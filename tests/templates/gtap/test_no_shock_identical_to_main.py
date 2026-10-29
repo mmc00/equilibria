@@ -39,6 +39,8 @@ import pathlib
 import sys
 import zlib
 
+from equilibria.sources import dataset_dir
+
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 GOLDEN = ROOT / "tests/fixtures/gtap7_3x3_residuos_sin_shock_3f3fe5f.json.gz"
 PUNTO = ROOT / "tests/fixtures/gtap7_3x3_punto_sin_shock_3f3fe5f.json.gz"
@@ -54,7 +56,7 @@ def residuos() -> dict[str, float]:
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
-    d = ROOT / "datasets/gtap7_3x3"
+    d = dataset_dir("gtap7_3x3")
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

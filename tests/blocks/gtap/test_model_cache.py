@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from equilibria.blocks.gtap import model_cache
+from equilibria.sources import dataset_dir
 
 
 class _Closure:
@@ -321,7 +322,7 @@ def test_save_is_noop_when_disabled(monkeypatch, tmp_path):
 
 # ── Integration: the production path, which unit tests cannot reach ─────────────
 
-_DS = pathlib.Path(__file__).resolve().parents[3] / "datasets" / "gtap7_3x3"
+_DS = dataset_dir("gtap7_3x3")
 
 
 def _real_params():

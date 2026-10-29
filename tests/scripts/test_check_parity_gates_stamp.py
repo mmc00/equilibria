@@ -44,3 +44,10 @@ def test_input_trees_cubre_ambos_caminos() -> None:
         "src/equilibria/blocks/gtap_logvalue",
     ):
         assert tree in module.INPUT_TREES, f"{tree} no esta vigilado por el stamp"
+
+
+def test_input_trees_watch_the_datasets() -> None:
+    """Gate results depend on the input datasets: a changed basedata.har must
+    make the stamp stale."""
+    module = _load_module()
+    assert {"data/gtap6", "data/gtap7"} <= set(module.INPUT_TREES)

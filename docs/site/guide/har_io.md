@@ -19,7 +19,7 @@ fixtures use:
 ```python
 from equilibria.babel.har import read_har
 
-data = read_har("datasets/gtap7_3x3/basedata.har")  # dict[name -> HeaderArray]
+data = read_har("data/gtap7/gtap7_3x3/basedata.har")  # dict[name -> HeaderArray]
 vdpp = data["VDPP"]
 print(vdpp.long_name, vdpp.array.shape, vdpp.set_names)
 print(vdpp.set_elements)                 # [[...COMM...], [...REG...]]
@@ -41,7 +41,7 @@ or more headers, and write the result back for the solver to consume.
 ```python
 from equilibria.babel.har import read_har, write_har
 
-data = read_har("datasets/gtap7_3x3/baserate.har")
+data = read_har("data/gtap7/gtap7_3x3/baserate.har")
 
 # 10% uniform bilateral import-tariff shock
 data["rTMS"].array[...] *= 1.10

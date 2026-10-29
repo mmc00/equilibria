@@ -22,6 +22,7 @@ Usage:
 """
 from __future__ import annotations
 
+from equilibria.sources import dataset_dir, has_dataset
 import argparse
 import statistics
 import sys
@@ -59,7 +60,7 @@ def _solve(dataset: str, ifsub: int):
     from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-    d = ROOT / "datasets" / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",
@@ -178,7 +179,7 @@ def main() -> int:
     bad = []
     print(f"{'dataset':14s} {'cells':>7s} {'agree%':>8s} {'medianΔ':>9s}  worst")
     for ds in args.datasets:
-        if not (ROOT / "datasets" / ds / "basedata.har").exists():
+        if not has_dataset(ds):
             print(f"{ds:14s} {'--':>7s} {'skip':>8s} {'--':>9s}  (no dataset HAR)")
             continue
         g1 = ROOT / f"tests/fixtures/gtap7/{ds}/out_gtap_shock_ifsub1.gdx"

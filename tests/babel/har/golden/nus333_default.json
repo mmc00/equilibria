@@ -508,5 +508,5 @@
       }
     }
   },
-  "path": "src/equilibria/templates/reference/gtap/data/nus333/default.prm"
+  "path": "data/gtap7/nus333/default.prm"
 }

@@ -36,7 +36,7 @@ Salida: un `.EXP` nuevo por cada uno, con sufijo `-DIR` (directo), al lado del
 original. No sobreescribe nada.
 
 Uso (en Windows o Mac, no necesita GEMPACK):
-    python scripts/gtap/mk_exp_directos.py datasets/nus333
+    python scripts/gtap/mk_exp_directos.py data/gtap7/nus333
 """
 
 from __future__ import annotations
@@ -44,6 +44,8 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+
+from equilibria.sources import dataset_dir
 
 # El .shk trae el header de dimensiones (`3 3 2  real row_order;`) y despues
 # las filas, con los indices en comentarios `! %1=AGR`. Se parsea eso.
@@ -279,5 +281,5 @@ def main(carpeta: str) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(
-        main(sys.argv[1] if len(sys.argv) > 1 else "datasets/nus333")
+        main(sys.argv[1] if len(sys.argv) > 1 else str(dataset_dir("nus333")))
     )

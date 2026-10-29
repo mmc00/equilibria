@@ -11,6 +11,7 @@ Usage:
         --out-dir /tmp/gtap_nl
 """
 from __future__ import annotations
+from equilibria.sources import dataset_dir
 import argparse
 import base64
 import re
@@ -2248,7 +2249,7 @@ def _run_nl(args) -> dict:
             closure_update["imuv"] = _imuv
         closure_config = contract.closure.model_copy(update=closure_update)
 
-    _har_dir = (ROOT / "datasets" / ds.name) if use_agg else None
+    _har_dir = (dataset_dir(ds.name)) if use_agg else None
     if not args.skip_python:
         py_paths = build_python_nls(
             args.phase, args.out_dir, closure_config,

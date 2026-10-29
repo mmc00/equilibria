@@ -5,6 +5,7 @@ p_gf, betap) that the .nl / residual / warm-start / closure tools take as litera
 """
 from __future__ import annotations
 
+from equilibria.sources import dataset_dir
 from typing import Any, Optional
 
 from pyomo.environ import Param, value
@@ -126,7 +127,7 @@ def _build_gtap7_har_models(dataset: str):
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
-    har = _ROOT / "datasets" / dataset
+    har = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=har / "basedata.har", sets_path=har / "sets.har",

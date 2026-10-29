@@ -16,6 +16,7 @@ Usage:
 Emits one JSON line to stdout; all logs to stderr.
 """
 from __future__ import annotations
+from equilibria.sources import dataset_dir
 
 import argparse
 import contextlib
@@ -32,7 +33,6 @@ _PATH_CAPI = path_capi_src()
 if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI))
 
-DATASETS = ROOT / "datasets"
 # specific factor + the activity that actually uses it (Land→Food); the residual
 # region rres is ROW, EU_28 is the sharpest re-settlement cell.
 LAND_CELL = ("EU_28", "Land")
@@ -46,7 +46,7 @@ def _land_response(dataset: str, base_calibrated: bool, ref_gdx: Path) -> dict:
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-    d = DATASETS / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",
@@ -108,7 +108,7 @@ def _quantity_match(dataset: str, base_calibrated: bool, ref_gdx: Path,
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
     from gempack_reference import Q_TO_VAR, gempack_qty_pct
 
-    d = DATASETS / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har", sets_path=d / "sets.har",

@@ -17,6 +17,7 @@ Usage:
     uv run python scripts/gtap/diag_mp_check_drift.py [--top 30]
 """
 from __future__ import annotations
+from equilibria.sources import dataset_dir
 import argparse
 import sys
 import time
@@ -27,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-DATASET_DIR = ROOT / "datasets" / "gtap7_3x3"
+DATASET_DIR = dataset_dir("gtap7_3x3")
 REF = Path(str(refs_dir() / "gtap7_3x3_altertax_cd" / "out_altertax_ifsub0.gdx"))
 
 

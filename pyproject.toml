@@ -127,11 +127,24 @@ exclude = [
     "/src/equilibria/templates/reference/gtap/comp_neos/",
 ]
 
+# load_bundled reads these in an installed wheel; in a checkout it reads data/.
+[tool.hatch.build.targets.wheel.force-include]
+"data/gtap7/9x10/basedata.har" = "equilibria/_bundled/gtap/9x10/basedata.har"
+"data/gtap7/9x10/sets.har" = "equilibria/_bundled/gtap/9x10/sets.har"
+"data/gtap7/9x10/default.prm" = "equilibria/_bundled/gtap/9x10/default.prm"
+"data/gtap7/nus333/basedata.har" = "equilibria/_bundled/gtap/nus333/basedata.har"
+"data/gtap7/nus333/sets.har" = "equilibria/_bundled/gtap/nus333/sets.har"
+"data/gtap7/nus333/default.prm" = "equilibria/_bundled/gtap/nus333/default.prm"
+"data/gtap7/nus333/baserate.har" = "equilibria/_bundled/gtap/nus333/baserate.har"
+
 [tool.hatch.build.targets.sdist]
 include = [
     "/src",
     "/tests",
     "/docs",
+    # the wheel's force-include reads these (load_bundled)
+    "/data/gtap7/9x10",
+    "/data/gtap7/nus333",
 ]
 
 # ============================================================================

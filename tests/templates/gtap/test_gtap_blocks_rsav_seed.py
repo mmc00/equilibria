@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pytest
 
+from equilibria.sources import dataset_dir
+
 ROOT = Path(__file__).resolve().parents[3]
 for _p in (ROOT / "src", ROOT / "scripts" / "gtap"):
     if str(_p) not in sys.path:
@@ -42,7 +44,7 @@ RTOL = 1e-3
 
 @pytest.fixture(scope="module")
 def _block_model():
-    d = ROOT / "datasets" / DATASET
+    d = dataset_dir(DATASET)
     if not (d / "basedata.har").exists():
         pytest.skip(f"dataset HAR ausente: {DATASET}")
 

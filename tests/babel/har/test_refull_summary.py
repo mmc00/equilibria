@@ -18,9 +18,10 @@ import pytest
 
 from equilibria.babel.har import HeaderArray, read_har
 from equilibria.babel.har.writer import write_har
+from equilibria.sources import dataset_dir
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-FIXTURE = REPO_ROOT / "src/equilibria/templates/reference/gtap/data/9x10/basedata.har"
+FIXTURE = dataset_dir("9x10") / "basedata.har"
 
 
 def _records(path: Path) -> list[bytes]:

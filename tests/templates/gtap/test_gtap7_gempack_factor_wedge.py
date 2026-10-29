@@ -21,8 +21,10 @@ from typing import Any, cast
 
 import pytest
 
+from equilibria.sources import dataset_dir
+
 ROOT = Path(__file__).resolve().parents[3]
-DATA = ROOT / "datasets" / "gtap7_3x3"
+DATA = dataset_dir("gtap7_3x3")
 
 
 def _params():

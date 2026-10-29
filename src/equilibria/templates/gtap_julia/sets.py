@@ -13,10 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from equilibria.babel.har import read_har
-
-# repo root: src/equilibria/templates/gtap_julia/sets.py -> up 4 to worktree root
-_ROOT = Path(__file__).resolve().parents[4]
-_DATASETS = _ROOT / "datasets"
+from equilibria.sources import dataset_dir
 
 # GTAP set header (UPPER) -> Julia set name (lower). Endowment partitions:
 #   ENDW all, ENDS sluggish, ENDM mobile, ENDC capital, ENDF fixed.
@@ -31,10 +28,6 @@ _SET_MAP = {
     "ENDC": "endwc",
     "ENDF": "endwf",
 }
-
-
-def dataset_dir(dataset: str) -> Path:
-    return _DATASETS / dataset
 
 
 def build_sets(dataset: str) -> dict[str, list[str]]:

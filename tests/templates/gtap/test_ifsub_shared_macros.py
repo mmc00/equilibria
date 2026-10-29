@@ -20,6 +20,7 @@ from pyomo.core.expr.visitor import identify_variables
 from pyomo.environ import Constraint
 
 from equilibria.blocks.gtap import _ifsub_macros as mac
+from equilibria.sources import dataset_dir
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -44,7 +45,7 @@ def modelo_3x3():
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_block_model import build_block_model
 
-    d = ROOT / "datasets" / "gtap7_3x3"
+    d = dataset_dir("gtap7_3x3")
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",
@@ -130,7 +131,7 @@ def test_sp_registra_las_instancias(modelo_3x3):
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_block_model import build_block_single_period
 
-    d = ROOT / "datasets" / "gtap7_3x3"
+    d = dataset_dir("gtap7_3x3")
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

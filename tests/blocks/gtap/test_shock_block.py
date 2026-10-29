@@ -10,8 +10,10 @@ import pathlib
 
 import pytest
 
+from equilibria.sources import dataset_dir
+
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-DATASET = ROOT / "datasets" / "gtap7_3x3"
+DATASET = dataset_dir("gtap7_3x3")
 
 
 def _params():

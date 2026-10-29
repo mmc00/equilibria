@@ -18,6 +18,7 @@ After running, submit the .gms to NEOS (solver=PATH, model=MCP) and save the
 returned out.gdx to output/<dataset>_altertax_neos_bundle/out.gdx.
 """
 from __future__ import annotations
+from equilibria.sources import dataset_dir
 import argparse
 import re
 import shutil
@@ -29,7 +30,6 @@ from equilibria._local_refs import cge_babel_dir
 ROOT = Path(__file__).resolve().parents[2]
 UPSTREAM = Path(str(cge_babel_dir() / "standard_gtap_7"))
 GAMS_SYS = "/Library/Frameworks/GAMS.framework/Versions/48/Resources"
-DATASETS_DIR = ROOT / "datasets"
 
 
 def _read(name: str) -> str:
@@ -532,7 +532,7 @@ def main() -> None:
     args = ap.parse_args()
 
     dataset = args.dataset
-    src_gdx = DATASETS_DIR / dataset / "v7_consolidated.gdx"
+    src_gdx = dataset_dir(dataset) / "v7_consolidated.gdx"
     if not src_gdx.exists():
         raise SystemExit(f"v7_consolidated.gdx not found: {src_gdx}")
 
@@ -640,7 +640,7 @@ def main() -> None:
     inject_lines = []
     for _sym in ("FBEP", "FTRV"):
         _blk = _fbep_ftrv_har_as_assignments(
-            DATASETS_DIR / dataset / "basedata.har", _sym, inlined)
+            dataset_dir(dataset) / "basedata.har", _sym, inlined)
         if _blk.strip():
             inject_lines.append(_blk)
             _ncells = _blk.count(" = ")
@@ -658,7 +658,7 @@ def main() -> None:
     # Error 170. Check the comment marker the inliner actually emits, not a
     # declaration line that never exists.
     if "* incpar data" not in prm_block and "* INCPAR data" not in prm_block:
-        prm_har_path = DATASETS_DIR / dataset / "default.prm"
+        prm_har_path = dataset_dir(dataset) / "default.prm"
         if prm_har_path.exists():
             import nl_compare as _nlc
             use_prefix = _nlc._detect_prm_prefix_convention(inlined)

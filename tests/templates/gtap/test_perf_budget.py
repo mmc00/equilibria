@@ -24,6 +24,8 @@ import re
 
 import pytest
 
+from equilibria.sources import dataset_dir
+
 
 def _quieto(fn, *a, **k):
     with (
@@ -108,7 +110,7 @@ def test_las_expresiones_no_se_inflan(ds):
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
-    d = Path(__file__).resolve().parents[3] / "datasets" / ds
+    d = dataset_dir(ds)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

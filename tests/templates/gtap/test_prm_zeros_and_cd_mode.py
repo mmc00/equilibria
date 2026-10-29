@@ -18,7 +18,7 @@ Cubre las tres cosas que el PR #89 cambio y que no tenian test:
 3. El modo CD se decide por el DATO (SUBPAR), como el `%utility%` de GAMS: con
    un .prm CDE ninguna region queda en modo Cobb-Douglas.
 
-Los tests usan `datasets/` del repo, no el nus333 de las notas: lo que se
+Los tests usan `data/` del repo, no el nus333 de las notas: lo que se
 verifica es el MECANISMO (un cero se conserva / se descarta segun se pida), y
 para eso alcanza con construir el caso a mano. Asi no dependen de un fixture
 externo ni de un solver.
@@ -33,16 +33,17 @@ congelaria el comportamiento equivocado; primero hay que arreglar el aviso.
 import pathlib
 import sys
 
+from equilibria.sources import dataset_dir
+
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 import pytest
 
-DATASETS = ROOT / "datasets"
 DATASET = "gtap7_3x3"
 
 
 def _prm_paths(dataset: str = DATASET):
-    d = DATASETS / dataset
+    d = dataset_dir(dataset)
     needed = ["basedata.har", "sets.har", "default.prm", "baserate.har"]
     missing = [n for n in needed if not (d / n).exists()]
     if missing:
@@ -110,7 +111,7 @@ def test_load_from_har_conserva_los_ceros_de_subpar():
     Hay que ESCRIBIR un .prm con SUBPAR=0 y cargarlo por el camino publico:
     `default.prm` es CDE (SUBPAR>0), asi que con o sin keep_zeros da lo mismo y
     la mutacion no se nota. El .prm Cobb-Douglas del libro vive fuera del repo,
-    de modo que se genera acá a partir del de datasets/.
+    de modo que se genera acá a partir del de data/.
     """
     import tempfile
 

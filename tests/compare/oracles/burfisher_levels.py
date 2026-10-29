@@ -30,10 +30,10 @@ import numpy as np
 from gtap7_map_3x3 import GEMPACK_VARS, ROOT, _add_vdfb, load_eq, report, rows_of
 
 from equilibria.babel.har.reader import read_har
+from equilibria.sources import dataset_dir
 
 FIX = ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher"
 EQ = ROOT / "tests" / "compare" / "fixtures"
-NUS333 = ROOT / "datasets"
 
 
 def sl4_levels(path: Path) -> dict[str, dict[tuple[str, tuple[str, ...]], float]]:
@@ -72,7 +72,7 @@ def run(exp: str) -> None:
         with gzip.open(FIX / f"{exp}.sl4.gz", "rb") as src, sl4.open("wb") as dst:
             shutil.copyfileobj(src, dst)
         B = sl4_levels(sl4)
-    _add_vdfb(B, NUS333 / "nus333" / "basedata.har", FIX / f"{exp}.upd")
+    _add_vdfb(B, dataset_dir("nus333") / "basedata.har", FIX / f"{exp}.upd")
     print(f"== {exp}: variables de B con nivel: {len(B) - 1} (+ VDFB)")
     print(f"  sin nivel: {sorted(set(GEMPACK_VARS) - set(B))}")
     eq, xs = load_eq(EQ / f"eq_burfisher_{exp}_levels.json.gz")

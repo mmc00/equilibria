@@ -23,10 +23,11 @@ import sys
 
 import pytest
 
+from equilibria.sources import dataset_dir
+
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-DATASETS = ROOT / "datasets"
 
 
 def _sp_ifsub(dataset: str = "gtap7_3x3"):
@@ -34,7 +35,7 @@ def _sp_ifsub(dataset: str = "gtap7_3x3"):
     from equilibria.templates.gtap.gtap_block_model import build_block_single_period
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
-    d = DATASETS / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

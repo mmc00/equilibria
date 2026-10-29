@@ -19,7 +19,7 @@ una copia dentro de la carpeta de salida.
      GEMSIM, y se re-corren con gemsim el 3x3 tm10 y los 6 datasets capFix
      (3x3, 3x4, 5x5, 10x7, 15x10, 20x41: las filas de la Tabla 2) sobre una
      copia de su carpeta de runs\gempack_matrix. El .prm capFix se rehace desde
-     datasets\<ds>\default.prm con _force_rdlt (cambia solo el int32 de RDLT: el
+     data\gtap7\<ds>\default.prm con _force_rdlt (cambia solo el int32 de RDLT: el
      .prm que escribia write_har no lo lee GEMSIM 11.3). export_sl4_levels.py
      exporta los niveles contra el sl4dump de la corrida SIN parche: una variable
      cuyo % de cambio no coincide se descarta y queda nombrada en
@@ -28,7 +28,7 @@ una copia dentro de la carpeta de salida.
      make_levels_tab.py --uncondensed arma gtapuv7_levels (el gtapv7.tab
      parchado SIN condensar, como el GTAPUV7 de RunGTAP: los .exp fijan y
      shockean variables que la condensacion omite), tablo lo compila para
-     GEMSIM y gemsim corre cada .exp de datasets\nus333 (me8 y tbl813
+     GEMSIM y gemsim corre cada .exp de data\gtap7\nus333 (me8 y tbl813
      con su -dir.exp). Los .exp de Johansen de 1 paso (TBL45A/B/C, TBL64,
      ME4A/B) pasan a Gragg 2-4-6. Deja .sl4, .upd y log por ejercicio en
      5_burfisher\out; los niveles se leen directo del .sl4 en la Mac.
@@ -237,7 +237,7 @@ if ($okTab) {
                 Copy-Item -Destination $dest -Force
             if ($rdlt -ge 0) {
                 $prm = Join-Path $dest "default_$tag.prm"
-                Copy-Item "datasets\$ds\default.prm" $prm -Force
+                Copy-Item "data\gtap7\$ds\default.prm" $prm -Force
                 & uv run python -c "import sys; sys.path.insert(0, 'scripts/gtap'); from pathlib import Path; from run_gempack_matrix import _force_rdlt; _force_rdlt(Path(sys.argv[1]), int(sys.argv[2]))" $prm $rdlt *> (Join-Path $dest "force_rdlt_console.txt")
                 if ($LASTEXITCODE -ne 0) { Result $step $false "fallo _force_rdlt (ver force_rdlt_console.txt)"; continue }
             }
@@ -289,7 +289,7 @@ if ($okTab5) {
 if ($okGss5) {
     $Aux5 = Join-Path $Tab5 "gtapuv7_levels"
     $Pkg = Join-Path $Bf "nus333"
-    Copy-Item "datasets\nus333" $Pkg -Recurse -Force
+    Copy-Item "data\gtap7\nus333" $Pkg -Recurse -Force
     # me8/tbl813: corren sus -dir.exp (rate% traducido); tbl53 usa target%, que solo
     # resuelve la GUI; gtapv7.exp declara el cierre del modelo CONDENSADO.
     $skip = @("me8", "tbl813", "tbl53", "gtapv7")

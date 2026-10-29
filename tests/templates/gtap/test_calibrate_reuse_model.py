@@ -23,6 +23,7 @@ from pyomo.environ import (
     Var,
 )
 
+from equilibria.sources import dataset_dir
 from equilibria.templates.gtap import model_state
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
@@ -89,7 +90,7 @@ def test_restore_deshace_todo_lo_que_hace_el_driver():
 def p3x3():
     from equilibria.templates.gtap import GTAPParameters
 
-    d = ROOT / "datasets" / "gtap7_3x3"
+    d = dataset_dir("gtap7_3x3")
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

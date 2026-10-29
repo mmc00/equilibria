@@ -41,9 +41,10 @@ from pathlib import Path
 
 import pytest
 
+from equilibria.sources import dataset_dir, has_dataset
+
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES_DIR = ROOT / "tests/fixtures/gtap7"
-DATASETS_DIR = ROOT / "datasets"
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
@@ -62,7 +63,7 @@ def _available_datasets() -> list[str]:
         if not d.is_dir():
             continue
         has_fixtures = (d / "gams_base.nl").exists() and (d / "gams_shock.nl").exists()
-        has_data = (DATASETS_DIR / d.name / "basedata.har").exists()
+        has_data = has_dataset(d.name)
         if has_fixtures and has_data:
             result.append(d.name)
     return result
@@ -127,7 +128,7 @@ def test_gtap7_nl_parity(dataset: str, tmp_path: Path) -> None:
     fixture_dir = FIXTURES_DIR / dataset
     if not (fixture_dir / "gams_base.nl").exists():
         pytest.skip(f"no .nl fixtures for {dataset}")
-    har_dir = DATASETS_DIR / dataset
+    har_dir = dataset_dir(dataset)
     closure_config = GTAPClosureConfig(if_sub=False)
 
     # The "check" phase (multi-period altertax CD step) is opt-in per dataset:

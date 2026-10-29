@@ -1,6 +1,6 @@
 # Soluciones GEMPACK de los ejercicios de Burfisher (nus333)
 
-Una corrida por ejercicio de la Tabla 3, sobre `datasets/nus333`, el paquete del libro. Cada `.exp` se anexó tal cual al command file, con su `.prm`, su cierre y su método.
+Una corrida por ejercicio de la Tabla 3, sobre `data/gtap7/nus333`, el paquete del libro. Cada `.exp` se anexó tal cual al command file, con su `.prm`, su cierre y su método.
 
 Corrió en Windows el 2026-09-24 con `tools/gempack-oracle/01-run-all.bat`, de la rama `tools/gempack-oracle-nus333`:
 - GEMPACK Release 12.1.003;

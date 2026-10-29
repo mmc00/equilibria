@@ -17,10 +17,11 @@ from equilibria.compare import (
     compare,
     from_dict,
 )
+from equilibria.sources import dataset_dir
 from tests.compare import _oracle as O
 
 SCRIPT = O.ROOT / "scripts" / "gtap" / "compare_gempack_levels.py"
-BASEDATA = O.ROOT / "datasets" / "gtap7_3x3" / "basedata.har"
+BASEDATA = dataset_dir("gtap7_3x3") / "basedata.har"
 UPDATED = O.ROOT / "tests" / "fixtures" / "gtap7_gempack" / "updated_gtap7_3x3_tm10.har"
 
 pytestmark = pytest.mark.skipif(

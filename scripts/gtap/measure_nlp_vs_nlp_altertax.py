@@ -9,6 +9,7 @@ Usage:
         --dataset gtap7_3x3 --ifsub 1 --gdx output/gtap7_3x3_pure_local_bundle/out_3x3_nlp.gdx
 """
 from __future__ import annotations
+from equilibria.sources import dataset_dir
 import argparse, json, os, sys
 from pathlib import Path
 from equilibria._local_refs import path_capi_src
@@ -20,7 +21,6 @@ _PATH_CAPI = path_capi_src()
 if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI))
 
-DATASETS_DIR = ROOT / "datasets"
 SKIP = {"walras", "ev", "cv", "uh", "u", "ug", "us"}
 RF = {"pfa", "pfy", "pm", "pmcif", "pefob", "pwmg", "pp", "pdp", "pmp",
       "xwmg", "xmgm", "lambdamg", "imptx", "exptx"}
@@ -44,7 +44,7 @@ def solve_and_measure(dataset: str, if_sub: bool, gdx: Path):
     from pyomo.environ import value as V
     from _diff_core import gams_levels, list_populated_vars, split_t
 
-    d = DATASETS_DIR / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(basedata_path=d / "basedata.har", sets_path=d / "sets.har",
                     default_path=d / "default.prm", baserate_path=d / "baserate.har")

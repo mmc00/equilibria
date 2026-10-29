@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from equilibria.sources import dataset_dir
+
 ROOT = Path(__file__).resolve().parents[3]
 DATASET = "gtap7_3x3"
 RESIDUAL_REGION = "ROW"
@@ -28,7 +30,7 @@ def _load_params():
     from equilibria.templates.gtap import GTAPParameters
 
     p = GTAPParameters()
-    d = ROOT / "datasets" / DATASET
+    d = dataset_dir(DATASET)
     p.load_from_har(
         basedata_path=d / "basedata.har",
         sets_path=d / "sets.har",

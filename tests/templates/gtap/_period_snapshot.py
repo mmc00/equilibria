@@ -31,8 +31,10 @@ from typing import Any
 
 from pyomo.environ import Constraint, Expression, Objective, Param, Var
 
+from equilibria.sources import dataset_dir
+
 ROOT = Path(__file__).resolve().parents[3]
-DATASET = ROOT / "datasets" / "gtap7_3x3"
+DATASET = dataset_dir("gtap7_3x3")
 FIXTURE = ROOT / "tests" / "fixtures" / "period_prep_snapshot.json"
 
 # Cada caso: (nombre, mode, if_sub, opciones de build, opciones del driver). La

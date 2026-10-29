@@ -20,6 +20,7 @@ Exit code is non-zero if any equation family exceeds the tolerance — so this c
 a reference before it is trusted (CI or a pre-comparison guard).
 """
 from __future__ import annotations
+from equilibria.sources import dataset_dir
 import argparse
 import math
 import sys
@@ -66,7 +67,7 @@ def _build_model(dataset: str, period: str):
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
-    data_dir = ROOT / "datasets" / dataset
+    data_dir = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=data_dir / "basedata.har",

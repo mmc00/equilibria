@@ -44,6 +44,7 @@ nothing to fix) | dirty (GOES = a differing equation, see violations = residual 
 error (solve crash). exit 0/1/2.
 """
 from __future__ import annotations
+from equilibria.sources import dataset_dir
 import argparse
 import copy
 import statistics
@@ -146,7 +147,7 @@ def run_seed_and_solve(dataset: str, gdx_path: Path, period: str, top: int):
     from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
 
     run_gtap = _build_run_gtap()
-    data_dir = ROOT / "datasets" / dataset
+    data_dir = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(basedata_path=data_dir / "basedata.har", sets_path=data_dir / "sets.har",
                     default_path=data_dir / "default.prm", baserate_path=data_dir / "baserate.har")
@@ -326,7 +327,7 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
     from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-    data_dir = ROOT / "datasets" / dataset
+    data_dir = dataset_dir(dataset)
 
     def _load_params():
         p = GTAPParameters()

@@ -21,6 +21,7 @@ import pytest
 
 from equilibria.babel.har import HarWriter, read_har, write_har
 from equilibria.babel.har.symbols import HeaderArray
+from equilibria.sources import dataset_dir
 
 harpy = pytest.importorskip(
     "harpy",
@@ -28,7 +29,7 @@ harpy = pytest.importorskip(
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-NUS333 = REPO_ROOT / "src/equilibria/templates/reference/gtap/data/nus333"
+NUS333 = dataset_dir("nus333")
 
 
 def test_harpy_reads_writer_refull_with_named_sets(tmp_path: Path):

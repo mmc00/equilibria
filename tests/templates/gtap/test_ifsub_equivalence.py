@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+from equilibria.sources import dataset_dir
+
 # needs_gdxdump: estos tests leen el GDX de referencia con gdxdump; sin el
 # binario fallaban con FileNotFoundError en vez de saltarse.
 pytestmark = [pytest.mark.integration, pytest.mark.needs_gdxdump]
@@ -35,7 +37,7 @@ FLOOR = 0.90
 def test_ifsub_primary_block_consistent(dataset):
     from verify_ifsub_equivalence import compare_primary_across_modes
 
-    d = ROOT / "datasets" / dataset / "basedata.har"
+    d = dataset_dir(dataset) / "basedata.har"
     g1 = ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub1.gdx"
     g0 = ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub0.gdx"
     if not (d.exists() and g1.exists() and g0.exists()):

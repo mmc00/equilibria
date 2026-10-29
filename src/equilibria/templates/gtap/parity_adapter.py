@@ -7,17 +7,15 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from equilibria.sources import dataset_dir
+
 _ROOT = Path(__file__).resolve().parents[4]
 _SCRIPTS_GTAP = _ROOT / "scripts" / "gtap"
 if str(_SCRIPTS_GTAP) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_GTAP))
 
-# HAR datasets for gtap7_* (relative to _ROOT)
-_DATASET_HAR = {
-    "gtap7_3x3": "datasets/gtap7_3x3",
-    "gtap7_3x4": "datasets/gtap7_3x4",
-    "gtap7_5x5": "datasets/gtap7_5x5",
-}
+# gtap7_* datasets loaded from HAR (their folder comes from dataset_dir)
+_DATASET_HAR = ("gtap7_3x3", "gtap7_3x4", "gtap7_5x5")
 
 
 def _load_run_gtap():
@@ -43,7 +41,7 @@ def _load_params_gdx(dataset: str, gdx_rel: str):
 def _load_params_har(dataset: str):
     from equilibria.templates.gtap import GTAPParameters
 
-    har_dir = _ROOT / _DATASET_HAR[dataset]
+    har_dir = dataset_dir(dataset)
     params = GTAPParameters()
     params.load_from_har(
         basedata_path=har_dir / "basedata.har",

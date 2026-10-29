@@ -14,10 +14,10 @@ import numpy as np
 import pytest
 
 from equilibria.babel.har import HarWriter, read_har, write_har
+from equilibria.sources import dataset_dir
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DATA = REPO_ROOT / "src/equilibria/templates/reference/gtap/data"
-NUS333 = DATA / "nus333"
+NUS333 = dataset_dir("nus333")
 
 
 # ── E2E-1: GTAP loader round-trip ─────────────────────────────────────────────

@@ -13,6 +13,8 @@ import sys
 import time
 from pathlib import Path
 
+from equilibria.sources import dataset_dir
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
@@ -26,13 +28,13 @@ _ENV = {
     "GTAP_GATES_SKIP": "1", "EQUILIBRIA_GTAP_GMIN": "1e-9",
     "EQUILIBRIA_GTAP_TR_RELTOL": "1e-6", "EQUILIBRIA_SEED_CACHE_DISABLE": "1",
 }
-DATA = ROOT / "datasets" / "gtap7_15x10"
+DATA = dataset_dir("gtap7_15x10")
 
 
 def _run(reuse):
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_block_model import solve_block_model
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap_sparse.multiperiod import build_sparse_model_mp
 
     for k, v in _ENV.items():

@@ -23,6 +23,8 @@ import sys
 
 import pytest
 
+from equilibria.sources import dataset_dir, has_dataset
+
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
@@ -30,7 +32,6 @@ sys.path.insert(0, str(ROOT / "scripts/gtap"))
 np = pytest.importorskip("numpy")
 pytest.importorskip("pyomo.contrib.pynumero.interfaces.pyomo_nlp")
 
-DATASETS_DIR = ROOT / "datasets"
 # The rows build_equations_fisher rebuilds across periods, plus eq_rgdpmp, which
 # carries the same wide-sum-under-a-root shape via _mqgdp.
 FISHER_ROWS = ("eq_pwfact", "eq_pfact", "eq_pabs", "eq_rgdpmp")
@@ -70,7 +71,7 @@ def _build_mp(dataset: str):
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
 
-    d = DATASETS_DIR / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",
@@ -97,7 +98,7 @@ def _build_mp(dataset: str):
 @pytest.mark.parametrize("dataset", ["gtap7_3x3", "gtap7_5x5"])
 def test_fisher_rows_exist(dataset):
     """Guard the measurement itself: renaming a row would make the density test vacuous."""
-    if not (DATASETS_DIR / dataset / "basedata.har").exists():
+    if not has_dataset(dataset):
         pytest.skip(f"{dataset} not shipped")
     m = _build_mp(dataset)
     for name in FISHER_ROWS:
@@ -114,7 +115,7 @@ def test_fisher_hessian_grows_subquadratically():
     costs. Measured before the fix, eq_pwfact grew 7.6x from 5x5 to 10x7.
     """
     for ds in ("gtap7_3x3", "gtap7_5x5"):
-        if not (DATASETS_DIR / ds / "basedata.har").exists():
+        if not has_dataset(ds):
             pytest.skip(f"{ds} not shipped")
 
     small = _hessian_nnz_by_equation(_build_mp("gtap7_3x3"))

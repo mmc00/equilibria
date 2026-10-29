@@ -35,13 +35,13 @@ from pathlib import Path
 import pytest
 
 from equilibria._local_refs import path_capi_src
+from equilibria.sources import dataset_dir, has_dataset
 
 # needs_gdxdump: estos tests leen el GDX de referencia con gdxdump; sin el
 # binario fallaban con FileNotFoundError en vez de saltarse.
 pytestmark = pytest.mark.needs_gdxdump
 
 ROOT = Path(__file__).resolve().parents[3]
-DATASETS_DIR = ROOT / "datasets"
 FIXTURES_DIR = ROOT / "tests/fixtures/gtap7"
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
@@ -151,7 +151,7 @@ def _solve_and_match(dataset: str, if_sub: bool, period: str = "shock"):
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     ref = _fixture_gdx(dataset, if_sub)
-    d = DATASETS_DIR / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",
@@ -244,7 +244,7 @@ def test_gtap_mp_shock_matches_gams_3x3():
     shock match% floor."""
     dataset = "gtap7_3x3"
     if_sub = False
-    if not (DATASETS_DIR / dataset / "basedata.har").exists():
+    if not has_dataset(dataset):
         pytest.skip(f"dataset HAR missing for {dataset}")
     ref = _fixture_gdx(dataset, if_sub)
     if not ref.exists():

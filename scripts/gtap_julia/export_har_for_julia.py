@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 
 from equilibria.babel.har import read_har
+from equilibria.sources import dataset_dir
 
 # Julia header (lower) -> our HAR header (UPPER). Data + parameters.
 _DATA = [
@@ -36,11 +37,7 @@ _SETS = {
 
 
 def _root(dataset: str) -> Path:
-    here = Path(__file__).resolve()
-    for p in here.parents:
-        if (p / "datasets").is_dir():
-            return p / "datasets" / dataset
-    raise FileNotFoundError("datasets/ not found")
+    return dataset_dir(dataset)
 
 
 def _dump_har(har, headers: list[str], out: Path) -> None:

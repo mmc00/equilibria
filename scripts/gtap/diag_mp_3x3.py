@@ -6,6 +6,7 @@ solves via solve_multiperiod, then compares shock-period vars against GAMS.
 Gate: shock code==1 AND residual<1e-6 AND match>=96.80%
 """
 from __future__ import annotations
+from equilibria.sources import dataset_dir
 import argparse
 import sys
 import time
@@ -30,7 +31,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "--dataset", default="gtap7_3x3",
-        help="Dataset name under datasets/ (e.g. gtap7_3x3, gtap7_5x5, gtap7_10x7). "
+        help="Dataset name under data/gtap7/ (e.g. gtap7_3x3, gtap7_5x5, gtap7_10x7). "
              "The GAMS reference is read from "
              "equilibria_refs/<dataset>_altertax_cd/out_altertax_ifsub0.gdx.",
     )
@@ -44,7 +45,7 @@ def main():
     skip_base_solve = not args.base_solve
 
     global DATASET_DIR, REF
-    DATASET_DIR = ROOT / "datasets" / args.dataset
+    DATASET_DIR = dataset_dir(args.dataset)
     REF = REFS_ROOT / f"{args.dataset}_altertax_cd" / "out_altertax_ifsub0.gdx"
     print(f"=== dataset={args.dataset}  ref={REF} ===")
 

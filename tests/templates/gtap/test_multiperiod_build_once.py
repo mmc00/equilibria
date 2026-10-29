@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from pyomo.environ import Constraint
 
+from equilibria.sources import dataset_dir
 from equilibria.templates.gtap import GTAPParameters
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 from equilibria.templates.gtap.gtap_model_multiperiod import (
@@ -22,7 +23,7 @@ from equilibria.templates.gtap.gtap_model_multiperiod import (
     GTAPMultiPeriodModel,
 )
 
-DATA = Path("datasets/gtap7_10x7")
+DATA = dataset_dir("gtap7_10x7")
 # Bumped from (37505, ec3e426d49a094cb) when build_equations_fisher started naming its
 # wide cross-period sums with auxiliary variables (+133 defining rows, and the four
 # Fisher rows now read those variables instead of the sums). The algebra is unchanged;

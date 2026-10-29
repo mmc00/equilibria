@@ -187,6 +187,36 @@ def reference(
     raise SourceError(f"{asked}: {what}; candidates:\n  {listed}")
 
 
+def _data_folders(dataset: str, root: Path) -> tuple[list[Path], list[SourceRecord]]:
+    data = [r for r in iter_sources(root) if r.kind == "data"]
+    return [r.path for r in data if r.dataset == dataset], data
+
+
+def dataset_dir(dataset: str, *, root: Path = DATA_ROOT) -> Path:
+    """The one ``kind: data`` folder of ``dataset``.
+
+    No folder, or more than one, is an error that names what exists.
+    """
+    matches, data = _data_folders(dataset, root)
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        known = sorted({str(r.dataset) for r in data})
+        raise SourceError(f"no data folder for dataset {dataset!r}; known: {known}")
+    listed = "\n  ".join(str(p) for p in matches)
+    raise SourceError(
+        f"{len(matches)} data folders for dataset {dataset!r}:\n  {listed}"
+    )
+
+
+def has_dataset(dataset: str, *, root: Path = DATA_ROOT) -> bool:
+    """Whether ``dataset`` has a data folder; two folders is still an error."""
+    matches, _ = _data_folders(dataset, root)
+    if len(matches) > 1:
+        dataset_dir(dataset, root=root)
+    return bool(matches)
+
+
 _EXEMPT = frozenset({SOURCE_FILE, "README.md"})
 
 

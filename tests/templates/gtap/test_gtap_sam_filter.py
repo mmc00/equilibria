@@ -11,6 +11,8 @@ import dataclasses
 
 import pytest
 
+from equilibria.sources import dataset_dir
+
 
 def test_filter_config_defaults():
     from equilibria.templates.gtap.gtap_sam_filter import FilterConfig
@@ -57,7 +59,7 @@ def _load_10x7():
 
     from equilibria.templates.gtap import GTAPParameters
 
-    D = Path("datasets/gtap7_10x7")
+    D = dataset_dir("gtap7_10x7")
     if not (D / "basedata.har").exists():
         pytest.skip("gtap7_10x7 dataset not present")
     p = GTAPParameters()
@@ -140,7 +142,7 @@ def test_load_from_har_default_off_unchanged():
 
     from equilibria.templates.gtap import GTAPParameters
 
-    D = Path("datasets/gtap7_3x3")
+    D = dataset_dir("gtap7_3x3")
     if not (D / "basedata.har").exists():
         pytest.skip("gtap7_3x3 dataset not present")
 

@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 
 from equilibria._local_refs import path_capi_src
+from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[3]
 for _p in (ROOT / "src", ROOT / "scripts" / "gtap"):
@@ -45,7 +46,7 @@ def _load_params():
     from equilibria.templates.gtap import GTAPParameters
 
     p = GTAPParameters()
-    d = ROOT / "datasets" / DATASET
+    d = dataset_dir(DATASET)
     p.load_from_har(
         basedata_path=d / "basedata.har",
         sets_path=d / "sets.har",

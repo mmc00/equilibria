@@ -13,10 +13,12 @@ from pathlib import Path
 
 import pytest
 
+from equilibria.sources import dataset_dir
+
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
-DATA = Path("datasets/gtap7_15x10")
+DATA = dataset_dir("gtap7_15x10")
 
 _SOLVE_ENV = {
     "EQUILIBRIA_GTAP_SOLVE_NLP": "1",

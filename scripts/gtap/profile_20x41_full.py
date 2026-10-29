@@ -23,6 +23,8 @@ import sys
 import time
 from pathlib import Path
 
+from equilibria.sources import dataset_dir
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
@@ -49,11 +51,11 @@ class _Phase:
 
 def run(dataset):
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_block_model import solve_block_model
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap_sparse.multiperiod import build_sparse_model_mp
 
-    d = ROOT / "datasets" / dataset
+    d = dataset_dir(dataset)
     gdx = ROOT / "tests/fixtures/gtap7" / dataset / "out_gtap_shock_ifsub0.gdx"
 
     with _Phase("load_params"):

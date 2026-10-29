@@ -26,8 +26,8 @@ itself carries benign domain "violations" (evfb's endowment labels sit under the
 Usage:
   PYTHONPATH=<gams>/GMSPython/lib/python3.12/site-packages \
     uv run --no-project python scripts/gtap/build_v7_processed_from_raw.py \
-      --raw datasets/gtap7_15x10/v7_consolidated.gdx \
-      --prm datasets/gtap7_15x10/default.prm \
+      --raw data/gtap7/gtap7_15x10/v7_consolidated.gdx \
+      --prm data/gtap7/gtap7_15x10/default.prm \
       --out /tmp/v7_15x10_processed.gdx
 
 Then swap it into the dataset (back up the RAW first), build+solve the bundle,

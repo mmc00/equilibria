@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 
 from equilibria._local_refs import path_capi_src
+from equilibria.sources import dataset_dir
 
 pytestmark = pytest.mark.integration
 
@@ -62,7 +63,7 @@ def _solve(mode: str, ifsub: int, gdx: Path):
     from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-    d = ROOT / "datasets" / DATASET
+    d = dataset_dir(DATASET)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",
@@ -214,7 +215,7 @@ def test_table1_3x3_keeps_its_solution():
         levels,
         xscale,
         GEMPACK / f"sl4levels6_{tag}.har",
-        ROOT / f"datasets/{DATASET}/basedata.har",
+        dataset_dir(DATASET) / "basedata.har",
         GEMPACK / f"updated_{tag}.har",
     )
     got = {

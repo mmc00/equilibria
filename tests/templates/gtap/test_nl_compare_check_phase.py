@@ -26,8 +26,9 @@ from pathlib import Path
 
 import pytest
 
+from equilibria.sources import dataset_dir
+
 ROOT = Path(__file__).resolve().parents[3]
-DATASETS_DIR = ROOT / "datasets"
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
@@ -36,7 +37,7 @@ DATASET = "gtap7_3x3"
 
 @pytest.fixture
 def har_dir() -> Path:
-    d = DATASETS_DIR / DATASET
+    d = dataset_dir(DATASET)
     if not (d / "basedata.har").exists():
         pytest.skip(f"HAR dataset {DATASET!r} not available at {d}")
     return d

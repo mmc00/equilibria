@@ -17,18 +17,22 @@ import importlib.util
 import sys
 from pathlib import Path
 
+from equilibria.sources import has_dataset
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "tests/templates/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
 from equilibria._local_refs import path_capi_src  # noqa: E402
+
 # Local PATH/NLP toolchain lives outside the venv (absent on CI → falls back to
 # floors-only rendering).
 _PATH_CAPI_SRC = path_capi_src()
 if _PATH_CAPI_SRC.exists() and str(_PATH_CAPI_SRC) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI_SRC))
 
-from coverage_matrix import nlp_rows, mcp_rows  # noqa: E402
+from coverage_matrix import mcp_rows, nlp_rows  # noqa: E402
+
 
 # Sphinx copies _static/ verbatim to the built site; the doc links to it as
 # ../_static/gtap7_<gate>_matrix.html. (A raw .html under guide/ is NOT served.)
@@ -40,7 +44,7 @@ def _doc_path(gate):
 # clean NEOS altertax fixtures. Each gate imports its own solve+measure from its test.
 def _gate_config(gate):
     if gate == "mcp":
-        from test_gtap7_mcp_parity import _solve_and_measure, _fixture_gdx
+        from test_gtap7_mcp_parity import _fixture_gdx, _solve_and_measure
         return {
             # against-GAMS page: exclude reference="gempack" rows (sibling page).
             "rows": [r for r in mcp_rows() if r.reference == "gams"],
@@ -52,7 +56,7 @@ def _gate_config(gate):
                      "is 99%+ everywhere — the 89–97 the NLP gate reads is the "
                      "mis-converged NLP reference, not the model."),
         }
-    from test_gtap7_nlp_parity import _solve_and_measure, _fixture_gdx
+    from test_gtap7_nlp_parity import _fixture_gdx, _solve_and_measure
     return {
         "rows": nlp_rows(),
         "gdx": lambda r: _fixture_gdx(r.dataset, r.mode, r.ifsub),
@@ -75,7 +79,7 @@ def _measure_all(cfg):
     for r in cfg["rows"]:
         key = (r.dataset, r.mode, r.ifsub)
         gdx = cfg["gdx"](r)
-        if not gdx.exists() or not (ROOT / "datasets" / r.dataset / "basedata.har").exists():
+        if not gdx.exists() or not has_dataset(r.dataset):
             results[key] = None
             continue
         try:

@@ -15,6 +15,8 @@ import sys
 import time
 from pathlib import Path
 
+from equilibria.sources import dataset_dir
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -27,7 +29,7 @@ from equilibria.templates.gtap.gtap_model_multiperiod import (  # noqa: E402
 
 
 def _load(dataset):
-    d = ROOT / "datasets" / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

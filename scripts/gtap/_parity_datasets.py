@@ -24,6 +24,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
+from equilibria.sources import dataset_dir
+
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "src/equilibria/templates/reference/gtap/data"
 
@@ -203,15 +205,14 @@ DATASETS: dict[str, ParityDataset] = {
     ),
 }
 
-# GTAPAgg v7 aggregations under datasets/ — registered as comp-stat (HAR loader).
+# GTAPAgg v7 aggregations under data/gtap7/ — registered as comp-stat (HAR loader).
 # No GAMS reference GDX, so residual / nl_compare are N/A; only the closure diff
 # (partition inspection) runs. agg_gdx points at the GTAPAgg basedata.gdx for any
 # future nl_compare _agg use. The comp-stat closure may not be square for these
 # (diff_closure prints the DOF gap).
-_GTAPAGG_DIR = ROOT / "datasets"
 for _name in ("gtap7_3x3", "gtap7_3x4", "gtap7_5x5", "gtap7_10x7",
               "gtap7_15x10", "gtap7_20x41"):
-    _dir = _GTAPAGG_DIR / _name
+    _dir = dataset_dir(_name)
     if (_dir / "basedata.har").exists():
         # nl_compare's GAMS getData (_agg) needs a CONSOLIDATED GDX (sets + all
         # params in one file). Use v7_consolidated.gdx when present; otherwise

@@ -8,6 +8,7 @@ import sys
 import pytest
 
 from equilibria.compare import Mapping, compare, from_har, from_pyomo
+from equilibria.sources import dataset_dir
 from tests.compare import _oracle as O
 
 INSCALE_WHY = "inScale: el modelo de equilibria no lo guarda como parametro"
@@ -58,7 +59,7 @@ def test_gempack_contra_el_modelo_de_equilibria_resuelto_en_niveles():
 
     m, code = _solve_shock("gtap7_3x3", 0)
     assert code == 1
-    d = O.ROOT / "datasets" / "gtap7_3x3"
+    d = dataset_dir("gtap7_3x3")
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

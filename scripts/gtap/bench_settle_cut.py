@@ -16,19 +16,21 @@ import sys
 import time
 from pathlib import Path
 
+from equilibria.sources import dataset_dir
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 os.environ["EQUILIBRIA_SEED_CACHE_DISABLE"] = "1"
 
+import equilibria.templates.gtap.gtap_block_model as _bm  # noqa: E402
 from equilibria.blocks.gtap.factor import FactorBlock  # noqa: E402
 from equilibria.templates.gtap import GTAPParameters  # noqa: E402
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig  # noqa: E402
-import equilibria.templates.gtap.gtap_block_model as _bm  # noqa: E402
 
 
 def _load(dataset):
-    d = ROOT / "datasets" / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",
