@@ -23,10 +23,11 @@ import numpy as np
 import pytest
 
 from equilibria.babel.har.reader import read_har
+from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "gtap" / "run_gempack_matrix.py"
-PRM = ROOT / "datasets" / "gtap7_20x41" / "default.prm"
+PRM = dataset_dir("gtap7_20x41") / "default.prm"
 ORACLE = (
     ROOT
     / "tests"
@@ -35,7 +36,7 @@ ORACLE = (
     / "default_gtap7_20x41_rdlt0_windows.prm"
 )
 
-pytestmark = pytest.mark.skipif(not PRM.exists(), reason="falta datasets/gtap7_20x41")
+pytestmark = pytest.mark.skipif(not PRM.exists(), reason="falta data/gtap7/gtap7_20x41")
 
 
 def _load_module() -> Any:

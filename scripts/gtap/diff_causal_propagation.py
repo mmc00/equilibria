@@ -38,6 +38,7 @@ Usage:
   uv run python scripts/gtap/diff_causal_propagation.py --dataset gtap7_3x3 --period shock
 """
 from __future__ import annotations
+from equilibria.sources import dataset_dir
 import argparse
 import copy
 import sys
@@ -76,7 +77,7 @@ def run_propagation_scan(dataset: str, gdx_path: Path, period: str, delta: float
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
-    data_dir = ROOT / "datasets" / dataset
+    data_dir = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(basedata_path=data_dir / "basedata.har", sets_path=data_dir / "sets.har",
                     default_path=data_dir / "default.prm", baserate_path=data_dir / "baserate.har")

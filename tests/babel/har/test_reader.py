@@ -21,10 +21,11 @@ import pytest
 
 from equilibria.babel.har import HeaderArray, get_header_names, read_har
 from equilibria.babel.har.reader import read_header_array
+from equilibria.sources import dataset_dir
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-NUS333 = REPO_ROOT / "src/equilibria/templates/reference/gtap/data/nus333"
-NINEX10 = REPO_ROOT / "src/equilibria/templates/reference/gtap/data/9x10"
+NUS333 = dataset_dir("nus333")
+NINEX10 = dataset_dir("9x10")
 
 NUS333_BASE = NUS333 / "basedata.har"
 NUS333_SETS = NUS333 / "sets.har"

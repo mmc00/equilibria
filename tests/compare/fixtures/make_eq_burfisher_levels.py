@@ -6,7 +6,7 @@ shocks y el cierre de la Tabla 3) y guarda con ``compare_gempack_levels.py``
 (``model_levels`` + ``save_eq_json``); ``xscale`` sale de los parametros del ejercicio.
 No usa ``equilibria.compare``.
 
-Uso (desde la raiz, con PATH; el paquete del libro es ``datasets/nus333``)::
+Uso (desde la raiz, con PATH; el paquete del libro es ``data/gtap7/nus333``)::
 
     PYTHONPATH=src:. python tests/compare/fixtures/make_eq_burfisher_levels.py TBL46A
 """

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from equilibria.compare import Mapping, compare, from_dict, from_gdx
+from equilibria.sources import dataset_dir
 from tests.compare import _oracle as O
 
 pytestmark = pytest.mark.skipif(
@@ -58,7 +59,7 @@ def test_gams_contra_el_modelo_de_equilibria_resuelto():
         sys.path.insert(0, src)
     from equilibria.templates.gtap import GTAPParameters
 
-    d = O.ROOT / "datasets" / "gtap7_3x3"
+    d = dataset_dir("gtap7_3x3")
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

@@ -31,6 +31,7 @@ Usage:
         --dataset gtap7_3x3 --ifsub 1
 """
 from __future__ import annotations
+from equilibria.sources import dataset_dir
 
 import argparse
 import re
@@ -43,7 +44,6 @@ import build_gtap7_altertax_neos_bundle as alt
 
 ROOT = Path(__file__).resolve().parents[2]
 UPSTREAM = alt.UPSTREAM
-DATASETS_DIR = ROOT / "datasets"
 
 
 def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10) -> str:
@@ -272,7 +272,7 @@ def main() -> None:
 
     dataset = args.dataset
     ifsub = args.ifsub
-    src_gdx = DATASETS_DIR / dataset / "v7_consolidated.gdx"
+    src_gdx = dataset_dir(dataset) / "v7_consolidated.gdx"
     if not src_gdx.exists():
         raise SystemExit(f"v7_consolidated.gdx not found: {src_gdx}")
 
@@ -434,7 +434,7 @@ def main() -> None:
     # wrong convention hard-fails GAMS Error 170 at compile. Detect from the
     # already-built `inlined` text itself rather than assuming.
     if "* incpar data" not in prm_block and "* INCPAR data" not in prm_block:
-        prm_har_path = DATASETS_DIR / dataset / "default.prm"
+        prm_har_path = dataset_dir(dataset) / "default.prm"
         if prm_har_path.exists():
             import nl_compare as _nlc
             use_prefix = _nlc._detect_prm_prefix_convention(inlined)
@@ -470,7 +470,7 @@ def main() -> None:
         if f"* {_sym} data" in inlined or f"\n{_sym}(" in inlined:
             continue  # already present (from the v7 via the inliner)
         _blk = _fbep_ftrv_har_as_assignments(
-            DATASETS_DIR / dataset / "basedata.har", _sym, inlined)
+            dataset_dir(dataset) / "basedata.har", _sym, inlined)
         if _blk.strip():
             prm_block += "\n" + _blk
             _ncells = _blk.count(" = ")

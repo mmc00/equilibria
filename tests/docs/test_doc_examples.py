@@ -6,7 +6,7 @@ pep_quickstart 0/7, gtap_quickstart 1/6 (el paso 2 armaba el monolito), README
 
 Cada página del sitio (``docs/site/guide/*.md``) y el README corre sus bloques
 ```python en orden, en un solo proceso (como los ejecutaría alguien siguiendo la
-página), desde un directorio temporal con ``datasets/`` y ``tests/`` del repo a
+página), desde un directorio temporal con ``data/`` y ``tests/`` del repo a
 mano, para que lo que escriben los ejemplos no ensucie el árbol. Una página nueva
 entra sola; las que necesitan un solver lo declaran en ``REQUIERE``.
 
@@ -76,7 +76,7 @@ def test_requiere_nombra_paginas_que_existen() -> None:
 
 @pytest.mark.parametrize("pagina", _casos())
 def test_los_ejemplos_de_la_pagina_corren(pagina: Path, tmp_path: Path) -> None:
-    for carpeta in ("datasets", "tests"):
+    for carpeta in ("data", "tests"):
         (tmp_path / carpeta).symlink_to(ROOT / carpeta, target_is_directory=True)
     script = tmp_path / "ejemplos.py"
     script.write_text(_script(pagina), encoding="utf-8")

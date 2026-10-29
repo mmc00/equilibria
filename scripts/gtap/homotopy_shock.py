@@ -28,6 +28,7 @@ Usage:
         --gdx /path/to/out_altertax_ifsub0.gdx --ramp-steps 30 --cleanup-steps 5
 """
 from __future__ import annotations
+from equilibria.sources import dataset_dir
 import argparse, copy, sys
 from pathlib import Path
 
@@ -59,7 +60,7 @@ def run_homotopy_shock(dataset: str, gdx_path: Path, ramp_steps: int,
 
     run_gtap = _build_run_gtap()
 
-    data_dir = ROOT / "datasets" / dataset
+    data_dir = dataset_dir(dataset)
     p_b_raw = GTAPParameters()
     p_b_raw.load_from_har(basedata_path=data_dir / "basedata.har", sets_path=data_dir / "sets.har",
                           default_path=data_dir / "default.prm", baserate_path=data_dir / "baserate.har")

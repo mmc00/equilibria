@@ -2,6 +2,7 @@
 shock-period variable values to a GAMS .gms that only DECLARES the data and
 execute_unloads it to a GDX — GAMS writes the GDX (no solve, fast). Read both GDXs
 with equilibria's reader afterwards to diff."""
+from equilibria.sources import dataset_dir
 import sys, os
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
@@ -23,7 +24,7 @@ from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 DATASET = sys.argv[1] if len(sys.argv) > 1 else "gtap7_3x3"
 _bundle = {"gtap7_3x3": "out_3x3_nlp.gdx", "gtap7_5x5": "out_5x5_nlp.gdx", "gtap7_10x7": "out_10x7_nlp.gdx", "gtap7_15x10": "out_15x10_nlp.gdx"}.get(DATASET)
 gdx_ref = ROOT / f"output/{DATASET}_pure_local_bundle/{_bundle}"
-d = ROOT / "datasets" / DATASET
+d = dataset_dir(DATASET)
 p = GTAPParameters()
 p.load_from_har(basedata_path=d/"basedata.har", sets_path=d/"sets.har", default_path=d/"default.prm", baserate_path=d/"baserate.har")
 rr = list(p.sets.r)[-1]

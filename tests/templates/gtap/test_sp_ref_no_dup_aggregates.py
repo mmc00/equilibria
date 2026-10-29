@@ -19,11 +19,12 @@ xs == xds + xet— y el gate MCP de 15x10 pure ifSUB=1 cae de >=99% a 87,00%.
 import pathlib
 import sys
 
+from equilibria.sources import dataset_dir
+
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 import pytest
 
-DATASETS = ROOT / "datasets"
 # Esta lista se mantiene APARTE a proposito, sin importar FISHER_AUX_EQS de
 # blocks/gtap/closure.py: si el test importara la misma constante que usa el
 # codigo, comprobaria que el codigo es coherente consigo mismo (tautologia) y
@@ -47,7 +48,7 @@ def test_sp_reference_has_no_duplicate_fisher_aggregates(dataset, if_sub, monkey
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_multiperiod_driver import _build_sp_reference
 
-    d = DATASETS / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

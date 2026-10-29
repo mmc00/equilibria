@@ -16,7 +16,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
-DATA = Path("datasets/gtap7_15x10")
+DATA = Path("data/gtap7/gtap7_15x10")
 
 _SOLVE_ENV = {
     "EQUILIBRIA_GTAP_SOLVE_NLP": "1",

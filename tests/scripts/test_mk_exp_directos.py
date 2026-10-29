@@ -16,9 +16,11 @@ from typing import Any
 
 import pytest
 
+from equilibria.sources import dataset_dir
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "gtap" / "mk_exp_directos.py"
-PKG = ROOT / "datasets" / "nus333"
+PKG = dataset_dir("nus333")
 LOGS = ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher"
 
 

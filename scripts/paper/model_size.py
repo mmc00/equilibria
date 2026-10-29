@@ -12,7 +12,7 @@ from equilibria.templates.gtap.gtap_block_model import (
 )
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
-d = Path("datasets/gtap7_3x3")
+d = Path("data/gtap7/gtap7_3x3")
 p = GTAPParameters()
 p.load_from_har(
     basedata_path=d / "basedata.har",

@@ -12,6 +12,7 @@ Run (local only — needs the NLP solve toolchain + dataset HARs):
 """
 from __future__ import annotations
 
+from equilibria.sources import has_dataset
 import argparse
 import importlib.util
 import sys
@@ -75,7 +76,7 @@ def _measure_all(cfg):
     for r in cfg["rows"]:
         key = (r.dataset, r.mode, r.ifsub)
         gdx = cfg["gdx"](r)
-        if not gdx.exists() or not (ROOT / "datasets" / r.dataset / "basedata.har").exists():
+        if not gdx.exists() or not has_dataset(r.dataset):
             results[key] = None
             continue
         try:

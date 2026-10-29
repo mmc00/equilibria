@@ -40,9 +40,10 @@ from pathlib import Path
 
 import pytest
 
+from equilibria.sources import dataset_dir
+
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES_DIR = ROOT / "tests/fixtures/gtap7"
-DATASETS_DIR = ROOT / "datasets"
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
@@ -75,7 +76,7 @@ def test_blocks_nl_parity_base(dataset: str, tmp_path: Path) -> None:
     gams_nl_path = fixture_dir / "gams_base.nl"
     if not gams_nl_path.exists():
         pytest.skip(f"no hay fixture .nl para {dataset}")
-    har_dir = DATASETS_DIR / dataset
+    har_dir = dataset_dir(dataset)
     if not (har_dir / "basedata.har").exists():
         pytest.skip(f"no hay datos HAR para {dataset}")
 

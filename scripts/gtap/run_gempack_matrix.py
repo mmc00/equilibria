@@ -1,7 +1,7 @@
 """Produce the RunGTAP (GEMPACK/GTAPv7) post-shock `updated.har` for every
 against-GEMPACK matrix dataset, on a Windows machine with RunGTAP installed.
 
-For each gtap7_* dataset under `datasets/<ds>/` this:
+For each gtap7_* dataset under `data/gtap7/<ds>/` this:
   1. creates an isolated run folder `runs/gempack_matrix/<ds>/`,
   2. copies the dataset inputs (sets.har / basedata.har / default.prm),
   3. writes a `tm10.cmf` mirroring the vetted nus333/9x10 experiment exactly —
@@ -28,6 +28,7 @@ Usage (Windows PowerShell, from repo root):
 """
 
 from __future__ import annotations
+from equilibria.sources import dataset_dir
 
 import argparse
 import shutil
@@ -39,7 +40,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 from equilibria.babel.har.reader import read_har  # noqa: E402
 
-# gtap7_* matrix datasets that ship RunGTAP-ready inputs under datasets/.
+# gtap7_* matrix datasets that ship RunGTAP-ready inputs under data/gtap7/.
 DATASETS = [
     "gtap7_3x3",
     "gtap7_3x4",
@@ -48,7 +49,6 @@ DATASETS = [
     "gtap7_15x10",
     "gtap7_20x41",  # known-blocked; attempted so the failure is on the record
 ]
-DATA_DIR = ROOT / "datasets"
 RUN_ROOT = ROOT / "runs/gempack_matrix"
 FIXTURES = ROOT / "tests/fixtures/gtap7_gempack"
 DEFAULT_GTAPV7 = Path(r"C:\runGTAP375\gtapv7.exe")
@@ -207,7 +207,7 @@ def prepare(name: str, shock_pct: float = 10.0, steps: str = "8 16 32",
     the tag/fixtures carry the ``_capfix`` / ``_capflex`` variant so BOTH capital-account
     closures coexist in the fixtures dir.
     """
-    ds_dir = DATA_DIR / name
+    ds_dir = dataset_dir(name)
     regs = regions(ds_dir)
     run_dir = RUN_ROOT / name
     run_dir.mkdir(parents=True, exist_ok=True)

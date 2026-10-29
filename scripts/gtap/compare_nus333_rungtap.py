@@ -8,6 +8,7 @@ by `runs/nus333_compare/rungtap/tm10.cmf` (gtapv7.exe).
 """
 from __future__ import annotations
 
+from equilibria.sources import dataset_dir
 import json
 import sys
 from pathlib import Path
@@ -39,7 +40,7 @@ if not os.environ.get("PATH_LICENSE_STRING"):
         "PATH_LICENSE_STRING is not set. Export it before running this script."
     )
 
-NUS333 = ROOT / "src" / "equilibria" / "templates" / "reference" / "gtap" / "data" / "nus333"
+NUS333 = dataset_dir("nus333")
 OUT_DIR = ROOT / "runs" / "nus333_compare" / "equilibria"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 

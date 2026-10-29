@@ -16,6 +16,7 @@ Usage:
 """
 from __future__ import annotations
 
+from equilibria.sources import dataset_dir
 import argparse
 import json
 import sys
@@ -30,7 +31,6 @@ if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI))
 
 FIXTURES_DIR = ROOT / "tests/fixtures/gtap7_altertax"
-DATASETS_DIR = ROOT / "datasets"
 
 # Identical exclusion/alias sets to the committed gate.
 SKIP = {"walras", "ev", "cv", "uh", "u", "ug", "us"}
@@ -69,7 +69,7 @@ def solve_and_measure(dataset: str, if_sub: bool):
     from _diff_core import gams_levels, list_populated_vars, split_t
 
     ref = _fixture_gdx(dataset, if_sub)
-    d = DATASETS_DIR / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

@@ -21,17 +21,17 @@ no lo hace — `build_block_model` deja 1 sola celda fijada en todo el modelo
 import pathlib
 import sys
 
+from equilibria.sources import dataset_dir
+
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 import pytest
-
-DATASETS = ROOT / "datasets"
 
 
 def _params(dataset: str):
     from equilibria.templates.gtap import GTAPParameters
 
-    d = DATASETS / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

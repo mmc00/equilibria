@@ -15,7 +15,7 @@ Variables reconocidas:
     Raiz de los .gdx de referencia generados con GAMS (por defecto
     ``~/proyectos2/equilibria_refs``).
 ``EQUILIBRIA_NUS333_DIR``
-    Paquete NUS333 de Burfisher (por defecto ``datasets/nus333`` del repo).
+    Paquete NUS333 de Burfisher (por defecto ``data/gtap7/nus333`` del repo).
 ``EQUILIBRIA_PATH_CAPI_SRC``
     Directorio ``src`` del checkout de path-capi-python (por defecto
     ``~/proyectos/path-capi-python/src``).
@@ -36,6 +36,8 @@ from __future__ import annotations
 import os
 import shutil
 from pathlib import Path
+
+from equilibria.sources import dataset_dir
 
 __all__ = [
     "cge_babel_dir",
@@ -69,10 +71,10 @@ _REPO = Path(__file__).resolve().parents[2]
 
 
 def nus333_dir() -> Path:
-    """Paquete NUS333 de Burfisher: ``datasets/nus333`` del repo, salvo que
+    """Paquete NUS333 de Burfisher: ``data/gtap7/nus333`` del repo, salvo que
     ``EQUILIBRIA_NUS333_DIR`` apunte a otra copia. Fuera del repo (equilibria
     instalado) puede no existir."""
-    return _por_entorno("EQUILIBRIA_NUS333_DIR", str(_REPO / "datasets" / "nus333"))
+    return _por_entorno("EQUILIBRIA_NUS333_DIR", str(dataset_dir("nus333")))
 
 
 def path_capi_src() -> Path:

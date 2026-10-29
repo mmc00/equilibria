@@ -28,6 +28,8 @@ from typing import Any
 import numpy as np
 import pytest
 
+from equilibria.sources import dataset_dir
+
 # La fixture de modulo importa compare_nus333_vs_neos, que necesita
 # path_capi_python: sin PATH esto es un error de setup, no un fallo de forma.
 pytestmark = pytest.mark.needs_path
@@ -280,7 +282,7 @@ def _params_sets():
     from equilibria.templates.gtap import GTAPParameters
 
     p = GTAPParameters()
-    d = ROOT / "datasets" / "gtap7_3x3"
+    d = dataset_dir("gtap7_3x3")
     p.load_from_har(
         basedata_path=d / "basedata.har",
         sets_path=d / "sets.har",

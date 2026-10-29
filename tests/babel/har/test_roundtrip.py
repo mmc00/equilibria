@@ -15,17 +15,17 @@ import numpy as np
 import pytest
 
 from equilibria.babel.har import read_har, write_har
+from equilibria.sources import dataset_dir
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DATA = REPO_ROOT / "src/equilibria/templates/reference/gtap/data"
 
 FIXTURES = [
-    DATA / "nus333/sets.har",
-    DATA / "nus333/basedata.har",
-    DATA / "nus333/baserate.har",
-    DATA / "nus333/default.prm",
-    DATA / "9x10/sets.har",
-    DATA / "9x10/basedata.har",
+    dataset_dir("nus333") / "sets.har",
+    dataset_dir("nus333") / "basedata.har",
+    dataset_dir("nus333") / "baserate.har",
+    dataset_dir("nus333") / "default.prm",
+    dataset_dir("9x10") / "sets.har",
+    dataset_dir("9x10") / "basedata.har",
 ]
 
 

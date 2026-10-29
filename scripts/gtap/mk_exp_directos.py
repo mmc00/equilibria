@@ -36,7 +36,7 @@ Salida: un `.EXP` nuevo por cada uno, con sufijo `-DIR` (directo), al lado del
 original. No sobreescribe nada.
 
 Uso (en Windows o Mac, no necesita GEMPACK):
-    python scripts/gtap/mk_exp_directos.py datasets/nus333
+    python scripts/gtap/mk_exp_directos.py data/gtap7/nus333
 """
 
 from __future__ import annotations
@@ -279,5 +279,5 @@ def main(carpeta: str) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(
-        main(sys.argv[1] if len(sys.argv) > 1 else "datasets/nus333")
+        main(sys.argv[1] if len(sys.argv) > 1 else "data/gtap7/nus333")
     )

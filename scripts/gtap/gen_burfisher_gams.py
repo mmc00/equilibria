@@ -21,7 +21,7 @@ Uso:
     .venv/bin/python scripts/gtap/gen_burfisher_gams.py <out_dir> [--only TBL46A,ME9C]
 
 Requiere GAMS (``gams`` en el PATH o ``--gams``) con PATH, y el dataset nus333 con
-los .prm del libro (``datasets/nus333``, o ``EQUILIBRIA_NUS333_DIR``).
+los .prm del libro (``data/gtap7/nus333``, o ``EQUILIBRIA_NUS333_DIR``).
 
 Codigo de salida: 0 si todos terminan en un optimo; 2 si alguno no (deja su GDX:
 ME4A/B terminan Intermediate Infeasible, asi que la corrida completa da 2); 1 si GAMS
@@ -495,7 +495,7 @@ def main() -> int:
     missing = missing_inputs(nus333, todo)
     if missing:
         ap.error(
-            "faltan archivos del dataset nus333 (datasets/nus333 o EQUILIBRIA_NUS333_DIR): "
+            "faltan archivos del dataset nus333 (data/gtap7/nus333 o EQUILIBRIA_NUS333_DIR): "
             + ", ".join(str(m) for m in missing)
         )
 

@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 from pyomo.environ import Var, value
 
+from equilibria.sources import dataset_dir
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -27,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[3]
 def _params(ds):
     from equilibria.templates.gtap import GTAPParameters
 
-    d = ROOT / "datasets" / ds
+    d = dataset_dir(ds)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

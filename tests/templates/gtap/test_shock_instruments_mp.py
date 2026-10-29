@@ -8,6 +8,7 @@ Sin solver: nus333.
 
 import pytest
 
+from equilibria.sources import dataset_dir
 from equilibria.templates.gtap.instruments import period_key
 
 
@@ -98,7 +99,7 @@ def test_build_vars_fija_y_registra_sin_pasar_por_build_block_model():
     from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
-    d = pathlib.Path(__file__).resolve().parents[3] / "datasets" / "gtap7_3x3"
+    d = dataset_dir("gtap7_3x3")
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

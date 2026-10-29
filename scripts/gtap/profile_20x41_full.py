@@ -16,6 +16,7 @@ Env (set BEFORE run for the free solver):
 
 from __future__ import annotations
 
+from equilibria.sources import dataset_dir
 import cProfile
 import io
 import pstats
@@ -53,7 +54,7 @@ def run(dataset):
     from equilibria.templates.gtap.gtap_block_model import solve_block_model
     from equilibria.templates.gtap_sparse.multiperiod import build_sparse_model_mp
 
-    d = ROOT / "datasets" / dataset
+    d = dataset_dir(dataset)
     gdx = ROOT / "tests/fixtures/gtap7" / dataset / "out_gtap_shock_ifsub0.gdx"
 
     with _Phase("load_params"):

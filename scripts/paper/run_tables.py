@@ -47,7 +47,7 @@ def steps(out: Path) -> list[Step]:
             py, "scripts/gtap/compare_gempack_levels.py",
             "--dataset", f"gtap7_{ds}", "--closure", "capFlex", "--solver", solver,
             "--har", f"{FIX}/sl4levels6_gtap7_{ds}_tm10_s8-16-32.har",
-            "--basedata", f"datasets/gtap7_{ds}/basedata.har",
+            "--basedata", f"data/gtap7/gtap7_{ds}/basedata.har",
             "--updated", f"{FIX}/updated_gtap7_{ds}_tm10_s8-16-32.har",
             "--save-eq", str(out / f"eq_gtap7_{ds}_capflex.json.gz"),
             "--out", str(out / f"table2_gtap7_{ds}.json"),
@@ -58,7 +58,7 @@ def steps(out: Path) -> list[Step]:
         f for ds in TABLE2 for f in (
             f"{FIX}/sl4levels6_gtap7_{ds}_tm10_s8-16-32.har",
             f"{FIX}/updated_gtap7_{ds}_tm10_s8-16-32.har",
-            f"datasets/gtap7_{ds}/basedata.har",
+            f"data/gtap7/gtap7_{ds}/basedata.har",
         )
     ]  # fmt: skip
     refs = out / "gams_burfisher"
@@ -69,7 +69,7 @@ def steps(out: Path) -> list[Step]:
         Step("table3a", "Tabla 3a: ejercicios del libro contra GEMPACK (Gragg)",
              [[py, "scripts/gtap/compare_burfisher_gempack.py",
                "--gempack-dir", f"{FIX}/burfisher_gragg", "--json", str(out / "table3a.json")]],
-             ["scripts/gtap/compare_burfisher_gempack.py", f"{FIX}/burfisher_gragg", "datasets/nus333"]),
+             ["scripts/gtap/compare_burfisher_gempack.py", f"{FIX}/burfisher_gragg", "data/gtap7/nus333"]),
         Step("table3_refs", "Referencias GAMS de la Tabla 3 (necesita GAMS)",
              [[py, "scripts/gtap/gen_burfisher_gams.py", str(refs)]],
              ["scripts/gtap/gen_burfisher_gams.py"]),
@@ -85,7 +85,7 @@ def steps(out: Path) -> list[Step]:
                "--json", str(out / "homogeneity_gempack.json")]],
              ["tests/templates/gtap/test_nus333_homogeneidad.py"]),
         Step("model_size", "Seccion 2: tamano del modelo",
-             [[py, "scripts/paper/model_size.py"]], ["scripts/paper/model_size.py", "datasets/gtap7_3x3"]),
+             [[py, "scripts/paper/model_size.py"]], ["scripts/paper/model_size.py", "data/gtap7/gtap7_3x3"]),
         Step("scale_20x41", "Seccion 4.3: tiempo y memoria del 20x41 (maquina limpia, sin swap)",
              [[py, "scripts/gtap/perf_budget_20x41.py"],
               [py, "scripts/gtap/phase_times.py", "gtap7_20x41", "--out", str(out / "phases_20x41.json")]],

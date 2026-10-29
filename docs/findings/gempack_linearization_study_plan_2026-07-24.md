@@ -58,7 +58,7 @@ FLOOR = 0.999  # 99.9% of level cells agree at rel 1e-4
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_ifsub_levels_equivalence(dataset):
     from verify_ifsub_equivalence import compare_levels
-    d = ROOT / "datasets" / dataset / "basedata.har"
+    d = dataset_dir(dataset) / "basedata.har"
     g1 = ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub1.gdx"
     g0 = ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub0.gdx"
     if not (d.exists() and g1.exists() and g0.exists()):
@@ -105,7 +105,7 @@ def _solve(dataset: str, ifsub: int):
     )
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-    d = ROOT / "datasets" / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har", sets_path=d / "sets.har",
@@ -181,7 +181,7 @@ def main() -> int:
     bad = []
     print(f"{'dataset':14s} {'cells':>7s} {'agree%':>8s}  worst")
     for ds in args.datasets:
-        if not (ROOT / "datasets" / ds / "basedata.har").exists():
+        if not has_dataset(ds):
             print(f"{ds:14s} {'--':>7s} {'skip':>8s}  (no dataset HAR)")
             continue
         r = compare_levels(ds, args.tol_rel)

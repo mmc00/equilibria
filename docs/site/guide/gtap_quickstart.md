@@ -152,7 +152,7 @@ allocative, terms-of-trade and other contributions is in
 ## Step 4 — Check the result against GAMS
 
 This step needs a checkout of the repository: it reads the 3×3 dataset in
-`datasets/gtap7_3x3` and the GAMS solution of its default shock in
+`data/gtap7/gtap7_3x3` and the GAMS solution of its default shock in
 `tests/fixtures/`. `equilibria.compare` lines the two solutions up cell by
 cell; the mapping file says which GAMS name matches which equilibria name.
 
@@ -162,7 +162,7 @@ from pathlib import Path
 from equilibria.compare import Mapping, compare, from_gdx, from_pyomo
 from equilibria.templates.gtap import GTAPParameters
 
-data = Path("datasets/gtap7_3x3")
+data = Path("data/gtap7/gtap7_3x3")
 params3 = GTAPParameters()
 params3.load_from_har(
     basedata_path=data / "basedata.har",

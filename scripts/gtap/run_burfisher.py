@@ -11,7 +11,7 @@ mismo ejercicio (``<gams-dir>/<EXP>_capFlex.gdx``), con las exclusiones de
 Uso:
     .venv/bin/python scripts/gtap/run_burfisher.py --gams-dir <dir> [--only TBL46A,TBL78]
 
-Lee el paquete del libro de ``datasets/nus333`` (o de ``EQUILIBRIA_NUS333_DIR``) y
+Lee el paquete del libro de ``data/gtap7/nus333`` (o de ``EQUILIBRIA_NUS333_DIR``) y
 necesita gdxdump en el PATH.
 Los GDX de GAMS los genera ``gen_burfisher_gams.py`` con la misma tabla EXERCISES.
 """

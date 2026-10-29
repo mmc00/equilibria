@@ -34,7 +34,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests/fixtures/gtap7"
-HAR_3X3 = ROOT / "datasets/gtap7_3x3"
+HAR_3X3 = ROOT / "data/gtap7/gtap7_3x3"
 
 
 _DECL = re.compile(r"(?i)^\s*(variables|equations)\b")

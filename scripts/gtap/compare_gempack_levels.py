@@ -25,7 +25,7 @@ Uso (desde la raiz). Con niveles de equilibria ya guardados::
     uv run python scripts/gtap/compare_gempack_levels.py \\
         --eq tests/compare/fixtures/eq_gtap7_3x3_levels.json.gz \\
         --har tests/fixtures/gtap7_gempack/sl4levels6_gtap7_3x3_tm10.har \\
-        --basedata datasets/gtap7_3x3/basedata.har \\
+        --basedata data/gtap7/gtap7_3x3/basedata.har \\
         --updated tests/fixtures/gtap7_gempack/updated_gtap7_3x3_tm10.har
 
 o resolviendo equilibria en el momento (necesita PATH; ``--solver newton`` es el
@@ -34,7 +34,7 @@ Newton-TR + MUMPS del 20x41, que necesita pymumps)::
     PYTHONPATH=. uv run python scripts/gtap/compare_gempack_levels.py \\
         --dataset gtap7_20x41 --closure capFix --solver newton --save-eq eq.json.gz \\
         --har tests/fixtures/gtap7_gempack/sl4levels6_gtap7_20x41_tm10_s8-16-32_capfix.har \\
-        --basedata datasets/gtap7_20x41/basedata.har \\
+        --basedata data/gtap7/gtap7_20x41/basedata.har \\
         --updated tests/fixtures/gtap7_gempack/updated_gtap7_20x41_tm10_s8-16-32_capfix.har \\
         --out reporte.json
 
@@ -43,6 +43,7 @@ Newton-TR + MUMPS del 20x41, que necesita pymumps)::
 
 from __future__ import annotations
 
+from equilibria.sources import dataset_dir
 import argparse
 import dataclasses
 import gzip
@@ -178,7 +179,7 @@ def dataset_xscale(dataset: str, va_subsidy_basis: str = "gempack") -> dict:
     from equilibria.blocks.gtap._derived_params import xscale_data
     from equilibria.templates.gtap import GTAPParameters
 
-    d = ROOT / "datasets" / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",
@@ -241,7 +242,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--eq", type=Path, help="niveles de equilibria ya guardados")
-    src.add_argument("--dataset", help="resolver equilibria sobre datasets/<dataset>")
+    src.add_argument("--dataset", help="resolver equilibria sobre data/gtap7/<dataset>")
     ap.add_argument("--closure", default="capFlex", choices=["capFlex", "capFix"])
     ap.add_argument("--solver", default="path", choices=["path", "ipopt", "newton"])
     ap.add_argument("--save-eq", type=Path, help="guardar los niveles resueltos")

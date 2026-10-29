@@ -23,6 +23,7 @@ Usage (from repo root):
 
 from __future__ import annotations
 
+from equilibria.sources import dataset_dir
 import argparse
 import sys
 import tempfile
@@ -36,9 +37,9 @@ from equilibria.babel.har.reader import read_har  # noqa: E402
 from equilibria.babel.har.symbols import HeaderArray  # noqa: E402
 from equilibria.babel.har.writer import write_har  # noqa: E402
 
-REF_PRM = ROOT / "src/equilibria/templates/reference/gtap/data/9x10/default.prm"
-REF_SETS = ROOT / "src/equilibria/templates/reference/gtap/data/9x10/sets.har"
-SIBLING_PRM = ROOT / "datasets/gtap7_5x5/default.prm"  # identical 5-endowment EFLG
+REF_PRM = dataset_dir("9x10") / "default.prm"
+REF_SETS = dataset_dir("9x10") / "sets.har"
+SIBLING_PRM = ROOT / "data/gtap7/gtap7_5x5/default.prm"  # identical 5-endowment EFLG
 ENDWT = ["mobile", "sluggish", "fixed"]
 
 

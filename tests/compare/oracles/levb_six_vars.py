@@ -30,6 +30,8 @@ from pathlib import Path
 
 import numpy as np
 
+from equilibria.sources import dataset_dir, has_dataset
+
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
@@ -53,7 +55,7 @@ def _labels(sets, k):
 
 def levb(dataset: str) -> dict[str, dict[str, float]]:
     """Nivel PRE de y, qinv y rore por region, desde los datos (en millones de USD)."""
-    d = ROOT / "datasets" / dataset
+    d = dataset_dir(dataset)
     b = read_har(str(d / "basedata.har"))
     s = read_har(str(d / "sets.har"))
     p = read_har(str(d / "default.prm"))
@@ -94,7 +96,7 @@ def _gdx_base(symbol: str) -> dict[tuple[str, ...], float]:
 
 def main() -> None:
     for ds in ("gtap7_3x3", "gtap7_20x41"):
-        if not (ROOT / "datasets" / ds / "basedata.har").exists():
+        if not has_dataset(ds):
             print(f"{ds}: sin datos")
             continue
         o = levb(ds)

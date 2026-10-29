@@ -15,6 +15,8 @@ from pathlib import Path
 
 import numpy as np
 
+from equilibria.sources import dataset_dir
+
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
@@ -30,7 +32,7 @@ THRESHOLDS = (1e-3, 5e-3, 1e-2)
 
 def main() -> None:
     m, code = _solve_shock("gtap7_3x3", 0)
-    d = ROOT / "datasets" / "gtap7_3x3"
+    d = dataset_dir("gtap7_3x3")
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

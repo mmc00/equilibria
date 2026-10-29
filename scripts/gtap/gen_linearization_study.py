@@ -15,6 +15,7 @@ Usage:
 """
 from __future__ import annotations
 
+from equilibria.sources import dataset_dir
 import sys
 from pathlib import Path
 from equilibria._local_refs import path_capi_src
@@ -138,7 +139,7 @@ def _solve_shock_10(dataset: str):
     )
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-    d = ROOT / "datasets" / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

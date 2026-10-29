@@ -82,7 +82,7 @@ def _gempack_levels() -> dict[str, dict[tuple[str, tuple[str, ...]], float]]:
     out = _leva_levb(FIX / "sl4levels6_gtap7_3x3_tm10.har")
     _add_vdfb(
         out,
-        ROOT / "datasets/gtap7_3x3/basedata.har",
+        ROOT / "data/gtap7/gtap7_3x3/basedata.har",
         ROOT / "tests/fixtures/gtap7_gempack/updated_gtap7_3x3_tm10.har",
     )
     return out

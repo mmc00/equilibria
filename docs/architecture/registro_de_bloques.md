@@ -82,7 +82,7 @@ manda al siguiente al sitio equivocado.
 
 Y deja a la vista lo que de verdad falta para el YAML, que no es un registro de
 bloques: los datasets grandes (`gtap7_10x7`, `gtap7_15x10`...) viven como
-carpetas en `datasets/` y en listas a mano dentro de `scripts/`, fuera del
+carpetas en `data/<model>/` y en listas a mano dentro de `scripts/`, fuera del
 registro de `equilibria.datasets`. Unificar eso es el primer paso real.
 
 **El boceto no tiene una lista de bloques, y ese es el hallazgo.** Un usuario de

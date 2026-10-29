@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from equilibria._local_refs import path_capi_src
+from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
@@ -17,7 +18,6 @@ _PATH_CAPI = path_capi_src()
 if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI))
 
-DATASETS = ROOT / "datasets"
 REF_GDX = ROOT / "tests/fixtures/gtap7/gtap7_3x3/out_gtap_shock_ifsub1.gdx"
 # GEMPACK con el MISMO cierre que estos tests (capFix = RORDELTA 0). El nombre sin
 # sufijo (sl4dump_gtap7_3x3_tm10.har) es capFlex (RORDELTA 1) desde 06dd878, que
@@ -79,7 +79,7 @@ def test_settled_base_land_response_matches_gempack():
 def _load_params(dataset="gtap7_3x3"):
     from equilibria.templates.gtap import GTAPParameters
 
-    d = DATASETS / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

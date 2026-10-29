@@ -23,13 +23,14 @@ from pathlib import Path
 
 import pytest
 
+from equilibria.sources import dataset_dir, has_dataset
+
 pytestmark = pytest.mark.integration
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
 from coverage_matrix import rows_for  # noqa: E402
 
-DATASETS_DIR = ROOT / "datasets"
 FIXTURES = ROOT / "tests/fixtures/gtap7_gempack"
 GEMPACK_ROWS = rows_for("gtap7", "gempack", kind="mcp")
 
@@ -84,7 +85,7 @@ def _solve_shock(
         from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
         from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-        d = DATASETS_DIR / dataset
+        d = dataset_dir(dataset)
         p = GTAPParameters()
         p.load_from_har(
             basedata_path=d / "basedata.har",
@@ -240,7 +241,7 @@ def _capfix_fixture_for(row) -> Path | None:
 @pytest.mark.needs_path
 @pytest.mark.parametrize("row", _gempack_params())
 def test_gtap7_gempack_parity(row):
-    if not (DATASETS_DIR / row.dataset / "basedata.har").exists():
+    if not has_dataset(row.dataset):
         pytest.skip(f"dataset HAR missing: {row.dataset}")
     # The GAMS ref GDX is a speedup (fast rore/rorg + warm-start), NOT a requirement: the block
     # SELF-SEEDS from base_calibrated's m._settled_seed + the risk twin-solve fallback (see

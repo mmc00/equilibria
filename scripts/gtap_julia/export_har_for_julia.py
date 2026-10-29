@@ -12,6 +12,7 @@ Usage: uv run python scripts/gtap_julia/export_har_for_julia.py <dataset> <out_d
 """
 from __future__ import annotations
 
+from equilibria.sources import dataset_dir
 import sys
 from pathlib import Path
 
@@ -36,11 +37,7 @@ _SETS = {
 
 
 def _root(dataset: str) -> Path:
-    here = Path(__file__).resolve()
-    for p in here.parents:
-        if (p / "datasets").is_dir():
-            return p / "datasets" / dataset
-    raise FileNotFoundError("datasets/ not found")
+    return dataset_dir(dataset)
 
 
 def _dump_har(har, headers: list[str], out: Path) -> None:

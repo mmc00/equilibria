@@ -14,7 +14,7 @@ from pyomo.environ import Var
 
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
-DS = Path("datasets/gtap7_3x3")
+DS = Path("data/gtap7/gtap7_3x3")
 
 
 def _build(sf):

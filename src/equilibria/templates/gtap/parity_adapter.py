@@ -14,9 +14,9 @@ if str(_SCRIPTS_GTAP) not in sys.path:
 
 # HAR datasets for gtap7_* (relative to _ROOT)
 _DATASET_HAR = {
-    "gtap7_3x3": "datasets/gtap7_3x3",
-    "gtap7_3x4": "datasets/gtap7_3x4",
-    "gtap7_5x5": "datasets/gtap7_5x5",
+    "gtap7_3x3": "data/gtap7/gtap7_3x3",
+    "gtap7_3x4": "data/gtap7/gtap7_3x4",
+    "gtap7_5x5": "data/gtap7/gtap7_5x5",
 }
 
 

@@ -9,11 +9,12 @@ reconstruction or key reorder), caught here before it reaches the α/γ solve.
 from pathlib import Path
 
 from equilibria.blocks.gtap_logvalue._derived_params import derived_shares
+from equilibria.sources import dataset_dir
 from equilibria.templates.gtap import GTAPParameters
 from equilibria.templates.gtap_julia.calibration import load_calibrated
 
 ROOT = Path(__file__).resolve().parents[3]
-DS = ROOT / "datasets" / "gtap7_3x3"
+DS = dataset_dir("gtap7_3x3")
 FIX = ROOT / "tests" / "fixtures" / "gtap_logvalue" / "julia_3x3_calibrated.csv"
 
 

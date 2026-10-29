@@ -8,6 +8,7 @@ Throwaway benchmark, committed for reproducibility.
 """
 from __future__ import annotations
 
+from equilibria.sources import dataset_dir
 import os
 import sys
 import time
@@ -26,7 +27,7 @@ _ENV = {
     "GTAP_GATES_SKIP": "1", "EQUILIBRIA_GTAP_GMIN": "1e-9",
     "EQUILIBRIA_GTAP_TR_RELTOL": "1e-6", "EQUILIBRIA_SEED_CACHE_DISABLE": "1",
 }
-DATA = ROOT / "datasets" / "gtap7_15x10"
+DATA = dataset_dir("gtap7_15x10")
 
 
 def _run(reuse):

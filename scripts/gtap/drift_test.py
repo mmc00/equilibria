@@ -34,6 +34,7 @@ INTERPRETATION:
   - Solve is code!=1 → not a drift problem; fix convergence first (tool 0 check-warmstart).
 """
 from __future__ import annotations
+from equilibria.sources import dataset_dir
 import argparse
 import copy
 import sys
@@ -72,7 +73,7 @@ def run_drift(dataset: str, gdx_path: Path, period: str, top: int, tol: float):
     from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
 
     run_gtap = _build_run_gtap()
-    data_dir = ROOT / "datasets" / dataset
+    data_dir = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(basedata_path=data_dir / "basedata.har", sets_path=data_dir / "sets.har",
                     default_path=data_dir / "default.prm", baserate_path=data_dir / "baserate.har")

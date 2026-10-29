@@ -9,7 +9,7 @@ sys.path.insert(0, str(ROOT / "src"))
 def _load_3x3_params():
     from equilibria.templates.gtap import GTAPParameters
 
-    d = ROOT / "datasets/gtap7_3x3"
+    d = ROOT / "data/gtap7/gtap7_3x3"
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

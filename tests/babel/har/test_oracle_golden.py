@@ -17,10 +17,9 @@ import numpy as np
 import pytest
 
 from equilibria.babel.har import read_har, write_har
+from equilibria.sources import dataset_dir
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DATA = REPO_ROOT / "src/equilibria/templates/reference/gtap/data"
-DATASETS = REPO_ROOT / "datasets"
 GOLDEN_DIR = Path(__file__).parent / "golden"
 
 
@@ -29,17 +28,17 @@ def _golden_path(fixture: Path) -> Path:
 
 
 FIXTURES = [
-    DATA / "nus333/sets.har",
-    DATA / "nus333/basedata.har",
-    DATA / "nus333/baserate.har",
-    DATA / "nus333/default.prm",
-    DATA / "9x10/sets.har",
-    DATA / "9x10/basedata.har",
+    dataset_dir("nus333") / "sets.har",
+    dataset_dir("nus333") / "basedata.har",
+    dataset_dir("nus333") / "baserate.har",
+    dataset_dir("nus333") / "default.prm",
+    dataset_dir("9x10") / "sets.har",
+    dataset_dir("9x10") / "basedata.har",
     # Multi-record REFULL regression: every array here is bigger than one
     # GEMPACK data record, so each data block carries its own 64-byte block
     # header. Folding those headers into the payload shifts the array and is
     # exactly the bug this fixture guards against.
-    DATASETS / "gtap6_20x41/basedata.har",
+    dataset_dir("gtap6_20x41") / "basedata.har",
 ]
 
 

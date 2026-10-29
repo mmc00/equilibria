@@ -59,7 +59,7 @@ Eso escribe `runs/gempack_matrix/<ds>/tm10.cmf` y copia los inputs del dataset.
 ### 2. Reescribir las elasticidades en el `.prm` de la corrida
 
 El `.prm` que hay que editar es el de `runs/gempack_matrix/<ds>/`, **no** el de
-`datasets/` (ese es la fuente y no se toca). Mismo patrón que `_force_rdlt`:
+`data/gtap7/` (ese es la fuente y no se toca). Mismo patrón que `_force_rdlt`:
 
 ```python
 import numpy as np

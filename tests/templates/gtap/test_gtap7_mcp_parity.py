@@ -27,6 +27,8 @@ from pathlib import Path
 
 import pytest
 
+from equilibria.sources import dataset_dir, has_dataset
+
 # needs_gdxdump: estos tests leen el GDX de referencia con gdxdump; sin el
 # binario fallaban con FileNotFoundError en vez de saltarse.
 pytestmark = [pytest.mark.integration, pytest.mark.needs_gdxdump]
@@ -34,7 +36,6 @@ pytestmark = [pytest.mark.integration, pytest.mark.needs_gdxdump]
 ROOT = Path(__file__).resolve().parents[3]
 ALTERTAX_FIXTURES = ROOT / "tests/fixtures/gtap7_altertax"
 PURE_FIXTURES = ROOT / "tests/fixtures/gtap7"
-DATASETS_DIR = ROOT / "datasets"
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
@@ -128,7 +129,7 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
     from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-    d = DATASETS_DIR / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",
@@ -252,7 +253,7 @@ def test_gtap7_mcp_parity(dataset, ifsub, mode, floors, ci_status, code2_ok):
     gdx = _fixture_gdx(dataset, ifsub, mode)
     if not gdx.exists():
         pytest.skip(f"fixture GDX missing: {gdx}")
-    if not (DATASETS_DIR / dataset / "basedata.har").exists():
+    if not has_dataset(dataset):
         pytest.skip(f"dataset HAR missing: {dataset}")
 
     per = _solve_and_measure(dataset, ifsub, mode, gdx)

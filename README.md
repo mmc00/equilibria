@@ -128,7 +128,7 @@ import numpy as np
 
 from equilibria.babel.har import HarWriter, read_har
 
-data = read_har("datasets/gtap7_3x3/basedata.har")  # dict[name -> HeaderArray]
+data = read_har("data/gtap7/gtap7_3x3/basedata.har")  # dict[name -> HeaderArray]
 vdpp = data["VDPP"]
 print(vdpp.long_name, vdpp.array.shape, vdpp.set_names)
 

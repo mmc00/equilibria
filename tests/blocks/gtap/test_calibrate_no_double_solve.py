@@ -21,7 +21,7 @@ from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
 pytestmark = pytest.mark.needs_path
 
-DATA = Path("datasets/gtap7_10x7")
+DATA = Path("data/gtap7/gtap7_10x7")
 # Full base->check->shock settle baseline (gtap7_10x7).
 # settle_only must reproduce this EXACTLY.
 #

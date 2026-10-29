@@ -11,6 +11,7 @@ Throwaway benchmark, committed for reproducibility of the perf claim.
 
 from __future__ import annotations
 
+from equilibria.sources import dataset_dir
 import os
 import sys
 import time
@@ -28,7 +29,7 @@ import equilibria.templates.gtap.gtap_block_model as _bm  # noqa: E402
 
 
 def _load(dataset):
-    d = ROOT / "datasets" / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",

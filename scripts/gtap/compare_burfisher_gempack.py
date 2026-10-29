@@ -12,7 +12,7 @@ aparte. Las variables sin nivel en el ``.sl4`` (``rore``, ``y``, ``pinv``, ``qin
 ``pva``, ``pe``: GTAPV7 sin el parche de ``make_levels_tab.py``) quedan excluidas
 con su motivo en el reporte.
 
-Uso (desde la raiz, con PATH; el paquete del libro es ``datasets/nus333``)::
+Uso (desde la raiz, con PATH; el paquete del libro es ``data/gtap7/nus333``)::
 
     PYTHONPATH=src:. python scripts/gtap/compare_burfisher_gempack.py [--only TBL46A]
 
@@ -24,6 +24,7 @@ o, sin resolver, con niveles ya guardados (``--save-eq-dir`` o
 
 from __future__ import annotations
 
+from equilibria.sources import dataset_dir
 import argparse
 import gzip
 import json
@@ -42,7 +43,7 @@ import run_burfisher as rb  # noqa: E402
 from equilibria.compare import Report  # noqa: E402
 
 FIX = ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher"
-BASEDATA = ROOT / "datasets" / "nus333" / "basedata.har"
+BASEDATA = dataset_dir("nus333") / "basedata.har"
 
 
 def method(exp: str, fix: Path = FIX) -> str:

@@ -26,6 +26,7 @@ Run:
 """
 from __future__ import annotations
 
+from equilibria.sources import dataset_dir
 import argparse
 import csv as csv_mod
 import os
@@ -47,7 +48,6 @@ if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
 
 from _diff_core import git_short_sha  # noqa: E402
 
-DATASETS_DIR = ROOT / "datasets"
 NLP_FIXTURES = ROOT / "tests" / "fixtures" / "gtap7_nlp"
 GAMS = "/Library/Frameworks/GAMS.framework/Versions/Current/Resources/gams"
 
@@ -111,7 +111,7 @@ def _time_python_once(dataset: str, mode: str, ifsub: int, gdx: Path) -> float:
     )
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-    d = DATASETS_DIR / dataset
+    d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(basedata_path=d / "basedata.har", sets_path=d / "sets.har",
                     default_path=d / "default.prm", baserate_path=d / "baserate.har")
