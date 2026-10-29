@@ -73,8 +73,9 @@ _REPO = Path(__file__).resolve().parents[2]
 def nus333_dir() -> Path:
     """Paquete NUS333 de Burfisher: ``data/gtap7/nus333`` del repo, salvo que
     ``EQUILIBRIA_NUS333_DIR`` apunte a otra copia. Fuera del repo (equilibria
-    instalado) puede no existir."""
-    return _por_entorno("EQUILIBRIA_NUS333_DIR", str(dataset_dir("nus333")))
+    instalado) no hay ``data/`` y sin la variable es un error."""
+    valor = os.environ.get("EQUILIBRIA_NUS333_DIR")
+    return Path(valor).expanduser() if valor else dataset_dir("nus333")
 
 
 def path_capi_src() -> Path:

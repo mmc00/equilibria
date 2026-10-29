@@ -28,3 +28,31 @@ def test_la_variable_de_entorno_manda(
 ) -> None:
     monkeypatch.setenv("EQUILIBRIA_NUS333_DIR", str(tmp_path))
     assert nus333_dir() == tmp_path
+
+
+def test_env_var_wins_without_a_data_folder(tmp_path: Path) -> None:
+    """Outside a checkout (no data/), the override must still work: the default
+    is only looked up when the variable is unset."""
+    import os
+    import subprocess
+    import sys
+
+    empty = tmp_path / "no_data"
+    empty.mkdir()
+    env = {
+        **os.environ,
+        "EQUILIBRIA_DATA_DIR": str(empty),
+        "EQUILIBRIA_NUS333_DIR": "/x",
+    }
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from equilibria._local_refs import nus333_dir; print(nus333_dir())",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "/x"

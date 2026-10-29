@@ -142,6 +142,9 @@ include = [
     "/src",
     "/tests",
     "/docs",
+    # the wheel's force-include reads these (load_bundled)
+    "/data/gtap7/9x10",
+    "/data/gtap7/nus333",
 ]
 
 # ============================================================================

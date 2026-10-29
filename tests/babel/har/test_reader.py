@@ -1,7 +1,7 @@
 """Tests for the native pure-Python HAR reader.
 
 Uses GTAP HAR/`.prm` fixtures already committed under
-`src/equilibria/templates/reference/gtap/data/`, so the suite has no
+`data/gtap7/{9x10,nus333}/`, so the suite has no
 external-path dependency. Golden values were captured against `harpy3`
 (see NOTICE) and cover the four supported types plus edge cases:
 

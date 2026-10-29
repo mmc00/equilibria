@@ -81,8 +81,8 @@ These two keep hand-tuned `.cmf` under `runs/<ds>_compare/rungtap/tm10.cmf`
 `compare_9x10_rungtap.py`). Copy the inputs next to each `.cmf` and solve:
 
 ```powershell
-copy src\equilibria\templates\reference\gtap\data\nus333\*.har  runs\nus333_compare\rungtap\
-copy src\equilibria\templates\reference\gtap\data\nus333\default.prm runs\nus333_compare\rungtap\
+copy data\gtap7\nus333\*.har  runs\nus333_compare\rungtap\
+copy data\gtap7\nus333\default.prm runs\nus333_compare\rungtap\
 cd runs\nus333_compare\rungtap ; gtapv7 -cmf tm10.cmf ; cd ..\..\..
 copy runs\nus333_compare\rungtap\updated.har tests\fixtures\gtap7_gempack\updated_nus333_tm10.har
 ```
