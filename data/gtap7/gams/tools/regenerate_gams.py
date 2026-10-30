@@ -1,13 +1,17 @@
-"""Regenerate the local GAMS GTAP references into data/ (ADR-0010, phase 2a).
+"""Regenerate the GAMS GTAP references into data/ (ADR-0010, phases 2a and 2b).
 
-Each job writes one folder data/gtap7/<ds>/gams_<form>_<mode>_ifsub<k>/ through
-write_source.py, which runs it, times it and records its source.yaml:
+Each job writes one folder data/gtap7/<ds>/gams_<form>_<mode>_ifsub<k>_fbep-<v>/
+through write_source.py, which runs it, times it and records its source.yaml:
 
-    nl   the GAMS .nl of every phase, local CONVERT (nl_compare --gams-local)
+    nl   the GAMS .nl of every phase, local CONVERT (tools/nl_standalone.py)
     nlp  the NLP solve with IPOPT (regen_gams_reference --form nlp)
     mcp  the MCP solve with PATH (regen_gams_reference --form mcp); the local
-         license stops PATH at 1000 rows, so only gtap7_3x3 ifSUB=1 is here,
-         the rest is phase 2b (NEOS)
+         license stops PATH at 1000 rows, so only gtap7_3x3 ifSUB=1 runs here,
+         the rest on NEOS (--where neos, e-mail from $NEOS_EMAIL)
+
+Every job comes in two variants (#187): fbep=header, the FBEP/FTRV headers of
+basedata.har injected after getData.gms's fbep = 0, and fbep=zero, the
+official getData.gms. --where local|neos|all picks the rows (default local).
 
 A folder that already has a source.yaml is skipped, so a run that dies resumes
 where it stopped. A failed job leaves no folder.
@@ -56,6 +60,16 @@ NLP_DATASETS = {
     "gtap": ("gtap7_3x3", "gtap7_5x5", "gtap7_10x7"),
 }
 MCP_JOBS = (("gtap7_3x3", "gtap", 1), ("gtap7_3x3", "altertax", 1))
+# above the local PATH license (1000 rows): solved on NEOS
+NEOS_JOBS = {
+    "gtap": (("gtap7_3x3", 0), ("gtap7_5x5", 0), ("gtap7_5x5", 1), ("gtap7_10x7", 0),
+             ("gtap7_10x7", 1), ("gtap7_15x10", 0), ("gtap7_15x10", 1), ("gtap7_20x41", 1)),
+    "altertax": (("gtap7_3x3", 0), ("gtap7_3x4", 0), ("gtap7_3x4", 1), ("gtap7_5x5", 0),
+                 ("gtap7_5x5", 1), ("gtap7_10x7", 0), ("gtap7_10x7", 1), ("gtap7_15x10", 0),
+                 ("gtap7_15x10", 1)),
+}  # fmt: skip
+FBEP = ("header", "zero")
+WHERE = ("local", "neos")
 SOLVER = {"nl": "CONVERT", "nlp": "IPOPT", "mcp": "PATH"}
 SOLVE_PHASES = ("base", "check", "shock")
 
@@ -68,36 +82,57 @@ class Job:
     ifsub: int
     phases: tuple[str, ...]
     folder: Path
+    fbep: str
+    where: str
 
 
 def _job(
-    ds: str, form: str, mode: str, k: int, phases: tuple[str, ...], root: Path
-) -> Job:
-    folder = dataset_dir(ds, root=root) / f"gams_{form}_{mode}_ifsub{k}"
-    return Job(ds, form, mode, k, phases, folder)
+    ds: str, form: str, mode: str, k: int, phases: tuple[str, ...], dirs: dict[str, Path],
+    fbep: str, where: str = "local",
+) -> Job:  # fmt: skip
+    folder = dirs[ds] / f"gams_{form}_{mode}_ifsub{k}_fbep-{fbep}"
+    return Job(ds, form, mode, k, phases, folder, fbep, where)
 
 
-def jobs(datasets: list[str] | None = None, root: Path = DATA_ROOT) -> list[Job]:
-    """The 26 jobs of the plan's table, restricted to ``datasets`` if given."""
+def jobs(
+    datasets: list[str] | None = None, root: Path = DATA_ROOT, where: str = "all"
+) -> list[Job]:
+    """The 86 jobs of the plan's table, restricted to ``datasets`` and ``where``."""
     keep = (lambda ds: True) if datasets is None else (lambda ds: ds in datasets)
+    named = {*NL_PHASES, *(ds for names in NLP_DATASETS.values() for ds in names),
+             *(ds for rows in NEOS_JOBS.values() for ds, _ in rows)}  # fmt: skip
+    # dataset_dir walks the whole data tree: once per dataset, not per job
+    root_dirs = {ds: dataset_dir(ds, root=root) for ds in named if keep(ds)}
     out = [
-        _job(ds, "nl", "altertax", k, phases, root)
+        _job(ds, "nl", "altertax", k, phases, root_dirs, v)
         for ds, phases in NL_PHASES.items()
         for k in (0, 1)
+        for v in FBEP
         if keep(ds)
     ]
     out += [
-        _job(ds, "nlp", mode, k, SOLVE_PHASES, root)
+        _job(ds, "nlp", mode, k, SOLVE_PHASES, root_dirs, v)
         for mode, names in NLP_DATASETS.items()
         for ds in names
         for k in (0, 1)
+        for v in FBEP
         if keep(ds)
     ]
     out += [
-        _job(ds, "mcp", mode, k, SOLVE_PHASES, root)
+        _job(ds, "mcp", mode, k, SOLVE_PHASES, root_dirs, v)
         for ds, mode, k in MCP_JOBS
+        for v in FBEP
         if keep(ds)
     ]
+    out += [
+        _job(ds, "mcp", mode, k, SOLVE_PHASES, root_dirs, v, "neos")
+        for mode, rows in NEOS_JOBS.items()
+        for ds, k in rows
+        for v in FBEP
+        if keep(ds)
+    ]
+    if where != "all":
+        out = [j for j in out if j.where == where]
     return out
 
 
@@ -106,20 +141,24 @@ def job_command(job: Job, *, tool_version: str, root: Path = DATA_ROOT) -> list[
     py = sys.executable
     if job.form == "nl":
         inner = [py, str(NL_STANDALONE), "--dataset", job.dataset, "--phase", *job.phases,
-                 "--ifsub", str(job.ifsub), "--out-dir", str(job.folder)]  # fmt: skip
+                 "--ifsub", str(job.ifsub), "--out-dir", str(job.folder),
+                 "--fbep", job.fbep]  # fmt: skip
     else:
         inner = [py, str(REGEN), "--dataset", job.dataset, "--mode", job.mode,
                  "--form", job.form, "--ifsub", str(job.ifsub), "--out", str(job.folder),
-                 "--fbep", "header"]  # fmt: skip
+                 "--fbep", job.fbep, "--where", job.where]  # fmt: skip
+    # NEOS reports the GAMS it ran; write_source reads it from neos_job.json
+    version = ["--remote", "neos"] if job.where == "neos" else ["--tool-version", tool_version]
     return [
         py, str(WRITE_SOURCE),
         "--data-root", str(root),
         "--folder", str(job.folder),
         "--kind", "result", "--model", "gtap7", "--dataset", job.dataset,
-        "--tool", "gams", "--tool-version", tool_version,
+        "--tool", "gams", *version,
         "--variant", f"form={job.form}",
         "--variant", f"mode={job.mode}",
         "--variant", f"ifsub={job.ifsub}",
+        "--variant", f"fbep={job.fbep}",
         "--phases", *job.phases,
         "--model-file", str(root / "gtap7" / "gams"),
         "--data-dir", str(job.folder.parent),
@@ -165,7 +204,9 @@ def main(argv: list[str] | None = None) -> int:
         default=shutil.which("gams"),
         help="the gams binary (default: on PATH)",
     )
-    ap.add_argument("--datasets", nargs="*", default=list(NL_PHASES))
+    ap.add_argument("--datasets", nargs="*", default=None, help="default: every dataset")
+    ap.add_argument("--where", choices=(*WHERE, "all"), default="local",
+                    help="local (default), neos, or all rows of the table")
     ap.add_argument(
         "--only",
         action="append",
@@ -176,7 +217,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="print the commands only")
     args = ap.parse_args(argv)
 
-    all_jobs = jobs(args.datasets, root=args.data_root)
+    all_jobs = jobs(args.datasets, root=args.data_root, where=args.where)
+    datasets = sorted({j.dataset for j in jobs(args.datasets, root=args.data_root)})
     unknown = sorted(set(args.only) - {j.folder.name for j in all_jobs})
     if unknown:
         valid = sorted({j.folder.name for j in all_jobs})
@@ -204,7 +246,7 @@ def main(argv: list[str] | None = None) -> int:
     # the jobs find gams on their PATH; this process's environment stays as it was
     path = f"{Path(args.gams).parent}{os.pathsep}{os.environ.get('PATH', '')}"
     env = {**os.environ, "PATH": path}
-    for folder in drop_broken_records(args.data_root, args.datasets):
+    for folder in drop_broken_records(args.data_root, datasets):
         print(f"removed an incomplete record: {folder}")
 
     failed: list[str] = []

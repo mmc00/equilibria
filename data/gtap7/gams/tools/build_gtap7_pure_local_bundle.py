@@ -504,6 +504,8 @@ def main() -> None:
         inlined = _inject_path_opt_for_shock(inlined)
         print("  injected PATH path.opt for the ifSUB=1 shock restart")
 
+    if args.fbep == "zero":
+        inlined = alt.drop_fbep_ftrv_data(inlined)
     out_gms = out_dir / f"comp_{dataset}_gtap_shock_ifsub{ifsub}.gms"
     out_gms.write_text(inlined)
     print(f"\n  wrote {out_gms.name} ({len(inlined):,} chars)")

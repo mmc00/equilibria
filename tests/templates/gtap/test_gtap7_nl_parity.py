@@ -47,7 +47,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 # The gate builds Python with ifSUB=0 (GTAPClosureConfig(if_sub=False)), so it
 # reads the GAMS .nl recorded with ifSUB=0 (#23: the old fixtures were ifSUB=1).
-NL_VARIANT = {"form": "nl", "mode": "altertax", "ifsub": 0}
+NL_VARIANT = {"form": "nl", "mode": "altertax", "ifsub": 0, "fbep": "zero"}
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 

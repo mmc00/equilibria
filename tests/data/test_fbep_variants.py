@@ -29,7 +29,7 @@ from equilibria.sources import dataset_dir, iter_sources
 
 pytestmark = pytest.mark.needs_gdxdump
 REL = 1e-6
-RESULT = "gams_mcp_gtap_ifsub1"  # the 2a 3x3 MCP result (injected, fbep=header)
+RESULT = "gams_mcp_gtap_ifsub1_fbep-header"  # the 3x3 MCP result solved locally
 
 
 def _gdx(gdx: Path, symbol: str) -> dict[tuple[str, ...], float]:

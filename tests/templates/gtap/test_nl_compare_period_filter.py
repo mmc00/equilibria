@@ -35,7 +35,9 @@ def test_shock_phase_reads_gams_shock_rows() -> None:
     from _nl_parser import parse_nl  # ty: ignore[unresolved-import]
     from nl_compare import diff_nl_models  # ty: ignore[unresolved-import]
 
-    folder = find_reference(DATASET, "gams", form="nl", mode="altertax", ifsub=0)
+    folder = find_reference(
+        DATASET, "gams", form="nl", mode="altertax", ifsub=0, fbep="zero"
+    )
     if folder is None:
         pytest.skip(f"no GAMS .nl recorded for {DATASET}")
         return  # pytest.skip raises; the return tells the type checker
@@ -67,7 +69,9 @@ def test_period_missing_from_a_multi_period_gams_nl_is_refused() -> None:
     from _nl_parser import parse_nl  # ty: ignore[unresolved-import]
     from nl_compare import diff_nl_models  # ty: ignore[unresolved-import]
 
-    folder = find_reference("gtap7_3x4", "gams", form="nl", mode="altertax", ifsub=0)
+    folder = find_reference(
+        "gtap7_3x4", "gams", form="nl", mode="altertax", ifsub=0, fbep="zero"
+    )
     if folder is None:
         pytest.skip("no GAMS .nl recorded for gtap7_3x4")
         return  # pytest.skip raises; the return tells the type checker

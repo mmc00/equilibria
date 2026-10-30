@@ -94,7 +94,7 @@ def _fmt_stats(label: str, s: dict[str, float]) -> str:
 def _fixture_gdx(dataset: str, mode: str, ifsub: int) -> Path | None:
     """The GAMS NLP reference recorded in data/ (mode "pure" is recorded as "gtap")."""
     model = "gtap" if mode == "pure" else mode
-    folder = find_reference(dataset, "gams", form="nlp", mode=model, ifsub=ifsub)
+    folder = find_reference(dataset, "gams", form="nlp", mode=model, ifsub=ifsub, fbep="header")
     return None if folder is None else folder / "out.gdx"
 
 

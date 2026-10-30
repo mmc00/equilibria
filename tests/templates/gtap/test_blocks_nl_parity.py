@@ -72,7 +72,9 @@ def test_blocks_nl_parity_base(dataset: str, tmp_path: Path) -> None:
     from equilibria.templates.gtap.gtap_solver import GTAPSolver
 
     # Python is built with ifSUB=0, so the GAMS .nl recorded with ifSUB=0 (#23)
-    fixture_dir = find_reference(dataset, "gams", form="nl", mode="altertax", ifsub=0)
+    fixture_dir = find_reference(
+        dataset, "gams", form="nl", mode="altertax", ifsub=0, fbep="zero"
+    )
     if fixture_dir is None:
         pytest.skip(f"no hay .nl de GAMS registrado para {dataset}")
     gams_nl_path = fixture_dir / "gams_base.nl"

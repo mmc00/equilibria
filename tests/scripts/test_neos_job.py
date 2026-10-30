@@ -17,7 +17,7 @@ import pytest
 
 from equilibria.sources import GAMS_TOOLS_DIR, dataset_dir
 
-RESULT = dataset_dir("gtap7_3x3") / "gams_mcp_gtap_ifsub1"
+RESULT = dataset_dir("gtap7_3x3") / "gams_mcp_gtap_ifsub1_fbep-header"
 PASSWORD = "s3cr3t-pw"
 EMAIL = "someone@example.org"
 

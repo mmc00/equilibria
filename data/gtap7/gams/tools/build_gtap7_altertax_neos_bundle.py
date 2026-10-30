@@ -470,6 +470,27 @@ def run_inliner(in_gdx: Path, out_data: Path, out_params: Path) -> None:
     subprocess.run(cmd, check=True, cwd=str(ROOT))
 
 
+FBEP_ZERO_ANCHOR = "fbep(fp,a0,r) = 0 ;"
+_FBEP_FTRV_DATA = re.compile(
+    r"^(?:\* (?:FBEP|FTRV) data \(\d+ cells\)|(?:FBEP|FTRV)\(.*\) = .*;)[ \t]*\n?",
+    re.MULTILINE,
+)
+
+
+def drop_fbep_ftrv_data(text: str) -> str:
+    """--fbep zero: no FBEP/FTRV assignment after getData's fbep = 0.
+
+    Some v7_consolidated.gdx carry FBEP themselves (gtap7_3x4, gtap7_5x5), and
+    the inliner writes them among the parameter data after the fbep = 0 line,
+    which would inject them anyway. The official getData.gms never reads the
+    header: fbep = 0 and ftrv = evfp - evfb (#187).
+    """
+    at = text.find(FBEP_ZERO_ANCHOR)
+    if at < 0:
+        raise SystemExit(f"no `{FBEP_ZERO_ANCHOR}` line in the bundle")
+    return text[:at] + _FBEP_FTRV_DATA.sub("", text[at:])
+
+
 def _fbep_ftrv_har_as_assignments(har_path: Path, header: str, inlined: str) -> str:
     """Emit GAMS assignment lines for a factor header (FBEP/FTRV) read from a
     basedata.har (index order ENDW/factor, ACTS/activity, REG/region; raw values).
@@ -706,6 +727,8 @@ def main() -> None:
         # the model text so gtap.optfile=1 finds it on the NEOS machine too.
         inlined = "$onecho > path.opt\n" + PATH_OPT + "$offecho\n\n" + inlined
 
+    if args.fbep == "zero":
+        inlined = drop_fbep_ftrv_data(inlined)
     out_gms = out_dir / f"comp_{dataset}_altertax_neos_ifsub{args.ifsub}.gms"
     out_gms.write_text(inlined)
     print(f"\n  wrote {out_gms.name} ({len(inlined):,} chars)")

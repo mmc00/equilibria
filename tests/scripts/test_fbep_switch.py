@@ -33,9 +33,9 @@ FBEP_EU_LAND = re.compile(
 )
 
 
-def _bundle(mode: str, out: Path, *fbep: str) -> str:
+def _bundle(mode: str, out: Path, *fbep: str, dataset: str = DS) -> str:
     subprocess.run(
-        [sys.executable, str(BUILDERS[mode]), "--dataset", DS, "--ifsub", "1",
+        [sys.executable, str(BUILDERS[mode]), "--dataset", dataset, "--ifsub", "1",
          "--out-dir", str(out), *fbep],
         check=True, cwd=ROOT, capture_output=True,
     )  # fmt: skip
@@ -53,15 +53,17 @@ def test_default_bundle_unchanged(mode: str, tmp_path: Path) -> None:
     default = _bundle(mode, tmp_path / "default")
     header = _bundle(mode, tmp_path / "header", "--fbep", "header")
     assert default == header
-    recorded = RESULTS / f"gams_mcp_{mode}_ifsub1" / "model.gms"
+    recorded = RESULTS / f"gams_mcp_{mode}_ifsub1_fbep-header" / "model.gms"
     assert hashlib.sha256(default.encode()).hexdigest() == (
         hashlib.sha256(recorded.read_bytes()).hexdigest()
     )
 
 
+# gtap7_3x4's own v7 GDX carries FBEP: the inliner writes it after fbep = 0 too
+@pytest.mark.parametrize("dataset", [DS, "gtap7_3x4"])
 @pytest.mark.parametrize("mode", ["gtap", "altertax"])
-def test_zero_bundle_has_no_injection(mode: str, tmp_path: Path) -> None:
-    text = _bundle(mode, tmp_path, "--fbep", "zero")
+def test_zero_bundle_has_no_injection(mode: str, dataset: str, tmp_path: Path) -> None:
+    text = _bundle(mode, tmp_path, "--fbep", "zero", dataset=dataset)
     assert FBEP_ZERO in text
     after = text[text.index(FBEP_ZERO) :]
     assert re.search(r"^\s*FBEP\(", after, flags=re.MULTILINE) is None
@@ -77,7 +79,7 @@ def _standalone(monkeypatch: Any, **kw: Any) -> str:
 
 @pytest.mark.needs_gdxdump
 def test_nl_standalone_default_unchanged(monkeypatch: Any) -> None:
-    recorded = RESULTS / "gams_nl_altertax_ifsub0" / "gams_base.gms"
+    recorded = RESULTS / "gams_nl_altertax_ifsub0_fbep-zero" / "gams_base.gms"
     assert _standalone(monkeypatch) == recorded.read_text()
 
 
@@ -105,7 +107,7 @@ def _fake_gdxdump(tmp_path: Path, fs_value: float) -> str:
 @pytest.mark.needs_gdxdump
 def test_verify_zero_rejects_subsidy(monkeypatch: Any) -> None:
     rgr = _tools(monkeypatch, "regen_gams_reference")
-    gdx = RESULTS / "gams_mcp_altertax_ifsub1" / "out.gdx"
+    gdx = RESULTS / "gams_mcp_altertax_ifsub1_fbep-header" / "out.gdx"
     gdxdump = str(Path(rgr.shutil.which("gams")).with_name("gdxdump"))
     rgr._verify_subsidy_aware(gdxdump, gdx, "header")
     with pytest.raises(SystemExit, match="fs"):

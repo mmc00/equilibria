@@ -121,7 +121,9 @@ def _fixture_gdx(dataset: str, mode: str, ifsub: int) -> Path | None:
     The matrix calls the pure model "pure"; data/ records it as mode "gtap".
     """
     model = "gtap" if mode == "pure" else mode
-    folder = find_reference(dataset, "gams", form="nlp", mode=model, ifsub=ifsub)
+    folder = find_reference(
+        dataset, "gams", form="nlp", mode=model, ifsub=ifsub, fbep="header"
+    )
     return None if folder is None else folder / "out.gdx"
 
 
