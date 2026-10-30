@@ -44,8 +44,9 @@ generated_from:
       tools/build_gtap7_altertax_neos_bundle.py: 7e59a9d0815ae6f7b54222ed39bae21c357d38fa34b300739abf47e777a91dca
       tools/build_gtap7_pure_local_bundle.py: fcf66d4b894819aacc80a90e2286e624f7b1a564f13e0ab1e7cb004ebc22bb30
       tools/gdx_to_gams_inline.py: 325d18b91f3eabddf050f8b2aaf77bf90f0a74d266f0e42bf665c6a514e24396
+      tools/neos_job.py: 8ab21691ee3c4953a8aaa21bb74b47eb60290869f0a7cbbdb2c438d32a68c8b0
       tools/nl_standalone.py: 53f321c41cfd9be539b5b30bb7eb93bffb93ed27734378f05fc8c6a58150736c
-      tools/regen_gams_reference.py: 2a200a2ff40f3f96196f02e9e92146613b03aa581b15eae10680816a44c0cf5a
+      tools/regen_gams_reference.py: c35ed393faad835478749fe1083499d903e7d264a62788694bd84c88463af03d
       tools/regenerate_gams.py: 9516571d77d0d08310c6bfded530f3f08e7a6159183e0782b4e20313f320fa80
   data:
     path: gtap7/gtap7_3x3
@@ -59,7 +60,7 @@ solver:
   name: CONVERT
 command: /Users/marmol/proyectos/equilibria-phase2b/.venv/bin/python /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gams/tools/nl_standalone.py
   --dataset gtap7_3x3 --phase base check shock altertax --ifsub 0 --out-dir /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gtap7_3x3/gams_nl_altertax_ifsub0
-equilibria_commit: f8c4698
+equilibria_commit: 046069e
 exit:
   code: 0
 outputs:
@@ -80,8 +81,8 @@ outputs:
   gams_shock.nl: 1dc531d5551624bbd2beddc81c589986de348411f1731484e620c571aa97dba8
   gams_shock.row: e0ee68fe5b0ba85622463e3f4ca566f9416d021128c222adf18b436eb75a7bb5
 run:
-  date: '2026-10-30T11:19:04-06:00'
-  duration_s: 3.804
+  date: '2026-10-30T11:36:19-06:00'
+  duration_s: 3.772
   machine:
     os: macOS 26.2 (Darwin 25.2.0)
     cpu: Apple M3 Pro

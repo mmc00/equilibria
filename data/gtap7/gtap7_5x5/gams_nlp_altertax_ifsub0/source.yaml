@@ -43,8 +43,9 @@ generated_from:
       tools/build_gtap7_altertax_neos_bundle.py: 7e59a9d0815ae6f7b54222ed39bae21c357d38fa34b300739abf47e777a91dca
       tools/build_gtap7_pure_local_bundle.py: fcf66d4b894819aacc80a90e2286e624f7b1a564f13e0ab1e7cb004ebc22bb30
       tools/gdx_to_gams_inline.py: 325d18b91f3eabddf050f8b2aaf77bf90f0a74d266f0e42bf665c6a514e24396
+      tools/neos_job.py: 8ab21691ee3c4953a8aaa21bb74b47eb60290869f0a7cbbdb2c438d32a68c8b0
       tools/nl_standalone.py: 53f321c41cfd9be539b5b30bb7eb93bffb93ed27734378f05fc8c6a58150736c
-      tools/regen_gams_reference.py: 2a200a2ff40f3f96196f02e9e92146613b03aa581b15eae10680816a44c0cf5a
+      tools/regen_gams_reference.py: c35ed393faad835478749fe1083499d903e7d264a62788694bd84c88463af03d
       tools/regenerate_gams.py: 9516571d77d0d08310c6bfded530f3f08e7a6159183e0782b4e20313f320fa80
   data:
     path: gtap7/gtap7_5x5
@@ -59,15 +60,15 @@ solver:
 command: /Users/marmol/proyectos/equilibria-phase2b/.venv/bin/python /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gams/tools/regen_gams_reference.py
   --dataset gtap7_5x5 --mode altertax --form nlp --ifsub 0 --out /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gtap7_5x5/gams_nlp_altertax_ifsub0
   --fbep header
-equilibria_commit: f8c4698
+equilibria_commit: 046069e
 exit:
   code: 0
 outputs:
   model.gms: 75714facfeb10b19c4ce935f18970496e3c928ab69e22f64bc6c1eaff8d8f5b4
   out.gdx: 65fb88d347e526b582c4855a8afed92ab0c28ad65bd989bd50afe61037e19b9c
 run:
-  date: '2026-10-30T11:19:59-06:00'
-  duration_s: 2.931
+  date: '2026-10-30T11:37:14-06:00'
+  duration_s: 2.906
   machine:
     os: macOS 26.2 (Darwin 25.2.0)
     cpu: Apple M3 Pro

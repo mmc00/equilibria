@@ -56,6 +56,9 @@ _ALLOWED = frozenset(
         "license",
         "derived_from",
         "changes",
+        # a result solved on NEOS: job, times, category/solver/input, options,
+        # sha256 of the .gms sent (never the job password or an e-mail)
+        "neos",
     }
 )
 _REQUIRED: dict[str, tuple[str, ...]] = {

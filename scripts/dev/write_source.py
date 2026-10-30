@@ -19,9 +19,11 @@ from __future__ import annotations
 import argparse
 import ctypes
 import datetime as dt
+import json
 import os
 import platform
 import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -171,6 +173,11 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="kind model: YAML list of {file, change, what, why, commit}",
     )
+    ap.add_argument(
+        "--remote",
+        choices=["neos"],
+        help="the command solved remotely: neos reads <folder>/neos_job.json",
+    )
     ap.add_argument("--notes", default="")
     ap.add_argument("--no-run", action="store_true")
     ap.add_argument("command", nargs=argparse.REMAINDER)
@@ -180,6 +187,7 @@ def main(argv: list[str] | None = None) -> int:
         command = command[1:]
     root = args.data_root.resolve()
     folder = args.folder.resolve()
+    created = not folder.exists()
     folder.mkdir(parents=True, exist_ok=True)
 
     record: dict[str, Any] = {"kind": args.kind, "model": args.model}
@@ -202,7 +210,26 @@ def main(argv: list[str] | None = None) -> int:
         duration = time.perf_counter() - t0
         if proc.returncode != 0:
             print(f"command failed (exit {proc.returncode}); no source.yaml written")
+            if created:  # a failed job leaves nothing; the next run resumes from it
+                shutil.rmtree(folder)
             return proc.returncode
+        run_info: dict[str, Any] = {
+            "date": started.isoformat(timespec="seconds"),
+            "duration_s": round(duration, 3),
+            "machine": machine_info(),
+        }
+        if args.remote == "neos":
+            job = json.loads((folder / "neos_job.json").read_text(encoding="utf-8"))
+            if args.tool_version and args.tool_version != job["gams_version"]:
+                print(
+                    f"--tool-version {args.tool_version} but NEOS ran GAMS "
+                    f"{job['gams_version']}; no source.yaml written"
+                )
+                return 1
+            args.tool_version = job.pop("gams_version")
+            run_info["date"] = job["finished_utc"]
+            run_info["machine"] = {"os": "NEOS server", "cpu": "", "cores": None,
+                                   "ram_gb": None}  # fmt: skip
         record.update(
             {
                 "tool": args.tool,
@@ -215,13 +242,11 @@ def main(argv: list[str] | None = None) -> int:
                 "equilibria_commit": _git_commit(),
                 "exit": {"code": proc.returncode},
                 "outputs": _outputs(folder),
-                "run": {
-                    "date": started.isoformat(timespec="seconds"),
-                    "duration_s": round(duration, 3),
-                    "machine": machine_info(),
-                },
+                "run": run_info,
             }
         )
+        if args.remote == "neos":
+            record["neos"] = job
     else:
         record["source"] = args.source or ""
         if args.kind == "data":

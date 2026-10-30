@@ -154,6 +154,11 @@ changes:
   what: runs the matrix of local GAMS jobs under write_source (moved from scripts/gtap/)
   why: generates GAMS results from this model, so it lives with it and the model-folder sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
   commit: 55c915a, this change
+- file: tools/neos_job.py
+  change: added
+  what: submits one self-contained GAMS MCP bundle to NEOS (cp/PATH/GAMS), polls, and keeps out.gdx, model.lst, neos.log and neos_job.json (never the job password or an e-mail)
+  why: the MCP references above the local PATH license (1000 rows) are solved on NEOS and recorded as such (phase 2b, maintainer 2026-10-30)
+  commit: this change
 outputs:
   GFTCET.gms: 154e0e19b669c6ba1797938ed531a2d0b999ba6d7f5b2ecc6ad4a0bad969d53c
   GFTFlxFF.gms: f1cf06373ce896b8748a95aaba3aa04ebb4557e2ef538565fbda60e34fdf29f5
@@ -183,8 +188,9 @@ outputs:
   tools/build_gtap7_altertax_neos_bundle.py: 7e59a9d0815ae6f7b54222ed39bae21c357d38fa34b300739abf47e777a91dca
   tools/build_gtap7_pure_local_bundle.py: fcf66d4b894819aacc80a90e2286e624f7b1a564f13e0ab1e7cb004ebc22bb30
   tools/gdx_to_gams_inline.py: 325d18b91f3eabddf050f8b2aaf77bf90f0a74d266f0e42bf665c6a514e24396
+  tools/neos_job.py: 8ab21691ee3c4953a8aaa21bb74b47eb60290869f0a7cbbdb2c438d32a68c8b0
   tools/nl_standalone.py: 53f321c41cfd9be539b5b30bb7eb93bffb93ed27734378f05fc8c6a58150736c
-  tools/regen_gams_reference.py: 2a200a2ff40f3f96196f02e9e92146613b03aa581b15eae10680816a44c0cf5a
+  tools/regen_gams_reference.py: c35ed393faad835478749fe1083499d903e7d264a62788694bd84c88463af03d
   tools/regenerate_gams.py: 9516571d77d0d08310c6bfded530f3f08e7a6159183e0782b4e20313f320fa80
 status: verified
 notes: ''

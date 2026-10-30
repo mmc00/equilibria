@@ -317,3 +317,56 @@ def test_model_folder_input_hashes_every_file(tmp_path: Path) -> None:
     assert set(hashes) == {"comp.gms", "model.gms"}
     (model.parent / "model.gms").write_text("edited")
     assert any("changed after" in m for m in check_tree(tmp_path))
+
+
+_NEOS_JOB = {
+    "job": 4242,
+    "submitted_utc": "2026-10-30T18:00:00+00:00",
+    "finished_utc": "2026-10-30T18:05:00+00:00",
+    "category": "cp",
+    "solver": "PATH",
+    "input_method": "GAMS",
+    "options": "convergence_tolerance 1e-9\n",
+    "gams_version": "52.5.0",
+    "sent_sha256": "0" * 64,
+}
+
+
+def _neos_cmd() -> list[str]:
+    body = f"import json; json.dump({_NEOS_JOB!r}, open('neos_job.json', 'w'))"
+    return [sys.executable, "-c", body]
+
+
+def test_write_source_remote_neos(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_mcp_gtap_ifsub1"
+    argv = _argv(tmp_path, folder, _neos_cmd())
+    argv[argv.index("--") : argv.index("--")] = ["--remote", "neos"]
+    assert _module().main(argv) == 0
+    raw = load_source(folder).raw
+    assert raw["run"]["machine"] == {"os": "NEOS server", "cpu": "", "cores": None,
+                                     "ram_gb": None}  # fmt: skip
+    assert raw["run"]["date"] == _NEOS_JOB["finished_utc"]
+    assert raw["tool_version"] == "52.5.0"
+    assert raw["neos"] == {k: v for k, v in _NEOS_JOB.items() if k != "gams_version"}
+    assert "neos_job.json" in raw["outputs"]
+
+
+def test_write_source_remote_neos_refuses_other_version(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_mcp_gtap_ifsub1"
+    argv = _argv(tmp_path, folder, _neos_cmd())
+    argv[argv.index("--") : argv.index("--")] = [
+        "--remote",
+        "neos",
+        "--tool-version",
+        "53.5.0",
+    ]
+    assert _module().main(argv) != 0
+    assert not (folder / "source.yaml").exists()
+
+
+def test_failed_command_leaves_no_new_folder(tmp_path: Path) -> None:
+    # a NEOS job that fails mid-matrix must leave nothing behind (phase 2b)
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_mcp_gtap_ifsub1"
+    cmd = [sys.executable, "-c", "raise SystemExit(3)"]
+    assert _module().main(_argv(tmp_path, folder, cmd)) == 3
+    assert not folder.exists()

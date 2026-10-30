@@ -1,4 +1,4 @@
-"""Solve one GAMS GTAP reference into a folder (ADR-0010, phase 2a).
+"""Solve one GAMS GTAP reference into a folder (ADR-0010, phases 2a and 2b).
 
 Builds the self-contained bundle of a dataset from the model in
 data/gtap7/gams (pure: build_gtap7_pure_local_bundle.py, altertax:
@@ -6,6 +6,10 @@ build_gtap7_altertax_neos_bundle.py), solves it with the local GAMS and
 leaves in --out only what replays the run: ``model.gms`` (the exact file
 solved, data inlined), ``path.opt`` when the bundle writes one, and
 ``out.gdx``. Nothing else, so write_source.py can record the folder as is.
+
+--where neos solves the same bundle on NEOS (neos_job.py, e-mail from
+$NEOS_EMAIL) and adds ``model.lst``, ``neos.log`` and ``neos_job.json``, which
+write_source.py --remote neos records. --out is created only on success.
 
 --form mcp solves the bundle as built (PATH; the local license stops at 1000
 rows, so only gtap7_3x3 ifSUB=1 fits). --form nlp switches ifMCP off and
@@ -27,6 +31,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+import neos_job
 
 ROOT = Path(__file__).resolve().parents[4]
 BUILDERS = {
@@ -108,19 +114,28 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--fbep", choices=("header", "zero"), required=True,
                     help="header: FBEP/FTRV injected from basedata.har; zero: official getData")
+    ap.add_argument("--where", choices=("local", "neos"), default="local",
+                    help="neos: solve on NEOS (PATH, --form mcp only)")
     args = ap.parse_args(argv)
 
+    if args.where == "neos" and args.form != "mcp":
+        ap.error("--where neos solves --form mcp only")
     gams = shutil.which("gams")
-    if gams is None:
+    if gams is None and args.where == "local":
         ap.error("the gams binary must be on PATH")
+    gdxdump = shutil.which("gdxdump") or (gams and str(Path(gams).with_name("gdxdump")))
+    if args.mode == "altertax" and not gdxdump:
+        ap.error("the altertax subsidy check needs gdxdump on PATH")
     out = args.out.resolve()
-    out.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="regen_gams_") as tmp:
         work = Path(tmp)
         text = _build(args.mode, args.dataset, args.ifsub, work, args.fbep).read_text()
         model = work / "model.gms"
         model.write_text(to_nlp(text) if args.form == "nlp" else text)
+        if args.where == "neos":
+            return _solve_on_neos(args, work, model, out, gdxdump)
+        assert gams is not None
         proc = subprocess.run(
             [gams, model.name, "lo=2"], cwd=work, capture_output=True, text=True
         )
@@ -143,11 +158,40 @@ def main(argv: list[str] | None = None) -> int:
                 print("\n".join(lst.read_text().splitlines()[-30:]))
             return 1
         if args.mode == "altertax":
-            _verify_subsidy_aware(str(Path(gams).with_name("gdxdump")), gdx, args.fbep)
-        for name in ("model.gms", "path.opt", "out.gdx"):
-            if (work / name).exists():
-                shutil.copyfile(work / name, out / name)
+            _verify_subsidy_aware(str(gdxdump), gdx, args.fbep)
+        _keep(work, out, ("model.gms", "path.opt", "out.gdx"))
     print(f"model statuses {statuses}; wrote {out}")
+    return 0
+
+
+def _keep(work: Path, out: Path, names: tuple[str, ...]) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        if (work / name).exists():
+            shutil.copyfile(work / name, out / name)
+
+
+def _solve_on_neos(
+    args: argparse.Namespace, work: Path, model: Path, out: Path, gdxdump: str | None
+) -> int:
+    """The bundle on NEOS; ``out`` only gets files when NEOS solved it."""
+    # a builder that writes path.opt next to the bundle (altertax --homotopy)
+    # sends it as the NEOS options; the others write their own with $onecho
+    opt = work / "path.opt"
+    solved = work / "neos"
+    try:
+        neos_job.run(model, solved, options=opt.read_text() if opt.exists() else "")
+    except neos_job.NeosError as err:
+        print(err)
+        return 1
+    if args.mode == "altertax":
+        _verify_subsidy_aware(str(gdxdump), solved / "out.gdx", args.fbep)
+    shutil.copyfile(model, solved / "model.gms")
+    if opt.exists():
+        shutil.copyfile(opt, solved / "path.opt")
+    _keep(solved, out, ("model.gms", "path.opt", "out.gdx", "model.lst", "neos.log",
+                        "neos_job.json"))  # fmt: skip
+    print(f"wrote {out}")
     return 0
 
 
