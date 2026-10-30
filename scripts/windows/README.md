@@ -49,3 +49,46 @@ Un paso que falla no corta los demás. Al final imprime los comandos para subir 
 - ME4A y ME4B (Gragg 2-4-6) terminan en "Accuracy too low": el shock de tierra de −81 % pide más pasos o subintervalos. `gemsim` escribe el `.sl4` igual, y el resumen los marcaba OK; ahora OK exige `rc=0` y el cierre normal del log. Sus `.sl4`/`sl4dump` de esa corrida **no** sirven de oráculo.
 
 **Estado:** el paso 4 corrió el 2026-10-19 (rama de datos `windows/corridas-paper-2026-10-19_1928`): `make_levels_tab` y `tablo` bien; los dos `gemsim` fallaron y se rehicieron a mano. Este script ya trae esos arreglos (tag `tm10_s8-16-32` en el 3x3, `.prm` capFix con `_force_rdlt` byte a byte), pero no volvió a correr solo de punta a punta.
+
+## Phase 3a-1: the GEMPACK matrix into `data/`
+
+`regenerate_gempack.py` re-solves the linearization-study matrix (6 datasets ×
+10 grid configurations in capFlex, plus `tm10_s8-16-32` in capFix: 66 jobs) and
+leaves each one in `data/gtap7/<ds>/gempack_<tag>/` with its `source.yaml`
+(command, GEMPACK version, machine, duration, input and output hashes). It
+deletes nothing: the old files in `tests/fixtures/gtap7_gempack/` stay until the
+Mac compares them (phase 3b).
+
+From the repo root, in PowerShell:
+
+```powershell
+git fetch origin
+git switch data/phase-3-gempack
+uv sync --frozen
+
+# 1. the GEMPACK version, as RunGTAP shows it in Help -> About (e.g. 11.3)
+$v = "11.3"
+
+# 2. what would run (66 jobs), nothing is solved
+uv run python scripts/windows/regenerate_gempack.py --tool-version $v --dry-run
+
+# 3. one job as a smoke test
+uv run python scripts/windows/regenerate_gempack.py --tool-version $v `
+    --datasets gtap7_3x3 --only tm10_s8-16-32_capflex
+Get-Content data\gtap7\gtap7_3x3\gempack_tm10_s8-16-32_capflex\source.yaml
+#    expect: status: verified, tool: gempack, run.machine with your CPU name
+
+# 4. everything (hours); rerunning skips the jobs already recorded
+uv run python scripts/windows/regenerate_gempack.py --tool-version $v
+
+# 5. send the results back
+git add data/gtap7
+git commit -m "data(gempack): regenerate the GEMPACK matrix on Windows"
+git push
+```
+
+Paths default to `C:\runGTAP375\gtapv7.exe` and `C:\GP\sltoht.exe`; pass
+`--gtapv7 PATH` / `--sltoht PATH` if yours differ. A failed job prints the end
+of the GEMPACK console and leaves no folder; the final summary lists it. If
+`gtap7_20x41` fails in every configuration, say so: its old fixtures came from
+an older setup and phase 3b has to explain the difference.
