@@ -372,8 +372,8 @@ class GTAPParityAdapter:
     ]
 
     _DATASET_GDX = {
-        "9x10": "src/equilibria/templates/reference/gtap/data/basedata-9x10.gdx",
-        "nus333": "src/equilibria/templates/reference/gtap/data/basedata-nus333.gdx",
+        "9x10": "data/gtap7/9x10/basedata-9x10.gdx",
+        "nus333": "data/gtap7/9x10/basedata-nus333.gdx",
     }
 
     # Reference GDX paths for gtap7_* datasets.

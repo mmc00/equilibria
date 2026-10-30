@@ -4,9 +4,9 @@
 Make the Python GTAP model in equilibria an exact mirror of the GAMS reference and validate baseline and tariff shock results against GAMS.
 
 ## Reference GAMS Model and Submission Path
-- GAMS reference model: [src/equilibria/templates/reference/gtap/scripts/model.gms](../../src/equilibria/templates/reference/gtap/scripts/model.gms)
+- GAMS reference model: [data/gtap7/gams/model.gms](../../data/gtap7/gams/model.gms)
 - GAMS submission script (NEOS): [scripts/gtap/submit_gams_to_neos.py](../../scripts/gtap/submit_gams_to_neos.py)
-- Reference data (GTAP 9x10): [src/equilibria/templates/reference/gtap/data](../../src/equilibria/templates/reference/gtap/data)
+- Reference data (GTAP 9x10): [data/gtap7/9x10](../../data/gtap7/9x10)
 
 ## Scope
 - Baseline: calibrate and solve Python and GAMS models on the same GTAP dataset.
@@ -78,15 +78,15 @@ Make the Python GTAP model in equilibria an exact mirror of the GAMS reference a
 
 ### Baseline run comparison
 - Python PATH-CAPI solve:
-   - `python scripts/gtap/run_gtap.py solve --gdx-file src/equilibria/templates/reference/gtap/data/9x10Dat.gdx --solver path-capi --path-capi-mode nonlinear --tee`
+   - `python scripts/gtap/run_gtap.py solve --gdx-file data/gtap7/9x10/9x10Dat.gdx --solver path-capi --path-capi-mode nonlinear --tee`
 - GAMS baseline via NEOS:
-   - `python scripts/gtap/submit_gams_to_neos.py --gms-file src/equilibria/templates/reference/gtap/scripts/model.gms --solver PATH`
+   - `python scripts/gtap/submit_gams_to_neos.py --gms-file data/gtap7/gams/model.gms --solver PATH`
 
 ### Tariff shock comparison
 - Python tariff shock (example):
-   - `python scripts/gtap/run_tariff_shock_python.py --gdx-file src/equilibria/templates/reference/gtap/data/9x10Dat.gdx --solver path-capi --path-capi-mode nonlinear --shock-file notes/tmp/tariff_shock.json`
+   - `python scripts/gtap/run_tariff_shock_python.py --gdx-file data/gtap7/9x10/9x10Dat.gdx --solver path-capi --path-capi-mode nonlinear --shock-file notes/tmp/tariff_shock.json`
 - GAMS tariff shock via NEOS:
-   - `python scripts/gtap/submit_gams_to_neos.py --gms-file src/equilibria/templates/reference/gtap/scripts/model.gms --solver PATH --shock-file notes/tmp/tariff_shock.gms`
+   - `python scripts/gtap/submit_gams_to_neos.py --gms-file data/gtap7/gams/model.gms --solver PATH --shock-file notes/tmp/tariff_shock.gms`
 
 ### Example shock files
 - Python shock file: [notes/tmp/tariff_shock.json](../../notes/tmp/tariff_shock.json)

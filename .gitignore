@@ -398,8 +398,7 @@ docs/superpowers/
 /skills/
 
 # GTAP scratch artifacts (accidental `con` redirect, fixed-script experiments)
-src/equilibria/templates/reference/gtap/scripts/con
-src/equilibria/templates/reference/gtap/scripts/tariff_sim_fixed.gms
+data/gtap7/gams/con
 
 # data/<model>/<dataset>/ — only commit basedata.har, sets.har, baserate.har, default.prm, v7_consolidated.gdx
 data/gtap*/*/GDX/

@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from equilibria.sources import DATA_ROOT
 from equilibria.templates.gtap.gtap_benchmark_scaling import (
     ScalingContext as _ScalingContext,
 )
@@ -257,13 +258,7 @@ class GTAPModelEquations:
             candidate = Path(env_hint).expanduser().resolve()
             return candidate if candidate.exists() else None
 
-        default_path = (
-            Path(__file__).resolve().parents[1]
-            / "reference"
-            / "gtap"
-            / "data"
-            / "gams_cal_dump_9x10.gdx"
-        )
+        default_path = DATA_ROOT / "gtap7" / "9x10" / "gams_cal_dump_9x10.gdx"
         if default_path.exists():
             return default_path
         return None
@@ -3971,7 +3966,7 @@ class GTAPModelEquations:
         model.facty = Var(
             model.r,
             # GAMS declares factY under `Variables` (FREE), not `Positive Variables`
-            # (reference/gtap/scripts/model.gms:53) — factor income NET of depreciation
+            # (data/gtap7/gams/model.gms:53) — factor income NET of depreciation
             # can be NEGATIVE for a small capital-heavy region in a period (13 regions in
             # gtap7_20x41: NZL/CHL/COL/PER/URY/PRY/CentralAmer/Caribbean/ARE/ISR/ZAF/EFTA/
             # EasternEur, facty ~ -0.004..-0.017). eq_facty and the seed both already allow

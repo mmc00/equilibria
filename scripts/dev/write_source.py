@@ -33,6 +33,7 @@ import yaml
 from equilibria.sources import (
     DATA_ROOT,
     SOURCE_FILE,
+    check_derived,
     load_source,
     own_files,
     sha256_file,
@@ -156,6 +157,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--solver")
     ap.add_argument("--source", help="kind data/model: where it comes from")
     ap.add_argument("--license", help="kind data: redistribution terms")
+    ap.add_argument(
+        "--derived-from",
+        help="kind model: the folder it was derived from, relative to the data root",
+    )
+    ap.add_argument(
+        "--changes",
+        type=Path,
+        help="kind model: YAML list of {file, change, what, why, commit}",
+    )
     ap.add_argument("--notes", default="")
     ap.add_argument("--no-run", action="store_true")
     ap.add_argument("command", nargs=argparse.REMAINDER)
@@ -211,6 +221,11 @@ def main(argv: list[str] | None = None) -> int:
         record["source"] = args.source or ""
         if args.kind == "data":
             record["license"] = args.license or ""
+        if args.derived_from or args.changes:
+            if args.kind != "model" or not (args.derived_from and args.changes):
+                ap.error("--derived-from and --changes go together, for --kind model")
+            record["derived_from"] = args.derived_from
+            record["changes"] = yaml.safe_load(args.changes.read_text(encoding="utf-8"))
         record["outputs"] = _outputs(folder)
     record["status"] = "verified"
     record["notes"] = args.notes
@@ -219,6 +234,11 @@ def main(argv: list[str] | None = None) -> int:
         yaml.safe_dump(record, sort_keys=False, allow_unicode=True), encoding="utf-8"
     )
     load_source(folder)  # what was written must be a valid record
+    problems = check_derived(folder, root)
+    if problems:
+        (folder / SOURCE_FILE).unlink()
+        print("\n".join(problems) + "\nno source.yaml written")
+        return 1
     print(f"wrote {folder / SOURCE_FILE}")
     return 0
 

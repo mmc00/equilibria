@@ -46,7 +46,7 @@ from run_burfisher import EXERCISES, me9  # noqa: E402
 
 from equilibria.templates.gtap.shocks import gempack_kind, shocked  # noqa: E402
 
-GAMS_SRC = ROOT / "src" / "equilibria" / "templates" / "reference" / "gtap" / "scripts"
+GAMS_SRC = ROOT / "data" / "gtap7" / "gams"
 COMP_SHOCK = Path(__file__).resolve().parent / "gams" / "comp_shock.gms"
 HAR_FILES = ("basedata.har", "sets.har", "baserate.har")
 

@@ -2,20 +2,20 @@
 * GTAP calibration dump (Python parity helper)
 *
 * Usage:
-*   gams scripts/cal_dump.gms
+*   gams data/gtap7/gams/cal_dump.gms
 *
 * Optional globals:
 *   --baseName=9x10
-*   --refRoot=src/equilibria/templates/reference/gtap
-*   --inDir=src/equilibria/templates/reference/gtap/data
-*   --outDir=src/equilibria/templates/reference/gtap/data
+*   --refRoot=data/gtap7
+*   --inDir=data/gtap7/9x10
+*   --outDir=data/gtap7/9x10
 * ------------------------------------------------------------------------------
 
 $if not setGlobal baseName  $setGlobal baseName  9x10
-$if not setGlobal refRoot   $setGlobal refRoot   src/equilibria/templates/reference/gtap
-$if not setGlobal scriptDir $setGlobal scriptDir %refRoot%/scripts
-$if not setGlobal inDir     $setGlobal inDir     %refRoot%/data
-$if not setGlobal outDir    $setGlobal outDir    %refRoot%/data
+$if not setGlobal refRoot   $setGlobal refRoot   data/gtap7
+$if not setGlobal scriptDir $setGlobal scriptDir %refRoot%/gams
+$if not setGlobal inDir     $setGlobal inDir     %refRoot%/9x10
+$if not setGlobal outDir    $setGlobal outDir    %refRoot%/9x10
 
 $setGlobal simType   CompStat
 $setGlobal simName   CAL_DUMP

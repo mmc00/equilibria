@@ -33,10 +33,10 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from equilibria._local_refs import cge_babel_dir
+from equilibria.sources import GAMS_MODEL_DIR, dataset_dir
 
 ROOT = Path(__file__).resolve().parents[2]
-UPSTREAM = Path(str(cge_babel_dir() / "standard_gtap_7"))
+UPSTREAM = GAMS_MODEL_DIR
 GAMS_SYS = "/Library/Frameworks/GAMS.framework/Versions/48/Resources"
 
 
@@ -192,7 +192,7 @@ def merge_gdx(out_path: Path) -> None:
 
     merged = gt.Container(system_directory=GAMS_SYS)
     for src in ("9x10Sets.gdx", "9x10Dat.gdx", "9x10Prm.gdx"):
-        c = gt.Container(str(UPSTREAM / src), system_directory=GAMS_SYS)
+        c = gt.Container(str(dataset_dir("9x10") / src), system_directory=GAMS_SYS)
         for name, sym in c.data.items():
             if name in merged.data:
                 continue

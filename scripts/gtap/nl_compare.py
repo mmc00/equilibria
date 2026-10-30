@@ -28,9 +28,9 @@ from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 from equilibria.templates.gtap.gtap_solver import GTAPSolver
 from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
 
-GDX9 = ROOT / "src/equilibria/templates/reference/gtap/data/basedata-9x10.gdx"
-COMP_GMS = ROOT / "src/equilibria/templates/reference/gtap/scripts/comp.gms"
-DATA_DIR = ROOT / "src/equilibria/templates/reference/gtap/data"
+GDX9 = ROOT / "data/gtap7/9x10/basedata-9x10.gdx"
+COMP_GMS = ROOT / "data/gtap7/gams/comp.gms"
+DATA_DIR = ROOT / "data/gtap7/9x10"
 
 KEEP_R = ["Oceania", "NAmerica", "EU_28"]
 KEEP_I = ["c_Crops", "c_MeatLstk", "c_Extraction", "c_TransComm"]

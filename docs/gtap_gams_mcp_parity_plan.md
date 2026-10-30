@@ -71,7 +71,7 @@ Criterio de cierre:
 
 Referencia GAMS:
 
-- el modelo `gtap` en [model.gms](src/equilibria/templates/reference/gtap/scripts/model.gms:1395) declara explícitamente el mapeo ecuación-variable del MCP
+- el modelo `gtap` en [model.gms](data/gtap7/gams/model.gms:1395) declara explícitamente el mapeo ecuación-variable del MCP
 - el bloque central relevante incluye, entre otros:
   - `pdpeq.pdp`, `pmpeq.pmp`, `paeq.pa`, `xdeq.xd`, `xmeq.xm`
   - `xmteq.xmt`, `xweq.xw`, `pmteq.pmt`, `pmeq.pm`
@@ -519,15 +519,15 @@ Evidencia base usada para esta clasificación:
 
 - la closure declarativa Pyomo fija por diseño `etax`, `mtax`, `lambdam`, `lambdamg`, `xft` y `tmarg` en [gtap_contract.py](src/equilibria/templates/gtap/gtap_contract.py:117)
 - GAMS fija en calibración:
-  - `etax.fx(r,i,t) = 0` en [cal.gms](src/equilibria/templates/reference/gtap/scripts/cal.gms:315)
-  - `mtax.fx(rp,i,t) = 0` en [cal.gms](src/equilibria/templates/reference/gtap/scripts/cal.gms:346)
-  - `lambdam.fx(rp,i,r,t) = 1` en [cal.gms](src/equilibria/templates/reference/gtap/scripts/cal.gms:347)
-  - `lambdamg.fx(m,r,i,rp,t) = 1` en [cal.gms](src/equilibria/templates/reference/gtap/scripts/cal.gms:382)
-  - `tmarg.fx(r,i,rp,t)$xwFlag(r,i,rp)` en [cal.gms](src/equilibria/templates/reference/gtap/scripts/cal.gms:322)
+  - `etax.fx(r,i,t) = 0` en [cal.gms](data/gtap7/gams/cal.gms:315)
+  - `mtax.fx(rp,i,t) = 0` en [cal.gms](data/gtap7/gams/cal.gms:346)
+  - `lambdam.fx(rp,i,r,t) = 1` en [cal.gms](data/gtap7/gams/cal.gms:347)
+  - `lambdamg.fx(m,r,i,rp,t) = 1` en [cal.gms](data/gtap7/gams/cal.gms:382)
+  - `tmarg.fx(r,i,rp,t)$xwFlag(r,i,rp)` en [cal.gms](data/gtap7/gams/cal.gms:322)
 - GAMS fija por cierre/iteración:
-  - `pnum.fx(t) = pnum.l(t)` en [iterloop.gms](src/equilibria/templates/reference/gtap/scripts/iterloop.gms:41)
-  - `xft.fx(r,fm,tsim)$(not xftFlag(r,fm)) = 0` en [iterloop.gms](src/equilibria/templates/reference/gtap/scripts/iterloop.gms:142)
-  - `chif.fx(r,t)$(not rres(r)) = chif.l(r,t)` en [iterloop.gms](src/equilibria/templates/reference/gtap/scripts/iterloop.gms:46)
+  - `pnum.fx(t) = pnum.l(t)` en [iterloop.gms](data/gtap7/gams/iterloop.gms:41)
+  - `xft.fx(r,fm,tsim)$(not xftFlag(r,fm)) = 0` en [iterloop.gms](data/gtap7/gams/iterloop.gms:142)
+  - `chif.fx(r,t)$(not rres(r)) = chif.l(r,t)` en [iterloop.gms](data/gtap7/gams/iterloop.gms:46)
 
 #### Tabla `Pyomo fixed now -> parity assessment`
 
@@ -808,7 +808,7 @@ Siguiente paso real:
 
 Comparación estructural:
 
-- GAMS [model.gms](src/equilibria/templates/reference/gtap/scripts/model.gms:587) define:
+- GAMS [model.gms](data/gtap7/gams/model.gms:587) define:
   - `xeq(r,a,i)` sobre `xFlag(r,a,i)`
   - `xpeq(r,a)` sobre `xpFlag(r,a)`
   - `ppeq(r,a,i)` sobre `xFlag(r,a,i)`

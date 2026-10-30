@@ -191,3 +191,112 @@ def test_bad_input_path_fails_before_running(tmp_path: Path) -> None:
     except SystemExit:
         pass
     assert not (folder / "ran.txt").exists()
+
+
+def test_model_derived_from_records_the_changes(tmp_path: Path) -> None:
+    root = tmp_path / "data"
+    base = root / "gtap7" / "base"
+    base.mkdir(parents=True)
+    (base / "a.gms").write_bytes(b"a\r\n")
+    assert (
+        _module().main(
+            [
+                "--data-root",
+                str(root),
+                "--folder",
+                str(base),
+                "--kind",
+                "model",
+                "--model",
+                "gtap7",
+                "--no-run",
+                "--source",
+                "upstream",
+            ]
+        )
+        == 0
+    )
+    derived = root / "gtap7" / "derived"
+    derived.mkdir()
+    (derived / "a.gms").write_bytes(b"A\n")
+    changes = tmp_path / "changes.yaml"
+    changes.write_text(
+        "- {file: a.gms, change: modified, what: upper case, why: test, commit: abc1234}\n"
+    )
+    assert (
+        _module().main(
+            [
+                "--data-root",
+                str(root),
+                "--folder",
+                str(derived),
+                "--kind",
+                "model",
+                "--model",
+                "gtap7",
+                "--no-run",
+                "--source",
+                "ours",
+                "--derived-from",
+                "gtap7/base",
+                "--changes",
+                str(changes),
+            ]
+        )
+        == 0
+    )
+    rec = load_source(derived)
+    assert rec.raw["derived_from"] == "gtap7/base"
+    assert rec.raw["changes"][0]["file"] == "a.gms"
+    assert check_tree(root) == []
+
+
+def test_unlisted_change_writes_no_record(tmp_path: Path) -> None:
+    # the writer refuses a derived folder whose changes do not cover its edits
+    root = tmp_path / "data"
+    base = root / "gtap7" / "base"
+    base.mkdir(parents=True)
+    (base / "a.gms").write_bytes(b"a")
+    _module().main(
+        [
+            "--data-root",
+            str(root),
+            "--folder",
+            str(base),
+            "--kind",
+            "model",
+            "--model",
+            "gtap7",
+            "--no-run",
+            "--source",
+            "upstream",
+        ]
+    )
+    derived = root / "gtap7" / "derived"
+    derived.mkdir()
+    (derived / "a.gms").write_bytes(b"A")
+    changes = tmp_path / "changes.yaml"
+    changes.write_text("[]\n")
+    assert (
+        _module().main(
+            [
+                "--data-root",
+                str(root),
+                "--folder",
+                str(derived),
+                "--kind",
+                "model",
+                "--model",
+                "gtap7",
+                "--no-run",
+                "--source",
+                "ours",
+                "--derived-from",
+                "gtap7/base",
+                "--changes",
+                str(changes),
+            ]
+        )
+        != 0
+    )
+    assert not (derived / "source.yaml").exists()

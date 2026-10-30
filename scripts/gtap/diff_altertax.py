@@ -31,7 +31,7 @@ from _diff_core import (
 )
 from equilibria._local_refs import refs_dir
 
-GDX_9X10 = ROOT / "src/equilibria/templates/reference/gtap/data/basedata-9x10.gdx"
+GDX_9X10 = ROOT / "data/gtap7/9x10/basedata-9x10.gdx"
 DEFAULT_NEOS_GDX = ROOT / "output/9x10_altertax_neos_bundle/out.gdx"
 
 
