@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from equilibria.sources import DATA_ROOT, SOURCE_FILE, dataset_dir
+from equilibria.sources import DATA_ROOT, SOURCE_FILE, SourceError, dataset_dir, load_source
 
 ROOT = Path(__file__).resolve().parents[2]
 MATRIX_SCRIPT = ROOT / "scripts" / "gtap" / "run_gempack_matrix.py"
@@ -104,7 +104,27 @@ def job_command(
         "--out", str(job.folder),
         "--gtapv7", str(gtapv7),
         "--sltoht", str(sltoht),
+        "--expect-release", tool_version,
     ]  # fmt: skip
+
+
+def drop_broken_records(root: Path, datasets: list[str]) -> list[Path]:
+    """Remove gempack_* folders whose source.yaml does not load as verified.
+
+    A record cut short by a killed run would make every dataset_dir() call fail
+    (all records are read), and must not count as done on resume.
+    """
+    dropped = []
+    for ds in datasets:
+        for record in sorted(root.glob(f"*/{ds}/gempack_*/{SOURCE_FILE}")):
+            try:
+                ok = load_source(record.parent).status == "verified"
+            except SourceError:
+                ok = False
+            if not ok:
+                shutil.rmtree(record.parent)
+                dropped.append(record.parent)
+    return dropped
 
 
 def run_job(cmd: list[str]) -> int:
@@ -123,6 +143,20 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--data-root", type=Path, default=DATA_ROOT)
     ap.add_argument("--dry-run", action="store_true", help="print the commands only")
     args = ap.parse_args(argv)
+
+    known = {_M.config_tag(s, st, rd) for s, st in _M._grid_configs() for rd in (1,)}
+    known.add(_M.config_tag(10.0, "8 16 32", 0))
+    unknown = sorted(set(args.only) - known)
+    if unknown:
+        print(f"unknown --only {unknown}; valid tags: {sorted(known)}", file=sys.stderr)
+        return 2
+    if not args.dry_run:
+        missing = [str(p) for p in (args.gtapv7, args.sltoht) if not p.exists()]
+        if missing:
+            print(f"not found: {missing} (pass --gtapv7 / --sltoht)", file=sys.stderr)
+            return 2
+        for folder in drop_broken_records(args.data_root, args.datasets):
+            print(f"removed an incomplete record: {folder}")
 
     selected = [
         j for j in jobs(args.datasets, root=args.data_root)

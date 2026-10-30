@@ -15,6 +15,11 @@ SCRIPT = ROOT / "scripts" / "windows" / "regenerate_gempack.py"
 G, S = Path("/opt/gp/gtapv7.exe"), Path("/opt/gp/sltoht.exe")
 
 
+@pytest.fixture(autouse=True)
+def _work_in_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EQUILIBRIA_GEMPACK_WORK", str(tmp_path / "work"))
+
+
 def _module() -> Any:
     spec = importlib.util.spec_from_file_location("regenerate_gempack", SCRIPT)
     assert spec is not None and spec.loader is not None
@@ -68,6 +73,12 @@ def _tree(tmp: Path) -> Path:
     return tmp
 
 
+def _exes(tmp: Path) -> list[str]:
+    (tmp / "gtapv7.exe").write_text("")
+    (tmp / "sltoht.exe").write_text("")
+    return ["--gtapv7", str(tmp / "gtapv7.exe"), "--sltoht", str(tmp / "sltoht.exe")]
+
+
 def test_resume_skips_recorded_folders(tmp_path: Path) -> None:
     m = _module()
     root = _tree(tmp_path)
@@ -76,7 +87,15 @@ def test_resume_skips_recorded_folders(tmp_path: Path) -> None:
     ran: list[list[str]] = []
     m.run_job = lambda cmd: ran.append(cmd) or 0
     m.main(
-        ["--tool-version", "11.3", "--datasets", "gtap7_3x3", "--data-root", str(root)]
+        [
+            "--tool-version",
+            "11.3",
+            "--datasets",
+            "gtap7_3x3",
+            "--data-root",
+            str(root),
+            *_exes(tmp_path),
+        ]
     )
     assert len(ran) == 10
     assert not any(str(done) in c for cmd in ran for c in cmd)
@@ -94,7 +113,7 @@ def test_failed_job_folder_is_removed(tmp_path: Path) -> None:
 
     m.run_job = fail
     rc = m.main(["--tool-version", "11.3", "--datasets", "gtap7_3x3",
-                 "--only", "tm10_s8-16-32_capflex", "--data-root", str(root)])  # fmt: skip
+                 "--only", "tm10_s8-16-32_capflex", "--data-root", str(root), *_exes(tmp_path)])  # fmt: skip
     assert rc == 1
     assert not (root / "gtap7" / "gtap7_3x3" / "gempack_tm10_s8-16-32_capflex").exists()
 
@@ -109,7 +128,7 @@ def test_partial_folder_is_cleaned_before_run(tmp_path: Path) -> None:
     seen: list[bool] = []
     m.run_job = lambda cmd: seen.append((partial / "updated.har").exists()) or 0
     m.main(["--tool-version", "11.3", "--datasets", "gtap7_3x3",
-            "--only", "tm10_s8-16-32_capflex", "--data-root", str(root)])  # fmt: skip
+            "--only", "tm10_s8-16-32_capflex", "--data-root", str(root), *_exes(tmp_path)])  # fmt: skip
     assert seen == [False]
 
 
@@ -141,7 +160,7 @@ def test_end_to_end_with_fake_gempack(tmp_path: Path) -> None:
     bin_dir.mkdir()
     m = _module()
     rc = m.main([
-        "--tool-version", "11.3", "--datasets", "gtap7_3x3",
+        "--tool-version", "12.1.003", "--datasets", "gtap7_3x3",
         "--only", "tm10_s4_capflex", "--data-root", str(root),
         "--gtapv7", str(_fake_gtapv7(bin_dir)), "--sltoht", str(_fake_sltoht(bin_dir)),
     ])  # fmt: skip
@@ -155,3 +174,46 @@ def test_end_to_end_with_fake_gempack(tmp_path: Path) -> None:
         "solve_console.txt", "sltoht_console.txt",
     }  # fmt: skip
     assert check_tree(root) == []
+
+
+def test_command_checks_the_release() -> None:
+    m = _module()
+    job = _job(m, "gtap7_3x3", "gempack_tm10_s4_capflex")
+    cmd = m.job_command(job, gtapv7=G, sltoht=S, tool_version="12.1.003")
+    assert cmd[cmd.index("--expect-release") + 1] == "12.1.003"
+
+
+def test_truncated_record_is_rerun(tmp_path: Path) -> None:
+    """A source.yaml cut short (killed mid-write) is not 'recorded': rerun it."""
+    m = _module()
+    root = _tree(tmp_path)
+    cut = root / "gtap7" / "gtap7_3x3" / "gempack_tm10_s8-16-32_capflex"
+    cut.mkdir()
+    (cut / "source.yaml").write_text("kind: result\nmodel: gt")
+    ran: list[list[str]] = []
+    m.run_job = lambda cmd: ran.append(cmd) or 0
+    m.main(["--tool-version", "11.3", "--datasets", "gtap7_3x3",
+            "--only", "tm10_s8-16-32_capflex", "--data-root", str(root),
+            *_exes(tmp_path)])  # fmt: skip
+    assert len(ran) == 1
+    assert not (cut / "source.yaml").exists()
+
+
+def test_unknown_only_tag_is_an_error(capsys: pytest.CaptureFixture[str]) -> None:
+    m = _module()
+    rc = m.main(
+        ["--dry-run", "--tool-version", "11.3", "--only", "tm10_s8-16-32_capflx"]
+    )
+    assert rc == 2
+    assert "tm10_s8-16-32_capflex" in capsys.readouterr().err
+
+
+def test_missing_executables_stop_before_job_one(tmp_path: Path) -> None:
+    m = _module()
+    root = _tree(tmp_path)
+    ran: list[list[str]] = []
+    m.run_job = lambda cmd: ran.append(cmd) or 0
+    rc = m.main(["--tool-version", "11.3", "--datasets", "gtap7_3x3",
+                 "--data-root", str(root), "--gtapv7", str(tmp_path / "no.exe"),
+                 "--sltoht", str(tmp_path / "no2.exe")])  # fmt: skip
+    assert rc == 2 and ran == []

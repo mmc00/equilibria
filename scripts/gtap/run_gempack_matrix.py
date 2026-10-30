@@ -30,6 +30,8 @@ Usage (Windows PowerShell, from repo root):
 from __future__ import annotations
 
 import argparse
+import os
+import re
 import shutil
 import subprocess
 import sys
@@ -52,6 +54,9 @@ DATASETS = [
     "gtap7_20x41",  # known-blocked; attempted so the failure is on the record
 ]
 RUN_ROOT = ROOT / "runs/gempack_matrix"
+# --out solves in a throwaway job_* folder here: short, no spaces, outside data/,
+# and not under %TEMP% (GEMPACK prints its folder, which would name the user).
+WORK_ROOT = Path(os.environ.get("EQUILIBRIA_GEMPACK_WORK") or RUN_ROOT)
 FIXTURES = ROOT / "tests/fixtures/gtap7_gempack"
 DEFAULT_GTAPV7 = Path(r"C:\runGTAP375\gtapv7.exe")
 DEFAULT_SLTOHT = Path(r"C:\GP\sltoht.exe")  # GEMPACK SL4→HAR converter
@@ -102,7 +107,8 @@ def config_tag(shock_pct: float, steps: str, rordelta: int | None = None) -> str
 
 def make_cmf(name: str, regs: list[str], shock_pct: float = 10.0,
              steps: str = "8 16 32", updated_name: str = "updated.har",
-             rordelta: int | None = None, prm_name: str = "default.prm") -> str:
+             rordelta: int | None = None, prm_name: str = "default.prm",
+             aux: str = r"C:\runGTAP375\gtapv7") -> str:
     """Write the .cmf for the STANDARD GTAP closure. ``rordelta`` selects the
     capital-account variant (GTAPv7.tab RORDELTA, from GTAPPARM header RDLT):
 
@@ -131,7 +137,7 @@ def make_cmf(name: str, regs: list[str], shock_pct: float = 10.0,
     return f"""! {name} uniform {pct}% shock to import tariff power (tm) - GEMPACK / GTAPv7
 ! STANDARD GTAP closure (GEMPACK gtapv7.cmf): dpsave EXOGENOUS, no swaps. Capital-account
 ! variant: {variant}. capFix (RORDELTA=0) returns differ; capFlex (RORDELTA=1) equalize.
-Auxiliary files = C:\\runGTAP375\\gtapv7 ;
+Auxiliary files = {aux} ;
 
 file GTAPSETS = sets.har ;
 file GTAPDATA = basedata.har ;
@@ -200,7 +206,8 @@ def _force_rdlt(prm_path: Path, rordelta: int) -> None:
 
 
 def prepare(name: str, shock_pct: float = 10.0, steps: str = "8 16 32",
-            rordelta: int | None = None, run_root: Path | None = None) -> tuple[Path, str]:
+            rordelta: int | None = None, run_root: Path | None = None,
+            aux: str | None = None) -> tuple[Path, str]:
     """Write a config-tagged .cmf for (name, shock_pct, steps[, rordelta]); return
     (run_dir, tag).
 
@@ -227,7 +234,8 @@ def prepare(name: str, shock_pct: float = 10.0, steps: str = "8 16 32",
     else:
         prm_name = "default.prm"
     cmf = make_cmf(name, regs, shock_pct, steps, updated_name=f"updated_{tag}.har",
-                   rordelta=rordelta, prm_name=prm_name)
+                   rordelta=rordelta, prm_name=prm_name,
+                   **({"aux": aux} if aux else {}))
     (run_dir / f"{tag}.cmf").write_text(cmf, encoding="ascii")
     print(f"  {name:14s} {tag:26s} residual={regs[-1]:<10s} regions={len(regs):2d}")
     return run_dir, tag
@@ -354,7 +362,24 @@ def collect_job(run_dir: Path, tag: str, out: Path) -> list[str]:
         if (run_dir / src).exists():
             shutil.copy2(run_dir / src, out / dst)
             written.append(dst)
+            if dst.endswith("_console.txt"):
+                _redact_work_path(out / dst, run_dir)
     return written
+
+
+def _redact_work_path(console: Path, run_dir: Path) -> None:
+    """GEMPACK prints its working folder; it may name the user (%TEMP%)."""
+    text = console.read_text(encoding="utf-8", errors="replace")
+    for form in {str(run_dir), str(run_dir.resolve())}:
+        text = text.replace(form, "<work>").replace(form.replace("\\", "/"), "<work>")
+    console.write_text(text, encoding="utf-8")
+
+
+def gempack_release(console: Path) -> str | None:
+    """The 'GEMPACK Release X' a GEMPACK program prints in its banner."""
+    m = re.search(r"GEMPACK Release\s+(\S+)",
+                  console.read_text(encoding="utf-8", errors="replace"))
+    return m.group(1) if m else None
 
 
 def _run_one_into(args: argparse.Namespace) -> int:
@@ -363,24 +388,39 @@ def _run_one_into(args: argparse.Namespace) -> int:
         print("--out needs exactly one --datasets, no --grid and one --rordelta",
               file=sys.stderr)
         return 2
-    with tempfile.TemporaryDirectory(prefix="gempack_") as work:
+    if not args.sltoht.exists():
+        print(f"--out needs sltoht (sl4dump.har is part of the result): "
+              f"{args.sltoht} not found", file=sys.stderr)
+        return 2
+    WORK_ROOT.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix="job_", dir=WORK_ROOT, ignore_cleanup_errors=True  # Windows file locks
+    ) as work:
         run_dir, tag = prepare(args.datasets[0], args.shock_pct, args.steps,
-                               rordelta=args.rordelta[0], run_root=Path(work))
+                               rordelta=args.rordelta[0], run_root=Path(work),
+                               aux=str(args.gtapv7.with_suffix("")))
+        name = f"{args.datasets[0]}/{tag}"
         ok, res = solve(run_dir, args.gtapv7, tag)
+        console = run_dir / f"solve_console_{tag}.txt"
         upd = run_dir / f"updated_{tag}.har"
         if not ok or not upd.exists() or upd.stat().st_size == 0:
-            print(f"FAILED {args.datasets[0]}/{tag}: {res or 'no residual line'}",
-                  file=sys.stderr)
-            console = run_dir / f"solve_console_{tag}.txt"
+            print(f"FAILED {name}: {res or 'no residual line'}", file=sys.stderr)
             if console.exists():
                 tail = console.read_text(encoding="utf-8", errors="replace")
                 print("--- last lines of the GEMPACK console ---", file=sys.stderr)
                 print("\n".join(tail.splitlines()[-30:]), file=sys.stderr)
             return 1
-        if args.sltoht.exists():
-            convert_sl4(run_dir, args.sltoht, tag)
+        release = gempack_release(console) if console.exists() else None
+        if args.expect_release and release and release != args.expect_release:
+            print(f"FAILED {name}: gtapv7 reports GEMPACK Release {release}, "
+                  f"--tool-version says {args.expect_release}", file=sys.stderr)
+            return 1
+        dump = convert_sl4(run_dir, args.sltoht, tag)
+        if dump is None or dump.stat().st_size == 0:
+            print(f"FAILED {name}: sltoht produced no sl4dump_{tag}.har", file=sys.stderr)
+            return 1
         written = collect_job(run_dir, tag, args.out)
-    print(f"OK {args.datasets[0]}/{tag} -> {args.out}: {', '.join(written)}")
+    print(f"OK {name} -> {args.out}: {', '.join(written)}")
     return 0
 
 
@@ -413,6 +453,8 @@ def main(argv: list[str] | None = None) -> int:
                          "(--rordelta 0 --rordelta 1). Default: both, so the fixtures dir "
                          "carries _capfix and _capflex side by side. Omit-and-empty keeps "
                          "the legacy single variant (dataset RDLT).")
+    ap.add_argument("--expect-release",
+                    help="with --out: fail if gtapv7 reports another GEMPACK Release")
     ap.add_argument("--out", type=Path,
                     help="solve ONE job (one dataset, one config, one --rordelta) and "
                          "leave its results in this folder under fixed names")

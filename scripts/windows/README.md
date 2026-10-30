@@ -66,8 +66,9 @@ git fetch origin
 git switch data/phase-3-gempack
 uv sync --frozen
 
-# 1. the GEMPACK version, as RunGTAP shows it in Help -> About (e.g. 11.3)
-$v = "11.3"
+# 1. the GEMPACK version gtapv7.exe prints in its banner ("GEMPACK Release 12.1.003 ...");
+#    if it is wrong, the smoke test stops and says which version gtapv7 reports
+$v = "12.1.003"
 
 # 2. what would run (66 jobs), nothing is solved
 uv run python scripts/windows/regenerate_gempack.py --tool-version $v --dry-run
@@ -76,7 +77,8 @@ uv run python scripts/windows/regenerate_gempack.py --tool-version $v --dry-run
 uv run python scripts/windows/regenerate_gempack.py --tool-version $v `
     --datasets gtap7_3x3 --only tm10_s8-16-32_capflex
 Get-Content data\gtap7\gtap7_3x3\gempack_tm10_s8-16-32_capflex\source.yaml
-#    expect: status: verified, tool: gempack, run.machine with your CPU name
+#    expect: status: verified, tool: gempack, tool_version: 12.1.003,
+#    run.machine with your CPU name, and sl4dump.har among the outputs
 
 # 4. everything (hours); rerunning skips the jobs already recorded
 uv run python scripts/windows/regenerate_gempack.py --tool-version $v
@@ -88,7 +90,10 @@ git push
 ```
 
 Paths default to `C:\runGTAP375\gtapv7.exe` and `C:\GP\sltoht.exe`; pass
-`--gtapv7 PATH` / `--sltoht PATH` if yours differ. A failed job prints the end
+`--gtapv7 PATH` / `--sltoht PATH` if yours differ (the driver checks both exist
+before the first job; the `.cmf` points GEMPACK's auxiliary files at the same
+folder). Work folders go to `runs\gempack_matrix\job_*` and are deleted after each
+job. A failed job prints the end
 of the GEMPACK console and leaves no folder; the final summary lists it. If
 `gtap7_20x41` fails in every configuration, say so: its old fixtures came from
 an older setup and phase 3b has to explain the difference.
