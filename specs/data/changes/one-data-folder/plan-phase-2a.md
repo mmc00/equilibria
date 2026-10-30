@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move the GAMS GTAP v7 model into `data/gtap7/gams/` and regenerate on the Mac, with local GAMS 53, every GAMS result the Mac can produce (all `.nl` in ifSUB 0 and 1, every IPOPT solve, the one PATH solve under the demo cap) into `data/gtap7/<ds>/gams_<form>_<mode>_ifsub<k>/`, each with a `source.yaml`; tests ask for them through `reference()`.
+**Goal:** Move the GAMS GTAP v7 model into `data/gtap7/gams/` and regenerate on the Mac, with local GAMS 53, every GAMS result the Mac can produce (all `.nl` in ifSUB 0 and 1, every NLP/IPOPT solve, the two PATH solves under the demo cap) into `data/gtap7/<ds>/gams_<form>_<mode>_ifsub<k>/`, each with a `source.yaml`; tests ask for them through `reference()`.
 
 **Architecture:** One driver, `scripts/gtap/regenerate_gams.py` (the Mac twin of `scripts/windows/regenerate_gempack.py`), lists the jobs and runs each under `write_source.py`. Each job calls one single-job entry point that writes into `--out DIR`: `nl_compare.py --gams-local` (CONVERT) for `.nl`, `regen_gams_reference.py` (new; replaces `regen_altertax_reference.py`) for GDX. Old fixtures are diffed against the new results (`gdxdiff`, `.nl` parser) before they are deleted; consumers switch from hand-built paths to `reference(dataset, "gams", form=..., mode=..., ifsub=...)`.
 
@@ -13,25 +13,26 @@
 ## Global Constraints
 
 - No number changes by moving (ADR-0008). A regenerated result that differs from the file it replaces stops the phase for that file until the difference is explained in the PR; a test that turns red with the new file is a finding about the old one, never a reason to keep it or to loosen a tolerance.
-- Local license, measured 2026-10-29: CONVERT and IPOPT have no size limit; PATH and CONOPT stop at 1000 rows (Demo; the personal license does not add PATH). Hence pure `gtap7_3x3` ifSUB=1 MCP is local (3 × Optimal) and ifSUB=0 is not (Licensing Problem) → 2b.
+- Local license, measured 2026-10-29: CONVERT and IPOPT have no size limit; PATH and CONOPT stop at 1000 rows (Demo; the personal license does not add PATH). Hence `gtap7_3x3` ifSUB=1 MCP is local (pure: 3 × Optimal; altertax: 804 rows) and ifSUB=0 is not (Licensing Problem) → 2b.
 - GAMS binary: `/Library/Frameworks/GAMS.framework/Versions/53/Resources/gams`, `--tool-version 53.5.0` (the version `gams` prints, measured 2026-10-29; the driver fails and names it if it differs).
 - GDX are never compared by bytes (the header carries a date): `gdxdiff OLD NEW RelEps=1e-9`; "No differences found" = identical.
 - Variant keys (the design leaves the vocabulary open): `form` ∈ {`nl`, `nlp`, `mcp`}, `mode` ∈ {`gtap`, `altertax`} (the names `nl_compare --mode` uses), `ifsub` ∈ {0, 1}. Folder name `gams_<form>_<mode>_ifsub<k>`. File names inside: `gams_<phase>.{nl,row,col}` + `comp_<phase>.gms` (the exact `.gms` CONVERT read) for `nl`; `out.gdx` + `model.gms` (+ `path.opt` when used) for `nlp`/`mcp`.
 - Each result folder stores the exact `.gms` that ran, so the run is replicable from the folder alone.
-- Out of scope (2b): pure MCP GDX + `comp_*.gms` of 3x3 ifSUB=0, 5x5, 10x7, 15x10, 20x41; `reference/gtap/comp*/`; `output/nus333_neos/`. Out of scope (later phases): `scripts/gtap/*/` comparison folders with `.gms` (phase 6), `results/` (PEP, phase 5), the dictionary pairing of the `.nl` gate (phase 7, branch `fix/23-nl-gate-vacuous`, which touches `nl_compare.py`: it rebases on this).
+- Out of scope (2b): every other MCP/PATH GDX — pure (`tests/fixtures/gtap7/<ds>/out_gtap_shock_*` + `comp_*.gms`) and altertax (`tests/fixtures/gtap7_altertax/<ds>/out_altertax_*`, `ifMCP=1`, NEOS #24); `reference/gtap/comp*/`; `output/nus333_neos/`. Out of scope (later phases): `scripts/gtap/*/` comparison folders with `.gms` (phase 6), `results/` (PEP, phase 5), the dictionary pairing of the `.nl` gate (phase 7, branch `fix/23-nl-gate-vacuous`, which touches `nl_compare.py`: it rebases on this).
 - Suite before/after compared by name, vanished names and skip reasons (`before.txt` from `origin/main`, GAMS 53 on `PATH`); restore `src/equilibria/templates/reference/pep2/scripts/Results.gdx` after each full run.
 - Commits in English, `type(scope): description`, ending with the session's `Co-Authored-By` line. `ruff` hooks may rewrite on commit: re-add and recommit.
 
-### Jobs (27)
+### Jobs (26)
 
 | Family | Datasets | ifSUB | Folder | Entry point | Replaces |
 |---|---|---|---|---|---|
 | nl | 3x3, 3x4, 5x5, 10x7, 15x10 | 0, 1 | `gams_nl_altertax_ifsub<k>` | `nl_compare.py --gams-local --skip-python --ifsub k --phase <today's phases> altertax` | `tests/fixtures/gtap7/<ds>/gams_*.{nl,row,col}`, `gtap7_altertax/<ds>/gams_altertax.nl` |
-| nlp altertax | 3x3, 3x4, 5x5, 10x7, 15x10 | 0, 1 | `gams_nlp_altertax_ifsub<k>` | `regen_gams_reference.py --mode altertax --form nlp` | `gtap7_altertax/<ds>/out_altertax_ifsub<k>.gdx`, `gtap7_nlp/<ds>_altertax_ifsub<k>.gdx` |
+| nlp altertax | 3x3, 3x4, 5x5, 10x7 | 0, 1 | `gams_nlp_altertax_ifsub<k>` | `regen_gams_reference.py --mode altertax --form nlp` | `gtap7_nlp/<ds>_altertax_ifsub<k>.gdx` |
 | nlp gtap | 3x3, 5x5, 10x7 | 0, 1 | `gams_nlp_gtap_ifsub<k>` | `regen_gams_reference.py --mode gtap --form nlp` | `gtap7_nlp/<ds>_pure_ifsub<k>.gdx` |
 | mcp gtap | 3x3 | 1 | `gams_mcp_gtap_ifsub1` | `regen_gams_reference.py --mode gtap --form mcp` | `gtap7/gtap7_3x3/{out_gtap_shock_ifsub1.gdx, comp_gtap7_3x3_gtap_shock_ifsub1.gms}` |
+| mcp altertax | 3x3 | 1 | `gams_mcp_altertax_ifsub1` | `regen_gams_reference.py --mode altertax --form mcp` | `gtap7_altertax/gtap7_3x3/out_altertax_ifsub1.gdx` |
 
-"Today's phases": `base check shock` for 3x3, 5x5, 10x7; `base shock` for 3x4, 15x10 (adding `check` to those two is phase 7). The two old altertax GDX per dataset (gate vs NLP fixture) differ today (md5); both are diffed against the one new result and the PR says which one it reproduces.
+"Today's phases": `base check shock` for 3x3, 5x5, 10x7; `base shock` for 3x4, 15x10 (adding `check` to those two is phase 7). The two altertax GDX per dataset are two methods, kept apart: `gtap7_altertax/` is the MCP/PATH reference (`ifMCP=1`, used by the MCP gate) and `gtap7_nlp/*_altertax_*` the NLP reference (`ifMCP=0`, used by the NLP gate); 185 symbols differ by ~0.3 % at the shock (`xp[USA,a_Food,shock]` 1.5642 vs 1.5599, measured 2026-10-29). Each is regenerated with its own method.
 
 ## Review Focus
 
@@ -116,16 +117,16 @@ def test_nlp_altertax_writes_gdx(tmp_path):         # gtap7_3x3 altertax nlp ifs
 
 **Interfaces:**
 - Consumes: Task 2 entry points; `write_source.py` (`--kind result --tool gams --tool-version --solver {CONVERT,IPOPT,PATH} --variant form=… --variant mode=… --variant ifsub=… --phases … --model-file data/gtap7/gams/comp.gms --data-dir <dataset_dir>`).
-- Produces: `regenerate_gams.py --tool-version V [--datasets …] [--only <folder name>] [--dry-run] [--data-root]`; `jobs() -> list[Job]` with the 27 jobs of the table, `Job.folder == dataset_dir(ds) / f"gams_{form}_{mode}_ifsub{k}"`.
+- Produces: `regenerate_gams.py --tool-version V [--datasets …] [--only <folder name>] [--dry-run] [--data-root]`; `jobs() -> list[Job]` with the 26 jobs of the table, `Job.folder == dataset_dir(ds) / f"gams_{form}_{mode}_ifsub{k}"`.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```python
 def test_jobs_are_the_table():
     js = jobs()
-    assert len(js) == 27
-    assert sum(j.form == "nl" for j in js) == 10 and sum(j.form == "mcp" for j in js) == 1
-    assert {j.folder.name for j in js if j.dataset == "gtap7_3x4"} == {f"gams_{f}_altertax_ifsub{k}" for f in ("nl", "nlp") for k in (0, 1)}
+    assert len(js) == 26
+    assert sum(j.form == "nl" for j in js) == 10 and sum(j.form == "mcp" for j in js) == 2
+    assert {j.folder.name for j in js if j.dataset == "gtap7_3x4"} == {f"gams_{f}_altertax_ifsub{k}" for f in ("nl", "nlp") for k in (0, 1)}  # no mcp: above the demo cap
 
 def test_resume_skips_recorded(tmp_path): ...       # folder with source.yaml → not run
 def test_failed_job_leaves_no_folder(tmp_path): ... # stub exits 1 → folder absent, driver exit ≠ 0, next jobs still run
@@ -134,15 +135,15 @@ def test_wrong_tool_version_stops(tmp_path): ...    # stub `gams` prints 53.6.0,
 
 - [ ] **Step 2:** `uv run pytest tests/scripts/test_regenerate_gams.py -q` → FAIL.
 - [ ] **Step 3:** Implement, mirroring `scripts/windows/regenerate_gempack.py` (skip recorded, delete a failed folder, run the rest, exit ≠ 0 if any failed).
-- [ ] **Step 4:** Same command → PASS; `--dry-run` prints 27 lines.
+- [ ] **Step 4:** Same command → PASS; `--dry-run` prints 26 lines.
 - [ ] **Step 5:** Commit `feat(gtap): regenerate_gams.py records the local GAMS results into data/`.
 
 ### Task 4: run, diff against the old fixtures, rewire, delete
 
 **Files:**
-- Create: the 27 result folders (by running Task 3); `data/gdx_tests/` with copies of the three GDX the reader test uses as format specimens (`tests/fixtures/gtap7/gtap7_3x3/out_gtap_shock_ifsub{0,1}.gdx`, `tests/fixtures/gtap7_nlp/gtap7_3x3_pure_ifsub0.gdx`) and their `.gdxdump.json.gz` oracles, `kind: data`, `--source "format specimen, copied from <old path> at <commit>"`. A reader specimen need not be a current result, so it is copied, not regenerated; the originals go with the phase that replaces them (2a or 2b).
-- Modify: every consumer of the replaced files (`git grep -lE 'fixtures/gtap7_(nlp|altertax)|gams_(base|check|shock|altertax)\.nl|out_altertax_ifsub|_pure_ifsub|gtap7_3x3/out_gtap_shock_ifsub1'`): the `.nl`, NLP and MCP gate tests, `coverage_matrix.py`, `cascade_config.py`, `bench_nlp_timing.py`, `convert_gams.py`, `diff_altertax.py`, `tests/babel/gdx/test_reader_vs_gdxdump_snapshot.py` and the rest the grep lists → `reference(...)` (or `data/gdx_tests/` for the reader test). `scripts/gtap/check_parity_gates_stamp.py` `INPUT_TREES`: drop `tests/fixtures/gtap7_altertax`.
-- Delete: the replaced files of the Jobs table (and `tests/fixtures/gtap7_altertax/`, `tests/fixtures/gtap7_nlp/` once empty).
+- Create: the 26 result folders (by running Task 3); `data/gdx_tests/` (the design's layout: a top-level folder of `data/`, next to `gtap7/`) with copies of the three GDX the reader test uses as format specimens (`tests/fixtures/gtap7/gtap7_3x3/out_gtap_shock_ifsub{0,1}.gdx`, `tests/fixtures/gtap7_nlp/gtap7_3x3_pure_ifsub0.gdx`) and their `.gdxdump.json.gz` oracles, `kind: data`, `--source "format specimen, copied from <old path> at <commit>"`. A reader specimen need not be a current result, so it is copied, not regenerated; the originals go with the phase that replaces them (2a or 2b).
+- Modify: every consumer of the replaced files (`git grep -lE 'fixtures/gtap7_(nlp|altertax)|gams_(base|check|shock|altertax)\.nl|out_altertax_ifsub|_pure_ifsub|gtap7_3x3/out_gtap_shock_ifsub1'`): the `.nl`, NLP and MCP gate tests, `coverage_matrix.py`, `cascade_config.py`, `bench_nlp_timing.py`, `convert_gams.py`, `diff_altertax.py`, `tests/babel/gdx/test_reader_vs_gdxdump_snapshot.py` and the rest the grep lists → `reference(...)` (or `data/gdx_tests/` for the reader test). `scripts/gtap/check_parity_gates_stamp.py` `INPUT_TREES` unchanged (both fixture trees still hold 2b files).
+- Delete: the replaced files of the Jobs table (and `tests/fixtures/gtap7_nlp/` once empty; `tests/fixtures/gtap7_altertax/` keeps its MCP GDX for 2b).
 - Test: `tests/templates/gtap/test_gtap7_nl_parity.py::test_nl_gate_asks_ifsub0`.
 
 - [ ] **Step 1: Write the failing test**
