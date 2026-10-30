@@ -4,7 +4,7 @@
 
 **Goal:** every GAMS GTAP result still in `tests/fixtures/gtap7*`, `src/equilibria/templates/reference/gtap/comp*` and `output/nus333_neos` is regenerated into `data/`, and every GAMS result exists in two variants: `fbep=header` (the FBEP/FTRV headers injected after `getData.gms`'s `fbep=0`, what the MCP references have used since #24) and `fbep=zero` (the official `getData.gms`: `fbep=0`, `ftrv=evfp-evfb`).
 
-**Architecture:** one switch, `--fbep header|zero`, reaches the bundle builders and `nl_compare`; `regen_gams_reference.py` solves either locally or on NEOS (`--where neos`) through a new `scripts/gtap/neos_job.py`; `write_source.py --remote neos` records a NEOS run from the job file the runner leaves. `regenerate_gams.py` lists every job (local and NEOS, both variants) and keeps its resume rule.
+**Architecture:** the scripts that generate GAMS results move next to the model, into `data/gtap7/gams/tools/` (maintainer, 2026-10-30): every result already records the sha256 of the whole `data/gtap7/gams/` folder, so editing a generator makes its results stale with no extra mechanism. One switch, `--fbep header|zero`, reaches the bundle builders and the `.nl` standalone; `regen_gams_reference.py` solves either locally or on NEOS (`--where neos`) through a new `tools/neos_job.py`; `write_source.py --remote neos` records a NEOS run from the job file the runner leaves. `regenerate_gams.py` lists every job (local and NEOS, both variants) and keeps its resume rule.
 
 **Tech Stack:** Python 3.13, GAMS 53.5 local (CONVERT, IPOPT, PATH ≤ 1000 rows), NEOS XML-RPC (`https://neos-server.org:3333`, category `cp`, solver `PATH`, input `GAMS`), pytest.
 
@@ -18,7 +18,8 @@
 - A NEOS `source.yaml` carries the NEOS run date and enough configuration to replicate it: job number, submit/finish time (UTC), category/solver/input method, the options sent, the GAMS version NEOS reports, the sha256 of the exact `.gms` sent. It never carries the job password or an e-mail address.
 - `run.machine` of a NEOS result is `os: "NEOS server"`, the other fields empty (design).
 - Folder name: `gams_<form>_<mode>_ifsub<k>_fbep-<header|zero>`; variant key `fbep` with values `header` / `zero`. Datasets whose FBEP is zero everywhere (`nus333`) get one folder without the suffix and no `fbep` key.
-- `scripts/gtap/*` is gitignored except a whitelist: a new script there needs its `!` line in `.gitignore`.
+- Generators live in `data/gtap7/gams/tools/` (bundle builders, `regen_gams_reference.py`, `regenerate_gams.py`, `neos_job.py`, the `.nl` standalone builder); comparators and gates stay in `scripts/gtap/` and `tests/`. Each tool file is listed in `data/gtap7/gams/source.yaml` `changes` (`change: added`, what, why, commit).
+- Every commit stays green: a task that edits a generator reruns the local jobs that exist (`regenerate_gams.py --where local`, ~2 min; outputs must be hash-identical, only the records change) in the same commit. The generators are frozen before Task 5: an edit after the NEOS runs makes them stale and means running NEOS again.
 
 ## Jobs
 
@@ -43,15 +44,30 @@ The 26 phase-2a folders are regenerated under the new names (their variant: `nl`
 
 ---
 
+### Task 0: the generators move next to the model
+
+**Files:**
+- Move (`git mv`): `scripts/gtap/build_gtap7_pure_local_bundle.py`, `scripts/gtap/build_gtap7_altertax_neos_bundle.py`, `scripts/gtap/regen_gams_reference.py`, `scripts/gtap/regenerate_gams.py` → `data/gtap7/gams/tools/`; extract `nl_compare.py`'s standalone builder (`_build_standalone_gms`, the getData replacements, `_gdxdump*`, `_gdx_set_elements`, `_compute_keep_a`, `_convert_locally`) into `data/gtap7/gams/tools/nl_standalone.py`, imported by `nl_compare.py` (its comparator stays in `scripts/gtap/`).
+- Modify: every importer and caller (`git grep -lE 'build_gtap7_(pure_local|altertax_neos)_bundle|regen_gams_reference|regenerate_gams|_build_standalone_gms'`), the `.gitignore` whitelist (drop the moved lines), `scripts/readme.md` rows, `data/gtap7/gams/source.yaml` `changes`, `data/README.md`.
+- Test: `tests/data/test_gams_model_present.py`
+
+**Interfaces:**
+- Produces: `GAMS_TOOLS_DIR = GAMS_MODEL_DIR / "tools"` in `equilibria.sources`; scripts run as `uv run python data/gtap7/gams/tools/<name>.py`; tests import them with `sys.path.insert(0, str(GAMS_TOOLS_DIR))`.
+
+- [ ] **Step 1: failing tests:** `test_generators_live_with_the_model` (each of the 5 tool files — the 4 moved scripts and `nl_standalone.py` — exists under `GAMS_TOOLS_DIR` and not under `scripts/gtap/`); `test_tools_change_the_model_hash` (the model-folder sha256 that `write_source.py` records changes when a byte of `tools/regenerate_gams.py` changes, on a tmp copy).
+- [ ] **Step 2:** red. **Step 3:** move, extract, rewire. **Step 4:** green; `tests/scripts/`, the `.nl` gates and `tests/data/` green.
+- [ ] **Step 5:** rerun the 26 local jobs (`tools/regenerate_gams.py --tool-version 53.5.0` after removing the 26 folders); every `outputs:` sha256 equals the 2a record; `test_data_tree` green.
+- [ ] **Step 6:** commit `refactor(data): GAMS result generators live next to the model`.
+
 ### Task 1: the `--fbep header|zero` switch
 
 **Files:**
-- Modify: `scripts/gtap/build_gtap7_pure_local_bundle.py`, `scripts/gtap/build_gtap7_altertax_neos_bundle.py` (the FBEP/FTRV injection blocks), `scripts/gtap/nl_compare.py` (`_build_standalone_gms` and the getData replacements), `scripts/gtap/regen_gams_reference.py` (`_build`, `_verify_subsidy_aware`)
+- Modify: `data/gtap7/gams/tools/build_gtap7_pure_local_bundle.py`, `tools/build_gtap7_altertax_neos_bundle.py` (the FBEP/FTRV injection blocks), `tools/nl_standalone.py` (`_build_standalone_gms` and the getData replacements), `tools/regen_gams_reference.py` (`_build`, `_verify_subsidy_aware`)
 - Test: `tests/scripts/test_fbep_switch.py`
 
 **Interfaces:**
 - Produces: builders and `nl_compare.py` accept `--fbep {header,zero}`; defaults keep today's behaviour (builders `header`, `nl_compare` `zero`). `regen_gams_reference.main` accepts `--fbep` (required). `_verify_subsidy_aware(gdxdump, gdx, fbep)`: `header` → `ytax(ft)` and `ytax(fs)` nonzero at check (today's check); `zero` → `ytax(fs)` zero in every period.
-- `nl_compare._build_standalone_gms(..., fbep: str = "zero")`; `header` injects the FBEP/FTRV assignments after the `ftrv = evfp - evfb` line, reusing `_fbep_ftrv_har_as_assignments` from `build_gtap7_pure_local_bundle.py`.
+- `nl_compare._build_standalone_gms(..., fbep: str = "zero")`; `header` injects the FBEP/FTRV assignments after the `ftrv = evfp - evfb` line, reusing `_fbep_ftrv_har_as_assignments` from `tools/build_gtap7_pure_local_bundle.py`.
 
 - [ ] **Step 1: failing tests**, on `gtap7_3x3`:
   - `test_default_bundle_unchanged[gtap|altertax]`: the builder's output without `--fbep` equals its output with `--fbep header`, and its sha256 equals the `model.gms` recorded in `data/gtap7/gtap7_3x3/gams_mcp_<mode>_ifsub1/` (2a).
@@ -67,8 +83,8 @@ The 26 phase-2a folders are regenerated under the new names (their variant: `nl`
 ### Task 2: a NEOS job, recorded
 
 **Files:**
-- Create: `scripts/gtap/neos_job.py` (+ `.gitignore` whitelist line)
-- Modify: `scripts/gtap/regen_gams_reference.py` (`--where local|neos`), `scripts/dev/write_source.py` (`--remote neos`)
+- Create: `data/gtap7/gams/tools/neos_job.py`
+- Modify: `data/gtap7/gams/tools/regen_gams_reference.py` (`--where local|neos`), `scripts/dev/write_source.py` (`--remote neos`)
 - Test: `tests/scripts/test_neos_job.py`, `tests/scripts/test_write_source.py`
 
 **Interfaces:**
@@ -84,7 +100,7 @@ The 26 phase-2a folders are regenerated under the new names (their variant: `nl`
 ### Task 3: the job table with both variants
 
 **Files:**
-- Modify: `scripts/gtap/regenerate_gams.py`, `src/equilibria/sources.py` only if `reference()` needs it (it should not: it already refuses two matches)
+- Modify: `data/gtap7/gams/tools/regenerate_gams.py`, `src/equilibria/sources.py` only if `reference()` needs it (it should not: it already refuses two matches)
 - Test: `tests/scripts/test_regenerate_gams.py`, `tests/data/test_sources_reference.py`
 
 **Interfaces:**
@@ -101,7 +117,7 @@ The 26 phase-2a folders are regenerated under the new names (their variant: `nl`
 - Create: the 52 local folders; delete the 26 2a folders (replaced by renamed regenerations)
 
 - [ ] **Step 1: the oracle, committed before any run** (`test(data): what each FBEP variant must hold`): for every recorded GAMS MCP/NLP result with `fbep` and a subsidised cell (FBEP ≠ 0 in its HAR), at `base`: `zero` → `pfa/pf == EVFP/EVFB` (rel 1e-6) and `ytax(fs) == 0`; `header` → `pfa/pf == 1 + (ftrv − FBEP)/EVFB` with `ftrv = FTRV` where the header is nonzero, else `EVFP − EVFB` (the injection overrides only nonzero cells), rel 1e-6. Skips while nothing is recorded; a test of the test feeds it a GDX of the wrong variant and expects red. Commit alone.
-- [ ] **Step 2:** `uv run python scripts/gtap/regenerate_gams.py --tool-version 53.5.0 --where local` (log to the ledger folder); every job recorded.
+- [ ] **Step 2:** `uv run python data/gtap7/gams/tools/regenerate_gams.py --tool-version 53.5.0 --where local` (log to the ledger folder); every job recorded.
 - [ ] **Step 3:** the regenerated 2a variants (nl `zero`, nlp/mcp `header`) hash-identical to the 2a outputs (compare `outputs:` sha256 of old vs new `source.yaml`); then `git rm` the 26 2a folders.
 - [ ] **Step 4:** oracle green on all local results; diff `header` vs `zero` per result (`gdxdiff RelEps 1e-6`, list of differing symbols) → `diff_summary.md`.
 - [ ] **Step 5:** rewire the 2a consumers to say `fbep=` (`.nl` gate → `zero`, NLP/MCP gates → `header`); `_KNOWN_GAPS` unchanged. Commit results + rewiring together: `refactor(data): local GAMS results in both FBEP variants`.
@@ -116,6 +132,7 @@ The 26 phase-2a folders are regenerated under the new names (their variant: `nl`
 ### Task 6: nus333 and 9x10
 
 - [ ] **Step 1 (gate):** find how `output/nus333_neos/out.gdx` (commit `beec5a0`: GAMS 53.5 local, `bench_nus333_dual.py`) and `reference/gtap/comp/COMP_generated.csv`, `comp_neos/COMP.csv` (commit `a0cab08`, no generator named) are produced. If a 9x10 CSV has no reproducible generator, STOP and ask the maintainer (keep as `kind: data` with its provenance, or drop).
+- [ ] **Step 1b:** the generators Step 1 found (for nus333: the bundle path of `bench_nus333_dual.py`; for 9x10: whatever Step 1 settles) move into `data/gtap7/gams/tools/` like Task 0, before they run.
 - [ ] **Step 2:** nus333 locally into `data/gtap7/nus333/gams_mcp_nus333/` (one variant: FBEP is zero in its data); diff vs the old GDX.
 - [ ] **Step 3:** whatever Step 1 decides for 9x10 (both variants if regenerated: its GDX carries 32 FBEP cells).
 - [ ] **Step 4:** rewire (`_parity_datasets.py`, `diff_nus333_full.py`, `test_nus333_neos_parity.py`, `gtap_parity_pipeline.py`, `gtap_model_equations.py:152-167`, `solver/path_capi.py:44`, `test_gtap_baseline_mirror.py`, `docs/site/guide/benchmarks.md`), drop `output/nus333_neos` and its `.gitignore` exception, `reference/gtap/comp*` and its `pyproject.toml` exclusion. Commit.
