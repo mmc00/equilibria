@@ -368,6 +368,7 @@ runs/9x10_compare/rungtap/tm10
 runs/9x10_compare/rungtap/har
 runs/gempack_matrix/*/har
 runs/gempack_matrix/run_study_windows.bat
+runs/gempack_matrix/job_*/
 
 # Evidencia de validacion que se versiona pese a las reglas de arriba
 !runs/gempack_20x41_validation/*_console.txt

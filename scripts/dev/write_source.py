@@ -61,6 +61,7 @@ def machine_info() -> dict[str, Any]:
                 break
     elif system == "Windows":
         os_name = f"Windows {platform.release()} ({platform.version()})"
+        cpu = _windows_cpu()
         ram = _windows_ram()
     else:
         os_name = f"{system} {platform.release()}"
@@ -77,6 +78,21 @@ def _sysctl(key: str) -> str:
         return subprocess.check_output(["sysctl", "-n", key], text=True).strip()
     except (OSError, subprocess.CalledProcessError):
         return ""
+
+
+def _windows_cpu(winreg_module: Any = None) -> str:
+    """The CPU model name; platform.processor() on Windows gives only the family."""
+    try:
+        if winreg_module is None:
+            import winreg as winreg_module  # Windows only
+        key = winreg_module.OpenKey(
+            winreg_module.HKEY_LOCAL_MACHINE,
+            r"HARDWARE\DESCRIPTION\System\CentralProcessor\0",
+        )
+        name, _ = winreg_module.QueryValueEx(key, "ProcessorNameString")
+        return str(name).strip()
+    except (ImportError, OSError):
+        return platform.processor() or platform.machine()
 
 
 def _windows_ram() -> float:
