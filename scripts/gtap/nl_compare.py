@@ -15,6 +15,8 @@ from equilibria.sources import dataset_dir
 import argparse
 import base64
 import re
+import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -1324,7 +1326,8 @@ def submit_and_fetch_gdx_9x10(out_dir: Path, neos_email: str) -> Path:
 
 def _build_standalone_gms(phase: str = "base", shrink: bool = False,
                           agg_gdx: Path | None = None,
-                          har_dir: Path | None = None) -> str:
+                          har_dir: Path | None = None,
+                          ifsub: int = 0) -> str:
     """Build a self-contained .gms for NEOS submission.
 
     Inlines all $include files. Replaces getData.gms with embedded sets + data
@@ -1533,7 +1536,39 @@ $setGlobal ifSUB     0
 $setGlobal ifCSV     0
 $setGlobal ifMCP     0
 """
-    return header + before_loop + solve_block
+    # comp.gms sets ifSUB itself and GAMS keeps the last $setGlobal, so the
+    # header alone would be overridden (#23): every setting gets the value asked.
+    return re.sub(r"^\$setGlobal\s+ifSUB\s+\d+\s*$", f"$setGlobal ifSUB     {ifsub}",
+                  header + before_loop + solve_block, flags=re.MULTILINE)
+
+
+def _convert_locally(standalone_gms: str, out_dir: Path, phase: str) -> Path:
+    """Run the standalone .gms through the local GAMS CONVERT (no size limit).
+
+    Leaves exactly gams_<phase>.{nl,row,col} and comp_<phase>.gms (the file
+    CONVERT read) in out_dir; raises if GAMS fails or writes no .nl.
+    """
+    gams = shutil.which("gams")
+    if gams is None:
+        raise RuntimeError("--gams-local needs the gams binary on PATH")
+    work = out_dir / f"_convert_{phase}"
+    shutil.rmtree(work, ignore_errors=True)
+    work.mkdir(parents=True)
+    (work / "comp.gms").write_text(standalone_gms)
+    (work / "convert.opt").write_text("AmplNL ampl.nl\n")
+    proc = subprocess.run([gams, "comp.gms", "lo=2"], cwd=work, capture_output=True, text=True)
+    nl = work / "ampl.nl"
+    if proc.returncode != 0 or not nl.exists():
+        raise RuntimeError(
+            f"local CONVERT ({phase}) failed (rc={proc.returncode}); see {work / 'comp.lst'}"
+        )
+    shutil.copyfile(work / "comp.gms", out_dir / f"comp_{phase}.gms")
+    for ext in ("nl", "row", "col"):
+        if (work / f"ampl.{ext}").exists():
+            shutil.copyfile(work / f"ampl.{ext}", out_dir / f"gams_{phase}.{ext}")
+    shutil.rmtree(work)
+    print(f"  Written: gams_{phase}.nl (local CONVERT)")
+    return out_dir / f"gams_{phase}.nl"
 
 
 def _submit_and_fetch_nl(
@@ -1695,8 +1730,12 @@ def fetch_gams_nl(
     shrink: bool = False,
     agg_gdx: Path | None = None,
     har_dir: Path | None = None,
+    ifsub: int = 0,
+    local: bool = False,
 ) -> dict[str, Path]:
     """Submit GTAP model to NEOS CONVERT for each requested phase.
+
+    local: run the local GAMS CONVERT instead of NEOS (see _convert_locally).
 
     Returns dict phase → Path of downloaded .nl file.
     For "shock" phase, submits a separate job with tm*1.10 tariff shock applied.
@@ -1710,7 +1749,11 @@ def fetch_gams_nl(
     result: dict[str, Path] = {}
     for phase in phases:
         print(f"\n  Building standalone .gms for phase={phase} ...")
-        standalone_gms = _build_standalone_gms(phase=phase, shrink=shrink, agg_gdx=agg_gdx, har_dir=har_dir)
+        standalone_gms = _build_standalone_gms(phase=phase, shrink=shrink, agg_gdx=agg_gdx,
+                                               har_dir=har_dir, ifsub=ifsub)
+        if local:
+            result[phase] = _convert_locally(standalone_gms, out_dir, phase)
+            continue
         standalone_path = out_dir / f"gtap_standalone_{phase}.gms"
         standalone_path.write_text(standalone_gms)
         print(f"  Standalone .gms: {len(standalone_gms.splitlines())} lines ({len(standalone_gms)//1024} KB)")
@@ -2262,7 +2305,8 @@ def _run_nl(args) -> dict:
     if not args.skip_gams:
         gams_nl_paths = fetch_gams_nl(
             args.out_dir, args.neos_email, list(args.phase), shrink=gams_shrink,
-            agg_gdx=(ds.agg_gdx if use_agg else None), har_dir=_har_dir)
+            agg_gdx=(ds.agg_gdx if use_agg else None), har_dir=_har_dir,
+            ifsub=args.ifsub, local=args.gams_local)
     else:
         for phase in args.phase:
             for p in (args.out_dir / f"gams_{phase}.nl",
@@ -2402,7 +2446,9 @@ def main() -> int:
     ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
                     help="altertax CD (default) or pure-gtap real-CES")
     ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
-                    help="ifSUB mode (pure-gtap only)")
+                    help="ifSUB of the GAMS model (CONVERT .nl) and of the pure-gtap Python side")
+    ap.add_argument("--gams-local", action="store_true",
+                    help="write the GAMS .nl with the local GAMS CONVERT instead of NEOS")
     args = ap.parse_args()
 
     # mode=gtap UNSUPPORTED, honestly: the pure-gtap shock is multi-period — the

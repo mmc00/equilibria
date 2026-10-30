@@ -157,7 +157,7 @@ def _time_python_once(dataset: str, mode: str, ifsub: int, gdx: Path) -> float:
 # ---------------------------------------------------------------------------
 def _build_nlp_gms(dataset: str, mode: str, ifsub: int) -> Path:
     """Build the bundle .gms and rewrite it to ifMCP=0 + IPOPT (as
-    regen_altertax_reference._solve does). Returns the runnable *_nlp.gms path.
+    regen_gams_reference.to_nlp does). Returns the runnable *_nlp.gms path.
     Done ONCE per plan row; the timed runs re-execute this file."""
     if mode == "altertax":
         builder = "build_gtap7_altertax_neos_bundle.py"

@@ -321,7 +321,7 @@ scripts/gtap/*
 !scripts/gtap/measure_gempack_blocks.py
 !scripts/gtap/measure_nlp_vs_nlp.py
 !scripts/gtap/measure_nlp_vs_nlp_altertax.py
-!scripts/gtap/regen_altertax_reference.py
+!scripts/gtap/regen_gams_reference.py
 !scripts/gtap/blocks_diag.py
 !scripts/gtap/run_burfisher.py
 
