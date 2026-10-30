@@ -16,7 +16,7 @@
 - The job set reproduces what is committed today, nothing more: for each of `gtap7_{3x3,3x4,5x5,10x7,15x10,20x41}` the 10 grid configurations of `_grid_configs()` with closure capFlex (RDLT=1; the July fixtures used the dataset's default `.prm`, which is RDLT=1) plus `tm10_s8-16-32` with capFix (RDLT=0). 66 jobs.
 - Folder: `data/gtap7/<ds>/gempack_<config_tag(shock, steps, rordelta)>`, e.g. `gempack_tm10_s8-16-32_capflex`, `gempack_tm0p1_s8-16-32_capflex`, `gempack_tm10_s8-16-32_capfix`.
 - Files in each folder (fixed names, so a test asks for `reference(...) / "updated.har"`): `updated.har`, `decomp.har`, `sl4dump.har`, `run.cmf`, `solve_console.txt`, `sltoht_console.txt`. Inputs (`basedata.har`, `sets.har`, the `.prm`) are not copied in: they are recorded by hash in `generated_from`.
-- `source.yaml` variant keys: `shock` (number, percent: `10`, `0.1`), `steps` (string, `"8-16-32"`), `closure` (`capFlex` | `capFix`, equilibria's spelling). `tool: gempack`, `tool_version` from `--tool-version` (the driver's argument, default `"11.3"`), `phases: [shock]`, `solver: gtapv7`, `--data-dir data/gtap7/<ds>`.
+- `source.yaml` variant keys: `shock` (number, percent: `10`, `0.1`), `steps` (string, `"8-16-32"`), `closure` (`capFlex` | `capFix`, equilibria's spelling). `tool: gempack`, `tool_version` from `--tool-version` (the driver's argument, REQUIRED: the operator reads it in RunGTAP Help → About; never guessed), `phases: [shock]`, `solver: gtapv7`, `--data-dir data/gtap7/<ds>`.
 - A failed job leaves no folder behind (its files would otherwise count as files of the dataset folder and break the next job's input hash and `check_tree`).
 - Commit messages in English, `type(scope): description`, ending with the session's `Co-Authored-By` line.
 
@@ -28,7 +28,19 @@
 - `--out` with more than one dataset, config or closure is ambiguous and must be refused → Task 1 `test_out_needs_exactly_one_job`.
 - Paths on Windows: every path the driver passes is absolute (`write_source.py` runs the command with `cwd=folder`) → Task 2 `test_command_paths_are_absolute`.
 
+- The CPU recorded on Windows is the model name (`ProcessorNameString` in the registry), not `platform.processor()`'s family string → Task 0 `test_windows_cpu_reads_the_registry_name`.
+
 ---
+
+### Task 0: CPU name on Windows in `write_source.py`
+
+**Files:**
+- Modify: `scripts/dev/write_source.py` (`machine_info`, new `_windows_cpu(winreg_module=None) -> str`)
+- Test: `tests/scripts/test_write_source.py`
+
+- [ ] **Step 1: Write the failing test** — a fake `winreg` object whose `QueryValueEx` returns `("Intel(R) Core(TM) i7-12700H", 1)` for `HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0` / `ProcessorNameString`: `assert _windows_cpu(fake) == "Intel(R) Core(TM) i7-12700H"`; and a fake that raises `OSError` → falls back to `platform.processor()`.
+- [ ] **Step 2:** run → FAIL (`_windows_cpu` missing). **Step 3:** implement; `machine_info` uses it on Windows. **Step 4:** run → PASS.
+- [ ] **Step 5:** Commit `fix(dev): write_source records the CPU model name on Windows`.
 
 ### Task 1: single-job mode in `run_gempack_matrix.py`
 
@@ -71,7 +83,7 @@ def test_out_needs_exactly_one_job(tmp_path):
 
 **Interfaces:**
 - Consumes: `config_tag`, `_grid_configs` (Task 1's module), `write_source.py` CLI.
-- Produces: `jobs(datasets: list[str]) -> list[Job]` with `Job(dataset: str, shock: float, steps: str, closure: str, rordelta: int, folder: Path)`; `job_command(job, *, gtapv7: Path, sltoht: Path, tool_version: str) -> list[str]` (the full `write_source.py ... -- run_gempack_matrix.py ... --out <folder>` argv); `main(argv) -> int` with `--dry-run`, `--datasets`, `--only TAG` (repeatable, filters by `config_tag`), `--gtapv7`, `--sltoht`, `--tool-version`; exit 0 when every job is recorded, 1 otherwise; prints one line per job and a summary.
+- Produces: `jobs(datasets: list[str]) -> list[Job]` with `Job(dataset: str, shock: float, steps: str, closure: str, rordelta: int, folder: Path)`; `job_command(job, *, gtapv7: Path, sltoht: Path, tool_version: str) -> list[str]` (the full `write_source.py ... -- run_gempack_matrix.py ... --out <folder>` argv); `main(argv) -> int` with `--tool-version` required (exit 2 without it), `--dry-run`, `--datasets`, `--only TAG` (repeatable, filters by `config_tag`), `--gtapv7`, `--sltoht`, `--tool-version`; exit 0 when every job is recorded, 1 otherwise; prints one line per job and a summary.
 
 - [ ] **Step 1: Write the failing tests**
 
