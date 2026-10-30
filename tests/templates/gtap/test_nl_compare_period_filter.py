@@ -56,3 +56,23 @@ def test_shock_phase_reads_gams_shock_rows() -> None:
     assert var.startswith("pmcif[")
     # coefficient is -(1 + imptx): the GAMS side must hold the 10% shock
     assert shock_c == pytest.approx(-(1.0 + 1.10 * (-base_c - 1.0)), rel=1e-6)
+
+
+def test_period_missing_from_a_multi_period_gams_nl_is_refused() -> None:
+    """Asking for a period the GAMS .nl lacks must fail, not compare a handful.
+
+    gtap7_3x4 has no check phase: filtering its shock .nl to "check" would keep
+    only the period-less rows (8), enough to pass the gates' n_common_cons > 0.
+    """
+    from _nl_parser import parse_nl  # ty: ignore[unresolved-import]
+    from nl_compare import diff_nl_models  # ty: ignore[unresolved-import]
+
+    folder = find_reference("gtap7_3x4", "gams", form="nl", mode="altertax", ifsub=0)
+    if folder is None:
+        pytest.skip("no GAMS .nl recorded for gtap7_3x4")
+        return  # pytest.skip raises; the return tells the type checker
+
+    base = parse_nl(folder / "gams_base.nl")
+    shock = parse_nl(folder / "gams_shock.nl")
+    with pytest.raises(ValueError, match="check"):
+        diff_nl_models(base, shock, py_period="check")

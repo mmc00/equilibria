@@ -1975,7 +1975,15 @@ def diff_nl_models(
     # py_period, or the first-seen BASE row would be compared against Python's
     # shock row (tests/templates/gtap/test_nl_compare_period_filter.py).
     gams_names = [gams_model.con_name(i) for i in range(gams_model.n_cons)]
-    gams_multi = len({_raw_period(n) for n in gams_names} - {None}) > 1
+    gams_periods = {_raw_period(n) for n in gams_names} - {None}
+    gams_multi = len(gams_periods) > 1
+    if gams_multi and py_period not in gams_periods:
+        # Filtering would keep only the period-less rows: a near-empty
+        # comparison that still passes an n_common_cons > 0 guard.
+        raise ValueError(
+            f"py_period={py_period!r} is not in the GAMS .nl "
+            f"(periods: {sorted(gams_periods)})"
+        )
 
     def _keep_gams(raw: str) -> bool:
         return not gams_multi or _raw_period(raw) in (None, py_period)
