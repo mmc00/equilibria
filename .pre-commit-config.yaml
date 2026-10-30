@@ -35,6 +35,9 @@ repos:
         files: ^(src|tests)/
       - id: check-yaml
       - id: check-added-large-files
+        # data/ is where recorded results live (ADR-0010); a regenerated GAMS
+        # .nl reaches 11 MB. The size guard keeps watching everything else.
+        exclude: ^data/
       - id: check-merge-conflict
 
   # Local: reusa [tool.ruff] y el `ty` del dependency-group dev, vía uv run.

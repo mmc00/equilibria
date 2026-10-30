@@ -9,7 +9,7 @@ dataset x kind (gtap|altertax|gtap_solve) x ifSUB x phase (base/check/shock). Dr
 
 Three axes / kinds:
   * "gtap"       — the .nl COEFFICIENT gate (no solver, CI). Phases are base+shock,
-                   plus `check` where a gams_check.nl fixture exists (3x3/5x5/10x7 →
+                   plus `check` where a recorded GAMS gams_check.nl exists (3x3/5x5/10x7 →
                    the check is the CD multi-period step). Contract: 0 coeff diffs.
   * "altertax"   — the altertax-CD multi-period SOLVE gate (PATH, local), per ifSUB.
   * "gtap_solve" — the PURE-gtap (real-CES, non-altertax) multi-period SOLVE gate

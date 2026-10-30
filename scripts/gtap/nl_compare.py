@@ -1769,6 +1769,17 @@ def fetch_gams_nl(
 _T_PERIODS = ("base", "check", "shock")
 
 
+def _raw_period(name: str) -> str | None:
+    """Period index of a raw GAMS or Python name, or None if it has none.
+
+    pmeq(EU_28,c_Food,ROW,shock) -> "shock"; pm[EU_28,Food,ROW,base] -> "base".
+    """
+    if not name or name[-1] not in ")]":
+        return None
+    last = name[:-1].rsplit(",", 1)[-1].lstrip("([")
+    return last if last in _T_PERIODS else None
+
+
 def _normalize_name(name: str) -> str:
     """Strip time-period suffix and unify bracket style.
 
@@ -1958,10 +1969,22 @@ def diff_nl_models(
         if norm:
             py_con_map.setdefault(norm, i)
 
-    # GAMS names: convert to Python convention, keep base period only
+    # GAMS names: convert to Python convention.  A GAMS check/shock .nl holds
+    # every period of the model (pmeq(...,base) AND pmeq(...,shock)), and
+    # stripping the period makes them collide; keep the rows/columns of
+    # py_period, or the first-seen BASE row would be compared against Python's
+    # shock row (tests/templates/gtap/test_nl_compare_period_filter.py).
+    gams_names = [gams_model.con_name(i) for i in range(gams_model.n_cons)]
+    gams_multi = len({_raw_period(n) for n in gams_names} - {None}) > 1
+
+    def _keep_gams(raw: str) -> bool:
+        return not gams_multi or _raw_period(raw) in (None, py_period)
+
     gams_var_map: dict[str, int] = {}
     for i in range(gams_model.n_vars):
         raw = gams_model.var_name(i)
+        if not _keep_gams(raw):
+            continue
         norm = _normalize_name(raw)  # strips time, unifies brackets
         if norm and norm not in gams_var_map:
             gams_var_map[norm] = i
@@ -1969,6 +1992,8 @@ def diff_nl_models(
     gams_con_map: dict[str, int] = {}
     for i in range(gams_model.n_cons):
         raw = gams_model.con_name(i)
+        if not _keep_gams(raw):
+            continue
         # Convert GAMS {name}eq(...) → eq_{name}[...]
         norm_raw = _normalize_name(raw)
         norm = _gams_to_python_name(raw)

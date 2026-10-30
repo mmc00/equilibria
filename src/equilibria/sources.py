@@ -226,6 +226,25 @@ def _data_folders(dataset: str, root: Path) -> tuple[list[Path], list[SourceReco
     return [r.path for r in data if r.dataset == dataset], data
 
 
+def find_reference(
+    dataset: str, tool: str, *, root: Path = DATA_ROOT, **variant: Any
+) -> Path | None:
+    """Like reference(), but None when no folder is recorded for the request.
+
+    For callers where a missing reference is a skip or a Python-only run. Two
+    matches are still an error: an ambiguous request is never optional.
+    """
+    found = [
+        r
+        for r in iter_sources(root)
+        if r.kind == "result"
+        and r.dataset == dataset
+        and r.tool == tool
+        and all(k in r.variant and r.variant[k] == v for k, v in variant.items())
+    ]
+    return reference(dataset, tool, root=root, **variant) if found else None
+
+
 def dataset_dir(dataset: str, *, root: Path = DATA_ROOT) -> Path:
     """The one ``kind: data`` folder of ``dataset``.
 

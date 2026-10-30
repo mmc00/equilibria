@@ -34,14 +34,13 @@ from pathlib import Path
 
 import pytest
 
-from equilibria.sources import dataset_dir, has_dataset
+from equilibria.sources import dataset_dir, find_reference, has_dataset
 
 # needs_gdxdump: estos tests leen el GDX de referencia con gdxdump; sin el
 # binario fallaban con FileNotFoundError en vez de saltarse.
 pytestmark = [pytest.mark.integration, pytest.mark.needs_gdxdump]
 
 ROOT = Path(__file__).resolve().parents[3]
-FIXTURES_DIR = ROOT / "tests/fixtures/gtap7_nlp"
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
@@ -116,8 +115,14 @@ def _has_solver() -> bool:
     return importlib.util.find_spec("path_capi_python") is not None
 
 
-def _fixture_gdx(dataset: str, mode: str, ifsub: int) -> Path:
-    return FIXTURES_DIR / f"{dataset}_{mode}_ifsub{ifsub}.gdx"
+def _fixture_gdx(dataset: str, mode: str, ifsub: int) -> Path | None:
+    """The GAMS NLP reference recorded in data/ (ADR-0010); None if none is.
+
+    The matrix calls the pure model "pure"; data/ records it as mode "gtap".
+    """
+    model = "gtap" if mode == "pure" else mode
+    folder = find_reference(dataset, "gams", form="nlp", mode=model, ifsub=ifsub)
+    return None if folder is None else folder / "out.gdx"
 
 
 def _strip(s):
@@ -267,8 +272,10 @@ def test_gtap7_nlp_parity(dataset, ifsub, mode, floors, ci_status):
     if not _has_solver():
         pytest.skip("NLP solve toolchain (path_capi_python) not available")
     gdx = _fixture_gdx(dataset, mode, ifsub)
-    if not gdx.exists():
-        pytest.skip(f"fixture GDX missing: {gdx}")
+    if gdx is None:
+        pytest.skip(
+            f"no GAMS NLP reference recorded for {dataset}/{mode}/ifSUB={ifsub}"
+        )
     if not has_dataset(dataset):
         pytest.skip(f"dataset HAR missing: {dataset}")
 

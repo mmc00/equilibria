@@ -40,10 +40,9 @@ from pathlib import Path
 
 import pytest
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, find_reference
 
 ROOT = Path(__file__).resolve().parents[3]
-FIXTURES_DIR = ROOT / "tests/fixtures/gtap7"
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
@@ -51,7 +50,7 @@ from coverage_matrix import nl_rows  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from test_gtap7_nl_parity import _WRITTEN_FORM_EQUIVALENT  # noqa: E402
+from test_gtap7_nl_parity import _KNOWN_GAPS, gap_counts  # noqa: E402
 
 # Misma lista que el gate del monolito: la matriz de cobertura es la fuente unica.
 DATASETS = [
@@ -72,10 +71,11 @@ def test_blocks_nl_parity_base(dataset: str, tmp_path: Path) -> None:
     from equilibria.templates.gtap.gtap_parameters import GTAPParameters
     from equilibria.templates.gtap.gtap_solver import GTAPSolver
 
-    fixture_dir = FIXTURES_DIR / dataset
+    # Python is built with ifSUB=0, so the GAMS .nl recorded with ifSUB=0 (#23)
+    fixture_dir = find_reference(dataset, "gams", form="nl", mode="altertax", ifsub=0)
+    if fixture_dir is None:
+        pytest.skip(f"no hay .nl de GAMS registrado para {dataset}")
     gams_nl_path = fixture_dir / "gams_base.nl"
-    if not gams_nl_path.exists():
-        pytest.skip(f"no hay fixture .nl para {dataset}")
     har_dir = dataset_dir(dataset)
     if not (har_dir / "basedata.har").exists():
         pytest.skip(f"no hay datos HAR para {dataset}")
@@ -128,16 +128,15 @@ def test_blocks_nl_parity_base(dataset: str, tmp_path: Path) -> None:
         f"significa 'la algebra cuadra'; significa que no se comparo nada."
     )
 
-    failures = [
-        f"{fam}: {st['n_diff']} diffs (max_rel={st['max_rel']:.2e})"
-        for fam, st in result["family_stats"].items()
-        if st.get("n_diff", 0) > 0
-        and not st.get("_structural_fp")
-        and fam not in _WRITTEN_FORM_EQUIVALENT
-    ]
-    assert not failures, (
-        f"[{dataset}/base] diffs de coeficientes vs fixture GAMS:\n"
-        + "\n".join(f"  {f}" for f in failures)
+    # Same pinned gaps as the monolith gate (#187, #188).
+    assert gap_counts(result["family_stats"]) == _KNOWN_GAPS.get(dataset, {}), (
+        f"[{dataset}/base] coefficient diffs vs GAMS fixture differ from the "
+        f"pinned known gaps {_KNOWN_GAPS.get(dataset, {})}:\n"
+        + "\n".join(
+            f"  {fam}: {st['n_diff']} diffs (max_rel={st['max_rel']:.2e})"
+            for fam, st in result["family_stats"].items()
+            if fam in gap_counts(result["family_stats"])
+        )
     )
     assert len(b_diffs) == 0, (
         f"[{dataset}/base] {len(b_diffs)} variables con bounds distintos"
