@@ -33,6 +33,7 @@ import argparse
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from equilibria.sources import dataset_dir
@@ -199,7 +200,7 @@ def _force_rdlt(prm_path: Path, rordelta: int) -> None:
 
 
 def prepare(name: str, shock_pct: float = 10.0, steps: str = "8 16 32",
-            rordelta: int | None = None) -> tuple[Path, str]:
+            rordelta: int | None = None, run_root: Path | None = None) -> tuple[Path, str]:
     """Write a config-tagged .cmf for (name, shock_pct, steps[, rordelta]); return
     (run_dir, tag).
 
@@ -210,7 +211,7 @@ def prepare(name: str, shock_pct: float = 10.0, steps: str = "8 16 32",
     """
     ds_dir = dataset_dir(name)
     regs = regions(ds_dir)
-    run_dir = RUN_ROOT / name
+    run_dir = (run_root or RUN_ROOT) / name
     run_dir.mkdir(parents=True, exist_ok=True)
     for f in INPUT_FILES:
         shutil.copy2(ds_dir / f, run_dir / f)
@@ -337,7 +338,48 @@ def emit_bat(jobs: list[tuple[str, Path, str, float, str]], out_bat: Path) -> No
     print(f"  emitted {out_bat}  ({len(jobs)} jobs)")
 
 
-def main() -> int:
+def collect_job(run_dir: Path, tag: str, out: Path) -> list[str]:
+    """Copy one solved job's results into ``out`` under fixed names."""
+    out.mkdir(parents=True, exist_ok=True)
+    pairs = [
+        (f"updated_{tag}.har", "updated.har"),
+        ("decomp.har", "decomp.har"),
+        (f"sl4dump_{tag}.har", "sl4dump.har"),
+        (f"{tag}.cmf", "run.cmf"),
+        (f"solve_console_{tag}.txt", "solve_console.txt"),
+        (f"sltoht_console_{tag}.txt", "sltoht_console.txt"),
+    ]
+    written = []
+    for src, dst in pairs:
+        if (run_dir / src).exists():
+            shutil.copy2(run_dir / src, out / dst)
+            written.append(dst)
+    return written
+
+
+def _run_one_into(args: argparse.Namespace) -> int:
+    """--out: solve exactly one (dataset, shock, steps, closure) into args.out."""
+    if args.grid or len(args.datasets) != 1 or len(args.rordelta or []) != 1:
+        print("--out needs exactly one --datasets, no --grid and one --rordelta",
+              file=sys.stderr)
+        return 2
+    with tempfile.TemporaryDirectory(prefix="gempack_") as work:
+        run_dir, tag = prepare(args.datasets[0], args.shock_pct, args.steps,
+                               rordelta=args.rordelta[0], run_root=Path(work))
+        ok, res = solve(run_dir, args.gtapv7, tag)
+        upd = run_dir / f"updated_{tag}.har"
+        if not ok or not upd.exists() or upd.stat().st_size == 0:
+            print(f"FAILED {args.datasets[0]}/{tag}: {res or 'no residual line'}",
+                  file=sys.stderr)
+            return 1
+        if args.sltoht.exists():
+            convert_sl4(run_dir, args.sltoht, tag)
+        written = collect_job(run_dir, tag, args.out)
+    print(f"OK {args.datasets[0]}/{tag} -> {args.out}: {', '.join(written)}")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--gtapv7", type=Path, default=DEFAULT_GTAPV7,
                     help=f"path to gtapv7.exe (default {DEFAULT_GTAPV7})")
@@ -366,7 +408,12 @@ def main() -> int:
                          "(--rordelta 0 --rordelta 1). Default: both, so the fixtures dir "
                          "carries _capfix and _capflex side by side. Omit-and-empty keeps "
                          "the legacy single variant (dataset RDLT).")
-    args = ap.parse_args()
+    ap.add_argument("--out", type=Path,
+                    help="solve ONE job (one dataset, one config, one --rordelta) and "
+                         "leave its results in this folder under fixed names")
+    args = ap.parse_args(argv)
+    if args.out is not None:
+        return _run_one_into(args)
 
     configs = _grid_configs() if args.grid else [(args.shock_pct, args.steps)]
     # Default: generate BOTH closures so capFix (fast gate) and capFlex (GEMPACK-faithful)
