@@ -609,7 +609,26 @@ def _gdx_set_elements(gdx_path: Path, set_name: str) -> list[str]:
     return _re.findall(r"'([^']+)'", raw)
 
 
-def _build_getdata_replacement_agg(gdx_path: Path, har_dir: Path | None = None) -> str:
+def _fbep_header_block(fbep: str, har_dir: Path | None, dump: str) -> str:
+    """The FBEP/FTRV assignments from basedata.har when fbep is "header", else ""."""
+    if fbep == "zero":
+        return ""
+    if fbep != "header":
+        raise ValueError(f"fbep must be 'header' or 'zero', not {fbep!r}")
+    if har_dir is None:
+        raise ValueError("fbep='header' needs har_dir (the basedata.har it injects)")
+    from build_gtap7_pure_local_bundle import _fbep_ftrv_har_as_assignments
+
+    blocks = [
+        _fbep_ftrv_har_as_assignments(har_dir / "basedata.har", sym, dump)
+        for sym in ("FBEP", "FTRV")
+    ]
+    return "".join(b + "\n" for b in blocks if b.strip())
+
+
+def _build_getdata_replacement_agg(
+    gdx_path: Path, har_dir: Path | None = None, fbep: str = "zero"
+) -> str:
     """getData.gms replacement for a pre-aggregated (balanced) subset GDX.
 
     Unlike the shrunk path (full 9x10 data + subset sets), this uses a single
@@ -619,6 +638,9 @@ def _build_getdata_replacement_agg(gdx_path: Path, har_dir: Path | None = None) 
     har_dir: when given, elasticity parameters are read from default.prm via
         _prm_har_as_assignments (for GTAPAgg datasets whose GDX lacks elasticities).
     rorFlex0 is absent in the aggregate → defaulted to 0 (mirrors Python).
+    fbep: "zero" keeps getData.gms's fbep = 0 and ftrv = evfp - evfb; "header"
+        injects har_dir/basedata.har's FBEP/FTRV right after them, as the bundle
+        builders do (#187).
     """
     reg  = _gdx_set_elements(gdx_path, "REG")
     comm = _gdx_set_elements(gdx_path, "COMM")
@@ -706,7 +728,8 @@ def _build_getdata_replacement_agg(gdx_path: Path, har_dir: Path | None = None) 
         + dump + "\n"
         "parameter fbep(*,*,*) ; fbep(fp,a0,r) = 0 ;\n"
         "parameter ftrv(*,*,*) ; ftrv(fp,a0,r) = evfp(fp,a0,r) - evfb(fp,a0,r) ;\n"
-        "parameter ptax(*,*,*) ; ptax(i0,a0,r) = makb(i0,a0,r) - maks(i0,a0,r) ;\n"
+        + _fbep_header_block(fbep, har_dir, dump)
+        + "parameter ptax(*,*,*) ; ptax(i0,a0,r) = makb(i0,a0,r) - maks(i0,a0,r) ;\n"
         "parameter tvom(a0,r)  ; tvom(a0,r) = sum(i0, vdfp(i0,a0,r) + vmfp(i0,a0,r)) + sum(fp, evfp(fp,a0,r)) ;\n"
         "parameter check(a0,r) ; check(a0,r) = 0 ;\n\n"
         "parameters mdf(i0,a0,r), mmf(i0,a0,r), mdp(i0,r), mmp(i0,r),\n"
@@ -737,7 +760,7 @@ def _build_getdata_replacement_agg(gdx_path: Path, har_dir: Path | None = None) 
 def _build_standalone_gms(phase: str = "base", shrink: bool = False,
                           agg_gdx: Path | None = None,
                           har_dir: Path | None = None,
-                          ifsub: int = 0) -> str:
+                          ifsub: int = 0, fbep: str = "zero") -> str:
     """Build a self-contained .gms for NEOS submission.
 
     Inlines all $include files. Replaces getData.gms with embedded sets + data
@@ -757,7 +780,7 @@ def _build_standalone_gms(phase: str = "base", shrink: bool = False,
     scripts_dir = COMP_GMS.parent
     import re
     if agg_gdx is not None:
-        getdata_replacement = _build_getdata_replacement_agg(agg_gdx, har_dir=har_dir)
+        getdata_replacement = _build_getdata_replacement_agg(agg_gdx, har_dir=har_dir, fbep=fbep)
     elif shrink:
         getdata_replacement = _build_getdata_replacement_shrunk(KEEP_R, KEEP_I)
     else:
@@ -981,7 +1004,9 @@ def _convert_locally(standalone_gms: str, out_dir: Path, phase: str) -> Path:
     return out_dir / f"gams_{phase}.nl"
 
 
-def generate_nl(dataset: str, phases: list[str], ifsub: int, out_dir: Path) -> dict[str, Path]:
+def generate_nl(
+    dataset: str, phases: list[str], ifsub: int, out_dir: Path, fbep: str = "zero"
+) -> dict[str, Path]:
     """The GAMS .nl of each phase of ``dataset``, by local CONVERT, into out_dir.
 
     What ``nl_compare.py --gams-local --skip-python`` did for a gtap7 dataset:
@@ -994,7 +1019,9 @@ def generate_nl(dataset: str, phases: list[str], ifsub: int, out_dir: Path) -> d
     out_dir.mkdir(parents=True, exist_ok=True)
     return {
         phase: _convert_locally(
-            _build_standalone_gms(phase=phase, agg_gdx=agg_gdx, har_dir=har_dir, ifsub=ifsub),
+            _build_standalone_gms(
+                phase=phase, agg_gdx=agg_gdx, har_dir=har_dir, ifsub=ifsub, fbep=fbep
+            ),
             out_dir,
             phase,
         )
@@ -1010,8 +1037,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--phase", nargs="+", required=True)
     ap.add_argument("--ifsub", type=int, choices=(0, 1), required=True)
     ap.add_argument("--out-dir", type=Path, required=True)
+    ap.add_argument("--fbep", choices=("header", "zero"), default="zero",
+                    help="zero: official getData (default); header: inject basedata.har's "
+                         "FBEP/FTRV like the bundle builders (#187)")
     args = ap.parse_args(argv)
-    generate_nl(args.dataset, list(args.phase), args.ifsub, args.out_dir)
+    generate_nl(args.dataset, list(args.phase), args.ifsub, args.out_dir, args.fbep)
     return 0
 
 

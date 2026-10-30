@@ -40,12 +40,12 @@ generated_from:
       solve.gms: 03d3a8e9488a24881febe86e53575403675d41d29b029338332002f9cf64e5d2
       tariff_sim.gms: 67df15d47505614917bbe5ac2613807ed1829aac0dd57fa8d1b4e6c85613e507
       tariff_sim_fixed.gms: e009d246ad5726e50db587db32cc2c642487ba2504b4ec0b2b77c9ceaf1cad5b
-      tools/build_gtap7_altertax_neos_bundle.py: 1bacfcfa7eb53969018eb8eee2f5171a51817f09ad0d1af085de91e805cf54c9
-      tools/build_gtap7_pure_local_bundle.py: 6229ea2b2c4c16d71fcbe4ff92500c7b04eabf27e89aae40e049cb85a6877f62
+      tools/build_gtap7_altertax_neos_bundle.py: 7e59a9d0815ae6f7b54222ed39bae21c357d38fa34b300739abf47e777a91dca
+      tools/build_gtap7_pure_local_bundle.py: fcf66d4b894819aacc80a90e2286e624f7b1a564f13e0ab1e7cb004ebc22bb30
       tools/gdx_to_gams_inline.py: 325d18b91f3eabddf050f8b2aaf77bf90f0a74d266f0e42bf665c6a514e24396
-      tools/nl_standalone.py: a3c274c13a27359e10f7609fa344aa3187e603b81d3fa9d9bc027f0429498187
-      tools/regen_gams_reference.py: f8b87b5953eccc8187faaac878058d7315e6f9ba1c91db4917fa14642545a26a
-      tools/regenerate_gams.py: 9fe60434aee15f516b9bd2ad2a43c9a53693e05986ec2054f08bb629361042e8
+      tools/nl_standalone.py: 53f321c41cfd9be539b5b30bb7eb93bffb93ed27734378f05fc8c6a58150736c
+      tools/regen_gams_reference.py: 2a200a2ff40f3f96196f02e9e92146613b03aa581b15eae10680816a44c0cf5a
+      tools/regenerate_gams.py: 9516571d77d0d08310c6bfded530f3f08e7a6159183e0782b4e20313f320fa80
   data:
     path: gtap7/gtap7_3x3
     sha256:
@@ -58,7 +58,8 @@ solver:
   name: IPOPT
 command: /Users/marmol/proyectos/equilibria-phase2b/.venv/bin/python /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gams/tools/regen_gams_reference.py
   --dataset gtap7_3x3 --mode gtap --form nlp --ifsub 1 --out /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gtap7_3x3/gams_nlp_gtap_ifsub1
-equilibria_commit: 86c9b6b
+  --fbep header
+equilibria_commit: f8c4698
 exit:
   code: 0
 outputs:
@@ -66,8 +67,8 @@ outputs:
   out.gdx: a670afeffd5d468a18ac11cd92cd1c85a8760efdb6ac9beed289ecd739b26b8c
   path.opt: 47ab97f3f1331ab6505c79903e7febdc2beb5a253083cbfb8175b746b3f33aaf
 run:
-  date: '2026-10-30T11:12:04-06:00'
-  duration_s: 1.568
+  date: '2026-10-30T11:20:47-06:00'
+  duration_s: 1.593
   machine:
     os: macOS 26.2 (Darwin 25.2.0)
     cpu: Apple M3 Pro

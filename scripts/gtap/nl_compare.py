@@ -823,6 +823,7 @@ def fetch_gams_nl(
     har_dir: Path | None = None,
     ifsub: int = 0,
     local: bool = False,
+    fbep: str = "zero",
 ) -> dict[str, Path]:
     """Submit GTAP model to NEOS CONVERT for each requested phase.
 
@@ -841,7 +842,7 @@ def fetch_gams_nl(
     for phase in phases:
         print(f"\n  Building standalone .gms for phase={phase} ...")
         standalone_gms = _build_standalone_gms(phase=phase, shrink=shrink, agg_gdx=agg_gdx,
-                                               har_dir=har_dir, ifsub=ifsub)
+                                               har_dir=har_dir, ifsub=ifsub, fbep=fbep)
         if local:
             result[phase] = _convert_locally(standalone_gms, out_dir, phase)
             continue
@@ -1430,7 +1431,7 @@ def _run_nl(args) -> dict:
         gams_nl_paths = fetch_gams_nl(
             args.out_dir, args.neos_email, list(args.phase), shrink=gams_shrink,
             agg_gdx=(ds.agg_gdx if use_agg else None), har_dir=_har_dir,
-            ifsub=args.ifsub, local=args.gams_local)
+            ifsub=args.ifsub, local=args.gams_local, fbep=args.fbep)
     else:
         for phase in args.phase:
             for p in (args.out_dir / f"gams_{phase}.nl",
@@ -1578,6 +1579,9 @@ def main() -> int:
                     help="altertax CD (default) or pure-gtap real-CES")
     ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
                     help="ifSUB of the GAMS model (CONVERT .nl) and of the pure-gtap Python side")
+    ap.add_argument("--fbep", choices=["header", "zero"], default="zero",
+                    help="zero: official getData (default); header: inject basedata.har's "
+                         "FBEP/FTRV like the bundle builders (#187)")
     ap.add_argument("--gams-local", action="store_true",
                     help="write the GAMS .nl with the local GAMS CONVERT instead of NEOS")
     args = ap.parse_args()

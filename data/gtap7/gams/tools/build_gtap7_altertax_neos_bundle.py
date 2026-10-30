@@ -532,6 +532,9 @@ def main() -> None:
                          "Use 30 for the large datasets (15x10): one-shot NEOS PATH reports "
                          "Optimal but mis-converges the micro ag cells (ref violates its own "
                          "xfeq). Writes path.opt alongside the bundle.")
+    ap.add_argument("--fbep", choices=("header", "zero"), default="header",
+                    help="header: inject basedata.har's FBEP/FTRV after getData's fbep=0 "
+                         "(default, the MCP references since #24); zero: official getData (#187).")
     args = ap.parse_args()
 
     dataset = args.dataset
@@ -641,7 +644,7 @@ def main() -> None:
     # `FTRV(...)` overrides `ftrv=evfp-evfb` where the header has a nonzero value).
     anchor_end = inlined.find(ftrv_anchor) + len(ftrv_anchor)
     inject_lines = []
-    for _sym in ("FBEP", "FTRV"):
+    for _sym in ("FBEP", "FTRV") if args.fbep == "header" else ():
         _blk = _fbep_ftrv_har_as_assignments(
             dataset_dir(dataset) / "basedata.har", _sym, inlined)
         if _blk.strip():

@@ -40,6 +40,8 @@ def _run(dataset: str, mode: str, form: str, ifsub: int, out: Path) -> int:
             str(ifsub),
             "--out",
             str(out),
+            "--fbep",
+            "header",
         ],
         cwd=ROOT,
     ).returncode

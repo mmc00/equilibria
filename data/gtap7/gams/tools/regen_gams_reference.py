@@ -48,7 +48,7 @@ def to_nlp(text: str) -> str:
     return _NLP_SOLVE.sub(r"\1option nlp=ipopt;\n\1\2", text)
 
 
-def _build(mode: str, dataset: str, ifsub: int, work: Path) -> Path:
+def _build(mode: str, dataset: str, ifsub: int, work: Path, fbep: str) -> Path:
     subprocess.run(
         [
             sys.executable,
@@ -59,6 +59,8 @@ def _build(mode: str, dataset: str, ifsub: int, work: Path) -> Path:
             str(ifsub),
             "--out-dir",
             str(work),
+            "--fbep",
+            fbep,
         ],
         check=True,
         cwd=ROOT,
@@ -69,18 +71,29 @@ def _build(mode: str, dataset: str, ifsub: int, work: Path) -> Path:
     return built[0]
 
 
-def _verify_subsidy_aware(gdxdump: str, gdx: Path) -> None:
-    """The altertax reference must carry nonzero ytax(ft) and ytax(fs) at check."""
+def _ytax(dump: str, stream: str, period: str | None = None) -> list[float]:
+    return [
+        abs(float(line.rsplit(",", 1)[-1]))
+        for line in dump.splitlines()
+        if f'"{stream}"' in line and (period is None or f'"{period}"' in line)
+    ]
+
+
+def _verify_subsidy_aware(gdxdump: str, gdx: Path, fbep: str) -> None:
+    """The altertax reference carries the factor subsidy only when it was injected.
+
+    header: nonzero ytax(ft) and ytax(fs) at check. zero: ytax(fs) is zero in
+    every period, since the official getData.gms sets fbep = 0 (#187).
+    """
     dump = subprocess.run(
         [gdxdump, str(gdx), "Symb=ytax", "Format=csv"], capture_output=True, text=True
     ).stdout
+    if fbep == "zero":
+        if any(v > 1e-6 for v in _ytax(dump, "fs")):
+            raise SystemExit("ytax(fs) is nonzero with fbep=zero: FBEP was injected")
+        return
     for stream in ("ft", "fs"):
-        values = [
-            abs(float(line.rsplit(",", 1)[-1]))
-            for line in dump.splitlines()
-            if f'"{stream}"' in line and "check" in line
-        ]
-        if not any(v > 1e-6 for v in values):
+        if not any(v > 1e-6 for v in _ytax(dump, stream, "check")):
             raise SystemExit(
                 f"ytax({stream}) is zero at check: subsidy-blind reference"
             )
@@ -93,6 +106,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--form", choices=("nlp", "mcp"), required=True)
     ap.add_argument("--ifsub", type=int, choices=(0, 1), required=True)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--fbep", choices=("header", "zero"), required=True,
+                    help="header: FBEP/FTRV injected from basedata.har; zero: official getData")
     args = ap.parse_args(argv)
 
     gams = shutil.which("gams")
@@ -103,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
 
     with tempfile.TemporaryDirectory(prefix="regen_gams_") as tmp:
         work = Path(tmp)
-        text = _build(args.mode, args.dataset, args.ifsub, work).read_text()
+        text = _build(args.mode, args.dataset, args.ifsub, work, args.fbep).read_text()
         model = work / "model.gms"
         model.write_text(to_nlp(text) if args.form == "nlp" else text)
         proc = subprocess.run(
@@ -128,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
                 print("\n".join(lst.read_text().splitlines()[-30:]))
             return 1
         if args.mode == "altertax":
-            _verify_subsidy_aware(str(Path(gams).with_name("gdxdump")), gdx)
+            _verify_subsidy_aware(str(Path(gams).with_name("gdxdump")), gdx, args.fbep)
         for name in ("model.gms", "path.opt", "out.gdx"):
             if (work / name).exists():
                 shutil.copyfile(work / name, out / name)

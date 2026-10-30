@@ -109,7 +109,8 @@ def job_command(job: Job, *, tool_version: str, root: Path = DATA_ROOT) -> list[
                  "--ifsub", str(job.ifsub), "--out-dir", str(job.folder)]  # fmt: skip
     else:
         inner = [py, str(REGEN), "--dataset", job.dataset, "--mode", job.mode,
-                 "--form", job.form, "--ifsub", str(job.ifsub), "--out", str(job.folder)]  # fmt: skip
+                 "--form", job.form, "--ifsub", str(job.ifsub), "--out", str(job.folder),
+                 "--fbep", "header"]  # fmt: skip
     return [
         py, str(WRITE_SOURCE),
         "--data-root", str(root),

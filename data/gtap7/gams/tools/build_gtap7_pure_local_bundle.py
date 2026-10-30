@@ -250,7 +250,7 @@ def _fbep_ftrv_har_as_assignments(har_path: Path, header: str, inlined: str) -> 
     # Detect the activity-set prefix from the inlined .gms's own EVFB block
     # (same (ENDW, ACTS, REG) domain): e.g. `evfb('Land','a_Food','USA')` → a_.
     act_prefix = ""
-    m = re.search(r"(?:^|\n)evfb\('[^']+','([acfr])_", inlined)
+    m = re.search(r"""(?:^|\n)evfb\(['"][^'"]+['"],['"]([acfr])_""", inlined)
     if m:
         act_prefix = m.group(1) + "_"
 
@@ -275,6 +275,9 @@ def main() -> None:
     ap.add_argument("--tariff", type=float, default=0.10,
                     help="Uniform tariff power shock fraction (default 0.10).")
     ap.add_argument("--out-dir", type=Path, default=None)
+    ap.add_argument("--fbep", choices=("header", "zero"), default="header",
+                    help="header: inject basedata.har's FBEP/FTRV after getData's fbep=0 "
+                         "(default, the MCP references since #24); zero: official getData (#187).")
     args = ap.parse_args()
 
     dataset = args.dataset
@@ -473,7 +476,7 @@ def main() -> None:
     # Fix: when the inlined .gms lacks the FBEP/FTRV data blocks (v7 dropped
     # them), inject them from basedata.har with the dataset's own set-prefix
     # convention, so the regenerated reference GDX carries the real subsidies.
-    for _sym, _n_idx in (("FBEP", 3), ("FTRV", 3)):
+    for _sym, _n_idx in (("FBEP", 3), ("FTRV", 3)) if args.fbep == "header" else ():
         if f"* {_sym} data" in inlined or f"\n{_sym}(" in inlined:
             continue  # already present (from the v7 via the inliner)
         _blk = _fbep_ftrv_har_as_assignments(
