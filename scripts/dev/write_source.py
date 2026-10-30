@@ -119,7 +119,12 @@ def _inputs(args: argparse.Namespace, root: Path) -> dict[str, Any]:
         mf = args.model_file.resolve()
         generated_from["model"] = {
             "path": mf.relative_to(root).as_posix(),
-            "sha256": sha256_file(mf),
+            # a model folder: every file, so an edited include makes it stale
+            "sha256": (
+                {p.relative_to(mf).as_posix(): sha256_file(p) for p in own_files(mf)}
+                if mf.is_dir()
+                else sha256_file(mf)
+            ),
         }
     if args.data_dir:
         dd = args.data_dir.resolve()

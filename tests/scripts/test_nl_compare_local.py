@@ -63,10 +63,12 @@ def test_gams_local_writes_nl(tmp_path: Path) -> None:
         cwd=ROOT,
     )
     names = {p.name for p in tmp_path.iterdir()}
-    assert {
+    assert proc.returncode == 0, (proc.stdout[-2000:], proc.stderr[-2000:])
+    # exactly the files write_source records: nothing else is left behind
+    assert names == {
         "gams_base.nl",
         "gams_base.row",
         "gams_base.col",
-        "comp_base.gms",
-    } <= names, (names, proc.stdout[-2000:], proc.stderr[-2000:])
-    assert "$setGlobal ifSUB     1" in (tmp_path / "comp_base.gms").read_text()
+        "gams_base.gms",
+    }, names
+    assert "$setGlobal ifSUB     1" in (tmp_path / "gams_base.gms").read_text()

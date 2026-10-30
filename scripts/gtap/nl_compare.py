@@ -1545,7 +1545,7 @@ $setGlobal ifMCP     0
 def _convert_locally(standalone_gms: str, out_dir: Path, phase: str) -> Path:
     """Run the standalone .gms through the local GAMS CONVERT (no size limit).
 
-    Leaves exactly gams_<phase>.{nl,row,col} and comp_<phase>.gms (the file
+    Leaves exactly gams_<phase>.{nl,row,col} and gams_<phase>.gms (the file
     CONVERT read) in out_dir; raises if GAMS fails or writes no .nl.
     """
     gams = shutil.which("gams")
@@ -1562,7 +1562,7 @@ def _convert_locally(standalone_gms: str, out_dir: Path, phase: str) -> Path:
         raise RuntimeError(
             f"local CONVERT ({phase}) failed (rc={proc.returncode}); see {work / 'comp.lst'}"
         )
-    shutil.copyfile(work / "comp.gms", out_dir / f"comp_{phase}.gms")
+    shutil.copyfile(work / "comp.gms", out_dir / f"gams_{phase}.gms")
     for ext in ("nl", "row", "col"):
         if (work / f"ampl.{ext}").exists():
             shutil.copyfile(work / f"ampl.{ext}", out_dir / f"gams_{phase}.{ext}")
@@ -2349,6 +2349,13 @@ def _run_nl(args) -> dict:
             "only_py_cons": result["only_py_cons"][:50],
             "only_gams_cons": result["only_gams_cons"][:50],
         }
+
+    if args.skip_python and len(gams_nl_paths) == len(args.phase):
+        # Asked for the GAMS side only (regenerate_gams.py): writing it is the job.
+        return dict(
+            status="clean", period=None,
+            headline=f"GAMS .nl written for {', '.join(args.phase)} (python side skipped)",
+            violations=[], meta={"gams_nl": {p: str(v) for p, v in gams_nl_paths.items()}})
 
     if not per_phase and skipped:
         return dict(
