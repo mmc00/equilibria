@@ -91,3 +91,11 @@ def test_failed_solve_exits_nonzero(tmp_path: Path) -> None:
 def test_out_needs_exactly_one_job(tmp_path: Path, extra: list[str]) -> None:
     assert _module().main([*extra, "--out", str(tmp_path / "o")]) == 2
     assert not (tmp_path / "o").exists()
+
+
+def test_failed_solve_shows_the_console(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The work folder is temporary: a failure must print GEMPACK's own words."""
+    _module().main(_args(tmp_path, tmp_path / "o", _fake_gtapv7(tmp_path, ok=False)))
+    assert "Fatal error in the solve" in capsys.readouterr().err

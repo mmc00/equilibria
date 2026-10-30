@@ -371,6 +371,11 @@ def _run_one_into(args: argparse.Namespace) -> int:
         if not ok or not upd.exists() or upd.stat().st_size == 0:
             print(f"FAILED {args.datasets[0]}/{tag}: {res or 'no residual line'}",
                   file=sys.stderr)
+            console = run_dir / f"solve_console_{tag}.txt"
+            if console.exists():
+                tail = console.read_text(encoding="utf-8", errors="replace")
+                print("--- last lines of the GEMPACK console ---", file=sys.stderr)
+                print("\n".join(tail.splitlines()[-30:]), file=sys.stderr)
             return 1
         if args.sltoht.exists():
             convert_sl4(run_dir, args.sltoht, tag)
