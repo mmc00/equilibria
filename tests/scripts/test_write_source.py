@@ -191,3 +191,36 @@ def test_bad_input_path_fails_before_running(tmp_path: Path) -> None:
     except SystemExit:
         pass
     assert not (folder / "ran.txt").exists()
+
+
+class _FakeWinreg:
+    HKEY_LOCAL_MACHINE = object()
+
+    def __init__(self, name: str | None) -> None:
+        self.name = name
+        self.asked: list[tuple[str, str]] = []
+
+    def OpenKey(self, root: object, path: str) -> str:  # noqa: N802 (winreg's API)
+        if self.name is None:
+            raise OSError("no such key")
+        return path
+
+    def QueryValueEx(self, key: str, value: str) -> tuple[str, int]:  # noqa: N802
+        self.asked.append((key, value))
+        return f"  {self.name}  ", 1
+
+
+def test_windows_cpu_reads_the_registry_name() -> None:
+    fake = _FakeWinreg("Intel(R) Core(TM) i7-12700H")
+    assert _module()._windows_cpu(fake) == "Intel(R) Core(TM) i7-12700H"
+    assert fake.asked == [
+        (r"HARDWARE\DESCRIPTION\System\CentralProcessor\0", "ProcessorNameString")
+    ]
+
+
+def test_windows_cpu_falls_back_without_the_key() -> None:
+    import platform
+
+    assert _module()._windows_cpu(_FakeWinreg(None)) == (
+        platform.processor() or platform.machine()
+    )
