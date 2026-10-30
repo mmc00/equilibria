@@ -37,7 +37,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, find_reference
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -50,7 +50,6 @@ if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
 
 from _diff_core import git_short_sha  # noqa: E402
 
-NLP_FIXTURES = ROOT / "tests" / "fixtures" / "gtap7_nlp"
 GAMS = "/Library/Frameworks/GAMS.framework/Versions/Current/Resources/gams"
 
 # The benchmark plan: (dataset, mode, ifsub, run_gams).
@@ -92,8 +91,11 @@ def _fmt_stats(label: str, s: dict[str, float]) -> str:
             f"mean={s['mean']:.3f}s  stdev={s['stdev']:.3f}s")
 
 
-def _fixture_gdx(dataset: str, mode: str, ifsub: int) -> Path:
-    return NLP_FIXTURES / f"{dataset}_{mode}_ifsub{ifsub}.gdx"
+def _fixture_gdx(dataset: str, mode: str, ifsub: int) -> Path | None:
+    """The GAMS NLP reference recorded in data/ (mode "pure" is recorded as "gtap")."""
+    model = "gtap" if mode == "pure" else mode
+    folder = find_reference(dataset, "gams", form="nlp", mode=model, ifsub=ifsub)
+    return None if folder is None else folder / "out.gdx"
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +159,7 @@ def _time_python_once(dataset: str, mode: str, ifsub: int, gdx: Path) -> float:
 # ---------------------------------------------------------------------------
 def _build_nlp_gms(dataset: str, mode: str, ifsub: int) -> Path:
     """Build the bundle .gms and rewrite it to ifMCP=0 + IPOPT (as
-    regen_altertax_reference._solve does). Returns the runnable *_nlp.gms path.
+    regen_gams_reference.to_nlp does). Returns the runnable *_nlp.gms path.
     Done ONCE per plan row; the timed runs re-execute this file."""
     if mode == "altertax":
         builder = "build_gtap7_altertax_neos_bundle.py"
@@ -248,7 +250,7 @@ def main() -> int:
     for dataset, mode, ifsub, want_gams in plan:
         tag = f"{dataset}/{mode}/ifSUB={ifsub}"
         gdx = _fixture_gdx(dataset, mode, ifsub)
-        run_gams = want_gams and not args.no_gams and gdx.exists()
+        run_gams = want_gams and not args.no_gams and gdx is not None
         _section(f"{tag}  (Python{'+GAMS' if run_gams else ' only'}, N={n})")
 
         # --- GAMS side (build once, warm-up, then N timed runs) ---
@@ -267,12 +269,12 @@ def main() -> int:
                 gams_times = []
 
         # --- Python side (warm-up + N timed runs) ---
-        if not gdx.exists() and mode != "altertax":
+        if gdx is None and mode != "altertax":
             # Python needs a seed GDX; without a fixture we can only time
             # datasets whose seed we can still supply. 15x10 uses its committed
             # MCP fixture as the seed even though the GAMS-NLP pair is absent.
             pass
-        py_seed = gdx if gdx.exists() else _find_seed(dataset, mode, ifsub)
+        py_seed = gdx if gdx is not None else _find_seed(dataset, mode, ifsub)
         py_times: list[float] = []
         if py_seed is not None:
             try:

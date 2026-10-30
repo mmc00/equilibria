@@ -40,7 +40,7 @@ def _doc_path(gate):
     return ROOT / f"docs/site/_static/gtap7_{gate}_matrix.html"
 
 
-# NLP refs live in tests/fixtures/gtap7_nlp/<ds>_<mode>_ifsub<N>.gdx; MCP refs are the
+# NLP refs live in data/gtap7/<ds>/gams_nlp_<mode>_ifsub<N>/out.gdx; MCP refs are the
 # clean NEOS altertax fixtures. Each gate imports its own solve+measure from its test.
 def _gate_config(gate):
     if gate == "mcp":
@@ -79,7 +79,7 @@ def _measure_all(cfg):
     for r in cfg["rows"]:
         key = (r.dataset, r.mode, r.ifsub)
         gdx = cfg["gdx"](r)
-        if not gdx.exists() or not has_dataset(r.dataset):
+        if gdx is None or not gdx.exists() or not has_dataset(r.dataset):
             results[key] = None
             continue
         try:

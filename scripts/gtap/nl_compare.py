@@ -15,6 +15,8 @@ from equilibria.sources import dataset_dir
 import argparse
 import base64
 import re
+import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -28,9 +30,9 @@ from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 from equilibria.templates.gtap.gtap_solver import GTAPSolver
 from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
 
-GDX9 = ROOT / "src/equilibria/templates/reference/gtap/data/basedata-9x10.gdx"
-COMP_GMS = ROOT / "src/equilibria/templates/reference/gtap/scripts/comp.gms"
-DATA_DIR = ROOT / "src/equilibria/templates/reference/gtap/data"
+GDX9 = ROOT / "data/gtap7/9x10/basedata-9x10.gdx"
+COMP_GMS = ROOT / "data/gtap7/gams/comp.gms"
+DATA_DIR = ROOT / "data/gtap7/9x10"
 
 KEEP_R = ["Oceania", "NAmerica", "EU_28"]
 KEEP_I = ["c_Crops", "c_MeatLstk", "c_Extraction", "c_TransComm"]
@@ -268,6 +270,22 @@ sets
 ;
 """
 
+def _gdxdump(gdx_path: Path, *args: str) -> str:
+    """gdxdump's text for gdx_path; an error, never a placeholder, when it can't run.
+
+    The dumps below are the DATA of the standalone .gms: a comment in their place
+    let GAMS run on the model's defaults without saying so.
+    """
+    exe = shutil.which("gdxdump")
+    if exe is None:
+        raise RuntimeError("gdxdump not on PATH (it ships with GAMS)")
+    if not gdx_path.exists():
+        raise FileNotFoundError(gdx_path)
+    return subprocess.check_output(
+        [exe, str(gdx_path), *args], stderr=subprocess.DEVNULL, timeout=30
+    ).decode()
+
+
 def _gdxdump_params_only(gdx_path: Path, renames: dict[str, str] | None = None,
                          universal_domains: bool = False) -> str:
     """Dump a GDX file, keeping only Parameter/Scalar blocks (strip Set blocks).
@@ -279,18 +297,8 @@ def _gdxdump_params_only(gdx_path: Path, renames: dict[str, str] | None = None,
         → GAMS $170 Domain violation. Universal domains hold the data verbatim and
         the model indexes them with proper sets (standard GTAP getData practice).
     """
-    import subprocess
     import re as _re
-    GDXDUMP = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump")
-    if not GDXDUMP.exists() or not gdx_path.exists():
-        return f"* gdxdump not available or {gdx_path.name} not found"
-    try:
-        raw = subprocess.check_output(
-            [str(GDXDUMP), str(gdx_path)],
-            stderr=subprocess.DEVNULL, timeout=30
-        ).decode()
-    except Exception as e:
-        return f"* gdxdump failed: {e}"
+    raw = _gdxdump(gdx_path)
 
     lines = []
     skip_block = False
@@ -419,17 +427,8 @@ def _prm_as_assignments(gdx_path: Path, renames: dict[str, str] | None = None) -
         etraq("a_agricultur","Oceania") = -5 ;
         ...
     """
-    import subprocess, re as _re
-    GDXDUMP = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump")
-    if not GDXDUMP.exists() or not gdx_path.exists():
-        return f"* gdxdump not available or {gdx_path.name} not found\n"
-    try:
-        raw = subprocess.check_output(
-            [str(GDXDUMP), str(gdx_path)],
-            stderr=subprocess.DEVNULL, timeout=30
-        ).decode()
-    except Exception as e:
-        return f"* gdxdump failed: {e}\n"
+    import re as _re
+    raw = _gdxdump(gdx_path)
 
     renames_upper = {k.upper(): v for k, v in (renames or {}).items()}
 
@@ -691,12 +690,8 @@ def _compute_keep_a(keep_i: list[str]) -> list[str]:
     Mirrors diff_3x3_full._shrink_sets keep_a derivation. Activities are the
     'a_*' tokens, commodities the 'c_*' tokens in each MAKB record.
     """
-    import subprocess, re as _re
-    GDXDUMP = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump")
-    raw = subprocess.check_output(
-        [str(GDXDUMP), str(DATA_DIR / "9x10Dat.gdx"), "Symb=MAKB"],
-        stderr=subprocess.DEVNULL, timeout=30,
-    ).decode()
+    import re as _re
+    raw = _gdxdump(DATA_DIR / "9x10Dat.gdx", "Symb=MAKB")
     keep = set(keep_i)
     keep_a: set[str] = set()
     for line in raw.splitlines():
@@ -831,12 +826,8 @@ def _build_getdata_replacement_shrunk(keep_r: list[str], keep_i: list[str]) -> s
 
 def _gdx_set_elements(gdx_path: Path, set_name: str) -> list[str]:
     """Read elements of a 1-dim Set from a GDX via gdxdump Symb=."""
-    import subprocess, re as _re
-    GDXDUMP = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump")
-    raw = subprocess.check_output(
-        [str(GDXDUMP), str(gdx_path), f"Symb={set_name}"],
-        stderr=subprocess.DEVNULL, timeout=30,
-    ).decode()
+    import re as _re
+    raw = _gdxdump(gdx_path, f"Symb={set_name}")
     return _re.findall(r"'([^']+)'", raw)
 
 
@@ -1324,7 +1315,8 @@ def submit_and_fetch_gdx_9x10(out_dir: Path, neos_email: str) -> Path:
 
 def _build_standalone_gms(phase: str = "base", shrink: bool = False,
                           agg_gdx: Path | None = None,
-                          har_dir: Path | None = None) -> str:
+                          har_dir: Path | None = None,
+                          ifsub: int = 0) -> str:
     """Build a self-contained .gms for NEOS submission.
 
     Inlines all $include files. Replaces getData.gms with embedded sets + data
@@ -1533,7 +1525,39 @@ $setGlobal ifSUB     0
 $setGlobal ifCSV     0
 $setGlobal ifMCP     0
 """
-    return header + before_loop + solve_block
+    # comp.gms sets ifSUB itself and GAMS keeps the last $setGlobal, so the
+    # header alone would be overridden (#23): every setting gets the value asked.
+    return re.sub(r"^\$setGlobal\s+ifSUB\s+\d+\s*$", f"$setGlobal ifSUB     {ifsub}",
+                  header + before_loop + solve_block, flags=re.MULTILINE)
+
+
+def _convert_locally(standalone_gms: str, out_dir: Path, phase: str) -> Path:
+    """Run the standalone .gms through the local GAMS CONVERT (no size limit).
+
+    Leaves exactly gams_<phase>.{nl,row,col} and gams_<phase>.gms (the file
+    CONVERT read) in out_dir; raises if GAMS fails or writes no .nl.
+    """
+    gams = shutil.which("gams")
+    if gams is None:
+        raise RuntimeError("--gams-local needs the gams binary on PATH")
+    work = out_dir / f"_convert_{phase}"
+    shutil.rmtree(work, ignore_errors=True)
+    work.mkdir(parents=True)
+    (work / "comp.gms").write_text(standalone_gms)
+    (work / "convert.opt").write_text("AmplNL ampl.nl\n")
+    proc = subprocess.run([gams, "comp.gms", "lo=2"], cwd=work, capture_output=True, text=True)
+    nl = work / "ampl.nl"
+    if proc.returncode != 0 or not nl.exists():
+        raise RuntimeError(
+            f"local CONVERT ({phase}) failed (rc={proc.returncode}); see {work / 'comp.lst'}"
+        )
+    shutil.copyfile(work / "comp.gms", out_dir / f"gams_{phase}.gms")
+    for ext in ("nl", "row", "col"):
+        if (work / f"ampl.{ext}").exists():
+            shutil.copyfile(work / f"ampl.{ext}", out_dir / f"gams_{phase}.{ext}")
+    shutil.rmtree(work)
+    print(f"  Written: gams_{phase}.nl (local CONVERT)")
+    return out_dir / f"gams_{phase}.nl"
 
 
 def _submit_and_fetch_nl(
@@ -1695,8 +1719,12 @@ def fetch_gams_nl(
     shrink: bool = False,
     agg_gdx: Path | None = None,
     har_dir: Path | None = None,
+    ifsub: int = 0,
+    local: bool = False,
 ) -> dict[str, Path]:
     """Submit GTAP model to NEOS CONVERT for each requested phase.
+
+    local: run the local GAMS CONVERT instead of NEOS (see _convert_locally).
 
     Returns dict phase → Path of downloaded .nl file.
     For "shock" phase, submits a separate job with tm*1.10 tariff shock applied.
@@ -1710,7 +1738,11 @@ def fetch_gams_nl(
     result: dict[str, Path] = {}
     for phase in phases:
         print(f"\n  Building standalone .gms for phase={phase} ...")
-        standalone_gms = _build_standalone_gms(phase=phase, shrink=shrink, agg_gdx=agg_gdx, har_dir=har_dir)
+        standalone_gms = _build_standalone_gms(phase=phase, shrink=shrink, agg_gdx=agg_gdx,
+                                               har_dir=har_dir, ifsub=ifsub)
+        if local:
+            result[phase] = _convert_locally(standalone_gms, out_dir, phase)
+            continue
         standalone_path = out_dir / f"gtap_standalone_{phase}.gms"
         standalone_path.write_text(standalone_gms)
         print(f"  Standalone .gms: {len(standalone_gms.splitlines())} lines ({len(standalone_gms)//1024} KB)")
@@ -1724,6 +1756,17 @@ def fetch_gams_nl(
 # ---------------------------------------------------------------------------
 
 _T_PERIODS = ("base", "check", "shock")
+
+
+def _raw_period(name: str) -> str | None:
+    """Period index of a raw GAMS or Python name, or None if it has none.
+
+    pmeq(EU_28,c_Food,ROW,shock) -> "shock"; pm[EU_28,Food,ROW,base] -> "base".
+    """
+    if not name or name[-1] not in ")]":
+        return None
+    last = name[:-1].rsplit(",", 1)[-1].lstrip("([")
+    return last if last in _T_PERIODS else None
 
 
 def _normalize_name(name: str) -> str:
@@ -1915,10 +1958,30 @@ def diff_nl_models(
         if norm:
             py_con_map.setdefault(norm, i)
 
-    # GAMS names: convert to Python convention, keep base period only
+    # GAMS names: convert to Python convention.  A GAMS check/shock .nl holds
+    # every period of the model (pmeq(...,base) AND pmeq(...,shock)), and
+    # stripping the period makes them collide; keep the rows/columns of
+    # py_period, or the first-seen BASE row would be compared against Python's
+    # shock row (tests/templates/gtap/test_nl_compare_period_filter.py).
+    gams_names = [gams_model.con_name(i) for i in range(gams_model.n_cons)]
+    gams_periods = {_raw_period(n) for n in gams_names} - {None}
+    gams_multi = len(gams_periods) > 1
+    if gams_multi and py_period not in gams_periods:
+        # Filtering would keep only the period-less rows: a near-empty
+        # comparison that still passes an n_common_cons > 0 guard.
+        raise ValueError(
+            f"py_period={py_period!r} is not in the GAMS .nl "
+            f"(periods: {sorted(gams_periods)})"
+        )
+
+    def _keep_gams(raw: str) -> bool:
+        return not gams_multi or _raw_period(raw) in (None, py_period)
+
     gams_var_map: dict[str, int] = {}
     for i in range(gams_model.n_vars):
         raw = gams_model.var_name(i)
+        if not _keep_gams(raw):
+            continue
         norm = _normalize_name(raw)  # strips time, unifies brackets
         if norm and norm not in gams_var_map:
             gams_var_map[norm] = i
@@ -1926,6 +1989,8 @@ def diff_nl_models(
     gams_con_map: dict[str, int] = {}
     for i in range(gams_model.n_cons):
         raw = gams_model.con_name(i)
+        if not _keep_gams(raw):
+            continue
         # Convert GAMS {name}eq(...) → eq_{name}[...]
         norm_raw = _normalize_name(raw)
         norm = _gams_to_python_name(raw)
@@ -2262,7 +2327,8 @@ def _run_nl(args) -> dict:
     if not args.skip_gams:
         gams_nl_paths = fetch_gams_nl(
             args.out_dir, args.neos_email, list(args.phase), shrink=gams_shrink,
-            agg_gdx=(ds.agg_gdx if use_agg else None), har_dir=_har_dir)
+            agg_gdx=(ds.agg_gdx if use_agg else None), har_dir=_har_dir,
+            ifsub=args.ifsub, local=args.gams_local)
     else:
         for phase in args.phase:
             for p in (args.out_dir / f"gams_{phase}.nl",
@@ -2305,6 +2371,13 @@ def _run_nl(args) -> dict:
             "only_py_cons": result["only_py_cons"][:50],
             "only_gams_cons": result["only_gams_cons"][:50],
         }
+
+    if args.skip_python and len(gams_nl_paths) == len(args.phase):
+        # Asked for the GAMS side only (regenerate_gams.py): writing it is the job.
+        return dict(
+            status="clean", period=None,
+            headline=f"GAMS .nl written for {', '.join(args.phase)} (python side skipped)",
+            violations=[], meta={"gams_nl": {p: str(v) for p, v in gams_nl_paths.items()}})
 
     if not per_phase and skipped:
         return dict(
@@ -2402,7 +2475,9 @@ def main() -> int:
     ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
                     help="altertax CD (default) or pure-gtap real-CES")
     ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
-                    help="ifSUB mode (pure-gtap only)")
+                    help="ifSUB of the GAMS model (CONVERT .nl) and of the pure-gtap Python side")
+    ap.add_argument("--gams-local", action="store_true",
+                    help="write the GAMS .nl with the local GAMS CONVERT instead of NEOS")
     args = ap.parse_args()
 
     # mode=gtap UNSUPPORTED, honestly: the pure-gtap shock is multi-period — the

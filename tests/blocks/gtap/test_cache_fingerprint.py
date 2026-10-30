@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from equilibria.blocks.gtap import fingerprint
+from equilibria.sources import dataset_dir
 
 
 class _Closure:
@@ -240,9 +241,7 @@ def test_a_path_on_params_counts_by_file_content(tmp_path):
     assert _fp(with_source(tmp_path / "missing.gdx")) is None
 
 
-_GDX_9x10 = (
-    fingerprint._package_root() / "templates/reference/gtap/data/basedata-9x10.gdx"
-)
+_GDX_9x10 = dataset_dir("9x10") / "basedata-9x10.gdx"
 
 
 @pytest.mark.skipif(not _GDX_9x10.exists(), reason="basedata-9x10.gdx not present")

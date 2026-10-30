@@ -321,7 +321,8 @@ scripts/gtap/*
 !scripts/gtap/measure_gempack_blocks.py
 !scripts/gtap/measure_nlp_vs_nlp.py
 !scripts/gtap/measure_nlp_vs_nlp_altertax.py
-!scripts/gtap/regen_altertax_reference.py
+!scripts/gtap/regen_gams_reference.py
+!scripts/gtap/regenerate_gams.py
 !scripts/gtap/blocks_diag.py
 !scripts/gtap/run_burfisher.py
 
@@ -398,8 +399,7 @@ docs/superpowers/
 /skills/
 
 # GTAP scratch artifacts (accidental `con` redirect, fixed-script experiments)
-src/equilibria/templates/reference/gtap/scripts/con
-src/equilibria/templates/reference/gtap/scripts/tariff_sim_fixed.gms
+data/gtap7/gams/con
 
 # data/<model>/<dataset>/ — only commit basedata.har, sets.har, baserate.har, default.prm, v7_consolidated.gdx
 data/gtap*/*/GDX/

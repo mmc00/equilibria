@@ -18,17 +18,16 @@ After running, submit the .gms to NEOS (solver=PATH, model=MCP) and save the
 returned out.gdx to output/<dataset>_altertax_neos_bundle/out.gdx.
 """
 from __future__ import annotations
-from equilibria.sources import dataset_dir
+from equilibria.sources import GAMS_MODEL_DIR, dataset_dir
 import argparse
 import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from equilibria._local_refs import cge_babel_dir
 
 ROOT = Path(__file__).resolve().parents[2]
-UPSTREAM = Path(str(cge_babel_dir() / "standard_gtap_7"))
+UPSTREAM = GAMS_MODEL_DIR
 GAMS_SYS = "/Library/Frameworks/GAMS.framework/Versions/48/Resources"
 
 

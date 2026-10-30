@@ -48,7 +48,7 @@ from diff_nus333_full import _nus333_key_remap
 NUS333_HAR = Path(str(nus333_dir()))
 NEOS_GDX = ROOT / "output/nus333_neos/out.gdx"
 GAMS = "/Library/Frameworks/GAMS.framework/Versions/53/Resources/gams"
-SCRIPTS_DIR = ROOT / "src/equilibria/templates/reference/gtap/scripts"
+SCRIPTS_DIR = ROOT / "data/gtap7/gams"
 LOCAL_BUNDLE = Path("/tmp/nus333_bench_local")
 
 

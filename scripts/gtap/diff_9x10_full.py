@@ -23,7 +23,7 @@ from _diff_core import (
     diff_phase_rows, write_csv, git_short_sha, split_t, build_derived,
 )
 
-GDX = ROOT / "src/equilibria/templates/reference/gtap/data/basedata-9x10.gdx"
+GDX = ROOT / "data/gtap7/9x10/basedata-9x10.gdx"
 GAMS_COMP = ROOT / "src/equilibria/templates/reference/gtap/output/COMP.gdx"
 
 

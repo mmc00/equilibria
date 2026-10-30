@@ -180,6 +180,11 @@ ALLOWED_PREFIXES: tuple[str, ...] = (
     "src/equilibria/templates/reference/pep2/data/",
     "src/equilibria/templates/reference/pep2/scripts/",
     "src/equilibria/templates/reference/gtap/",
+    # GTAP 7 GAMS distribution: upstream file names (GFTCET.gms, ...).
+    "data/gtap7/gams/",
+    "data/gtap7/gams_jgea/",
+    # getData.gms reads %BaseName%Dat/Prm/Sets.gdx: GAMS fixes these names.
+    "data/gtap7/9x10/9x10",
     # Horridge's SIMPLE distribution (tpmh0103): simpleMCP.gms / simpleNLP.gms
     # keep the author's upstream CamelCase — renaming would break fidelity to
     # the published sources and the references in dogams.bat / the README.

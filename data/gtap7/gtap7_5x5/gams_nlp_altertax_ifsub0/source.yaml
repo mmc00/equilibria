@@ -1,0 +1,70 @@
+kind: result
+model: gtap7
+dataset: gtap7_5x5
+tool: gams
+tool_version: 53.5.0
+variant:
+  form: nlp
+  mode: altertax
+  ifsub: 0
+phases:
+- base
+- check
+- shock
+generated_from:
+  model:
+    path: gtap7/gams
+    sha256:
+      GFTCET.gms: 154e0e19b669c6ba1797938ed531a2d0b999ba6d7f5b2ecc6ad4a0bad969d53c
+      GFTFlxFF.gms: f1cf06373ce896b8748a95aaba3aa04ebb4557e2ef538565fbda60e34fdf29f5
+      GFTLnd.gms: f840b28b8ce0337fc9f959ebf7881d555f27bdd84bda817c4520989c19180912
+      altertax_config.gms: 98d7edcdb4985dce6fa310b7176d1b526a7f156f198dcf15c71cb6c2f430c4fb
+      altertax_postmodel.gms: ea7a0c2049b204b44cbd20c3b04939e7aef23fa682f761ea030451d18384f497
+      cal.gms: b614ecc85da45f1c11bb19a0bcd0433681e6502ca6674d74db8f9392b02298e4
+      cal_dump.gms: c1c7a51f4412ee668ca3ecc36940901c91552243a67d04c3cd2b6d7a6193d4ef
+      cal_dump_neos.gms: 97b4ac52a749eb5e4c92cea3eddf5c79361ba74eef3451a2cb14fef5efdf7a8a
+      comp.gms: 46a7d0375b7009f5aa3c53954363b263200c1940d477fc4be4fb7bf6e89a4801
+      comp_altertax.gms: df5ccfc6a34617aa1f84299e99c118946b6d69a34ac60534dd8e6e8c8c9ad1bb
+      comp_nus333.gms: d8c9dbb3bfa2d3c4fa680b2f5a17bf8c6780395602faaa271a39d4abec09554e
+      comp_nus333_landshock.gms: ac7c1662a662379113acfb8d56bef5aa1ff635a02f66753194f1ba00d6c2b8ab
+      getData.gms: bb99b5ddda2e90881d8efc48d788f014de9a4d9e86a1bd5261fcad64c0b09f1c
+      gft.gms: 9a6d3d9ca65f5e66dfb64651ecb8f10716f4223d1c19e58be96754a7d12af595
+      gftCapFix.gms: 9f702e89ab3c2d52b40219eb7c446de4024b9728aabb56ad4403cbc72b1744c5
+      iterloop.gms: 5f397508798794aec80c342b3dafeac95060a257d6c67c8c87d7413c3dd9b8ce
+      merge.gms: 0842064b8a4e264affbdeba5b685025055bd5e18e813ef0f368c316a786c65d6
+      model.gms: 5dbd6027b606ad54546dbfd2849941f2c3796ea8b1728ce54ebacb3cd416e0b8
+      mvar.gms: 67972a753657732c2e4140039e3edb07f7b36eb75886eec5d9f6606811914085
+      postsim.gms: 74129cd89786d6b4ed3a4b84da4d7a337197e85cd61aedcb18cd725c0c318bcf
+      report_fixed_run.inc: ac6e677b6e94f7bcada65897a1cbfe6ab12fb97b03b211a9937ff41d567286d0
+      report_fixed_setup.inc: daac4cd13f681595cc1cd65f6270d049c167088defc86512603cb138f14f1c21
+      solve.gms: 03d3a8e9488a24881febe86e53575403675d41d29b029338332002f9cf64e5d2
+      tariff_sim.gms: 67df15d47505614917bbe5ac2613807ed1829aac0dd57fa8d1b4e6c85613e507
+      tariff_sim_fixed.gms: e009d246ad5726e50db587db32cc2c642487ba2504b4ec0b2b77c9ceaf1cad5b
+  data:
+    path: gtap7/gtap7_5x5
+    sha256:
+      basedata.har: 1bc5fdada69d539d5a4846082b97729f0f2c402328400a6e530d437d6dbd3d66
+      baserate.har: 512016e327ece7e11903bd87b508d09a428ddaa92c205c9cbf2c54e316cc20fe
+      default.prm: 4b344be79624c3f1e815765117bd4a6cd2adb06c67b9157acfb85e9fb376448b
+      sets.har: 21b0543013851d0de576db97257fd22944a6f6c39788ccf9d30b6e6740775992
+      v7_consolidated.gdx: 595b9709680967bb4a7f23fe7df07a8c967ed02c47103adc92f18a6c3573a27c
+solver:
+  name: IPOPT
+command: /Users/marmol/proyectos/equilibria-phase2/.venv/bin/python /Users/marmol/proyectos/equilibria-phase2/scripts/gtap/regen_gams_reference.py
+  --dataset gtap7_5x5 --mode altertax --form nlp --ifsub 0 --out /Users/marmol/proyectos/equilibria-phase2/data/gtap7/gtap7_5x5/gams_nlp_altertax_ifsub0
+equilibria_commit: 30a381f
+exit:
+  code: 0
+outputs:
+  model.gms: 75714facfeb10b19c4ce935f18970496e3c928ab69e22f64bc6c1eaff8d8f5b4
+  out.gdx: 65fb88d347e526b582c4855a8afed92ab0c28ad65bd989bd50afe61037e19b9c
+run:
+  date: '2026-10-29T21:59:44-06:00'
+  duration_s: 3.257
+  machine:
+    os: macOS 26.2 (Darwin 25.2.0)
+    cpu: Apple M3 Pro
+    cores: 11
+    ram_gb: 18.0
+status: verified
+notes: ''

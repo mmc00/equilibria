@@ -28,6 +28,9 @@ DATA_ROOT = Path(
     or Path(__file__).resolve().parents[2] / "data"
 )
 
+# The GAMS GTAP v7 model (comp.gms and its includes) that generates the results.
+GAMS_MODEL_DIR = DATA_ROOT / "gtap7" / "gams"
+
 _ALLOWED = frozenset(
     {
         "kind",
@@ -48,6 +51,8 @@ _ALLOWED = frozenset(
         "notes",
         "source",
         "license",
+        "derived_from",
+        "changes",
     }
 )
 _REQUIRED: dict[str, tuple[str, ...]] = {
@@ -69,6 +74,10 @@ _RUN_KEYS = frozenset({"date", "duration_s", "machine"})
 # Only these: a host or user name must never be recorded.
 _MACHINE_KEYS = frozenset({"os", "cpu", "cores", "ram_gb"})
 _STATUSES = ("verified", "pending")
+# A model folder derived from another (data/gtap7/gams from gams_jgea) lists
+# every file it adds or modifies, with what and why.
+_CHANGE_KEYS = frozenset({"file", "change", "what", "why", "commit"})
+_CHANGE_KINDS = ("added", "modified")
 
 
 class SourceError(ValueError):
@@ -121,6 +130,8 @@ def load_source(folder: Path) -> SourceRecord:
         )
     if "run" in data:
         _check_run(file, data["run"])
+    if "derived_from" in data or "changes" in data:
+        _check_changes(file, data)
     variant = data.get("variant") or {}
     if not isinstance(variant, Mapping):
         raise SourceError(f"{file}: variant must be a mapping")
@@ -150,6 +161,29 @@ def _check_run(file: Path, run: Any) -> None:
         raise SourceError(
             f"{file}: run.machine must have exactly {sorted(_MACHINE_KEYS)}, got {got}"
         )
+
+
+def _check_changes(file: Path, data: Mapping[str, Any]) -> None:
+    if data["kind"] != "model":
+        raise SourceError(f"{file}: derived_from/changes are for kind 'model' only")
+    if not isinstance(data.get("derived_from"), str) or not isinstance(
+        data.get("changes"), list
+    ):
+        raise SourceError(
+            f"{file}: derived_from (a path) and changes (a list) go together"
+        )
+    for i, entry in enumerate(data["changes"]):
+        where = f"{file}: changes[{i}]"
+        if not isinstance(entry, Mapping) or set(entry) != _CHANGE_KEYS:
+            got = sorted(entry) if isinstance(entry, Mapping) else entry
+            raise SourceError(
+                f"{where} must have exactly {sorted(_CHANGE_KEYS)}, got {got}"
+            )
+        if entry["change"] not in _CHANGE_KINDS:
+            raise SourceError(f"{where}: change must be one of {_CHANGE_KINDS}")
+        empty = [k for k in sorted(_CHANGE_KEYS) if not str(entry[k]).strip()]
+        if empty:
+            raise SourceError(f"{where}: empty {empty}")
 
 
 def iter_sources(root: Path = DATA_ROOT) -> Iterator[SourceRecord]:
@@ -190,6 +224,25 @@ def reference(
 def _data_folders(dataset: str, root: Path) -> tuple[list[Path], list[SourceRecord]]:
     data = [r for r in iter_sources(root) if r.kind == "data"]
     return [r.path for r in data if r.dataset == dataset], data
+
+
+def find_reference(
+    dataset: str, tool: str, *, root: Path = DATA_ROOT, **variant: Any
+) -> Path | None:
+    """Like reference(), but None when no folder is recorded for the request.
+
+    For callers where a missing reference is a skip or a Python-only run. Two
+    matches are still an error: an ambiguous request is never optional.
+    """
+    found = [
+        r
+        for r in iter_sources(root)
+        if r.kind == "result"
+        and r.dataset == dataset
+        and r.tool == tool
+        and all(k in r.variant and r.variant[k] == v for k, v in variant.items())
+    ]
+    return reference(dataset, tool, root=root, **variant) if found else None
 
 
 def dataset_dir(dataset: str, *, root: Path = DATA_ROOT) -> Path:
@@ -269,6 +322,57 @@ def check_tree(root: Path = DATA_ROOT, *, allow_pending: bool = False) -> list[s
         if rec.status == "verified":
             msgs.extend(_check_inputs(root, where, rec.raw.get("generated_from") or {}))
         msgs.extend(_check_outputs(folder, where, rec.raw.get("outputs") or {}))
+        if "derived_from" in rec.raw:
+            msgs.extend(_check_derived(root, folder, where, rec.raw))
+    return msgs
+
+
+def check_derived(folder: Path, root: Path = DATA_ROOT) -> list[str]:
+    """check_tree's derived_from/changes check for one model folder."""
+    rec = load_source(folder)
+    if "derived_from" not in rec.raw:
+        return []
+    return _check_derived(root, folder, folder.relative_to(root), rec.raw)
+
+
+def _same_text(a: Path, b: Path) -> bool:
+    """Equal up to line endings (the GTAP distribution ships CRLF files)."""
+    return a.read_bytes().replace(b"\r\n", b"\n") == b.read_bytes().replace(
+        b"\r\n", b"\n"
+    )
+
+
+def _check_derived(
+    root: Path, folder: Path, where: Path, raw: Mapping[str, Any]
+) -> list[str]:
+    base = root / raw["derived_from"]
+    if not (base / SOURCE_FILE).is_file():
+        return [f"{where}: derived_from {raw['derived_from']} is not a recorded folder"]
+    listed = {c["file"]: c["change"] for c in raw["changes"]}
+    msgs = []
+    for f in own_files(folder):
+        rel = f.relative_to(folder).as_posix()
+        if rel == SOURCE_FILE:
+            continue
+        original = base / rel
+        actual = (
+            "added"
+            if not original.is_file()
+            else (None if _same_text(f, original) else "modified")
+        )
+        if actual is None:
+            if rel in listed:
+                msgs.append(
+                    f"{where}: {rel} is listed in changes but identical to the base"
+                )
+        elif rel not in listed:
+            msgs.append(f"{where}: {rel} is {actual} but not listed in changes")
+        elif listed[rel] != actual:
+            msgs.append(f"{where}: {rel} is listed as {listed[rel]} but is {actual}")
+    for rel in sorted(
+        set(listed) - {f.relative_to(folder).as_posix() for f in own_files(folder)}
+    ):
+        msgs.append(f"{where}: changes lists {rel}, which is not in the folder")
     return msgs
 
 

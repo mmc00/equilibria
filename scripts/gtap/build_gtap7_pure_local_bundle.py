@@ -130,12 +130,17 @@ def _inject_path_opt_for_shock(text: str) -> str:
         "$offecho\n"
         "   gtap.optfile = 1 ;\n"
     )
-    anchor = "   options limrow = 3, limcol = 3, solprint = off, iterlim = 1000 ;"
-    if text.count(anchor) != 1:
+    # The model's own iteration limit is kept (comp.gms in data/gtap7/gams).
+    anchors = re.findall(
+        r"^   options limrow = 3, limcol = 3, solprint = off, iterlim = \d+ ;$",
+        text,
+        flags=re.MULTILINE,
+    )
+    if len(anchors) != 1:
         raise SystemExit(
-            f"Expected exactly 1 shock-solve options anchor, found {text.count(anchor)}."
+            f"Expected exactly 1 shock-solve options anchor, found {len(anchors)}."
         )
-    return text.replace(anchor, anchor + "\n" + optfile_block, 1)
+    return text.replace(anchors[0], anchors[0] + "\n" + optfile_block, 1)
 
 
 def _force_ifsub(text: str, ifsub: int) -> str:

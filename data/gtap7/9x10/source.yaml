@@ -1,11 +1,18 @@
 kind: data
 model: gtap7
 dataset: 9x10
-source: GTAP Standard 7 GAMS distribution, inputs of convert.cmd (6bf7dd5)
+source: 'GTAP Standard 7 GAMS distribution: HAR inputs of convert.cmd (6bf7dd5); their
+  GDX conversions committed in a0cab08 and 4be9bcf (2026-04-01)'
 license: not stated by the source; to confirm
 outputs:
+  9x10Dat.gdx: 2f45c492213370f06da48e537664d145b29b3b02c71222f9c0f969e5f0be543c
+  9x10Prm.gdx: 19d99a6c3b7094d754f44e97a58ef0fe1cd7ffa5ddb78d71c7de0c42fa598efa
+  9x10Sets.gdx: 6da94a328ea9982ed604b10bd34929b51e93c059d7973dceefb6055e3e4ab1f8
+  basedata-9x10.gdx: 2f45c492213370f06da48e537664d145b29b3b02c71222f9c0f969e5f0be543c
   basedata.har: 1485b5d66a997e7502dc106d390d2a72b887f4c3c9a1d09d9e3c65c7d1e97054
+  default-9x10.gdx: 19d99a6c3b7094d754f44e97a58ef0fe1cd7ffa5ddb78d71c7de0c42fa598efa
   default.prm: 1b180fbfa725f413ae4bf9bd50c4a4cd085d44ae95e5d4055625ba5bb358611d
+  sets-9x10.gdx: 6da94a328ea9982ed604b10bd34929b51e93c059d7973dceefb6055e3e4ab1f8
   sets.har: 317f6905ebc458bf7ad3aa01fca1ffbfd362e8dff8c9d9208a200f85832af533
 status: verified
 notes: ''

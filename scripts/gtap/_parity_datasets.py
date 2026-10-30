@@ -27,7 +27,7 @@ from typing import Callable, Optional
 from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = ROOT / "src/equilibria/templates/reference/gtap/data"
+DATA_DIR = ROOT / "data/gtap7/9x10"
 
 
 def _closure_stack(model, params, label, closure):
