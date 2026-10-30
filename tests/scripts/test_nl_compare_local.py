@@ -24,6 +24,29 @@ def _nl_compare(monkeypatch: Any) -> Any:
     return importlib.import_module("nl_compare")
 
 
+@pytest.mark.parametrize(
+    "dump",
+    ["_gdxdump_params_only", "_prm_as_assignments", "_gdx_set_elements"],
+)
+def test_no_gdxdump_is_an_error(monkeypatch: Any, dump: str) -> None:
+    # without gdxdump the standalone .gms used to be written with a comment
+    # where the data go, and GAMS then ran on whatever the model defaults are
+    nlc = _nl_compare(monkeypatch)
+    monkeypatch.setattr(nlc.shutil, "which", lambda name: None)
+    gdx = dataset_dir("gtap7_3x3") / "v7_consolidated.gdx"
+    args = (gdx, "REG") if dump == "_gdx_set_elements" else (gdx,)
+    with pytest.raises(RuntimeError, match="gdxdump"):
+        getattr(nlc, dump)(*args)
+
+
+def test_missing_gdx_is_an_error(monkeypatch: Any, tmp_path: Path) -> None:
+    nlc = _nl_compare(monkeypatch)
+    monkeypatch.setattr(nlc.shutil, "which", lambda name: "/bin/echo")
+    with pytest.raises(FileNotFoundError):
+        nlc._gdxdump_params_only(tmp_path / "absent.gdx")
+
+
+@pytest.mark.needs_gdxdump
 @pytest.mark.parametrize("ifsub", [0, 1])
 def test_standalone_carries_ifsub(monkeypatch: Any, ifsub: int) -> None:
     # comp.gms sets ifSUB itself; GAMS keeps the last $setGlobal, so every

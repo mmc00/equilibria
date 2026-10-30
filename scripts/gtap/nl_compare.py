@@ -270,6 +270,22 @@ sets
 ;
 """
 
+def _gdxdump(gdx_path: Path, *args: str) -> str:
+    """gdxdump's text for gdx_path; an error, never a placeholder, when it can't run.
+
+    The dumps below are the DATA of the standalone .gms: a comment in their place
+    let GAMS run on the model's defaults without saying so.
+    """
+    exe = shutil.which("gdxdump")
+    if exe is None:
+        raise RuntimeError("gdxdump not on PATH (it ships with GAMS)")
+    if not gdx_path.exists():
+        raise FileNotFoundError(gdx_path)
+    return subprocess.check_output(
+        [exe, str(gdx_path), *args], stderr=subprocess.DEVNULL, timeout=30
+    ).decode()
+
+
 def _gdxdump_params_only(gdx_path: Path, renames: dict[str, str] | None = None,
                          universal_domains: bool = False) -> str:
     """Dump a GDX file, keeping only Parameter/Scalar blocks (strip Set blocks).
@@ -281,18 +297,8 @@ def _gdxdump_params_only(gdx_path: Path, renames: dict[str, str] | None = None,
         → GAMS $170 Domain violation. Universal domains hold the data verbatim and
         the model indexes them with proper sets (standard GTAP getData practice).
     """
-    import subprocess
     import re as _re
-    GDXDUMP = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump")
-    if not GDXDUMP.exists() or not gdx_path.exists():
-        return f"* gdxdump not available or {gdx_path.name} not found"
-    try:
-        raw = subprocess.check_output(
-            [str(GDXDUMP), str(gdx_path)],
-            stderr=subprocess.DEVNULL, timeout=30
-        ).decode()
-    except Exception as e:
-        return f"* gdxdump failed: {e}"
+    raw = _gdxdump(gdx_path)
 
     lines = []
     skip_block = False
@@ -421,17 +427,8 @@ def _prm_as_assignments(gdx_path: Path, renames: dict[str, str] | None = None) -
         etraq("a_agricultur","Oceania") = -5 ;
         ...
     """
-    import subprocess, re as _re
-    GDXDUMP = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump")
-    if not GDXDUMP.exists() or not gdx_path.exists():
-        return f"* gdxdump not available or {gdx_path.name} not found\n"
-    try:
-        raw = subprocess.check_output(
-            [str(GDXDUMP), str(gdx_path)],
-            stderr=subprocess.DEVNULL, timeout=30
-        ).decode()
-    except Exception as e:
-        return f"* gdxdump failed: {e}\n"
+    import re as _re
+    raw = _gdxdump(gdx_path)
 
     renames_upper = {k.upper(): v for k, v in (renames or {}).items()}
 
@@ -693,12 +690,8 @@ def _compute_keep_a(keep_i: list[str]) -> list[str]:
     Mirrors diff_3x3_full._shrink_sets keep_a derivation. Activities are the
     'a_*' tokens, commodities the 'c_*' tokens in each MAKB record.
     """
-    import subprocess, re as _re
-    GDXDUMP = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump")
-    raw = subprocess.check_output(
-        [str(GDXDUMP), str(DATA_DIR / "9x10Dat.gdx"), "Symb=MAKB"],
-        stderr=subprocess.DEVNULL, timeout=30,
-    ).decode()
+    import re as _re
+    raw = _gdxdump(DATA_DIR / "9x10Dat.gdx", "Symb=MAKB")
     keep = set(keep_i)
     keep_a: set[str] = set()
     for line in raw.splitlines():
@@ -833,12 +826,8 @@ def _build_getdata_replacement_shrunk(keep_r: list[str], keep_i: list[str]) -> s
 
 def _gdx_set_elements(gdx_path: Path, set_name: str) -> list[str]:
     """Read elements of a 1-dim Set from a GDX via gdxdump Symb=."""
-    import subprocess, re as _re
-    GDXDUMP = Path("/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump")
-    raw = subprocess.check_output(
-        [str(GDXDUMP), str(gdx_path), f"Symb={set_name}"],
-        stderr=subprocess.DEVNULL, timeout=30,
-    ).decode()
+    import re as _re
+    raw = _gdxdump(gdx_path, f"Symb={set_name}")
     return _re.findall(r"'([^']+)'", raw)
 
 
