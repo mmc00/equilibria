@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import stat
 import sys
 from pathlib import Path
@@ -90,7 +91,7 @@ def test_job_command_records_what_ran(driver: Any) -> None:
 def test_resume_skips_recorded(driver: Any, tmp_path: Path, monkeypatch: Any) -> None:
     root = _root(tmp_path)
     ran: list[list[str]] = []
-    monkeypatch.setattr(driver, "run_job", lambda cmd: ran.append(cmd) or 0)
+    monkeypatch.setattr(driver, "run_job", lambda cmd, env=None: ran.append(cmd) or 0)
     done = root / "gtap7" / "gtap7_3x3" / "gams_nl_altertax_ifsub0"
     write_record(
         done,
@@ -115,7 +116,7 @@ def test_failed_job_leaves_no_folder(
     root = _root(tmp_path)
     ran: list[list[str]] = []
 
-    def fail_first(cmd: list[str]) -> int:
+    def fail_first(cmd: list[str], env: Any = None) -> int:
         ran.append(cmd)
         folder = Path(cmd[cmd.index("--folder") + 1])
         folder.mkdir(parents=True, exist_ok=True)
@@ -136,7 +137,7 @@ def test_wrong_tool_version_stops(
 ) -> None:
     root = _root(tmp_path)
     ran: list[list[str]] = []
-    monkeypatch.setattr(driver, "run_job", lambda cmd: ran.append(cmd) or 0)
+    monkeypatch.setattr(driver, "run_job", lambda cmd, env=None: ran.append(cmd) or 0)
     argv = ["--tool-version", "53.5.0", "--gams", str(_gams(tmp_path, "53.6.0")),
             "--data-root", str(root), "--datasets", "gtap7_3x3"]  # fmt: skip
     assert driver.main(argv) != 0
@@ -150,3 +151,23 @@ def test_unknown_only_is_refused(driver: Any, tmp_path: Path, capsys: Any) -> No
             "--only", "gams_mcp_gtap_ifsub0"]  # fmt: skip
     assert driver.main(argv) == 2
     assert "gams_mcp_gtap_ifsub0" in capsys.readouterr().err
+
+
+def test_main_leaves_the_environment_alone(
+    driver: Any, tmp_path: Path, monkeypatch: Any
+) -> None:
+    # the jobs get gams on their PATH; the caller's process must not
+    root = _root(tmp_path)
+    seen: list[str] = []
+    monkeypatch.setattr(
+        driver,
+        "run_job",
+        lambda cmd, env=None: seen.append((env or {}).get("PATH", "")) or 0,
+    )
+    before = os.environ.get("PATH")
+    gams = _gams(tmp_path, "53.5.0")
+    argv = ["--tool-version", "53.5.0", "--gams", str(gams), "--data-root", str(root),
+            "--datasets", "gtap7_3x3", "--only", "gams_nl_altertax_ifsub0"]  # fmt: skip
+    assert driver.main(argv) == 0
+    assert os.environ.get("PATH") == before
+    assert seen and seen[0].split(os.pathsep)[0] == str(gams.parent)

@@ -151,8 +151,8 @@ def drop_broken_records(root: Path, datasets: list[str]) -> list[Path]:
     return dropped
 
 
-def run_job(cmd: list[str]) -> int:
-    return subprocess.run(cmd, check=False).returncode
+def run_job(cmd: list[str], env: dict[str, str] | None = None) -> int:
+    return subprocess.run(cmd, check=False, env=env).returncode
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -201,10 +201,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"gams at {args.gams} is release {found or '?'}, not --tool-version "
               f"{args.tool_version}: record the release that runs", file=sys.stderr)  # fmt: skip
         return 2
-    # the jobs find gams on PATH
-    os.environ["PATH"] = (
-        f"{Path(args.gams).parent}{os.pathsep}{os.environ.get('PATH', '')}"
-    )
+    # the jobs find gams on their PATH; this process's environment stays as it was
+    path = f"{Path(args.gams).parent}{os.pathsep}{os.environ.get('PATH', '')}"
+    env = {**os.environ, "PATH": path}
     for folder in drop_broken_records(args.data_root, args.datasets):
         print(f"removed an incomplete record: {folder}")
 
@@ -218,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
             shutil.rmtree(j.folder)
         print(f"[{n}/{len(selected)}] {name}: running", flush=True)
         rc = run_job(
-            job_command(j, tool_version=args.tool_version, root=args.data_root)
+            job_command(j, tool_version=args.tool_version, root=args.data_root), env
         )
         if rc != 0:
             shutil.rmtree(j.folder, ignore_errors=True)
