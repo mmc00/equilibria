@@ -22,9 +22,9 @@ consistent with its 'blocked' status in the coverage matrix); the runner reports
 it as FAILED and moves on without emitting a fixture.
 
 Usage (Windows PowerShell, from repo root):
-    uv run python scripts/gtap/run_gempack_matrix.py                # generate + solve + collect
-    uv run python scripts/gtap/run_gempack_matrix.py --no-solve     # (re)generate .cmf only
-    uv run python scripts/gtap/run_gempack_matrix.py --gtapv7 C:/path/gtapv7.exe
+    uv run python data/gtap7/gempack/tools/run_gempack_matrix.py                # generate + solve + collect
+    uv run python data/gtap7/gempack/tools/run_gempack_matrix.py --no-solve     # (re)generate .cmf only
+    uv run python data/gtap7/gempack/tools/run_gempack_matrix.py --gtapv7 C:/path/gtapv7.exe
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ from pathlib import Path
 
 from equilibria.sources import dataset_dir
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "src"))
 from equilibria.babel.har.reader import read_har  # noqa: E402
 

@@ -180,7 +180,6 @@ cada script y quién lo nombra (CI, tests, docs u otro código). Un script con
 | `regen_altertax_reference.py` | Regenerate a subsidy-aware altertax reference GDX by building the NEOS bundle, | código |  |
 | `run_burfisher.py` | Burfisher 3e / nus333: corre cada ejercicio con equilibria y lo compara contra GAMS. | tests, docs, código | bloques |
 | `run_full_gtap_comparison.py` | Full GTAP Model Execution and Parity Check | — |  |
-| `run_gempack_matrix.py` | Produce the RunGTAP (GEMPACK/GTAPv7) post-shock `updated.har` for every | tests, docs, código |  |
 | `run_gtap.py` | GTAP CLI - Command-line interface for GTAP CGE model | tests, docs, código | monolito |
 | `run_gtap_parity.py` | GTAP Parity Test Runner | código |  |
 | `run_parity_both_models.py` | Execute Both GTAP Models and Compare Results | — | monolito |

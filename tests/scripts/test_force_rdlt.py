@@ -26,7 +26,7 @@ from equilibria.babel.har.reader import read_har
 from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts" / "gtap" / "run_gempack_matrix.py"
+SCRIPT = ROOT / "data" / "gtap7" / "gempack" / "tools" / "run_gempack_matrix.py"
 PRM = dataset_dir("gtap7_20x41") / "default.prm"
 ORACLE = (
     ROOT

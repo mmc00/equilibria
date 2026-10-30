@@ -52,10 +52,13 @@ Un paso que falla no corta los demás. Al final imprime los comandos para subir 
 
 ## Phase 3a-1: the GEMPACK matrix into `data/`
 
-`regenerate_gempack.py` re-solves the linearization-study matrix (6 datasets ×
+`data/gtap7/gempack/tools/regenerate_gempack.py` re-solves the linearization-study matrix (6 datasets ×
 10 grid configurations in capFlex, plus `tm10_s8-16-32` in capFix: 66 jobs) and
 leaves each one in `data/gtap7/<ds>/gempack_<tag>/` with its `source.yaml`
-(command, GEMPACK version, machine, duration, input and output hashes). It
+(command, GEMPACK version, machine, duration, input and output hashes). The two
+scripts that produce a result (`regenerate_gempack.py`, `run_gempack_matrix.py`) live
+in `data/gtap7/gempack/tools/`, and every result records the hash of that folder:
+editing either script marks the results it produced as stale. It
 deletes nothing: the old files in `tests/fixtures/gtap7_gempack/` stay until the
 Mac compares them (phase 3b).
 
@@ -71,17 +74,17 @@ uv sync --frozen
 $v = "12.1.003"
 
 # 2. what would run (66 jobs), nothing is solved
-uv run python scripts/windows/regenerate_gempack.py --tool-version $v --dry-run
+uv run python data/gtap7/gempack/tools/regenerate_gempack.py --tool-version $v --dry-run
 
 # 3. one job as a smoke test
-uv run python scripts/windows/regenerate_gempack.py --tool-version $v `
+uv run python data/gtap7/gempack/tools/regenerate_gempack.py --tool-version $v `
     --datasets gtap7_3x3 --only tm10_s8-16-32_capflex
 Get-Content data\gtap7\gtap7_3x3\gempack_tm10_s8-16-32_capflex\source.yaml
 #    expect: status: verified, tool: gempack, tool_version: 12.1.003,
 #    run.machine with your CPU name, and sl4dump.har among the outputs
 
 # 4. everything (hours); rerunning skips the jobs already recorded
-uv run python scripts/windows/regenerate_gempack.py --tool-version $v
+uv run python data/gtap7/gempack/tools/regenerate_gempack.py --tool-version $v
 
 # 5. send the results back
 git add data/gtap7

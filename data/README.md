@@ -20,6 +20,7 @@ next to it, one folder per tool and variant.
 data/
   gtap7/
     gams/                     the GAMS GTAP v7 model (.gms) that generates the results
+    gempack/tools/            the scripts that drive GEMPACK (gtapv7.exe); every GEMPACK result hashes gempack/
     gtap7_3x3/
       basedata.har sets.har default.prm ...   + source.yaml (kind: data)
       gams_ifsub0/            .nl, GDX ...    + source.yaml (kind: result)

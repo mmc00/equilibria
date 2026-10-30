@@ -11,7 +11,7 @@ import pytest
 from tests.data._records import data_record, result_record, write_record
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts" / "windows" / "regenerate_gempack.py"
+SCRIPT = ROOT / "data" / "gtap7" / "gempack" / "tools" / "regenerate_gempack.py"
 G, S = Path("/opt/gp/gtapv7.exe"), Path("/opt/gp/sltoht.exe")
 
 
@@ -58,6 +58,17 @@ def test_command_records_the_variant() -> None:
     assert cmd[cmd.index("--tool-version") + 1] == "11.3"
     assert cmd[cmd.index("--out") + 1] == str(job.folder)
     assert cmd[cmd.index("--rordelta") + 1] == "0"
+
+
+def test_command_records_the_generators() -> None:
+    # the result hashes data/gtap7/gempack whole: its tools/ are what ran
+    m = _module()
+    job = _job(m, "gtap7_3x3", "gempack_tm10_s4_capflex")
+    cmd = m.job_command(job, gtapv7=G, sltoht=S, tool_version="12.1.003")
+    assert cmd[cmd.index("--model-file") + 1] == str(m.DATA_ROOT / "gtap7" / "gempack")
+    assert str(m.MATRIX_SCRIPT).startswith(
+        str(m.DATA_ROOT / "gtap7" / "gempack" / "tools")
+    )
 
 
 def test_command_paths_are_absolute() -> None:
@@ -152,10 +163,19 @@ def test_end_to_end_with_fake_gempack(tmp_path: Path) -> None:
 
     from tests.scripts.test_run_gempack_matrix_out import _fake_gtapv7, _fake_sltoht
 
-    from equilibria.sources import check_tree, dataset_dir, load_source
+    from equilibria.sources import (
+        GEMPACK_MODEL_DIR,
+        check_tree,
+        dataset_dir,
+        load_source,
+    )
 
     root = tmp_path / "data"
     shutil.copytree(dataset_dir("gtap7_3x3"), root / "gtap7" / "gtap7_3x3")
+    shutil.copytree(
+        GEMPACK_MODEL_DIR, root / "gtap7" / "gempack",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )  # fmt: skip
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     m = _module()
@@ -173,6 +193,7 @@ def test_end_to_end_with_fake_gempack(tmp_path: Path) -> None:
         "updated.har", "decomp.har", "sl4dump.har", "run.cmf",
         "solve_console.txt", "sltoht_console.txt",
     }  # fmt: skip
+    assert rec.raw["generated_from"]["model"]["path"] == "gtap7/gempack"
     assert check_tree(root) == []
 
 

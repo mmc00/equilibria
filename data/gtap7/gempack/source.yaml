@@ -1,0 +1,11 @@
+kind: model
+model: gtap7
+source: 'equilibria''s drivers of the RunGTAP GEMPACK solver (gtapv7.exe): tools/run_gempack_matrix.py
+  writes the .cmf and solves one job, tools/regenerate_gempack.py runs the matrix
+  under write_source. The GTAP model itself is the gtapv7.exe binary, not redistributed
+  here.'
+outputs:
+  tools/regenerate_gempack.py: af49bd0642afe6bf65e81b1bcd3c3a33ac21fd4ee20e3bcddb061b29bd4b33eb
+  tools/run_gempack_matrix.py: a05a022c4d198f4e8b98e8df587af6faeefd829a70dd736c43a95caeb875ca0e
+status: verified
+notes: ''

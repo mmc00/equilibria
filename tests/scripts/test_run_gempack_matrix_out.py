@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts" / "gtap" / "run_gempack_matrix.py"
+SCRIPT = ROOT / "data" / "gtap7" / "gempack" / "tools" / "run_gempack_matrix.py"
 
 
 @pytest.fixture(autouse=True)

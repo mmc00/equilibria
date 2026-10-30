@@ -10,10 +10,10 @@ resumes where it stopped. A failed job leaves no folder: its files would
 otherwise count as files of the dataset folder.
 
 Usage (PowerShell, from the repo root):
-    uv run python scripts/windows/regenerate_gempack.py --tool-version 11.3 --dry-run
-    uv run python scripts/windows/regenerate_gempack.py --tool-version 11.3 `
+    uv run python data/gtap7/gempack/tools/regenerate_gempack.py --tool-version 11.3 --dry-run
+    uv run python data/gtap7/gempack/tools/regenerate_gempack.py --tool-version 11.3 `
         --datasets gtap7_3x3 --only tm10_s8-16-32_capflex
-    uv run python scripts/windows/regenerate_gempack.py --tool-version 11.3
+    uv run python data/gtap7/gempack/tools/regenerate_gempack.py --tool-version 11.3
 """
 
 from __future__ import annotations
@@ -30,8 +30,8 @@ from typing import Any
 
 from equilibria.sources import DATA_ROOT, SOURCE_FILE, SourceError, dataset_dir, load_source
 
-ROOT = Path(__file__).resolve().parents[2]
-MATRIX_SCRIPT = ROOT / "scripts" / "gtap" / "run_gempack_matrix.py"
+ROOT = Path(__file__).resolve().parents[4]
+MATRIX_SCRIPT = Path(__file__).with_name("run_gempack_matrix.py")
 WRITE_SOURCE = ROOT / "scripts" / "dev" / "write_source.py"
 
 
@@ -93,6 +93,7 @@ def job_command(
         "--variant", f'steps="{job.steps.replace(" ", "-")}"',
         "--variant", f"closure={job.closure}",
         "--phases", "shock",
+        "--model-file", str(root / "gtap7" / "gempack"),
         "--data-dir", str(job.folder.parent),
         "--solver", "gtapv7",
         "--",

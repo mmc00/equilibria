@@ -27,6 +27,9 @@ DATA_ROOT = Path(
     os.environ.get("EQUILIBRIA_DATA_DIR")
     or Path(__file__).resolve().parents[2] / "data"
 )
+# The scripts that drive GEMPACK (gtapv7.exe) live in its tools/: every
+# GEMPACK result hashes this folder whole, so editing one makes it stale.
+GEMPACK_MODEL_DIR = DATA_ROOT / "gtap7" / "gempack"
 
 _ALLOWED = frozenset(
     {
@@ -235,6 +238,8 @@ def own_files(folder: Path) -> list[Path]:
         if p.is_file()
         and p.name != SOURCE_FILE
         and not any(q in nested for q in p.parents)
+        # running a tool writes bytecode; it is not part of what was recorded
+        and "__pycache__" not in p.relative_to(folder).parts
     ]
 
 

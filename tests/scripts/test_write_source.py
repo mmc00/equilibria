@@ -224,3 +224,20 @@ def test_windows_cpu_falls_back_without_the_key() -> None:
     assert _module()._windows_cpu(_FakeWinreg(None)) == (
         platform.processor() or platform.machine()
     )
+
+
+def test_model_folder_input_hashes_every_file(tmp_path: Path) -> None:
+    # an include edited after the run makes the result stale, not only comp.gms
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_ifsub0"
+    argv = _argv(
+        tmp_path, folder, [sys.executable, "-c", "open('x.nl', 'w').write('nl')"]
+    )
+    model = Path(argv[argv.index("--model-file") + 1])
+    (model.parent / "model.gms").write_text("equations")
+    folder.mkdir(parents=True)
+    argv[argv.index("--model-file") + 1] = str(model.parent)
+    assert _module().main(argv) == 0
+    hashes = load_source(folder).raw["generated_from"]["model"]["sha256"]
+    assert set(hashes) == {"comp.gms", "model.gms"}
+    (model.parent / "model.gms").write_text("edited")
+    assert any("changed after" in m for m in check_tree(tmp_path))
