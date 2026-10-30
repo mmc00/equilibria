@@ -30,6 +30,9 @@ DATA_ROOT = Path(
 
 # The GAMS GTAP v7 model (comp.gms and its includes) that generates the results.
 GAMS_MODEL_DIR = DATA_ROOT / "gtap7" / "gams"
+# The scripts that generate GAMS results live with the model, so the model
+# folder hash every result records covers them too.
+GAMS_TOOLS_DIR = GAMS_MODEL_DIR / "tools"
 
 _ALLOWED = frozenset(
     {
@@ -288,6 +291,8 @@ def own_files(folder: Path) -> list[Path]:
         if p.is_file()
         and p.name != SOURCE_FILE
         and not any(q in nested for q in p.parents)
+        # running a tool writes bytecode; it is not part of what was recorded
+        and "__pycache__" not in p.relative_to(folder).parts
     ]
 
 

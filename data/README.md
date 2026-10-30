@@ -91,7 +91,7 @@ that differs from `gams_jgea/` with what changed and why. Each result folder is
 | `mode` | `gtap`: the pure model (`comp.gms`), base then the tariff shock; `altertax`: `comp_altertax.gms`, whose `check` step uses the altertax CD elasticities before the shock |
 | `ifsub<k>` | GAMS `ifSUB`: `0` keeps the substituted equations explicit, `1` substitutes them |
 
-`scripts/gtap/regenerate_gams.py` regenerates them from `data/gtap7/gams/`, one
+`data/gtap7/gams/tools/regenerate_gams.py` regenerates them from `data/gtap7/gams/`, one
 job per folder through `write_source.py`; a folder that already has a
 `source.yaml` is skipped, so a stopped run resumes.
 

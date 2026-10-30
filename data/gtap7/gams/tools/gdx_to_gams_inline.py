@@ -5,10 +5,18 @@ emit each Set / Parameter as literal GAMS so the resulting .gms is
 self-contained and NEOS can run it without a separate GDX upload.
 """
 from __future__ import annotations
+
 import argparse
+import shutil
 from pathlib import Path
 
-GAMS_SYS = "/Library/Frameworks/GAMS.framework/Versions/48/Resources"
+
+def gams_system_dir() -> str:
+    """The GAMS on PATH (the one the results record), never a hard-coded install."""
+    gams = shutil.which("gams")
+    if gams is None:
+        raise SystemExit("gdx_to_gams_inline needs the gams binary on PATH")
+    return str(Path(gams).resolve().parent)
 
 
 def _domain_str(sym) -> str:
@@ -123,7 +131,7 @@ def main() -> None:
     args = ap.parse_args()
 
     import gams.transfer as gt
-    m = gt.Container(str(args.gdx), system_directory=GAMS_SYS)
+    m = gt.Container(str(args.gdx), system_directory=gams_system_dir())
 
     # Sets block: full Set declarations (must exist at compile time).
     set_lines = ["* === Inlined SETS from " + args.gdx.name + " ===\n"]

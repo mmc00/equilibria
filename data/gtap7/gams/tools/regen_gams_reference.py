@@ -14,7 +14,7 @@ solves ``gtap using nlp maximizing walras`` with IPOPT (no size limit).
 Exit status is not 0, and --out holds no out.gdx, when GAMS fails or any
 model status is not 1 (Optimal) or 2 (Locally Optimal).
 
-    uv run python scripts/gtap/regen_gams_reference.py --dataset gtap7_3x3 \\
+    uv run python data/gtap7/gams/tools/regen_gams_reference.py --dataset gtap7_3x3 \\
         --mode altertax --form nlp --ifsub 1 --out /tmp/ref
 """
 
@@ -28,10 +28,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 BUILDERS = {
-    "gtap": ROOT / "scripts" / "gtap" / "build_gtap7_pure_local_bundle.py",
-    "altertax": ROOT / "scripts" / "gtap" / "build_gtap7_altertax_neos_bundle.py",
+    "gtap": Path(__file__).with_name("build_gtap7_pure_local_bundle.py"),
+    "altertax": Path(__file__).with_name("build_gtap7_altertax_neos_bundle.py"),
 }
 _IFMCP = re.compile(r'(ifMCP\s+"[^"]*"\s+/\s*)1(\s*/)')
 _NLP_SOLVE = re.compile(

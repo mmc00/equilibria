@@ -6,9 +6,9 @@ the 9x10-specific GDX merge step — the consolidated GDX is already a single
 merged file equivalent to in.gdx.
 
 Usage:
-    uv run python scripts/gtap/build_gtap7_altertax_neos_bundle.py --dataset gtap7_3x3
-    uv run python scripts/gtap/build_gtap7_altertax_neos_bundle.py --dataset gtap7_3x4
-    uv run python scripts/gtap/build_gtap7_altertax_neos_bundle.py --dataset gtap7_5x5
+    uv run python data/gtap7/gams/tools/build_gtap7_altertax_neos_bundle.py --dataset gtap7_3x3
+    uv run python data/gtap7/gams/tools/build_gtap7_altertax_neos_bundle.py --dataset gtap7_3x4
+    uv run python data/gtap7/gams/tools/build_gtap7_altertax_neos_bundle.py --dataset gtap7_5x5
 
 Output:
     output/<dataset>_altertax_neos_bundle/comp_<dataset>_altertax_neos.gms
@@ -18,7 +18,7 @@ After running, submit the .gms to NEOS (solver=PATH, model=MCP) and save the
 returned out.gdx to output/<dataset>_altertax_neos_bundle/out.gdx.
 """
 from __future__ import annotations
-from equilibria.sources import GAMS_MODEL_DIR, dataset_dir
+
 import argparse
 import re
 import shutil
@@ -26,9 +26,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+from equilibria.sources import GAMS_MODEL_DIR, dataset_dir
+
+ROOT = Path(__file__).resolve().parents[4]
 UPSTREAM = GAMS_MODEL_DIR
-GAMS_SYS = "/Library/Frameworks/GAMS.framework/Versions/48/Resources"
 
 
 def _read(name: str) -> str:
@@ -265,7 +266,7 @@ def _get_dataset_sets(gdx_path: Path) -> dict:
     try:
         import gams.transfer as gt
     except ImportError:
-        from equilibria.babel.gdx.reader import read_gdx, read_set_elements, get_symbol
+        from equilibria.babel.gdx.reader import get_symbol, read_gdx, read_set_elements
         d = read_gdx(str(gdx_path))
 
         def _read(name: str) -> list[str]:
@@ -275,7 +276,9 @@ def _get_dataset_sets(gdx_path: Path) -> dict:
             return [t[0] for t in read_set_elements(d, actual)]
 
         return {"reg": _read("reg"), "comm": _read("comm"), "endw": _read("endw")}
-    c = gt.Container(str(gdx_path), system_directory=GAMS_SYS)
+    from gdx_to_gams_inline import gams_system_dir
+
+    c = gt.Container(str(gdx_path), system_directory=gams_system_dir())
     return {
         "reg":  list(c["reg"].records["uni"].values),
         "comm": list(c["comm"].records["uni"].values),
@@ -459,7 +462,7 @@ def _fix_acts_comm_collision(text: str) -> str:
 def run_inliner(in_gdx: Path, out_data: Path, out_params: Path) -> None:
     cmd = [
         "uv", "run", "--with", "gamsapi", "--with", "pandas",
-        "python", str(ROOT / "scripts/gtap/gdx_to_gams_inline.py"),
+        "python", str(Path(__file__).with_name("gdx_to_gams_inline.py")),
         "--gdx", str(in_gdx),
         "--out", str(out_data),
         "--out-params", str(out_params),
@@ -485,8 +488,9 @@ def _fbep_ftrv_har_as_assignments(har_path: Path, header: str, inlined: str) -> 
     _src = str(ROOT / "src")
     if _src not in _sys.path:
         _sys.path.insert(0, _src)
-    from equilibria.babel.har.reader import read_har  # type: ignore
     import numpy as _np
+
+    from equilibria.babel.har.reader import read_har  # type: ignore
 
     try:
         har = read_har(har_path, select_headers=[header])
@@ -659,7 +663,7 @@ def main() -> None:
     if "* incpar data" not in prm_block and "* INCPAR data" not in prm_block:
         prm_har_path = dataset_dir(dataset) / "default.prm"
         if prm_har_path.exists():
-            import nl_compare as _nlc
+            import nl_standalone as _nlc
             use_prefix = _nlc._detect_prm_prefix_convention(inlined)
             elast_block = _nlc._prm_har_as_assignments(prm_har_path, use_prefix=use_prefix)
             # getData.gms (already inlined) declares these params with real domains —

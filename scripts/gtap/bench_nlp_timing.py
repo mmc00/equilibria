@@ -170,7 +170,7 @@ def _build_nlp_gms(dataset: str, mode: str, ifsub: int) -> Path:
         out_dir = ROOT / "output" / f"{dataset}_pure_local_bundle"
         gms_stem = f"comp_{dataset}_gtap_shock_ifsub{ifsub}"
 
-    subprocess.run(["uv", "run", "python", str(ROOT / "scripts/gtap" / builder),
+    subprocess.run(["uv", "run", "python", str(ROOT / "data/gtap7/gams/tools" / builder),
                     "--dataset", dataset, "--ifsub", str(ifsub)],
                    check=True, cwd=str(ROOT), capture_output=True, text=True)
     gms = out_dir / f"{gms_stem}.gms"

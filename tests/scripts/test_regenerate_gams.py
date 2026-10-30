@@ -13,7 +13,7 @@ import pytest
 from tests.data._records import data_record, write_record
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts" / "gtap" / "regenerate_gams.py"
+SCRIPT = ROOT / "data" / "gtap7" / "gams" / "tools" / "regenerate_gams.py"
 
 
 @pytest.fixture
@@ -85,7 +85,8 @@ def test_job_command_records_what_ran(driver: Any) -> None:
         ("--out-dir", str(job.folder)),
     ]:
         assert (flag, value) in pairs, (flag, value)
-    assert "--gams-local" in cmd and "--skip-python" in cmd
+    assert str(driver.NL_STANDALONE) in cmd
+    assert "--gams-local" not in cmd and "--skip-python" not in cmd
 
 
 def test_resume_skips_recorded(driver: Any, tmp_path: Path, monkeypatch: Any) -> None:

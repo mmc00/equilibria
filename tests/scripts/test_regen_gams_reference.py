@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts" / "gtap" / "regen_gams_reference.py"
+SCRIPT = ROOT / "data" / "gtap7" / "gams" / "tools" / "regen_gams_reference.py"
 needs_gams = pytest.mark.skipif(shutil.which("gams") is None, reason="GAMS not on PATH")
 
 

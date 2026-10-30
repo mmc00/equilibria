@@ -12,10 +12,10 @@ write_source.py, which runs it, times it and records its source.yaml:
 A folder that already has a source.yaml is skipped, so a run that dies resumes
 where it stopped. A failed job leaves no folder.
 
-    uv run python scripts/gtap/regenerate_gams.py --tool-version 53.5.0 --dry-run
-    uv run python scripts/gtap/regenerate_gams.py --tool-version 53.5.0 \\
+    uv run python data/gtap7/gams/tools/regenerate_gams.py --tool-version 53.5.0 --dry-run
+    uv run python data/gtap7/gams/tools/regenerate_gams.py --tool-version 53.5.0 \\
         --datasets gtap7_3x3 --only gams_nl_altertax_ifsub0
-    uv run python scripts/gtap/regenerate_gams.py --tool-version 53.5.0
+    uv run python data/gtap7/gams/tools/regenerate_gams.py --tool-version 53.5.0
 """
 
 from __future__ import annotations
@@ -38,10 +38,10 @@ from equilibria.sources import (
     load_source,
 )
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 WRITE_SOURCE = ROOT / "scripts" / "dev" / "write_source.py"
-NL_COMPARE = ROOT / "scripts" / "gtap" / "nl_compare.py"
-REGEN = ROOT / "scripts" / "gtap" / "regen_gams_reference.py"
+NL_STANDALONE = Path(__file__).with_name("nl_standalone.py")
+REGEN = Path(__file__).with_name("regen_gams_reference.py")
 
 # The phases of today's .nl fixtures (adding check to 3x4/15x10 is phase 7).
 NL_PHASES = {
@@ -105,9 +105,8 @@ def job_command(job: Job, *, tool_version: str, root: Path = DATA_ROOT) -> list[
     """write_source.py recording one job (the model folder is hashed whole)."""
     py = sys.executable
     if job.form == "nl":
-        inner = [py, str(NL_COMPARE), "--dataset", job.dataset, "--phase", *job.phases,
-                 "--ifsub", str(job.ifsub), "--gams-local", "--skip-python",
-                 "--out-dir", str(job.folder)]  # fmt: skip
+        inner = [py, str(NL_STANDALONE), "--dataset", job.dataset, "--phase", *job.phases,
+                 "--ifsub", str(job.ifsub), "--out-dir", str(job.folder)]  # fmt: skip
     else:
         inner = [py, str(REGEN), "--dataset", job.dataset, "--mode", job.mode,
                  "--form", job.form, "--ifsub", str(job.ifsub), "--out", str(job.folder)]  # fmt: skip

@@ -25,9 +25,9 @@ Differences from build_gtap7_altertax_neos_bundle.py:
   * pdp/pmp recalc and pwmg=0 are already in postsim.gms / iterloop.gms.
 
 Usage:
-    uv run python scripts/gtap/build_gtap7_pure_local_bundle.py \
+    uv run python data/gtap7/gams/tools/build_gtap7_pure_local_bundle.py \
         --dataset gtap7_3x3 --ifsub 0
-    uv run python scripts/gtap/build_gtap7_pure_local_bundle.py \
+    uv run python data/gtap7/gams/tools/build_gtap7_pure_local_bundle.py \
         --dataset gtap7_3x3 --ifsub 1
 """
 from __future__ import annotations
@@ -43,7 +43,7 @@ import build_gtap7_altertax_neos_bundle as alt
 
 from equilibria.sources import dataset_dir
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 UPSTREAM = alt.UPSTREAM
 
 
@@ -443,7 +443,7 @@ def main() -> None:
     if "* incpar data" not in prm_block and "* INCPAR data" not in prm_block:
         prm_har_path = dataset_dir(dataset) / "default.prm"
         if prm_har_path.exists():
-            import nl_compare as _nlc
+            import nl_standalone as _nlc
             use_prefix = _nlc._detect_prm_prefix_convention(inlined)
             elast_block = _nlc._prm_har_as_assignments(prm_har_path, use_prefix=use_prefix)
             # comp.gms (via getData.gms, already inlined) declares these
@@ -521,7 +521,7 @@ def main() -> None:
     if active_macros:
         print(f"  NOTE: leftover macros in active code: {active_macros}")
 
-    print(f"\nNext: run LOCALLY with GAMS v53:")
+    print("\nNext: run LOCALLY with GAMS v53:")
     print(f"  gams {out_gms.name} curDir={out_dir}  (-> out.gdx)")
 
 

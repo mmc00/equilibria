@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import GAMS_TOOLS_DIR, dataset_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "gtap" / "nl_compare.py"
@@ -24,6 +24,11 @@ def _nl_compare(monkeypatch: Any) -> Any:
     return importlib.import_module("nl_compare")
 
 
+def _nl_standalone(monkeypatch: Any) -> Any:
+    monkeypatch.syspath_prepend(str(GAMS_TOOLS_DIR))
+    return importlib.import_module("nl_standalone")
+
+
 @pytest.mark.parametrize(
     "dump",
     ["_gdxdump_params_only", "_prm_as_assignments", "_gdx_set_elements"],
@@ -31,7 +36,7 @@ def _nl_compare(monkeypatch: Any) -> Any:
 def test_no_gdxdump_is_an_error(monkeypatch: Any, dump: str) -> None:
     # without gdxdump the standalone .gms used to be written with a comment
     # where the data go, and GAMS then ran on whatever the model defaults are
-    nlc = _nl_compare(monkeypatch)
+    nlc = _nl_standalone(monkeypatch)
     monkeypatch.setattr(nlc.shutil, "which", lambda name: None)
     gdx = dataset_dir("gtap7_3x3") / "v7_consolidated.gdx"
     args = (gdx, "REG") if dump == "_gdx_set_elements" else (gdx,)
@@ -40,7 +45,7 @@ def test_no_gdxdump_is_an_error(monkeypatch: Any, dump: str) -> None:
 
 
 def test_missing_gdx_is_an_error(monkeypatch: Any, tmp_path: Path) -> None:
-    nlc = _nl_compare(monkeypatch)
+    nlc = _nl_standalone(monkeypatch)
     monkeypatch.setattr(nlc.shutil, "which", lambda name: "/bin/echo")
     with pytest.raises(FileNotFoundError):
         nlc._gdxdump_params_only(tmp_path / "absent.gdx")
