@@ -54,7 +54,9 @@ def to_nlp(text: str) -> str:
     return _NLP_SOLVE.sub(r"\1option nlp=ipopt;\n\1\2", text)
 
 
-def _build(mode: str, dataset: str, ifsub: int, work: Path, fbep: str) -> Path:
+def _build(
+    mode: str, dataset: str, ifsub: int, work: Path, fbep: str, path_opt: bool = False
+) -> Path:
     subprocess.run(
         [
             sys.executable,
@@ -67,6 +69,7 @@ def _build(mode: str, dataset: str, ifsub: int, work: Path, fbep: str) -> Path:
             str(work),
             "--fbep",
             fbep,
+            *(["--path-opt"] if path_opt else []),
         ],
         check=True,
         cwd=ROOT,
@@ -75,6 +78,15 @@ def _build(mode: str, dataset: str, ifsub: int, work: Path, fbep: str) -> Path:
     if len(built) != 1:
         raise SystemExit(f"builder left {len(built)} comp_*.gms in {work}, expected 1")
     return built[0]
+
+
+_ONECHO_OPT = re.compile(r"^\$onecho > path\.opt\n(.*?)^\$offecho", re.MULTILINE | re.DOTALL)
+
+
+def bundle_path_opt(text: str) -> str | None:
+    """The path.opt the bundle writes for itself ($onecho), the last one if several."""
+    found = _ONECHO_OPT.findall(text)
+    return found[-1] if found else None
 
 
 def _ytax(dump: str, stream: str, period: str | None = None) -> list[float]:
@@ -114,6 +126,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--fbep", choices=("header", "zero"), required=True,
                     help="header: FBEP/FTRV injected from basedata.har; zero: official getData")
+    ap.add_argument("--path-opt", action="store_true",
+                    help="altertax: one-shot shock with the tight PATH options (builder --path-opt)")
     ap.add_argument("--where", choices=("local", "neos"), default="local",
                     help="neos: solve on NEOS (PATH, --form mcp only)")
     args = ap.parse_args(argv)
@@ -130,7 +144,11 @@ def main(argv: list[str] | None = None) -> int:
 
     with tempfile.TemporaryDirectory(prefix="regen_gams_") as tmp:
         work = Path(tmp)
-        text = _build(args.mode, args.dataset, args.ifsub, work, args.fbep).read_text()
+        if args.path_opt and args.mode != "altertax":
+            ap.error("--path-opt is an altertax builder option")
+        text = _build(
+            args.mode, args.dataset, args.ifsub, work, args.fbep, path_opt=args.path_opt
+        ).read_text()
         model = work / "model.gms"
         model.write_text(to_nlp(text) if args.form == "nlp" else text)
         if args.where == "neos":
@@ -187,8 +205,11 @@ def _solve_on_neos(
     if args.mode == "altertax":
         _verify_subsidy_aware(str(gdxdump), solved / "out.gdx", args.fbep)
     shutil.copyfile(model, solved / "model.gms")
+    inlined = bundle_path_opt(model.read_text())
     if opt.exists():
         shutil.copyfile(opt, solved / "path.opt")
+    elif inlined is not None:  # what the bundle wrote on the NEOS machine
+        (solved / "path.opt").write_text(inlined)
     _keep(solved, out, ("model.gms", "path.opt", "out.gdx", "model.lst", "neos.log",
                         "neos_job.json"))  # fmt: skip
     print(f"wrote {out}")

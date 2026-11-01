@@ -139,6 +139,20 @@ def _inputs(args: argparse.Namespace, root: Path) -> dict[str, Any]:
     return generated_from
 
 
+def _solver(name: str, folder: Path, options_file: str | None) -> dict[str, Any]:
+    """The solver and, when the run left an options file, every option it set."""
+    solver: dict[str, Any] = {"name": name}
+    opt = folder / options_file if options_file else None
+    if opt is not None and opt.exists():
+        options = {}
+        for line in opt.read_text(encoding="utf-8").splitlines():
+            if line.strip() and not line.lstrip().startswith("*"):
+                key, _, value = line.strip().partition(" ")
+                options[key] = value.strip()
+        solver["options"] = options
+    return solver
+
+
 def _git_commit() -> str:
     try:
         return subprocess.check_output(
@@ -162,6 +176,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model-file", type=Path)
     ap.add_argument("--data-dir", type=Path)
     ap.add_argument("--solver")
+    ap.add_argument(
+        "--solver-options-file",
+        help="file the command leaves in the folder (path.opt): recorded as solver.options",
+    )
     ap.add_argument("--source", help="kind data/model: where it comes from")
     ap.add_argument("--license", help="kind data: redistribution terms")
     ap.add_argument(
@@ -237,7 +255,11 @@ def main(argv: list[str] | None = None) -> int:
                 "variant": _variant(args.variant),
                 **({"phases": args.phases} if args.phases else {}),
                 "generated_from": generated_from,
-                **({"solver": {"name": args.solver}} if args.solver else {}),
+                **(
+                    {"solver": _solver(args.solver, folder, args.solver_options_file)}
+                    if args.solver
+                    else {}
+                ),
                 "command": shlex.join(command),
                 "equilibria_commit": _git_commit(),
                 "exit": {"code": proc.returncode},

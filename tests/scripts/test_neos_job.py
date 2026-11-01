@@ -141,7 +141,14 @@ def _regen(monkeypatch: Any, tmp_path: Path, fake: FakeNeos) -> tuple[int, Path]
     rgr = _tools(monkeypatch, "regen_gams_reference")
     nj = _tools(monkeypatch, "neos_job")
 
-    def build(mode: str, dataset: str, ifsub: int, work: Path, fbep: str) -> Path:
+    def build(
+        mode: str,
+        dataset: str,
+        ifsub: int,
+        work: Path,
+        fbep: str,
+        path_opt: bool = False,
+    ) -> Path:
         gms = work / "comp_gtap7_3x3_gtap_shock_ifsub1.gms"
         gms.write_text((RESULT / "model.gms").read_text())
         return gms
@@ -170,3 +177,44 @@ def test_neos_record_has_no_password(monkeypatch: Any, tmp_path: Path) -> None:
         blob = f.read_bytes()
         assert PASSWORD.encode() not in blob, f
         assert EMAIL.encode() not in blob, f
+
+
+class FlakyNeos(FakeNeos):
+    """The network drops while polling and fetching, then comes back."""
+
+    def __init__(self, drops: int) -> None:
+        super().__init__()
+        self.drops = {"getJobStatus": drops, "getOutputFile": drops}
+
+    def _maybe_drop(self, name: str) -> None:
+        if self.drops[name] > 0:
+            self.drops[name] -= 1
+            raise OSError(51, "Network is unreachable")
+
+    def getJobStatus(self, job: int, pw: str) -> str:  # noqa: N802
+        self._maybe_drop("getJobStatus")
+        return super().getJobStatus(job, pw)
+
+    def getOutputFile(self, job: int, pw: str, name: str) -> xmlrpc.client.Binary:  # noqa: N802
+        self._maybe_drop("getOutputFile")
+        return super().getOutputFile(job, pw, name)
+
+
+def test_neos_survives_network_drops(monkeypatch: Any, tmp_path: Path) -> None:
+    nj, run = _run(monkeypatch, tmp_path, FlakyNeos(drops=3))
+    assert run.job == 4242 and (tmp_path / "out" / "out.gdx").exists()
+
+
+def test_neos_gives_up_after_many_drops(monkeypatch: Any, tmp_path: Path) -> None:
+    nj = _tools(monkeypatch, "neos_job")
+    with pytest.raises(nj.NeosError, match="unreachable"):
+        nj.run(RESULT / "model.gms", tmp_path / "out", email=EMAIL,
+               proxy=FlakyNeos(drops=10_000), poll_s=0)  # fmt: skip
+
+
+def test_neos_result_keeps_the_bundle_path_opt(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    rc, out = _regen(monkeypatch, tmp_path, FakeNeos())
+    assert rc == 0
+    assert (out / "path.opt").read_text().startswith("convergence_tolerance 1e-9\n")

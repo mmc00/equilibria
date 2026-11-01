@@ -153,7 +153,7 @@ def _insert_pdp_pmp_recalc_before_unload(text: str) -> str:
 
 
 def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10,
-                           homotopy_steps: int = 0) -> str:
+                           homotopy_steps: int = 0, optfile: bool = False) -> str:
     """Replace the numeraire shock with a +tariff% import-tariff shock.
 
     homotopy_steps=0 (default) applies the tariff ONE-SHOT. For the larger
@@ -165,6 +165,11 @@ def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10,
     re-solves at the full shock (restored from 815bceb, which documented the
     same corrupt-reference failure mode for a coarse ramp), and a path.opt with
     tightened convergence must accompany the bundle (written by main()).
+
+    optfile=True (one-shot only): the shock solve reads path.opt (PATH_OPT,
+    inlined by main()). The 15x10 references of 2026-07-19 were made this way:
+    one shot, tight options, no ramp (the ramp parks the degenerate directions
+    path-dependently).
     """
     old_block = (
         "   if(sameas(tsim,'shock'),\n"
@@ -175,8 +180,9 @@ def _patch_shock_to_tariff(text: str, tariff_increase: float = 0.10,
     factor = 1.0 + tariff_increase
     if homotopy_steps <= 0:
         new_block = (
-            f"   if(sameas(tsim,'shock'),\n"
-            f"* === NEOS bundle: altertax tariff shock +{pct:.0f}% on all import tariffs ===\n"
+            "   if(sameas(tsim,'shock'),\n"
+            + ("      gtap.optfile = 1 ;\n" if optfile else "")
+            + f"* === NEOS bundle: altertax tariff shock +{pct:.0f}% on all import tariffs ===\n"
             f"      imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) =\n"
             f"         imptx.l(r,i,rp,tsim) * {factor} ;\n"
             f"   ) ;"
@@ -553,6 +559,9 @@ def main() -> None:
                          "Use 30 for the large datasets (15x10): one-shot NEOS PATH reports "
                          "Optimal but mis-converges the micro ag cells (ref violates its own "
                          "xfeq). Writes path.opt alongside the bundle.")
+    ap.add_argument("--path-opt", action="store_true",
+                    help="one-shot shock with PATH_OPT (tight convergence) inlined via $onecho; "
+                         "the 15x10 references of 2026-07-19")
     ap.add_argument("--fbep", choices=("header", "zero"), default="header",
                     help="header: inject basedata.har's FBEP/FTRV after getData's fbep=0 "
                          "(default, the MCP references since #24); zero: official getData (#187).")
@@ -719,10 +728,12 @@ def main() -> None:
 
     inlined = _insert_pwmg_fix_before_solve(inlined)
     inlined = _insert_pdp_pmp_recalc_before_unload(inlined)
+    if args.path_opt and args.homotopy > 0:
+        raise SystemExit("--path-opt is the one-shot option set; --homotopy writes its own")
     inlined = _patch_shock_to_tariff(inlined, tariff_increase=args.tariff,
-                                     homotopy_steps=args.homotopy)
+                                     homotopy_steps=args.homotopy, optfile=args.path_opt)
 
-    if args.homotopy > 0:
+    if args.homotopy > 0 or args.path_opt:
         # NEOS jobs carry ONLY the .gms + in.gdx — materialize path.opt from inside
         # the model text so gtap.optfile=1 finds it on the NEOS machine too.
         inlined = "$onecho > path.opt\n" + PATH_OPT + "$offecho\n\n" + inlined

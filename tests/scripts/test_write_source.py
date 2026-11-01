@@ -370,3 +370,36 @@ def test_failed_command_leaves_no_new_folder(tmp_path: Path) -> None:
     cmd = [sys.executable, "-c", "raise SystemExit(3)"]
     assert _module().main(_argv(tmp_path, folder, cmd)) == 3
     assert not folder.exists()
+
+
+def test_solver_options_are_recorded(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_mcp_gtap_ifsub1"
+    body = "open('path.opt','w').write('* tight\\nconvergence_tolerance 1e-9\\ncrash_method pnewton\\n')"
+    argv = _argv(tmp_path, folder, [sys.executable, "-c", body])
+    argv[argv.index("--") : argv.index("--")] = [
+        "--solver",
+        "PATH",
+        "--solver-options-file",
+        "path.opt",
+    ]
+    assert _module().main(argv) == 0
+    solver = load_source(folder).raw["solver"]
+    assert solver == {
+        "name": "PATH",
+        "options": {"convergence_tolerance": "1e-9", "crash_method": "pnewton"},
+    }
+
+
+def test_no_options_file_records_no_options(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_mcp_gtap_ifsub1"
+    argv = _argv(
+        tmp_path, folder, [sys.executable, "-c", "open('out.txt','w').write('x')"]
+    )
+    argv[argv.index("--") : argv.index("--")] = [
+        "--solver",
+        "PATH",
+        "--solver-options-file",
+        "path.opt",
+    ]
+    assert _module().main(argv) == 0
+    assert load_source(folder).raw["solver"] == {"name": "PATH"}

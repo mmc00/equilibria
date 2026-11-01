@@ -222,3 +222,14 @@ def test_main_leaves_the_environment_alone(
     assert driver.main(argv) == 0
     assert os.environ.get("PATH") == before
     assert seen and seen[0].split(os.pathsep)[0] == str(gams.parent)
+
+
+def test_tight_path_opt_only_for_15x10_altertax_neos(driver: Any) -> None:
+    for j in driver.jobs():
+        cmd = driver.job_command(j, tool_version="53.5.0")
+        pairs = list(zip(cmd, cmd[1:], strict=False))
+        assert ("--solver-options-file", "path.opt") in pairs
+        tight = (
+            j.where == "neos" and j.mode == "altertax" and j.dataset == "gtap7_15x10"
+        )
+        assert ("--path-opt" in cmd) == tight, j.folder.name

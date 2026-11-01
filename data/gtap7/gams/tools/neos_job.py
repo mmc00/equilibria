@@ -32,6 +32,10 @@ CATEGORY, SOLVER, INPUT_METHOD = "cp", "PATH", "GAMS"
 POLL_S = 15.0
 TIMEOUT_S = 8 * 3600.0
 _FAILED = ("Failed", "Killed", "Bad job", "Error")
+# a dropped connection while waiting must not lose a job of hours: retry the
+# read-only calls (status, results); never the submission, which would send it twice
+NETWORK_RETRIES = 40
+_NETWORK = (OSError, xmlrpc.client.ProtocolError)
 _OK_STATUS = {"1", "2"}
 _VERSION = re.compile(r"\bGAMS (\d+\.\d+\.\d+)\b")
 _MODEL_STATUS = re.compile(r"MODEL STATUS\s+(\d+)")
@@ -54,6 +58,18 @@ def default_proxy() -> Any:
 
 def _bytes(blob: Any) -> bytes:
     return blob.data if hasattr(blob, "data") else bytes(blob)
+
+
+def _retry(call: Any, *args: Any, wait: float) -> Any:
+    for attempt in range(NETWORK_RETRIES + 1):
+        try:
+            return call(*args)
+        except _NETWORK as err:
+            if attempt == NETWORK_RETRIES:
+                raise NeosError(f"NEOS unreachable after {attempt + 1} tries: {err}") from err
+            print(f"  network error ({err}); retrying", flush=True)
+            time.sleep(max(wait, 1.0) if wait else 0)
+    raise AssertionError("unreachable")
 
 
 def _now() -> str:
@@ -102,15 +118,15 @@ def run(
     job, password = neos.submitJob(job_xml(model, options, email))
     if not job:
         raise NeosError(f"NEOS refused the job: {password}")
-    print(f"NEOS job {job} submitted")
+    print(f"NEOS job {job} submitted", flush=True)
 
     seen: list[str] = []
     t0 = time.monotonic()
     while True:
-        status = neos.getJobStatus(job, password)
+        status = _retry(neos.getJobStatus, job, password, wait=poll)
         if not seen or seen[-1] != status:
             seen.append(status)
-            print(f"  [{time.monotonic() - t0:6.0f}s] {status}")
+            print(f"  [{time.monotonic() - t0:6.0f}s] {status}", flush=True)
         if status == "Done":
             break
         if status in _FAILED:
@@ -120,8 +136,10 @@ def run(
         time.sleep(poll)
     finished = _now()
 
-    log = _bytes(neos.getFinalResults(job, password)).decode("utf-8", errors="replace")
-    payload = _bytes(neos.getOutputFile(job, password, "solver-output.zip"))
+    log = _bytes(_retry(neos.getFinalResults, job, password, wait=poll)).decode(
+        "utf-8", errors="replace"
+    )
+    payload = _bytes(_retry(neos.getOutputFile, job, password, "solver-output.zip", wait=poll))
     try:
         archive = zipfile.ZipFile(io.BytesIO(payload))
     except zipfile.BadZipFile as err:

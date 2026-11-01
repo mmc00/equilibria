@@ -68,6 +68,9 @@ NEOS_JOBS = {
                  ("gtap7_5x5", 1), ("gtap7_10x7", 0), ("gtap7_10x7", 1), ("gtap7_15x10", 0),
                  ("gtap7_15x10", 1)),
 }  # fmt: skip
+# one-shot shock with the tight PATH options of the 2026-07-19 references:
+# with PATH defaults the 15x10 altertax shock ends Intermediate Infeasible (6)
+TIGHT_PATH = {("gtap7_15x10", "altertax", "neos")}
 FBEP = ("header", "zero")
 WHERE = ("local", "neos")
 SOLVER = {"nl": "CONVERT", "nlp": "IPOPT", "mcp": "PATH"}
@@ -84,6 +87,7 @@ class Job:
     folder: Path
     fbep: str
     where: str
+    path_opt: bool = False
 
 
 def _job(
@@ -91,7 +95,7 @@ def _job(
     fbep: str, where: str = "local",
 ) -> Job:  # fmt: skip
     folder = dirs[ds] / f"gams_{form}_{mode}_ifsub{k}_fbep-{fbep}"
-    return Job(ds, form, mode, k, phases, folder, fbep, where)
+    return Job(ds, form, mode, k, phases, folder, fbep, where, (ds, mode, where) in TIGHT_PATH)
 
 
 def jobs(
@@ -146,7 +150,8 @@ def job_command(job: Job, *, tool_version: str, root: Path = DATA_ROOT) -> list[
     else:
         inner = [py, str(REGEN), "--dataset", job.dataset, "--mode", job.mode,
                  "--form", job.form, "--ifsub", str(job.ifsub), "--out", str(job.folder),
-                 "--fbep", job.fbep, "--where", job.where]  # fmt: skip
+                 "--fbep", job.fbep, "--where", job.where,
+                 *(["--path-opt"] if job.path_opt else [])]  # fmt: skip
     # NEOS reports the GAMS it ran; write_source reads it from neos_job.json
     version = ["--remote", "neos"] if job.where == "neos" else ["--tool-version", tool_version]
     return [
@@ -162,7 +167,7 @@ def job_command(job: Job, *, tool_version: str, root: Path = DATA_ROOT) -> list[
         "--phases", *job.phases,
         "--model-file", str(root / "gtap7" / "gams"),
         "--data-dir", str(job.folder.parent),
-        "--solver", SOLVER[job.form],
+        "--solver", SOLVER[job.form], "--solver-options-file", "path.opt",
         "--",
         *inner,
     ]  # fmt: skip
