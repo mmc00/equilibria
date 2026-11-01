@@ -35,6 +35,8 @@ _FAILED = ("Failed", "Killed", "Bad job", "Error")
 # a dropped connection while waiting must not lose a job of hours: retry the
 # read-only calls (status, results); never the submission, which would send it twice
 NETWORK_RETRIES = 40
+# no answer within this on an open socket = a dead connection (a 2 h hang once)
+SOCKET_TIMEOUT_S = 120.0
 _NETWORK = (OSError, xmlrpc.client.ProtocolError)
 _OK_STATUS = {"1", "2"}
 _VERSION = re.compile(r"\bGAMS (\d+\.\d+\.\d+)\b")
@@ -52,8 +54,18 @@ class NeosRun:
     statuses: tuple[str, ...]
 
 
-def default_proxy() -> Any:
-    return xmlrpc.client.ServerProxy(NEOS_URL, allow_none=True)
+def default_proxy(url: str = NEOS_URL, timeout_s: float = SOCKET_TIMEOUT_S) -> Any:
+    """XML-RPC proxy whose socket times out: a half-open connection raises an
+    OSError (retried by the read-only calls) instead of hanging forever."""
+    base = xmlrpc.client.SafeTransport if url.startswith("https") else xmlrpc.client.Transport
+
+    class _Transport(base):  # type: ignore[valid-type, misc]
+        def make_connection(self, host: Any) -> Any:
+            conn = super().make_connection(host)
+            conn.timeout = timeout_s
+            return conn
+
+    return xmlrpc.client.ServerProxy(url, transport=_Transport(), allow_none=True)
 
 
 def _bytes(blob: Any) -> bytes:

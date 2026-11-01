@@ -218,3 +218,19 @@ def test_neos_result_keeps_the_bundle_path_opt(
     rc, out = _regen(monkeypatch, tmp_path, FakeNeos())
     assert rc == 0
     assert (out / "path.opt").read_text().startswith("convergence_tolerance 1e-9\n")
+
+
+def test_neos_proxy_gives_up_on_a_silent_server(monkeypatch: Any) -> None:
+    # a half-open connection (the Mac changed IP) hung a probe for 2 h: the socket
+    # must time out, as an OSError, which the read-only calls already retry
+    import socket
+    import time
+
+    nj = _tools(monkeypatch, "neos_job")
+    with socket.create_server(("127.0.0.1", 0)) as silent:  # accepts, never answers
+        port = silent.getsockname()[1]
+        proxy = nj.default_proxy(f"http://127.0.0.1:{port}", timeout_s=0.5)
+        t0 = time.monotonic()
+        with pytest.raises(OSError):
+            proxy.getJobStatus(1, "pw")
+    assert time.monotonic() - t0 < 5
