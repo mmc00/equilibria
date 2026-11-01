@@ -506,6 +506,8 @@ def main() -> None:
 
     if args.fbep == "zero":
         inlined = alt.drop_fbep_ftrv_data(inlined)
+    else:
+        inlined = alt.fbep_as_subsidy(inlined)
     out_gms = out_dir / f"comp_{dataset}_gtap_shock_ifsub{ifsub}.gms"
     out_gms.write_text(inlined)
     print(f"\n  wrote {out_gms.name} ({len(inlined):,} chars)")

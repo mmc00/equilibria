@@ -1,7 +1,9 @@
 """One switch, --fbep header|zero, for every GAMS result generator (#187).
 
 ``header``: the FBEP/FTRV headers of the dataset's basedata.har are injected
-after getData.gms's ``fbep = 0`` (what the MCP references have used since #24).
+after getData.gms's ``fbep = 0`` (what the MCP references have used since #24),
+with FBEP's sign flipped: the HAR stores the subsidy negative (EVFP = EVFB +
+FTRV + FBEP) while cal.gms takes ``fctts = -fbep/evfb``, a positive subsidy.
 ``zero``: the official getData.gms, ``fbep = 0`` and ``ftrv = evfp - evfb``.
 """
 
@@ -29,7 +31,7 @@ BUILDERS = {
 FBEP_ZERO = "fbep(fp,a0,r) = 0 ;"
 FTRV_LINE = "ftrv(fp,a0,r) = evfp(fp,a0,r) - evfb(fp,a0,r) ;"
 FBEP_EU_LAND = re.compile(
-    r"""FBEP\(['"]Land['"],['"](a_)?Food['"],['"]EU_28['"]\) = -24050\.85"""
+    r"""FBEP\(['"]Land['"],['"](a_)?Food['"],['"]EU_28['"]\) = 24050\.85"""
 )
 
 
@@ -68,6 +70,26 @@ def test_zero_bundle_has_no_injection(mode: str, dataset: str, tmp_path: Path) -
     after = text[text.index(FBEP_ZERO) :]
     assert re.search(r"^\s*FBEP\(", after, flags=re.MULTILINE) is None
     assert re.search(r"^\s*FTRV\(", after, flags=re.MULTILINE) is None
+
+
+FBEP_ASSIGN = re.compile(r"^\s*FBEP\([^)]*\) = (\S+) ;", flags=re.MULTILINE)
+
+
+# gtap7_3x4's FBEP comes from its own v7 GDX (the inliner), gtap7_3x3's from basedata.har
+@pytest.mark.parametrize("dataset", [DS, "gtap7_3x4"])
+@pytest.mark.parametrize("mode", ["gtap", "altertax"])
+def test_header_bundle_fbep_is_a_positive_subsidy(
+    mode: str, dataset: str, tmp_path: Path
+) -> None:
+    text = _bundle(mode, tmp_path, "--fbep", "header", dataset=dataset)
+    values = [float(v) for v in FBEP_ASSIGN.findall(text[text.index(FBEP_ZERO) :])]
+    assert values
+    assert min(values) > 0
+
+
+def test_header_bundle_fbep_is_minus_the_har(tmp_path: Path) -> None:
+    text = _bundle("altertax", tmp_path, "--fbep", "header")
+    assert FBEP_EU_LAND.search(text) is not None
 
 
 def _standalone(monkeypatch: Any, **kw: Any) -> str:

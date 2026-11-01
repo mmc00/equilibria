@@ -497,6 +497,29 @@ def drop_fbep_ftrv_data(text: str) -> str:
     return text[:at] + _FBEP_FTRV_DATA.sub("", text[at:])
 
 
+_FBEP_VALUE = re.compile(r"^(\s*FBEP\([^)]*\) = )(\S+)( ;)", re.MULTILINE)
+
+
+def negate_fbep_assignments(text: str) -> str:
+    """Flip the sign of every ``FBEP(...) = v ;`` line in ``text``.
+
+    The GTAP data store the factor subsidy negative (EVFP = EVFB + FTRV + FBEP,
+    FBEP <= 0), while cal.gms takes ``fctts = -fbep/evfb``, a positive subsidy.
+    Injected as is, the subsidy counts as a tax and the base is not an
+    equilibrium in subsidised cells (the 20x41 header never solved).
+    """
+    return _FBEP_VALUE.sub(lambda m: f"{m[1]}{-float(m[2]):.10g}{m[3]}", text)
+
+
+def fbep_as_subsidy(text: str) -> str:
+    """--fbep header: every FBEP assignment after getData's fbep = 0, from the
+    v7 GDX or from basedata.har, with the sign cal.gms expects."""
+    at = text.find(FBEP_ZERO_ANCHOR)
+    if at < 0:
+        raise SystemExit(f"no `{FBEP_ZERO_ANCHOR}` line in the bundle")
+    return text[:at] + negate_fbep_assignments(text[at:])
+
+
 def _fbep_ftrv_har_as_assignments(har_path: Path, header: str, inlined: str) -> str:
     """Emit GAMS assignment lines for a factor header (FBEP/FTRV) read from a
     basedata.har (index order ENDW/factor, ACTS/activity, REG/region; raw values).
@@ -740,6 +763,8 @@ def main() -> None:
 
     if args.fbep == "zero":
         inlined = drop_fbep_ftrv_data(inlined)
+    else:
+        inlined = fbep_as_subsidy(inlined)
     out_gms = out_dir / f"comp_{dataset}_altertax_neos_ifsub{args.ifsub}.gms"
     out_gms.write_text(inlined)
     print(f"\n  wrote {out_gms.name} ({len(inlined):,} chars)")

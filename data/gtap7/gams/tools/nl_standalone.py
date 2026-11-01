@@ -617,10 +617,13 @@ def _fbep_header_block(fbep: str, har_dir: Path | None, dump: str) -> str:
         raise ValueError(f"fbep must be 'header' or 'zero', not {fbep!r}")
     if har_dir is None:
         raise ValueError("fbep='header' needs har_dir (the basedata.har it injects)")
+    from build_gtap7_altertax_neos_bundle import negate_fbep_assignments
     from build_gtap7_pure_local_bundle import _fbep_ftrv_har_as_assignments
 
     blocks = [
-        _fbep_ftrv_har_as_assignments(har_dir / "basedata.har", sym, dump)
+        negate_fbep_assignments(
+            _fbep_ftrv_har_as_assignments(har_dir / "basedata.har", sym, dump)
+        )
         for sym in ("FBEP", "FTRV")
     ]
     return "".join(b + "\n" for b in blocks if b.strip())
