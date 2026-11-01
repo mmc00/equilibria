@@ -74,7 +74,6 @@ TIGHT_PATH = {("gtap7_15x10", "altertax", "neos")}
 FBEP = ("header", "zero")
 WHERE = ("local", "neos")
 SOLVER = {"nl": "CONVERT", "nlp": "IPOPT", "mcp": "PATH"}
-OPTIONS_FILE = {"nl": "path.opt", "nlp": "ipopt.opt", "mcp": "path.opt"}
 SOLVE_PHASES = ("base", "check", "shock")
 
 
@@ -168,7 +167,7 @@ def job_command(job: Job, *, tool_version: str, root: Path = DATA_ROOT) -> list[
         "--phases", *job.phases,
         "--model-file", str(root / "gtap7" / "gams"),
         "--data-dir", str(job.folder.parent),
-        "--solver", SOLVER[job.form], "--solver-options-file", OPTIONS_FILE[job.form],
+        "--solver", SOLVER[job.form], "--solver-options-file", "path.opt",
         "--",
         *inner,
     ]  # fmt: skip

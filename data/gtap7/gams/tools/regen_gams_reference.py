@@ -41,27 +41,17 @@ BUILDERS = {
 }
 _IFMCP = re.compile(r'(ifMCP\s+"[^"]*"\s+/\s*)1(\s*/)')
 _NLP_SOLVE = re.compile(
-    r"^(\s*)(solve (gtap|dynCal|dynGTAP) using nlp maximizing walras ;)", re.MULTILINE
+    r"^(\s*)(solve (?:gtap|dynCal|dynGTAP) using nlp maximizing walras ;)", re.MULTILINE
 )
 _OK_STATUS = {"1", "2"}
 
 
-# The check period starts at the base solution: IPOPT's default barrier start
-# walked the 5x5 altertax ifSUB=0 check away from it into negative prices (#190).
-# The shock starts away from its solution and keeps IPOPT's defaults: with these
-# options it stops at a different point (pd up to 21% off the MCP result).
-IPOPT_CHECK_OPT = "warm_start_init_point yes\nmu_init 1e-9\n"
-
-
 def to_nlp(text: str) -> str:
-    """The bundle solved as NLP with IPOPT (ifMCP = 0), warm at check."""
+    """The bundle solved as NLP with IPOPT (ifMCP = 0)."""
     text, n = _IFMCP.subn(r"\g<1>0\g<2>", text, count=1)
     if n != 1:
         raise SystemExit("bundle has no `ifMCP ... / 1 /` switch to turn off")
-    text = _NLP_SOLVE.sub(
-        r"\1option nlp=ipopt;\n\1\3.optfile = 1$sameas(tsim,'check') ;\n\1\2", text
-    )
-    return "$onecho > ipopt.opt\n" + IPOPT_CHECK_OPT + "$offecho\n\n" + text
+    return _NLP_SOLVE.sub(r"\1option nlp=ipopt;\n\1\2", text)
 
 
 def _build(
@@ -187,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         if args.mode == "altertax":
             _verify_subsidy_aware(str(gdxdump), gdx, args.fbep)
-        _keep(work, out, ("model.gms", "path.opt", "ipopt.opt", "out.gdx"))
+        _keep(work, out, ("model.gms", "path.opt", "out.gdx"))
     print(f"model statuses {statuses}; wrote {out}")
     return 0
 
