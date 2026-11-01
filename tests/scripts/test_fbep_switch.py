@@ -87,6 +87,26 @@ def test_header_bundle_fbep_is_a_positive_subsidy(
     assert min(values) > 0
 
 
+# IND agriculture is subsidised with no factor tax (FTRV = 0): without an explicit
+# FTRV = 0 there, getData's ftrv = evfp - evfb (which already holds FBEP) stays and
+# the subsidy counts twice. 15x10's gtap bundle takes FBEP/FTRV from its own v7 GDX.
+FTRV_ZERO_IND = re.compile(
+    r"""^\s*FTRV\(['"]Land['"],['"](a_)?Rice['"],['"]IND['"]\) = 0 ;""", re.MULTILINE
+)
+
+
+@pytest.mark.parametrize(
+    ("mode", "dataset"),
+    [("gtap", "gtap7_10x7"), ("altertax", "gtap7_10x7"), ("gtap", "gtap7_15x10")],
+)
+def test_header_bundle_zeroes_ftrv_where_only_subsidised(
+    mode: str, dataset: str, tmp_path: Path
+) -> None:
+    text = _bundle(mode, tmp_path, "--fbep", "header", dataset=dataset)
+    # after getData's ftrv = evfp - evfb, or that line overwrites the zero
+    assert FTRV_ZERO_IND.search(text[text.index(FTRV_LINE) :]) is not None
+
+
 def test_header_bundle_fbep_is_minus_the_har(tmp_path: Path) -> None:
     text = _bundle("altertax", tmp_path, "--fbep", "header")
     assert FBEP_EU_LAND.search(text) is not None

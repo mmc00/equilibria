@@ -486,6 +486,10 @@ def main() -> None:
             _ncells = _blk.count(" = ")
             print(f"  injected {_sym} ({_ncells} cells) from basedata.har for {dataset}")
 
+    if args.fbep == "header":
+        _zero = alt.ftrv_zero_where_only_subsidised(dataset_dir(dataset) / "basedata.har", inlined)
+        if _zero:
+            prm_block += "\n" + _zero
     insert_at = close_idx + len(close_marker)
     inlined = inlined[:insert_at] + "\n" + prm_block + "\n" + inlined[insert_at:]
 

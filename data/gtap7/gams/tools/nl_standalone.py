@@ -626,6 +626,9 @@ def _fbep_header_block(fbep: str, har_dir: Path | None, dump: str) -> str:
         )
         for sym in ("FBEP", "FTRV")
     ]
+    from build_gtap7_altertax_neos_bundle import ftrv_zero_where_only_subsidised
+
+    blocks.append(ftrv_zero_where_only_subsidised(har_dir / "basedata.har", dump))
     return "".join(b + "\n" for b in blocks if b.strip())
 
 

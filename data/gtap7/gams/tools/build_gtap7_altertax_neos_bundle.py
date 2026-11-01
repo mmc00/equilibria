@@ -520,6 +520,34 @@ def fbep_as_subsidy(text: str) -> str:
     return text[:at] + negate_fbep_assignments(text[at:])
 
 
+def ftrv_zero_where_only_subsidised(har_path: Path, inlined: str) -> str:
+    """--fbep header: ``FTRV(...) = 0 ;`` for every cell basedata.har subsidises
+    with no factor tax (FBEP != 0, FTRV = 0; IND agriculture in 10x7/15x10/20x41).
+
+    The FTRV injection only writes nonzero cells, so there getData's
+    ftrv = evfp - evfb stays, and it already holds FBEP: with fbep injected the
+    subsidy counted twice (pfa/pf 0.9978 for 10x7 IND Land Rice, data 0.9989).
+    """
+    import numpy as _np
+
+    from equilibria.babel.har.reader import read_har  # type: ignore
+
+    har = read_har(har_path, select_headers=["FBEP", "FTRV"])
+    if "FBEP" not in har or "FTRV" not in har:
+        return ""
+    fbep, ftrv = har["FBEP"], har["FTRV"]
+    act_prefix = ""
+    m = re.search(r"""(?:^|\n)evfb\(['"][^'"]+['"],['"]([acfr])_""", inlined)
+    if m:
+        act_prefix = m.group(1) + "_"
+    endw, acts, regs = fbep.set_elements
+    cells = _np.argwhere((fbep.array != 0) & (ftrv.array == 0))
+    lines = [f"FTRV('{endw[i]}','{act_prefix}{acts[j]}','{regs[k]}') = 0 ;" for i, j, k in cells]
+    if not lines:
+        return ""
+    return "* FTRV zero where only subsidised (from basedata.har)\n" + "\n".join(lines)
+
+
 def _fbep_ftrv_har_as_assignments(har_path: Path, header: str, inlined: str) -> str:
     """Emit GAMS assignment lines for a factor header (FBEP/FTRV) read from a
     basedata.har (index order ENDW/factor, ACTS/activity, REG/region; raw values).
@@ -704,6 +732,10 @@ def main() -> None:
             inject_lines.append(_blk)
             _ncells = _blk.count(" = ")
             print(f"  injected {_sym} ({_ncells} cells) from basedata.har for {dataset}")
+    if args.fbep == "header":
+        _zero = ftrv_zero_where_only_subsidised(dataset_dir(dataset) / "basedata.har", inlined)
+        if _zero:
+            inject_lines.append(_zero)
     if inject_lines:
         inject_txt = "\n\n" + "\n".join(inject_lines) + "\n"
         inlined = inlined[:anchor_end] + inject_txt + inlined[anchor_end:]
