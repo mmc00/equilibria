@@ -6,12 +6,19 @@ cell the HAR subsidises (FBEP != 0):
 
     zero    the official getData.gms: fbep = 0 and ftrv = EVFP - EVFB, so
             pfa/pf = EVFP/EVFB and ytax(fs) = 0
-    header  FBEP/FTRV injected after fbep = 0: pfa/pf = 1 + (ftrv - FBEP)/EVFB
-            with ftrv = FTRV where the header is nonzero, else EVFP - EVFB
-            (the injection only overrides nonzero cells)
+    header  FBEP/FTRV injected after fbep = 0, FBEP with its sign flipped (the
+            HAR stores the subsidy negative, cal.gms takes fctts = -fbep/evfb):
+            pfa/pf = 1 + (ftrv + FBEP)/EVFB with ftrv = FTRV where the header
+            is nonzero, else EVFP - EVFB (the injection only overrides nonzero
+            cells); where FTRV is nonzero that is EVFP/EVFB, the data's wedge
 
     ytax(fs) is checked for zero only: header's ytax(fs) depends on more
     than these four headers.
+
+Amended 2026-11-01 (3ba4f88): the first version asked header for
+1 + (ftrv - FBEP)/EVFB, the subsidy counted as a tax. That rule came from
+cal.gms, not from the data, and encoded the bug the 20x41 header exposed:
+the HAR satisfy EVFP = EVFB + FTRV + FBEP, so the base was no equilibrium.
 """
 
 from __future__ import annotations
@@ -73,7 +80,7 @@ def variant_problems(gdx: Path, dataset: str, fbep: str) -> list[str]:
             want = evfp / evfb
         else:
             ftrv = ft if ft != 0 else evfp - evfb
-            want = 1 + (ftrv - fb) / evfb
+            want = 1 + (ftrv + fb) / evfb
         if key not in pfa or key not in pf:
             problems.append(f"{key}: pfa/pf missing at base")
             continue
@@ -117,8 +124,8 @@ def test_oracle_accepts_the_injected_reference() -> None:
 
 
 def test_oracle_rejects_the_wrong_variant() -> None:
-    # the injected 2a reference read as if it were fbep=zero must be red
+    # the header reference read as if it were fbep=zero must be red: both carry
+    # the data's wedge, but only header splits out the subsidy, ytax(fs) != 0
     gdx = dataset_dir("gtap7_3x3") / RESULT / "out.gdx"
     problems = variant_problems(gdx, "gtap7_3x3", "zero")
-    assert any("pfa/pf" in p for p in problems)
     assert any("ytax" in p for p in problems)
