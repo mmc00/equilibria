@@ -4,7 +4,8 @@ Each job writes one folder data/gtap7/<ds>/gams_<form>_<mode>_ifsub<k>_fbep-<v>/
 through write_source.py, which runs it, times it and records its source.yaml:
 
     nl   the GAMS .nl of every phase, local CONVERT (tools/nl_standalone.py)
-    nlp  the NLP solve with IPOPT (regen_gams_reference --form nlp)
+    nlp  the NLP solve with IPOPT (regen_gams_reference --form nlp); gtap7_20x41
+         with CONOPT on NEOS and zcons scaled (NEOS_NLP_JOBS)
     mcp  the MCP solve with PATH (regen_gams_reference --form mcp); the local
          license stops PATH at 1000 rows, so only gtap7_3x3 ifSUB=1 runs here,
          the rest on NEOS (--where neos, e-mail from $NEOS_EMAIL)
@@ -63,17 +64,27 @@ MCP_JOBS = (("gtap7_3x3", "gtap", 1), ("gtap7_3x3", "altertax", 1))
 # above the local PATH license (1000 rows): solved on NEOS
 NEOS_JOBS = {
     "gtap": (("gtap7_3x3", 0), ("gtap7_5x5", 0), ("gtap7_5x5", 1), ("gtap7_10x7", 0),
-             ("gtap7_10x7", 1), ("gtap7_15x10", 0), ("gtap7_15x10", 1), ("gtap7_20x41", 1)),
+             ("gtap7_10x7", 1), ("gtap7_15x10", 0), ("gtap7_15x10", 1)),
     "altertax": (("gtap7_3x3", 0), ("gtap7_3x4", 0), ("gtap7_3x4", 1), ("gtap7_5x5", 0),
                  ("gtap7_5x5", 1), ("gtap7_10x7", 0), ("gtap7_10x7", 1), ("gtap7_15x10", 0),
                  ("gtap7_15x10", 1)),
 }  # fmt: skip
+# NLP with CONOPT on NEOS, zcons scaled: in gtap7_20x41 CHE has SUBPAR at the
+# GTAP floor (1e-6) in 8 of 20 goods, so zcons(CHE) ~ 1e-10; PATH stalls there
+# (even at a 1% shock) and unscaled CONOPT stops at false points.
+NEOS_NLP_JOBS = {"gtap": (("gtap7_20x41", 1),)}
+ZCONS_NOTES = (
+    "zcons and zconseq scaled by their calibrated level (regen --scale-zcons): "
+    "SUBPAR at the GTAP floor (1e-6) in CHE puts zcons near 1e-10; the original "
+    "model sets scaleopt=1 but no .scale."
+)
 # one-shot shock with the tight PATH options of the 2026-07-19 references:
 # with PATH defaults the 15x10 altertax shock ends Intermediate Infeasible (6)
 TIGHT_PATH = {("gtap7_15x10", "altertax", "neos")}
 FBEP = ("header", "zero")
 WHERE = ("local", "neos")
-SOLVER = {"nl": "CONVERT", "nlp": "IPOPT", "mcp": "PATH"}
+SOLVER = {"nl": "CONVERT", "mcp": "PATH"}
+NLP_SOLVER = {"ipopt": "IPOPT", "conopt": "CONOPT"}
 SOLVE_PHASES = ("base", "check", "shock")
 
 
@@ -88,14 +99,17 @@ class Job:
     fbep: str
     where: str
     path_opt: bool = False
+    nlp_solver: str = "ipopt"
+    scale_zcons: bool = False
 
 
 def _job(
     ds: str, form: str, mode: str, k: int, phases: tuple[str, ...], dirs: dict[str, Path],
-    fbep: str, where: str = "local",
+    fbep: str, where: str = "local", nlp_solver: str = "ipopt", scale_zcons: bool = False,
 ) -> Job:  # fmt: skip
     folder = dirs[ds] / f"gams_{form}_{mode}_ifsub{k}_fbep-{fbep}"
-    return Job(ds, form, mode, k, phases, folder, fbep, where, (ds, mode, where) in TIGHT_PATH)
+    return Job(ds, form, mode, k, phases, folder, fbep, where,
+               (ds, mode, where) in TIGHT_PATH, nlp_solver, scale_zcons)  # fmt: skip
 
 
 def jobs(
@@ -104,7 +118,8 @@ def jobs(
     """The 86 jobs of the plan's table, restricted to ``datasets`` and ``where``."""
     keep = (lambda ds: True) if datasets is None else (lambda ds: ds in datasets)
     named = {*NL_PHASES, *(ds for names in NLP_DATASETS.values() for ds in names),
-             *(ds for rows in NEOS_JOBS.values() for ds, _ in rows)}  # fmt: skip
+             *(ds for rows in NEOS_JOBS.values() for ds, _ in rows),
+             *(ds for rows in NEOS_NLP_JOBS.values() for ds, _ in rows)}  # fmt: skip
     # dataset_dir walks the whole data tree: once per dataset, not per job
     root_dirs = {ds: dataset_dir(ds, root=root) for ds in named if keep(ds)}
     out = [
@@ -135,6 +150,13 @@ def jobs(
         for v in FBEP
         if keep(ds)
     ]
+    out += [
+        _job(ds, "nlp", mode, k, SOLVE_PHASES, root_dirs, v, "neos", "conopt", True)
+        for mode, rows in NEOS_NLP_JOBS.items()
+        for ds, k in rows
+        for v in FBEP
+        if keep(ds)
+    ]
     if where != "all":
         out = [j for j in out if j.where == where]
     return out
@@ -151,7 +173,9 @@ def job_command(job: Job, *, tool_version: str, root: Path = DATA_ROOT) -> list[
         inner = [py, str(REGEN), "--dataset", job.dataset, "--mode", job.mode,
                  "--form", job.form, "--ifsub", str(job.ifsub), "--out", str(job.folder),
                  "--fbep", job.fbep, "--where", job.where,
-                 *(["--path-opt"] if job.path_opt else [])]  # fmt: skip
+                 *(["--path-opt"] if job.path_opt else []),
+                 *(["--nlp-solver", job.nlp_solver] if job.nlp_solver != "ipopt" else []),
+                 *(["--scale-zcons"] if job.scale_zcons else [])]  # fmt: skip
     # NEOS reports the GAMS it ran; write_source reads it from neos_job.json
     version = ["--remote", "neos"] if job.where == "neos" else ["--tool-version", tool_version]
     return [
@@ -167,7 +191,9 @@ def job_command(job: Job, *, tool_version: str, root: Path = DATA_ROOT) -> list[
         "--phases", *job.phases,
         "--model-file", str(root / "gtap7" / "gams"),
         "--data-dir", str(job.folder.parent),
-        "--solver", SOLVER[job.form], "--solver-options-file", "path.opt",
+        "--solver", NLP_SOLVER[job.nlp_solver] if job.form == "nlp" else SOLVER[job.form],
+        "--solver-options-file", "path.opt",
+        *(["--notes", ZCONS_NOTES] if job.scale_zcons else []),
         "--",
         *inner,
     ]  # fmt: skip

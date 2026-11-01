@@ -137,7 +137,13 @@ def test_neos_tool_version_from_lst(monkeypatch: Any, tmp_path: Path) -> None:
     assert job["gams_version"] == "52.5.0"
 
 
-def _regen(monkeypatch: Any, tmp_path: Path, fake: FakeNeos) -> tuple[int, Path]:
+def _regen(
+    monkeypatch: Any,
+    tmp_path: Path,
+    fake: FakeNeos,
+    form: str = "mcp",
+    extra: list[str] | None = None,
+) -> tuple[int, Path]:
     rgr = _tools(monkeypatch, "regen_gams_reference")
     nj = _tools(monkeypatch, "neos_job")
 
@@ -158,8 +164,9 @@ def _regen(monkeypatch: Any, tmp_path: Path, fake: FakeNeos) -> tuple[int, Path]
     monkeypatch.setattr(nj, "POLL_S", 0)
     monkeypatch.setenv("NEOS_EMAIL", EMAIL)
     out = tmp_path / "result"
-    argv = ["--dataset", "gtap7_3x3", "--mode", "gtap", "--form", "mcp", "--ifsub", "1",
-            "--fbep", "header", "--where", "neos", "--out", str(out)]  # fmt: skip
+    argv = ["--dataset", "gtap7_3x3", "--mode", "gtap", "--form", form, "--ifsub", "1",
+            "--fbep", "header", "--where", "neos", "--out", str(out),
+            *(extra or [])]  # fmt: skip
     return rgr.main(argv), out
 
 
@@ -234,3 +241,19 @@ def test_neos_proxy_gives_up_on_a_silent_server(monkeypatch: Any) -> None:
         with pytest.raises(OSError):
             proxy.getJobStatus(1, "pw")
     assert time.monotonic() - t0 < 5
+
+
+def test_neos_nlp_conopt_sends_the_scaled_nlp_bundle(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    # the 20x41 row: NLP with CONOPT and zcons scaled, solved on NEOS
+    fake = FakeNeos()
+    rc, out = _regen(monkeypatch, tmp_path, fake, form="nlp",
+                     extra=["--nlp-solver", "conopt", "--scale-zcons"])  # fmt: skip
+    assert rc == 0
+    sent = (out / "model.gms").read_text()
+    assert sent in fake.sent
+    assert "option nlp=conopt;" in sent and "zcons.scale(" in sent
+    assert '"Set to 1 to solve using MCP"           / 0 /' in sent
+    # the bundle's PATH options do not describe a CONOPT solve
+    assert not (out / "path.opt").exists()

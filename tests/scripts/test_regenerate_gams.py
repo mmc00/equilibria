@@ -51,7 +51,8 @@ def test_jobs_are_the_table(driver: Any) -> None:
         return sum(j.form == form and j.where == where for j in js)
 
     assert (count("nl", "local"), count("nlp", "local")) == (20, 28)
-    assert (count("mcp", "local"), count("mcp", "neos")) == (4, 34)
+    assert (count("mcp", "local"), count("mcp", "neos")) == (4, 32)
+    assert count("nlp", "neos") == 2
     assert {j.fbep for j in js} == {"header", "zero"}
     for fbep in ("header", "zero"):
         assert sum(j.fbep == fbep for j in js) == 43
@@ -65,6 +66,8 @@ def test_jobs_are_the_table(driver: Any) -> None:
     }
     neos = {(j.dataset, j.mode, j.ifsub) for j in js if j.where == "neos"}
     assert ("gtap7_20x41", "gtap", 1) in neos and ("gtap7_20x41", "gtap", 0) not in neos
+    # 20x41: PATH stalls on CHE's zcons ~1e-10 (SUBPAR at the GTAP floor), even at a 1% shock
+    assert {j.form for j in js if j.dataset == "gtap7_20x41"} == {"nlp"}
     assert ("gtap7_3x3", "gtap", 1) not in neos  # solved locally
     assert len({j.folder for j in js}) == 86
     # no local mcp for 3x4: above the license cap
@@ -233,3 +236,27 @@ def test_tight_path_opt_only_for_15x10_altertax_neos(driver: Any) -> None:
             j.where == "neos" and j.mode == "altertax" and j.dataset == "gtap7_15x10"
         )
         assert ("--path-opt" in cmd) == tight, j.folder.name
+
+
+def test_20x41_neos_row_is_conopt_with_zcons_scaled(driver: Any) -> None:
+    rows = [j for j in driver.jobs() if j.dataset == "gtap7_20x41"]
+    assert {j.fbep for j in rows} == {"header", "zero"}
+    for j in rows:
+        assert (j.form, j.where, j.nlp_solver, j.scale_zcons) == (
+            "nlp",
+            "neos",
+            "conopt",
+            True,
+        )
+        cmd = driver.job_command(j, tool_version="53.5.0")
+        pairs = list(zip(cmd, cmd[1:], strict=False))
+        assert ("--solver", "CONOPT") in pairs and ("--nlp-solver", "conopt") in pairs
+        assert "--scale-zcons" in cmd
+        notes = cmd[cmd.index("--notes") + 1]
+        assert "zcons" in notes and "SUBPAR" in notes  # disclosed: not in the original
+    # every other row is unchanged: IPOPT for NLP, nothing scaled
+    for j in driver.jobs():
+        if j.dataset != "gtap7_20x41":
+            assert (j.nlp_solver, j.scale_zcons) == ("ipopt", False)
+            cmd = driver.job_command(j, tool_version="53.5.0")
+            assert "--scale-zcons" not in cmd and "--notes" not in cmd

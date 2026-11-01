@@ -13,7 +13,9 @@ write_source.py --remote neos records. --out is created only on success.
 
 --form mcp solves the bundle as built (PATH; the local license stops at 1000
 rows, so only gtap7_3x3 ifSUB=1 fits). --form nlp switches ifMCP off and
-solves ``gtap using nlp maximizing walras`` with IPOPT (no size limit).
+solves ``gtap using nlp maximizing walras`` with IPOPT (no size limit), or
+CONOPT with --nlp-solver conopt. --scale-zcons scales zcons/zconseq by their
+calibrated level (gtap7_20x41: SUBPAR at the GTAP floor in CHE).
 
 Exit status is not 0, and --out holds no out.gdx, when GAMS fails or any
 model status is not 1 (Optimal) or 2 (Locally Optimal).
@@ -46,12 +48,30 @@ _NLP_SOLVE = re.compile(
 _OK_STATUS = {"1", "2"}
 
 
-def to_nlp(text: str) -> str:
-    """The bundle solved as NLP with IPOPT (ifMCP = 0)."""
+def to_nlp(text: str, solver: str = "ipopt") -> str:
+    """The bundle solved as NLP with ``solver`` (ifMCP = 0)."""
     text, n = _IFMCP.subn(r"\g<1>0\g<2>", text, count=1)
     if n != 1:
         raise SystemExit("bundle has no `ifMCP ... / 1 /` switch to turn off")
-    return _NLP_SOLVE.sub(r"\1option nlp=ipopt;\n\1\2", text)
+    return _NLP_SOLVE.sub(rf"\1option nlp={solver};\n\1\2", text)
+
+
+_LOOP = re.compile(r"^loop\(tsim,", re.MULTILINE)
+ZCONS_SCALE = (
+    "* === zcons and zconseq scaled by the calibrated zcons level: SUBPAR at the\n"
+    "* === GTAP floor (1e-6, CHE in 20x41) puts zcons near 1e-10, below the solver\n"
+    "* === tolerances. The original model sets scaleopt=1 but no .scale.\n"
+    "zcons.scale(r,i,h,t)$(xaFlag(r,i,h) and zcons.l(r,i,h,t) gt 0) = zcons.l(r,i,h,t) ;\n"
+    "zconseq.scale(r,i,h,t)$(xaFlag(r,i,h) and zcons.l(r,i,h,t) gt 0) = zcons.l(r,i,h,t) ;\n"
+)
+
+
+def scale_zcons(text: str) -> str:
+    """The bundle with zcons/zconseq scaled, set after calibration, before loop(tsim,."""
+    m = _LOOP.search(text)
+    if m is None:
+        raise SystemExit("bundle has no `loop(tsim,` to scale zcons before")
+    return text[: m.start()] + ZCONS_SCALE + text[m.start() :]
 
 
 def _build(
@@ -129,11 +149,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--path-opt", action="store_true",
                     help="altertax: one-shot shock with the tight PATH options (builder --path-opt)")
     ap.add_argument("--where", choices=("local", "neos"), default="local",
-                    help="neos: solve on NEOS (PATH, --form mcp only)")
+                    help="neos: solve on NEOS")
+    ap.add_argument("--nlp-solver", choices=("ipopt", "conopt"), default="ipopt",
+                    help="--form nlp: the NLP solver")
+    ap.add_argument("--scale-zcons", action="store_true",
+                    help="scale zcons/zconseq by their calibrated level (20x41)")
     args = ap.parse_args(argv)
-
-    if args.where == "neos" and args.form != "mcp":
-        ap.error("--where neos solves --form mcp only")
     gams = shutil.which("gams")
     if gams is None and args.where == "local":
         ap.error("the gams binary must be on PATH")
@@ -149,8 +170,12 @@ def main(argv: list[str] | None = None) -> int:
         text = _build(
             args.mode, args.dataset, args.ifsub, work, args.fbep, path_opt=args.path_opt
         ).read_text()
+        if args.form == "nlp":
+            text = to_nlp(text, args.nlp_solver)
+        if args.scale_zcons:
+            text = scale_zcons(text)
         model = work / "model.gms"
-        model.write_text(to_nlp(text) if args.form == "nlp" else text)
+        model.write_text(text)
         if args.where == "neos":
             return _solve_on_neos(args, work, model, out, gdxdump)
         assert gams is not None
@@ -205,7 +230,8 @@ def _solve_on_neos(
     if args.mode == "altertax":
         _verify_subsidy_aware(str(gdxdump), solved / "out.gdx", args.fbep)
     shutil.copyfile(model, solved / "model.gms")
-    inlined = bundle_path_opt(model.read_text())
+    # the bundle's PATH options describe an MCP solve, not an NLP one
+    inlined = bundle_path_opt(model.read_text()) if args.form == "mcp" else None
     if opt.exists():
         shutil.copyfile(opt, solved / "path.opt")
     elif inlined is not None:  # what the bundle wrote on the NEOS machine
