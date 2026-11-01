@@ -228,7 +228,8 @@ def test_tight_path_opt_only_for_15x10_altertax_neos(driver: Any) -> None:
     for j in driver.jobs():
         cmd = driver.job_command(j, tool_version="53.5.0")
         pairs = list(zip(cmd, cmd[1:], strict=False))
-        assert ("--solver-options-file", "path.opt") in pairs
+        opts = "ipopt.opt" if j.form == "nlp" else "path.opt"
+        assert ("--solver-options-file", opts) in pairs, j.folder.name
         tight = (
             j.where == "neos" and j.mode == "altertax" and j.dataset == "gtap7_15x10"
         )
