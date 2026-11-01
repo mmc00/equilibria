@@ -41,13 +41,13 @@ generated_from:
       solve.gms: 03d3a8e9488a24881febe86e53575403675d41d29b029338332002f9cf64e5d2
       tariff_sim.gms: 67df15d47505614917bbe5ac2613807ed1829aac0dd57fa8d1b4e6c85613e507
       tariff_sim_fixed.gms: e009d246ad5726e50db587db32cc2c642487ba2504b4ec0b2b77c9ceaf1cad5b
-      tools/build_gtap7_altertax_neos_bundle.py: eff39193c16b1e30ef879bc3bb93d3564103fc0449f448ea2cea05c93cd10a36
-      tools/build_gtap7_pure_local_bundle.py: febb3193fbb638344d10b30b7e91672687ac8fc19350bafa06054755edaad9b7
+      tools/build_gtap7_altertax_neos_bundle.py: 31073ca85f127122fa63547907e7ac9a4d58f220d5cb7b7bd8f61042002e137e
+      tools/build_gtap7_pure_local_bundle.py: 21607a00c50a76b1e30cb2388a60a573a291cc5f2364c05b1ede40c0b2e9d837
       tools/gdx_to_gams_inline.py: 325d18b91f3eabddf050f8b2aaf77bf90f0a74d266f0e42bf665c6a514e24396
-      tools/neos_job.py: 8ab21691ee3c4953a8aaa21bb74b47eb60290869f0a7cbbdb2c438d32a68c8b0
-      tools/nl_standalone.py: 53f321c41cfd9be539b5b30bb7eb93bffb93ed27734378f05fc8c6a58150736c
-      tools/regen_gams_reference.py: c35ed393faad835478749fe1083499d903e7d264a62788694bd84c88463af03d
-      tools/regenerate_gams.py: 4831f6e355af2ff582bf56e5bba36ce392c5b563c258ce29cdc6569bcb0a8cf1
+      tools/neos_job.py: 923744a65f0a2c51e831f133c2dcdb91b49f6a3a20aa7ea933300318d9cafe5e
+      tools/nl_standalone.py: 10cc0eb5dcc400986222139a339d7f07ad6e9cba34aebce388f3987a6ad24478
+      tools/regen_gams_reference.py: 7b987ed66f7beed684a3ede1a69b2bca7578026923cdc3ea9d831bd7d088bb38
+      tools/regenerate_gams.py: 436743f19654e04bf19c8c571e891ad65e96bf6e799f18746433ba3304e84edb
   data:
     path: gtap7/gtap7_10x7
     sha256:
@@ -61,15 +61,15 @@ solver:
 command: /Users/marmol/proyectos/equilibria-phase2b/.venv/bin/python /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gams/tools/regen_gams_reference.py
   --dataset gtap7_10x7 --mode altertax --form nlp --ifsub 1 --out /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gtap7_10x7/gams_nlp_altertax_ifsub1_fbep-zero
   --fbep zero --where local
-equilibria_commit: 879e685
+equilibria_commit: 8b16a3cc
 exit:
   code: 0
 outputs:
   model.gms: 99b9071c20b02b24a1922f99c54d2cd03d2170c08845f783c28ad4909f0d6df2
   out.gdx: 87147c89c640a29a262172dda786bc472669559f9340f36e6c1cfa13c46c4d02
 run:
-  date: '2026-10-30T12:01:49-06:00'
-  duration_s: 15.476
+  date: '2026-11-01T00:40:13-06:00'
+  duration_s: 15.14
   machine:
     os: macOS 26.2 (Darwin 25.2.0)
     cpu: Apple M3 Pro

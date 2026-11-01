@@ -7,14 +7,14 @@
 * -------------------------------------------------------------------------
 
 $setGlobal simType   CompStat
-$setGlobal simName   COMP_ALTERTAX
-$setGlobal baseName  9x10
-$setGlobal inDir     .
-$setGlobal outDir    .
+$setGlobal simName   COMP
+$if not setGlobal baseName $setGlobal baseName  9x10
+$if not setGlobal inDir $setGlobal inDir     ../data
+$if not setGlobal outDir $setGlobal outDir    ../output
 $setGlobal utility   cde
 $setGlobal savfFlag  capFix
 $setGlobal ifCal       0
-$setGlobal ifSUB       0
+$setGlobal ifSUB       1
 $if not setGlobal ifCSV $setGlobal ifCSV 1
 $if not setGlobal ifCSVAppend $setGlobal ifCSVAppend 0
 
@@ -52,7 +52,7 @@ scalar
    xpScale     "Scale factor for output"               / 1 /
    ifCSV       "Flag for CSV file"                     / %ifCSV% /
    ifCSVAppend "Flag to append to existing CSV file"   / %ifCSVAppend% /
-   ifMCP       "Set to 1 to solve using MCP"           / 0 /
+   ifMCP       "Set to 1 to solve using MCP"           / 1 /
 ;
 
 *  CSV results go to this file
@@ -369,7 +369,6 @@ parameters
 *        HANDLING OF FBEP and FTRV
 
 fbep(fp,a0,r) = 0 ;
-
 * === Inlined PARAMETER data from in.gdx ===
 $onImplicitAssign
 * vdfb data (125 cells)
@@ -2152,125 +2151,6 @@ makb('c_Svces','a_Svces','ROW') = 29814150 ;
 
 
 ftrv(fp,a0,r) = evfp(fp,a0,r) - evfb(fp,a0,r) ;
-
-* FBEP data (injected from basedata.har)
-FBEP('Land','a_Agri','USA') = -9419.345703 ;
-FBEP('Land','a_Agri','EU_28') = -24050.85156 ;
-FBEP('Land','a_Agri','CHN') = -27023.44727 ;
-FBEP('Land','a_Agri','LatinAmer') = -713.5120239 ;
-FBEP('Land','a_Agri','ROW') = -8524.269531 ;
-FBEP('UnSkLab','a_Agri','USA') = -2072.498291 ;
-FBEP('UnSkLab','a_Agri','EU_28') = -23071.52148 ;
-FBEP('UnSkLab','a_Agri','CHN') = -8818.607422 ;
-FBEP('UnSkLab','a_Agri','LatinAmer') = -122.5802155 ;
-FBEP('UnSkLab','a_Agri','ROW') = -3596.395264 ;
-FBEP('SkLab','a_Agri','USA') = -2023.032715 ;
-FBEP('SkLab','a_Agri','EU_28') = -7168.943359 ;
-FBEP('SkLab','a_Agri','CHN') = -556.9624023 ;
-FBEP('SkLab','a_Agri','LatinAmer') = -1.059459925 ;
-FBEP('SkLab','a_Agri','ROW') = -484.6528931 ;
-FBEP('Capital','a_Agri','USA') = -3635.937988 ;
-FBEP('Capital','a_Agri','EU_28') = -18409.45508 ;
-FBEP('Capital','a_Agri','CHN') = -17110.14258 ;
-FBEP('Capital','a_Agri','LatinAmer') = -3347.629883 ;
-FBEP('Capital','a_Agri','ROW') = -7285.005371 ;
-* FTRV data (injected from basedata.har)
-FTRV('Land','a_Agri','USA') = 2070.950684 ;
-FTRV('Land','a_Agri','EU_28') = 2027.685181 ;
-FTRV('Land','a_Agri','CHN') = 4219.46582 ;
-FTRV('Land','a_Agri','LatinAmer') = 1086.191528 ;
-FTRV('Land','a_Agri','ROW') = 1992.529053 ;
-FTRV('UnSkLab','a_Agri','USA') = 6688.251953 ;
-FTRV('UnSkLab','a_Agri','EU_28') = 42320.82031 ;
-FTRV('UnSkLab','a_Agri','CHN') = 6355.275879 ;
-FTRV('UnSkLab','a_Agri','LatinAmer') = 19331.20703 ;
-FTRV('UnSkLab','a_Agri','ROW') = 32837.1875 ;
-FTRV('UnSkLab','a_Food','USA') = 17667.82031 ;
-FTRV('UnSkLab','a_Food','EU_28') = 27437.79688 ;
-FTRV('UnSkLab','a_Food','CHN') = 2331.086182 ;
-FTRV('UnSkLab','a_Food','LatinAmer') = 9318.908203 ;
-FTRV('UnSkLab','a_Food','ROW') = 18156.45117 ;
-FTRV('UnSkLab','a_Energy','USA') = 10786.72754 ;
-FTRV('UnSkLab','a_Energy','EU_28') = 8994.048828 ;
-FTRV('UnSkLab','a_Energy','CHN') = 1807.408691 ;
-FTRV('UnSkLab','a_Energy','LatinAmer') = 2994.144043 ;
-FTRV('UnSkLab','a_Energy','ROW') = 17671.75195 ;
-FTRV('UnSkLab','a_Manuf','USA') = 140781.2188 ;
-FTRV('UnSkLab','a_Manuf','EU_28') = 203273.0625 ;
-FTRV('UnSkLab','a_Manuf','CHN') = 17247.86914 ;
-FTRV('UnSkLab','a_Manuf','LatinAmer') = 31736.44336 ;
-FTRV('UnSkLab','a_Manuf','ROW') = 146764.8125 ;
-FTRV('UnSkLab','a_Svces','USA') = 668262.25 ;
-FTRV('UnSkLab','a_Svces','EU_28') = 758985.5 ;
-FTRV('UnSkLab','a_Svces','CHN') = 41306.00391 ;
-FTRV('UnSkLab','a_Svces','LatinAmer') = 165787.7188 ;
-FTRV('UnSkLab','a_Svces','ROW') = 561522.375 ;
-FTRV('SkLab','a_Agri','USA') = 6534.520996 ;
-FTRV('SkLab','a_Agri','EU_28') = 11453.12695 ;
-FTRV('SkLab','a_Agri','CHN') = 399.3140259 ;
-FTRV('SkLab','a_Agri','LatinAmer') = 1387.694702 ;
-FTRV('SkLab','a_Agri','ROW') = 2376.240234 ;
-FTRV('SkLab','a_Food','USA') = 5935.175293 ;
-FTRV('SkLab','a_Food','EU_28') = 28841.25977 ;
-FTRV('SkLab','a_Food','CHN') = 459.9342651 ;
-FTRV('SkLab','a_Food','LatinAmer') = 4015.108643 ;
-FTRV('SkLab','a_Food','ROW') = 10996.90137 ;
-FTRV('SkLab','a_Energy','USA') = 4410.98584 ;
-FTRV('SkLab','a_Energy','EU_28') = 10548.19824 ;
-FTRV('SkLab','a_Energy','CHN') = 354.1466064 ;
-FTRV('SkLab','a_Energy','LatinAmer') = 1958.447632 ;
-FTRV('SkLab','a_Energy','ROW') = 15387.4541 ;
-FTRV('SkLab','a_Manuf','USA') = 46755.39453 ;
-FTRV('SkLab','a_Manuf','EU_28') = 209283.7656 ;
-FTRV('SkLab','a_Manuf','CHN') = 3337.414795 ;
-FTRV('SkLab','a_Manuf','LatinAmer') = 11699.38379 ;
-FTRV('SkLab','a_Manuf','ROW') = 87033.10156 ;
-FTRV('SkLab','a_Svces','USA') = 769517.0625 ;
-FTRV('SkLab','a_Svces','EU_28') = 1082995.5 ;
-FTRV('SkLab','a_Svces','CHN') = 22433.35352 ;
-FTRV('SkLab','a_Svces','LatinAmer') = 99236.85156 ;
-FTRV('SkLab','a_Svces','ROW') = 577286.3125 ;
-FTRV('Capital','a_Agri','USA') = 4613.787109 ;
-FTRV('Capital','a_Agri','EU_28') = 3550.370361 ;
-FTRV('Capital','a_Agri','CHN') = 4306.545898 ;
-FTRV('Capital','a_Agri','LatinAmer') = 1703.798096 ;
-FTRV('Capital','a_Agri','ROW') = 2908.974365 ;
-FTRV('Capital','a_Food','USA') = 6676.73291 ;
-FTRV('Capital','a_Food','EU_28') = 6491.51123 ;
-FTRV('Capital','a_Food','CHN') = 3113.253174 ;
-FTRV('Capital','a_Food','LatinAmer') = 2355.204834 ;
-FTRV('Capital','a_Food','ROW') = 4941.333008 ;
-FTRV('Capital','a_Energy','USA') = 11067.0957 ;
-FTRV('Capital','a_Energy','EU_28') = 5422.237305 ;
-FTRV('Capital','a_Energy','CHN') = 3147.544189 ;
-FTRV('Capital','a_Energy','LatinAmer') = 3194.664551 ;
-FTRV('Capital','a_Energy','ROW') = 13182.4209 ;
-FTRV('Capital','a_Manuf','USA') = 43969.26172 ;
-FTRV('Capital','a_Manuf','EU_28') = 29395.48633 ;
-FTRV('Capital','a_Manuf','CHN') = 21324.49023 ;
-FTRV('Capital','a_Manuf','LatinAmer') = 6687.540039 ;
-FTRV('Capital','a_Manuf','ROW') = 33407.42188 ;
-FTRV('Capital','a_Svces','USA') = 296416.2812 ;
-FTRV('Capital','a_Svces','EU_28') = 184945.0625 ;
-FTRV('Capital','a_Svces','CHN') = 44715.48438 ;
-FTRV('Capital','a_Svces','LatinAmer') = 33564.84375 ;
-FTRV('Capital','a_Svces','ROW') = 147584.5625 ;
-FTRV('NatRes','a_Agri','USA') = 264.7532043 ;
-FTRV('NatRes','a_Agri','EU_28') = 296.8175659 ;
-FTRV('NatRes','a_Agri','CHN') = 749.3397217 ;
-FTRV('NatRes','a_Agri','LatinAmer') = 116.0493164 ;
-FTRV('NatRes','a_Agri','ROW') = 453.0726318 ;
-FTRV('NatRes','a_Energy','USA') = 3060.048096 ;
-FTRV('NatRes','a_Energy','EU_28') = 367.7024841 ;
-FTRV('NatRes','a_Energy','CHN') = 899.0325928 ;
-FTRV('NatRes','a_Energy','LatinAmer') = 902.664856 ;
-FTRV('NatRes','a_Energy','ROW') = 4702.03125 ;
-FTRV('NatRes','a_Manuf','USA') = 739.8401489 ;
-FTRV('NatRes','a_Manuf','EU_28') = 236.8793182 ;
-FTRV('NatRes','a_Manuf','CHN') = 252.6437225 ;
-FTRV('NatRes','a_Manuf','LatinAmer') = 141.0215607 ;
-FTRV('NatRes','a_Manuf','ROW') = 801.6800537 ;
-
 ptax(i0,a0,r) = makb(i0,a0,r) - maks(i0,a0,r) ;
 
 * --------------------------------------------------------------------------------------------------
@@ -2539,6 +2419,123 @@ rorFlex0('EU_28') = 10 ;
 rorFlex0('CHN') = 10 ;
 rorFlex0('LatinAmer') = 10 ;
 rorFlex0('ROW') = 10 ;
+* FBEP data (injected from basedata.har)
+FBEP('Land','a_Agri','USA') = 9419.345703 ;
+FBEP('Land','a_Agri','EU_28') = 24050.85156 ;
+FBEP('Land','a_Agri','CHN') = 27023.44727 ;
+FBEP('Land','a_Agri','LatinAmer') = 713.5120239 ;
+FBEP('Land','a_Agri','ROW') = 8524.269531 ;
+FBEP('UnSkLab','a_Agri','USA') = 2072.498291 ;
+FBEP('UnSkLab','a_Agri','EU_28') = 23071.52148 ;
+FBEP('UnSkLab','a_Agri','CHN') = 8818.607422 ;
+FBEP('UnSkLab','a_Agri','LatinAmer') = 122.5802155 ;
+FBEP('UnSkLab','a_Agri','ROW') = 3596.395264 ;
+FBEP('SkLab','a_Agri','USA') = 2023.032715 ;
+FBEP('SkLab','a_Agri','EU_28') = 7168.943359 ;
+FBEP('SkLab','a_Agri','CHN') = 556.9624023 ;
+FBEP('SkLab','a_Agri','LatinAmer') = 1.059459925 ;
+FBEP('SkLab','a_Agri','ROW') = 484.6528931 ;
+FBEP('Capital','a_Agri','USA') = 3635.937988 ;
+FBEP('Capital','a_Agri','EU_28') = 18409.45508 ;
+FBEP('Capital','a_Agri','CHN') = 17110.14258 ;
+FBEP('Capital','a_Agri','LatinAmer') = 3347.629883 ;
+FBEP('Capital','a_Agri','ROW') = 7285.005371 ;
+* FTRV data (injected from basedata.har)
+FTRV('Land','a_Agri','USA') = 2070.950684 ;
+FTRV('Land','a_Agri','EU_28') = 2027.685181 ;
+FTRV('Land','a_Agri','CHN') = 4219.46582 ;
+FTRV('Land','a_Agri','LatinAmer') = 1086.191528 ;
+FTRV('Land','a_Agri','ROW') = 1992.529053 ;
+FTRV('UnSkLab','a_Agri','USA') = 6688.251953 ;
+FTRV('UnSkLab','a_Agri','EU_28') = 42320.82031 ;
+FTRV('UnSkLab','a_Agri','CHN') = 6355.275879 ;
+FTRV('UnSkLab','a_Agri','LatinAmer') = 19331.20703 ;
+FTRV('UnSkLab','a_Agri','ROW') = 32837.1875 ;
+FTRV('UnSkLab','a_Food','USA') = 17667.82031 ;
+FTRV('UnSkLab','a_Food','EU_28') = 27437.79688 ;
+FTRV('UnSkLab','a_Food','CHN') = 2331.086182 ;
+FTRV('UnSkLab','a_Food','LatinAmer') = 9318.908203 ;
+FTRV('UnSkLab','a_Food','ROW') = 18156.45117 ;
+FTRV('UnSkLab','a_Energy','USA') = 10786.72754 ;
+FTRV('UnSkLab','a_Energy','EU_28') = 8994.048828 ;
+FTRV('UnSkLab','a_Energy','CHN') = 1807.408691 ;
+FTRV('UnSkLab','a_Energy','LatinAmer') = 2994.144043 ;
+FTRV('UnSkLab','a_Energy','ROW') = 17671.75195 ;
+FTRV('UnSkLab','a_Manuf','USA') = 140781.2188 ;
+FTRV('UnSkLab','a_Manuf','EU_28') = 203273.0625 ;
+FTRV('UnSkLab','a_Manuf','CHN') = 17247.86914 ;
+FTRV('UnSkLab','a_Manuf','LatinAmer') = 31736.44336 ;
+FTRV('UnSkLab','a_Manuf','ROW') = 146764.8125 ;
+FTRV('UnSkLab','a_Svces','USA') = 668262.25 ;
+FTRV('UnSkLab','a_Svces','EU_28') = 758985.5 ;
+FTRV('UnSkLab','a_Svces','CHN') = 41306.00391 ;
+FTRV('UnSkLab','a_Svces','LatinAmer') = 165787.7188 ;
+FTRV('UnSkLab','a_Svces','ROW') = 561522.375 ;
+FTRV('SkLab','a_Agri','USA') = 6534.520996 ;
+FTRV('SkLab','a_Agri','EU_28') = 11453.12695 ;
+FTRV('SkLab','a_Agri','CHN') = 399.3140259 ;
+FTRV('SkLab','a_Agri','LatinAmer') = 1387.694702 ;
+FTRV('SkLab','a_Agri','ROW') = 2376.240234 ;
+FTRV('SkLab','a_Food','USA') = 5935.175293 ;
+FTRV('SkLab','a_Food','EU_28') = 28841.25977 ;
+FTRV('SkLab','a_Food','CHN') = 459.9342651 ;
+FTRV('SkLab','a_Food','LatinAmer') = 4015.108643 ;
+FTRV('SkLab','a_Food','ROW') = 10996.90137 ;
+FTRV('SkLab','a_Energy','USA') = 4410.98584 ;
+FTRV('SkLab','a_Energy','EU_28') = 10548.19824 ;
+FTRV('SkLab','a_Energy','CHN') = 354.1466064 ;
+FTRV('SkLab','a_Energy','LatinAmer') = 1958.447632 ;
+FTRV('SkLab','a_Energy','ROW') = 15387.4541 ;
+FTRV('SkLab','a_Manuf','USA') = 46755.39453 ;
+FTRV('SkLab','a_Manuf','EU_28') = 209283.7656 ;
+FTRV('SkLab','a_Manuf','CHN') = 3337.414795 ;
+FTRV('SkLab','a_Manuf','LatinAmer') = 11699.38379 ;
+FTRV('SkLab','a_Manuf','ROW') = 87033.10156 ;
+FTRV('SkLab','a_Svces','USA') = 769517.0625 ;
+FTRV('SkLab','a_Svces','EU_28') = 1082995.5 ;
+FTRV('SkLab','a_Svces','CHN') = 22433.35352 ;
+FTRV('SkLab','a_Svces','LatinAmer') = 99236.85156 ;
+FTRV('SkLab','a_Svces','ROW') = 577286.3125 ;
+FTRV('Capital','a_Agri','USA') = 4613.787109 ;
+FTRV('Capital','a_Agri','EU_28') = 3550.370361 ;
+FTRV('Capital','a_Agri','CHN') = 4306.545898 ;
+FTRV('Capital','a_Agri','LatinAmer') = 1703.798096 ;
+FTRV('Capital','a_Agri','ROW') = 2908.974365 ;
+FTRV('Capital','a_Food','USA') = 6676.73291 ;
+FTRV('Capital','a_Food','EU_28') = 6491.51123 ;
+FTRV('Capital','a_Food','CHN') = 3113.253174 ;
+FTRV('Capital','a_Food','LatinAmer') = 2355.204834 ;
+FTRV('Capital','a_Food','ROW') = 4941.333008 ;
+FTRV('Capital','a_Energy','USA') = 11067.0957 ;
+FTRV('Capital','a_Energy','EU_28') = 5422.237305 ;
+FTRV('Capital','a_Energy','CHN') = 3147.544189 ;
+FTRV('Capital','a_Energy','LatinAmer') = 3194.664551 ;
+FTRV('Capital','a_Energy','ROW') = 13182.4209 ;
+FTRV('Capital','a_Manuf','USA') = 43969.26172 ;
+FTRV('Capital','a_Manuf','EU_28') = 29395.48633 ;
+FTRV('Capital','a_Manuf','CHN') = 21324.49023 ;
+FTRV('Capital','a_Manuf','LatinAmer') = 6687.540039 ;
+FTRV('Capital','a_Manuf','ROW') = 33407.42188 ;
+FTRV('Capital','a_Svces','USA') = 296416.2812 ;
+FTRV('Capital','a_Svces','EU_28') = 184945.0625 ;
+FTRV('Capital','a_Svces','CHN') = 44715.48438 ;
+FTRV('Capital','a_Svces','LatinAmer') = 33564.84375 ;
+FTRV('Capital','a_Svces','ROW') = 147584.5625 ;
+FTRV('NatRes','a_Agri','USA') = 264.7532043 ;
+FTRV('NatRes','a_Agri','EU_28') = 296.8175659 ;
+FTRV('NatRes','a_Agri','CHN') = 749.3397217 ;
+FTRV('NatRes','a_Agri','LatinAmer') = 116.0493164 ;
+FTRV('NatRes','a_Agri','ROW') = 453.0726318 ;
+FTRV('NatRes','a_Energy','USA') = 3060.048096 ;
+FTRV('NatRes','a_Energy','EU_28') = 367.7024841 ;
+FTRV('NatRes','a_Energy','CHN') = 899.0325928 ;
+FTRV('NatRes','a_Energy','LatinAmer') = 902.664856 ;
+FTRV('NatRes','a_Energy','ROW') = 4702.03125 ;
+FTRV('NatRes','a_Manuf','USA') = 739.8401489 ;
+FTRV('NatRes','a_Manuf','EU_28') = 236.8793182 ;
+FTRV('NatRes','a_Manuf','CHN') = 252.6437225 ;
+FTRV('NatRes','a_Manuf','LatinAmer') = 141.0215607 ;
+FTRV('NatRes','a_Manuf','ROW') = 801.6800537 ;
 
 * --------------------------------------------------------------------------------------------------
 *
@@ -2660,39 +2657,6 @@ set imuv(i) "IMUV commodities" /
 *
 * -------------------------------------------------------------------------
 
-* -------------------------------------------------------------------------
-*  ALTERTAX overrides (Malcolm 1998, mirrored from
-*  cgebox/scen/Parameters/parameter_altertax.gms):
-*     - Cobb-Douglas value-added (esubva = 1)
-*     - Armington top + second level both 0.95
-*     - CET for factors: 1 (CD)
-*     - Government / investment expenditure: CD (sigmag, sigmai = 1)
-*     - All factors fully mobile (omegaf set on all fp, fm := all factors)
-* -------------------------------------------------------------------------
-
-esubva(a0,r) = 1.0 ;
-esubd(i0,r)  = 0.95 ;
-esubm(i0,r)  = 0.95 ;
-etrae(fp,r)  = 1.0 ;
-
-* Make ALL factors mobile under altertax (override the fnm/fm split).
-fnm(fp)      = no ;
-fm(fp)       = yes ;
-
-* CET mobility for ALL fp set to CD (omegaf = 1).
-omegaf(r,fp) = 1.0 ;
-
-* Government / investment expenditure: CD limit (esubg, esubi = 1)
-esubg(r)     = 1.0 ;
-esubi(r)     = 1.0 ;
-
-* Force ND/VA (sigmap), intermediate nest (sigmand), VA (sigmav) to CD.
-sigmap(r,a)  = 1.0 ;
-sigmand(r,a) = 1.0 ;
-sigmav(r,a)  = 1.0 ;
-
-* Mark altertax run for diagnostics
-scalar altertax / 1 / ;
 
 * -------------------------------------------------------------------------
 *
@@ -5350,10 +5314,7 @@ loop(t0,
 *  Force pwmg=0 on no-flow routes (mirrors 9x10 convention; default cal.gms
 *  init leaves pwmg=1 here, causing spurious divergence vs Python).
    pwmg.l(r,i,rp,tsim)$(not tmgFlag(r,i,rp))   = 0 ;
-   
-* === NEOS bundle fix: enforce pwmg convention (0 where tmarg=0) ===
-pwmg.l(r,i,rp,tsim)$(tmarg.l(r,i,rp,tsim) eq 0) = 0 ;
-pwmg.fx(r,i,rp,tsim)$(not tmgFlag(r,i,rp))  = pwmg.l(r,i,rp,tsim) ;
+   pwmg.fx(r,i,rp,tsim)$(not tmgFlag(r,i,rp))  = pwmg.l(r,i,rp,tsim) ;
    xmgm.fx(m,r,i,rp,tsim)$(not amgm(m,r,i,rp)) = 0 ;
 
    xds.fx(r,i,tsim)$(not xdFlag(r,i))  = 0 ;
@@ -5403,13 +5364,37 @@ if(years(tsim) ne firstYear,
 
 *  Define the simulation specific shock
 
+* === PURE gtap tm_pct shock: +10% on the POWER of all bilateral
+* === import tariffs.  imptx_new = (1+imptx)*1.1 - 1, gated by xwFlag
+* === (so the diagonal r==r / no-flow routes, where xwFlag=0, are skipped).
+* === Matches the Python gate's _apply_imptx_shock(factor=0.1).
    if(sameas(tsim,'shock'),
-* === NEOS bundle: altertax tariff shock +10% on all import tariffs ===
       imptx.fx(r,i,rp,tsim)$xwFlag(r,i,rp) =
-         imptx.l(r,i,rp,tsim) * 1.1 ;
+         (1 + imptx.l(r,i,rp,tsim)) * 1.1 - 1 ;
    ) ;
 
-   options limrow = 3, limcol = 3, solprint = off, iterlim = 1000 ;
+   options limrow = 3, limcol = 3, solprint = off, iterlim = 50000 ;
+
+* === PATH stabilisation for the ifSUB=1 shock restart (see
+* === _inject_path_opt_for_shock): default PATH diverges from the check
+* === warm-start on the large datasets; a proximal perturbation + higher
+* === iteration limits let it converge.  Faithful (solver tuning, no eq change).
+$onecho > path.opt
+convergence_tolerance 1e-9
+major_iteration_limit 2000
+minor_iteration_limit 100000
+cumulative_iteration_limit 1000000
+proximal_perturbation 1e-2
+crash_method pnewton
+crash_perturb yes
+nms_initial_reference_factor 2
+gradient_step_limit 20
+restart_limit 5
+lemke_start automatic
+time_limit 3600
+$offecho
+   gtap.optfile = 1 ;
+
 
    if(years(tsim) gt firstYear,
 
@@ -5417,7 +5402,6 @@ if(years(tsim) ne firstYear,
 if(ifMCP,
    solve gtap using mcp ;
 else
-   option nlp=ipopt;
    solve gtap using nlp maximizing walras ;
 ) ;
 
@@ -5444,7 +5428,6 @@ if(ifSUB,
 if(ifMCP,
    solve dynCal using mcp ;
 else
-   option nlp=ipopt;
    solve dynCal using nlp maximizing walras ;
 ) ;
 
@@ -5469,7 +5452,6 @@ if(ifSUB,
 if(ifMCP,
    solve dynGTAP using mcp ;
 else
-   option nlp=ipopt;
    solve dynGTAP using nlp maximizing walras ;
 ) ;
 
@@ -5752,8 +5734,4 @@ if(ifCSV,
    ) ;
 ) ;
 
-
-* === NEOS bundle fix: recompute pdp/pmp for ALL cells (alpha=0 too) ===
-pdp.l(r,i,aa,tsim) = pd.l(r,i,tsim) * (1 + dintx.l(r,i,aa,tsim)) ;
-pmp.l(r,i,aa,tsim) = pmt.l(r,i,tsim) * (1 + mintx.l(r,i,aa,tsim)) ;
 execute_unload "out.gdx" ;

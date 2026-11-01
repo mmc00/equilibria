@@ -1127,18 +1127,18 @@ MAKB('Svces','Svces','ROW') = 51896388 ;
 ftrv(fp,a0,r) = evfp(fp,a0,r) - evfb(fp,a0,r) ;
 
 * FBEP data (injected from basedata.har)
-FBEP('Land','Food','USA') = -9419.345703 ;
-FBEP('Land','Food','EU_28') = -24050.85156 ;
-FBEP('Land','Food','ROW') = -36261.22656 ;
-FBEP('UnSkLab','Food','USA') = -2072.498291 ;
-FBEP('UnSkLab','Food','EU_28') = -23071.52148 ;
-FBEP('UnSkLab','Food','ROW') = -12537.58203 ;
-FBEP('SkLab','Food','USA') = -2023.032715 ;
-FBEP('SkLab','Food','EU_28') = -7168.943359 ;
-FBEP('SkLab','Food','ROW') = -1042.674805 ;
-FBEP('Capital','Food','USA') = -3635.937988 ;
-FBEP('Capital','Food','EU_28') = -18409.45508 ;
-FBEP('Capital','Food','ROW') = -27742.77734 ;
+FBEP('Land','Food','USA') = 9419.345703 ;
+FBEP('Land','Food','EU_28') = 24050.85156 ;
+FBEP('Land','Food','ROW') = 36261.22656 ;
+FBEP('UnSkLab','Food','USA') = 2072.498291 ;
+FBEP('UnSkLab','Food','EU_28') = 23071.52148 ;
+FBEP('UnSkLab','Food','ROW') = 12537.58203 ;
+FBEP('SkLab','Food','USA') = 2023.032715 ;
+FBEP('SkLab','Food','EU_28') = 7168.943359 ;
+FBEP('SkLab','Food','ROW') = 1042.674805 ;
+FBEP('Capital','Food','USA') = 3635.937988 ;
+FBEP('Capital','Food','EU_28') = 18409.45508 ;
+FBEP('Capital','Food','ROW') = 27742.77734 ;
 * FTRV data (injected from basedata.har)
 FTRV('Land','Food','USA') = 2070.950684 ;
 FTRV('Land','Food','EU_28') = 2027.685181 ;
@@ -1279,18 +1279,18 @@ PTAX('Svces','Svces','EGY') = -40.71002197 ;
 PTAX('Svces','Svces','ROW') = 436516.6562 ;
 
 * FBEP data (12 cells)
-FBEP('Land','Food','USA') = -9419.345703 ;
-FBEP('Land','Food','EU_28') = -24050.85156 ;
-FBEP('Land','Food','ROW') = -36261.22656 ;
-FBEP('UnSkLab','Food','USA') = -2072.498291 ;
-FBEP('UnSkLab','Food','EU_28') = -23071.52148 ;
-FBEP('UnSkLab','Food','ROW') = -12537.58203 ;
-FBEP('SkLab','Food','USA') = -2023.032715 ;
-FBEP('SkLab','Food','EU_28') = -7168.943359 ;
-FBEP('SkLab','Food','ROW') = -1042.674805 ;
-FBEP('Capital','Food','USA') = -3635.937988 ;
-FBEP('Capital','Food','EU_28') = -18409.45508 ;
-FBEP('Capital','Food','ROW') = -27742.77734 ;
+FBEP('Land','Food','USA') = 9419.345703 ;
+FBEP('Land','Food','EU_28') = 24050.85156 ;
+FBEP('Land','Food','ROW') = 36261.22656 ;
+FBEP('UnSkLab','Food','USA') = 2072.498291 ;
+FBEP('UnSkLab','Food','EU_28') = 23071.52148 ;
+FBEP('UnSkLab','Food','ROW') = 12537.58203 ;
+FBEP('SkLab','Food','USA') = 2023.032715 ;
+FBEP('SkLab','Food','EU_28') = 7168.943359 ;
+FBEP('SkLab','Food','ROW') = 1042.674805 ;
+FBEP('Capital','Food','USA') = 3635.937988 ;
+FBEP('Capital','Food','EU_28') = 18409.45508 ;
+FBEP('Capital','Food','ROW') = 27742.77734 ;
 
 * FTRV data (48 cells)
 FTRV('Land','Food','USA') = 2070.950684 ;

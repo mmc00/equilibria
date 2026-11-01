@@ -42,13 +42,13 @@ generated_from:
       solve.gms: 03d3a8e9488a24881febe86e53575403675d41d29b029338332002f9cf64e5d2
       tariff_sim.gms: 67df15d47505614917bbe5ac2613807ed1829aac0dd57fa8d1b4e6c85613e507
       tariff_sim_fixed.gms: e009d246ad5726e50db587db32cc2c642487ba2504b4ec0b2b77c9ceaf1cad5b
-      tools/build_gtap7_altertax_neos_bundle.py: eff39193c16b1e30ef879bc3bb93d3564103fc0449f448ea2cea05c93cd10a36
-      tools/build_gtap7_pure_local_bundle.py: febb3193fbb638344d10b30b7e91672687ac8fc19350bafa06054755edaad9b7
+      tools/build_gtap7_altertax_neos_bundle.py: 31073ca85f127122fa63547907e7ac9a4d58f220d5cb7b7bd8f61042002e137e
+      tools/build_gtap7_pure_local_bundle.py: 21607a00c50a76b1e30cb2388a60a573a291cc5f2364c05b1ede40c0b2e9d837
       tools/gdx_to_gams_inline.py: 325d18b91f3eabddf050f8b2aaf77bf90f0a74d266f0e42bf665c6a514e24396
-      tools/neos_job.py: 8ab21691ee3c4953a8aaa21bb74b47eb60290869f0a7cbbdb2c438d32a68c8b0
-      tools/nl_standalone.py: 53f321c41cfd9be539b5b30bb7eb93bffb93ed27734378f05fc8c6a58150736c
-      tools/regen_gams_reference.py: c35ed393faad835478749fe1083499d903e7d264a62788694bd84c88463af03d
-      tools/regenerate_gams.py: 4831f6e355af2ff582bf56e5bba36ce392c5b563c258ce29cdc6569bcb0a8cf1
+      tools/neos_job.py: 923744a65f0a2c51e831f133c2dcdb91b49f6a3a20aa7ea933300318d9cafe5e
+      tools/nl_standalone.py: 10cc0eb5dcc400986222139a339d7f07ad6e9cba34aebce388f3987a6ad24478
+      tools/regen_gams_reference.py: 7b987ed66f7beed684a3ede1a69b2bca7578026923cdc3ea9d831bd7d088bb38
+      tools/regenerate_gams.py: 436743f19654e04bf19c8c571e891ad65e96bf6e799f18746433ba3304e84edb
   data:
     path: gtap7/gtap7_3x3
     sha256:
@@ -62,29 +62,29 @@ solver:
 command: /Users/marmol/proyectos/equilibria-phase2b/.venv/bin/python /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gams/tools/nl_standalone.py
   --dataset gtap7_3x3 --phase base check shock altertax --ifsub 0 --out-dir /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gtap7_3x3/gams_nl_altertax_ifsub0_fbep-header
   --fbep header
-equilibria_commit: 879e685
+equilibria_commit: 8b16a3cc
 exit:
   code: 0
 outputs:
   gams_altertax.col: cbb558b1ef0b1b035283de4e70ad91f99ca4667b36608b4b1c19be2809cb1848
-  gams_altertax.gms: 75a10df4e8db29b82ea3fb1f1dcdc9a11323b7791ad62122495bfa68d5f1a170
-  gams_altertax.nl: 438bd4ddcbbd0750669f4f88c35bcc93546e74b1b41eda520c6e6e297f57c983
+  gams_altertax.gms: ffbc3f34c0a03d9f7024b070819861120bccd86f6f34ea136851c2648655f306
+  gams_altertax.nl: 5461eb73b15a103dcb72810130fb9d458ea8fc182eaaffc1fa722f2c904593a7
   gams_altertax.row: 7f1bd1d663bf5566509c230b8e9fc811e02a74a67604785f18d8d908df095ff5
   gams_base.col: 495aa8dc72daae4b03d52b626759e1f2c72bae13baf6fa98ae32eb1efed4a0aa
-  gams_base.gms: 8f76a8c392b9a1363bc04eaa26d5821f5c86a5d2fcb3be67b95241a31bc82f13
-  gams_base.nl: d96a45e62cdcc131d06a2c13cf43ddb73b569e33aa0fa13f95ba31761de399fb
+  gams_base.gms: 246cecbab04fcd67f434d1dc04442a77a17ecbb56b9ec34a6a10636db09100b6
+  gams_base.nl: 86f8299cd8f50a00d98225f377491e8d54e573c35541470230d4a19194ec136f
   gams_base.row: 51b248348c66e0b5e7ee5da48d0ef1e5fc05b592ffc5d1a14f3aa7eba6dd39fa
   gams_check.col: efa368aac46419a3df69e65efd9dfcf4b225aeba0f75c2f24765b4127412db2d
-  gams_check.gms: fc8d303fda3853bef6318f380c20a9ee324920598f1988cc129bec6e949f1330
-  gams_check.nl: 54d678978f905c3d279cfe635929dc2ea59f69ff369a26a1e05f0a7c9239a126
+  gams_check.gms: 53017281686d65dce9c31fee55f680afbb7f928d37a3e892fff7be17a366a66e
+  gams_check.nl: 0c95ef6129d0d56d73b242facea843798eb98f05c8ae5b22c7ebb1352a179fe9
   gams_check.row: a54b69d53ce3de05132f47773120d305234b91239ff7a99e6909f6d74f5cbdb1
   gams_shock.col: 1beb30349d05ce60d793b828698084eb771e57ee3a7eb568ef486a0d8c083aff
-  gams_shock.gms: e15ec93a3c86aefeaa737e5b1152d570cce90ac685daa5f0037b77b59ca184c5
-  gams_shock.nl: d1adaa2972859c7196e1221a3b6ecfdedb25e2899777d518ced2c40c43500860
+  gams_shock.gms: aa97a698caa84ef7f75141a46c261764cd5e67079740991e0c0918e955766dde
+  gams_shock.nl: 5031e4179d0b4368dd846c045e5138019c3a87d9032ae4f8b520a520fa8a4661
   gams_shock.row: 4361a2924194a504ba28d6f92095420097a1c05f9487a0d0b6a4544760a2b6f2
 run:
-  date: '2026-10-30T11:58:06-06:00'
-  duration_s: 3.494
+  date: '2026-11-01T00:35:59-06:00'
+  duration_s: 3.604
   machine:
     os: macOS 26.2 (Darwin 25.2.0)
     cpu: Apple M3 Pro

@@ -1,0 +1,10 @@
+* PATH options for altertax CD shock convergence (hard basin)
+convergence_tolerance 1e-10
+major_iteration_limit 5000
+minor_iteration_limit 100000
+cumulative_iteration_limit 500000
+crash_method none
+crash_perturb yes
+nms_searchtype line
+gradient_step_limit 1e6
+proximal_perturbation 0
