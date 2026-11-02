@@ -59,3 +59,13 @@ def test_bundle_is_the_nus333_har(regen: Any, tmp_path: Path) -> None:
         "nus333Prm.gdx",
         "nus333Sets.gdx",
     ]
+
+
+def test_the_har_to_gdx_mapping_lives_with_the_model(regen: Any) -> None:
+    # every nus333 record hashes the model folder: the code that maps its HARs
+    # to the GDX files getData reads must sit there, or editing it leaves the
+    # record verified while a rerun would give other data
+    import inspect
+
+    source = Path(inspect.getsourcefile(regen.write_nus333_gdx_bundle) or "")
+    assert source.resolve().is_relative_to(GAMS_TOOLS_DIR.resolve()), source

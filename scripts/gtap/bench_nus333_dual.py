@@ -75,7 +75,11 @@ def _fmt_stats(label: str, s: dict[str, float]) -> str:
 
 
 def build_bundle_once() -> None:
-    from equilibria.babel.har_to_gdx import write_nus333_gdx_bundle
+    from equilibria.sources import GAMS_TOOLS_DIR
+
+    if str(GAMS_TOOLS_DIR) not in sys.path:
+        sys.path.insert(0, str(GAMS_TOOLS_DIR))
+    from nus333_bundle import write_nus333_gdx_bundle
     LOCAL_BUNDLE.mkdir(parents=True, exist_ok=True)
     for p in LOCAL_BUNDLE.glob("*"):
         p.unlink()

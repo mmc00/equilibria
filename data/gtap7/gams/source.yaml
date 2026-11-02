@@ -126,55 +126,92 @@ changes:
   commit: 9ac8ce1
 - file: tools/build_gtap7_altertax_neos_bundle.py
   change: added
-  what: 'builds the altertax NEOS/local bundle (moved from scripts/gtap/); --fbep header|zero (#187): header injects the HAR''s FTRV and -FBEP after getData''s fbep = 0 (the HAR stores the subsidy negative, cal.gms takes fctts = -fbep/evfb; 3ba4f88), writes FTRV = 0 where a cell is subsidised with no factor tax (16679d7), and keeps HAR labels that already carry the a_ prefix (5368acce); zero leaves getData as published'
-  why: generates GAMS results from this model, so it lives with it and the model-folder sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
+  what: 'builds the altertax NEOS/local bundle (moved from scripts/gtap/); --fbep
+    header|zero (#187): header injects the HAR''s FTRV and -FBEP after getData''s
+    fbep = 0 (the HAR stores the subsidy negative, cal.gms takes fctts = -fbep/evfb;
+    3ba4f88), writes FTRV = 0 where a cell is subsidised with no factor tax (16679d7),
+    and keeps HAR labels that already carry the a_ prefix (5368acce); zero leaves
+    getData as published'
+  why: generates GAMS results from this model, so it lives with it and the model-folder
+    sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
   commit: 56b170e, this change
 - file: tools/build_gtap7_pure_local_bundle.py
   change: added
-  what: 'builds the pure GTAP local bundle (moved from scripts/gtap/); --fbep header|zero (#187): header injects the HAR''s FTRV and -FBEP after getData''s fbep = 0 (the HAR stores the subsidy negative, cal.gms takes fctts = -fbep/evfb; 3ba4f88), writes FTRV = 0 where a cell is subsidised with no factor tax (16679d7), and keeps HAR labels that already carry the a_ prefix (5368acce); zero leaves getData as published'
-  why: generates GAMS results from this model, so it lives with it and the model-folder sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
+  what: 'builds the pure GTAP local bundle (moved from scripts/gtap/); --fbep header|zero
+    (#187): header injects the HAR''s FTRV and -FBEP after getData''s fbep = 0 (the
+    HAR stores the subsidy negative, cal.gms takes fctts = -fbep/evfb; 3ba4f88), writes
+    FTRV = 0 where a cell is subsidised with no factor tax (16679d7), and keeps HAR
+    labels that already carry the a_ prefix (5368acce); zero leaves getData as published'
+  why: generates GAMS results from this model, so it lives with it and the model-folder
+    sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
   commit: 5e0360b, this change
 - file: tools/gdx_to_gams_inline.py
   change: added
-  what: inlines a GDX as GAMS data statements; finds the GAMS system directory (moved from scripts/gtap/)
-  why: generates GAMS results from this model, so it lives with it and the model-folder sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
+  what: inlines a GDX as GAMS data statements; finds the GAMS system directory (moved
+    from scripts/gtap/)
+  why: generates GAMS results from this model, so it lives with it and the model-folder
+    sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
   commit: 3e758c8, this change
 - file: tools/nl_standalone.py
   change: added
-  what: builds the standalone .gms with the data inlined and converts it to .nl with CONVERT (extracted from scripts/gtap/nl_compare.py)
-  why: generates GAMS results from this model, so it lives with it and the model-folder sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
+  what: builds the standalone .gms with the data inlined and converts it to .nl with
+    CONVERT (extracted from scripts/gtap/nl_compare.py)
+  why: generates GAMS results from this model, so it lives with it and the model-folder
+    sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
   commit: this change
 - file: tools/regen_gams_reference.py
   change: added
   what: solves one GAMS job into a result folder (moved from scripts/gtap/); --nlp-solver
     conopt and --scale-zcons (zcons.scale = zconseq.scale = calibrated zcons.l, set
     before loop(tsim,), used by the 20x41 rows on NEOS
-  why: generates GAMS results from this model, so it lives with it and the model-folder sha256 every result records covers it (phase 2b, maintainer 2026-10-30).
-    Scaling - gtap7_20x41 has SUBPAR at the GTAP floor (1e-6) in 8 of CHE's 20 goods,
-    so zcons(CHE) is near 1e-10, below the solver tolerances; PATH stalls (even at a
-    1% shock) and unscaled CONOPT stops at false points (u(CHE) -12.8% zero vs -0.9%
-    header). The original model sets scaleopt=1 but no .scale. Scaled, header and
-    zero agree to 2e-7 (maintainer 2026-11-01; dev-tools notes/cge/2026-11-01)
+  why: generates GAMS results from this model, so it lives with it and the model-folder
+    sha256 every result records covers it (phase 2b, maintainer 2026-10-30). Scaling
+    - gtap7_20x41 has SUBPAR at the GTAP floor (1e-6) in 8 of CHE's 20 goods, so zcons(CHE)
+    is near 1e-10, below the solver tolerances; PATH stalls (even at a 1% shock) and
+    unscaled CONOPT stops at false points (u(CHE) -12.8% zero vs -0.9% header). The
+    original model sets scaleopt=1 but no .scale. Scaled, header and zero agree to
+    2e-7 (maintainer 2026-11-01; dev-tools notes/cge/2026-11-01)
   commit: 69bef5b, d981ddd6, this change
 - file: tools/regenerate_gams.py
   change: added
   what: runs the matrix of local GAMS jobs under write_source (moved from scripts/gtap/)
-  why: generates GAMS results from this model, so it lives with it and the model-folder sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
+  why: generates GAMS results from this model, so it lives with it and the model-folder
+    sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
   commit: 55c915a, this change
 - file: tools/neos_job.py
   change: added
-  what: submits one self-contained GAMS MCP bundle to NEOS (cp/PATH/GAMS), polls, and keeps out.gdx, model.lst, neos.log and neos_job.json (never the job password or an e-mail)
-  why: the MCP references above the local PATH license (1000 rows) are solved on NEOS and recorded as such (phase 2b, maintainer 2026-10-30)
+  what: submits one self-contained GAMS MCP bundle to NEOS (cp/PATH/GAMS), polls,
+    and keeps out.gdx, model.lst, neos.log and neos_job.json (never the job password
+    or an e-mail)
+  why: the MCP references above the local PATH license (1000 rows) are solved on NEOS
+    and recorded as such (phase 2b, maintainer 2026-10-30)
   commit: this change
 - file: tools/har_to_consolidated.py
   change: added
-  what: writes a dataset's v7_consolidated.gdx (the schema the bundle builders inline) from its basedata.har, sets.har and default.prm; on the datasets that ship one it reproduces it record by record
-  why: 9x10 comes from the GAMS distribution without a v7_consolidated.gdx; its GAMS reference is regenerated with the same builders as the other datasets (maintainer 2026-11-01, replacing the generator-less COMP_generated.csv)
+  what: writes a dataset's v7_consolidated.gdx (the schema the bundle builders inline)
+    from its basedata.har, sets.har and default.prm; on the datasets that ship one
+    it reproduces it record by record
+  why: 9x10 comes from the GAMS distribution without a v7_consolidated.gdx; its GAMS
+    reference is regenerated with the same builders as the other datasets (maintainer
+    2026-11-01, replacing the generator-less COMP_generated.csv)
   commit: this change
 - file: tools/regen_nus333.py
   change: added
-  what: solves the nus333 GAMS reference locally (its HARs to nus333Sets/Dat/Prm.gdx, then comp_nus333.gms) and keeps COMP.gdx as out.gdx
-  why: the bundle path of scripts/gtap/bench_nus333_dual.py made output/nus333_neos/out.gdx (beec5a0) outside data/; it generates a GAMS result from this model, so it lives with it (phase 2b Task 6; its output is byte-identical to beec5a0's, md5 2e4d348a)
+  what: solves the nus333 GAMS reference locally (its HARs to nus333Sets/Dat/Prm.gdx,
+    then comp_nus333.gms) and keeps COMP.gdx as out.gdx; the HAR-to-GDX mapping it
+    uses is tools/nus333_bundle.py
+  why: the bundle path of scripts/gtap/bench_nus333_dual.py made output/nus333_neos/out.gdx
+    (beec5a0) outside data/; it generates a GAMS result from this model, so it lives
+    with it (phase 2b Task 6; its output is byte-identical to beec5a0's, md5 2e4d348a)
+  commit: this change
+- file: tools/nus333_bundle.py
+  change: added
+  what: maps nus333's HARs to the nus333Sets/Dat/Prm.gdx files getData.gms reads (moved
+    from equilibria.babel.har_to_gdx.write_nus333_gdx_bundle; the HAR reader and GDX
+    writer stay in the library); its GDX files are byte-identical to the library version's
+  why: it decides the data the nus333 GAMS reference runs on; in src/ the model-folder
+    sha256 the nus333 record keeps did not cover it, so editing it left the record
+    verified (final review of phase 2b)
   commit: this change
 outputs:
   GFTCET.gms: 154e0e19b669c6ba1797938ed531a2d0b999ba6d7f5b2ecc6ad4a0bad969d53c
@@ -208,8 +245,9 @@ outputs:
   tools/har_to_consolidated.py: a22f203920e9e8d0dc747dfecd5a176c540dc48f709492181863fb7fe1a90dfc
   tools/neos_job.py: 923744a65f0a2c51e831f133c2dcdb91b49f6a3a20aa7ea933300318d9cafe5e
   tools/nl_standalone.py: 156594006f71822dbf4f6e3e3e5ca8d4cf9fcf35430d3813379669cdb3b63015
+  tools/nus333_bundle.py: cd215e1944853b2f9c50bdd63d1741cc152a10647f70874ec7430dbb92a2a2c6
   tools/regen_gams_reference.py: f816612856449809cfd925110821fbbe2e717e66543f633a742a49a358a5b5ee
-  tools/regen_nus333.py: 15017621d044ccfb5dc5837b19a481531362a8378294f262f9a3aebea62394b7
+  tools/regen_nus333.py: d55522291bf4fdd1a5503a663c690ec949292e4408e916bf58ee841e18450c21
   tools/regenerate_gams.py: f08ebf23befbbc1003f143afcd714b9cb92f880cee334288b2b6984a5844e4e3
 status: verified
 notes: ''

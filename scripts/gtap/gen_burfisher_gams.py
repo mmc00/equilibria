@@ -406,7 +406,11 @@ def run_exercise(exp: str, run: GamsRun) -> tuple[str, str]:
     (SOLVED | NOT_OPTIMAL | FAILED, linea para imprimir). NOT_OPTIMAL deja el GDX
     (ME4A/B terminan asi y el paper los reporta como N/A); FAILED no deja nada.
     """
-    from equilibria.babel.har_to_gdx import write_nus333_gdx_bundle
+    from equilibria.sources import GAMS_TOOLS_DIR
+
+    if str(GAMS_TOOLS_DIR) not in sys.path:
+        sys.path.insert(0, str(GAMS_TOOLS_DIR))
+    from nus333_bundle import write_nus333_gdx_bundle
 
     for f in ("lst", "log"):
         (run.out / f"{exp}.{f}").unlink(missing_ok=True)

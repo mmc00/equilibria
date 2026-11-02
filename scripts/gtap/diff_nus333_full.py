@@ -18,7 +18,7 @@ esto corre en un clon limpio sin necesidad de tener GAMS. Antes no: la regla
 
 Para REGENERARLO (si cambia el modelo de referencia) hace falta GAMS — la
 licencia demo alcanza, porque el modelo es 651x651. Los tres pasos (HAR -> GDX
-de entrada via `equilibria.babel.har_to_gdx.write_nus333_gdx_bundle(har_dir,
+de entrada via `data/gtap7/gams/tools/nus333_bundle.write_nus333_gdx_bundle(har_dir,
 out_dir)`, correr `comp_nus333.gms`, y copiar el `COMP.gdx` resultante a la
 ruta de arriba) ya estan automatizados en `bench_nus333_dual.py` — ver
 `build_bundle_once()` y `run_gams_local()`.

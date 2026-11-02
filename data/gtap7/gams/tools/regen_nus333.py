@@ -19,7 +19,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from equilibria.babel.har_to_gdx import write_nus333_gdx_bundle
+from nus333_bundle import write_nus333_gdx_bundle
+
 from equilibria.sources import GAMS_MODEL_DIR, dataset_dir
 
 MODEL = GAMS_MODEL_DIR / "comp_nus333.gms"
