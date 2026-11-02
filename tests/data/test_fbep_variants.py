@@ -80,17 +80,19 @@ def _har(dataset: str) -> dict[str, Any]:
         dataset_dir(dataset) / "basedata.har",
         select_headers=["FBEP", "FTRV", "EVFB", "EVFP"],
     )
-    return {name: har[name] for name in ("FBEP", "FTRV", "EVFB", "EVFP")}
+    # nus333's data has no FBEP header: no subsidised cell
+    return {name: har[name] for name in ("FBEP", "FTRV", "EVFB", "EVFP") if name in har}
 
 
 def variant_problems(gdx: Path, dataset: str, fbep: str) -> list[str]:
     """Every subsidised cell where ``gdx`` breaks what ``fbep`` must hold."""
     h = _har(dataset)
-    endw, acts, regs = h["FBEP"].set_elements
     pfa, pf = _gdx(gdx, "pfa"), _gdx(gdx, "pf")
+    cells = np.argwhere(h["FBEP"].array != 0) if "FBEP" in h else []
+    endw, acts, regs = h["FBEP"].set_elements if "FBEP" in h else ([], [], [])
     a_label = {a.split("_", 1)[-1] if a.startswith("a_") else a: a for (_, _, a) in pfa}
     problems = []
-    for i, j, k in np.argwhere(h["FBEP"].array != 0):
+    for i, j, k in cells:
         f, a, r = endw[i], acts[j], regs[k]
         key = (r, f, a_label.get(a, a))
         fb, ft = (float(h[n].array[i, j, k]) for n in ("FBEP", "FTRV"))
