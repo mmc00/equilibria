@@ -50,6 +50,7 @@ def _tools(monkeypatch: Any, name: str) -> Any:
     return importlib.import_module(name)
 
 
+@pytest.mark.gams  # the builders inline data through the gams binary; CI has none
 @pytest.mark.parametrize("mode", ["gtap", "altertax"])
 def test_default_bundle_unchanged(mode: str, tmp_path: Path) -> None:
     default = _bundle(mode, tmp_path / "default")
@@ -62,6 +63,7 @@ def test_default_bundle_unchanged(mode: str, tmp_path: Path) -> None:
 
 
 # gtap7_3x4's own v7 GDX carries FBEP: the inliner writes it after fbep = 0 too
+@pytest.mark.gams  # the builders inline data through the gams binary; CI has none
 @pytest.mark.parametrize("dataset", [DS, "gtap7_3x4"])
 @pytest.mark.parametrize("mode", ["gtap", "altertax"])
 def test_zero_bundle_has_no_injection(mode: str, dataset: str, tmp_path: Path) -> None:
@@ -76,6 +78,7 @@ FBEP_ASSIGN = re.compile(r"^\s*FBEP\([^)]*\) = (\S+) ;", flags=re.MULTILINE)
 
 
 # gtap7_3x4's FBEP comes from its own v7 GDX (the inliner), gtap7_3x3's from basedata.har
+@pytest.mark.gams  # the builders inline data through the gams binary; CI has none
 @pytest.mark.parametrize("dataset", [DS, "gtap7_3x4"])
 @pytest.mark.parametrize("mode", ["gtap", "altertax"])
 def test_header_bundle_fbep_is_a_positive_subsidy(
@@ -99,6 +102,7 @@ FTRV_ZERO_IND = re.compile(
     ("mode", "dataset"),
     [("gtap", "gtap7_10x7"), ("altertax", "gtap7_10x7"), ("gtap", "gtap7_15x10")],
 )
+@pytest.mark.gams  # the builders inline data through the gams binary; CI has none
 def test_header_bundle_zeroes_ftrv_where_only_subsidised(
     mode: str, dataset: str, tmp_path: Path
 ) -> None:
@@ -107,6 +111,7 @@ def test_header_bundle_zeroes_ftrv_where_only_subsidised(
     assert FTRV_ZERO_IND.search(text[text.index(FTRV_LINE) :]) is not None
 
 
+@pytest.mark.gams  # the builders inline data through the gams binary; CI has none
 def test_header_bundle_fbep_is_minus_the_har(tmp_path: Path) -> None:
     text = _bundle("altertax", tmp_path, "--fbep", "header")
     assert FBEP_EU_LAND.search(text) is not None
@@ -164,6 +169,7 @@ def test_verify_header_rejects_blind(monkeypatch: Any, tmp_path: Path) -> None:
         rgr._verify_subsidy_aware(blind, tmp_path / "out.gdx", "header")
 
 
+@pytest.mark.gams  # the builders inline data through the gams binary; CI has none
 @pytest.mark.parametrize("mode", ["gtap", "altertax"])
 def test_header_keeps_prefixed_har_labels(mode: str, tmp_path: Path) -> None:
     # 9x10's HARs already say a_agricultur (gtap7_3x3's say Food): the injected

@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from equilibria.sources import GAMS_TOOLS_DIR, dataset_dir
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -33,6 +35,7 @@ def _altertax(tmp_path: Path, *flags: str) -> str:
     return built.read_text()
 
 
+@pytest.mark.gams  # the builders inline data through the gams binary; CI has none
 def test_altertax_path_opt_is_one_shot_and_inlined(
     monkeypatch: Any, tmp_path: Path
 ) -> None:

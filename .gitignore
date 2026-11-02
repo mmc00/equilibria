@@ -409,3 +409,9 @@ GTAP_VALIDATION_STATUS.md
 2026-*-*.md
 plan_*.md
 gtap7_status_sweep_*.md
+
+# Recorded NEOS results keep the listing and log they came back with: their
+# source.yaml lists them as outputs (ADR-0010), so *.lst / *.log above must
+# not hide them.
+!data/**/gams_*/model.lst
+!data/**/gams_*/neos.log
