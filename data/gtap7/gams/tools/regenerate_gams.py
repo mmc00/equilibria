@@ -47,6 +47,7 @@ ROOT = Path(__file__).resolve().parents[4]
 WRITE_SOURCE = ROOT / "scripts" / "dev" / "write_source.py"
 NL_STANDALONE = Path(__file__).with_name("nl_standalone.py")
 REGEN = Path(__file__).with_name("regen_gams_reference.py")
+REGEN_NUS333 = Path(__file__).with_name("regen_nus333.py")
 
 # The phases of today's .nl fixtures (adding check to 3x4/15x10 is phase 7).
 NL_PHASES = {
@@ -61,6 +62,9 @@ NLP_DATASETS = {
     "gtap": ("gtap7_3x3", "gtap7_5x5", "gtap7_10x7"),
 }
 MCP_JOBS = (("gtap7_3x3", "gtap", 1), ("gtap7_3x3", "altertax", 1))
+# nus333 (Burfisher's NUS333): comp_nus333.gms on its HARs, ifSUB=0; FBEP is
+# zero in its data, so the official getData (fbep = 0) is its one variant
+NUS333_JOB = ("nus333", "gtap", 0, "zero")
 # above the local PATH license (1000 rows): solved on NEOS
 NEOS_JOBS = {
     "gtap": (("gtap7_3x3", 0), ("gtap7_5x5", 0), ("gtap7_5x5", 1), ("gtap7_10x7", 0),
@@ -115,11 +119,12 @@ def _job(
 def jobs(
     datasets: list[str] | None = None, root: Path = DATA_ROOT, where: str = "all"
 ) -> list[Job]:
-    """The 88 jobs of the plan's table, restricted to ``datasets`` and ``where``."""
+    """The 89 jobs of the plan's table, restricted to ``datasets`` and ``where``."""
     keep = (lambda ds: True) if datasets is None else (lambda ds: ds in datasets)
     named = {*NL_PHASES, *(ds for names in NLP_DATASETS.values() for ds in names),
              *(ds for rows in NEOS_JOBS.values() for ds, _ in rows),
-             *(ds for rows in NEOS_NLP_JOBS.values() for ds, _ in rows)}  # fmt: skip
+             *(ds for rows in NEOS_NLP_JOBS.values() for ds, _ in rows),
+             NUS333_JOB[0]}  # fmt: skip
     # dataset_dir walks the whole data tree: once per dataset, not per job
     root_dirs = {ds: dataset_dir(ds, root=root) for ds in named if keep(ds)}
     out = [
@@ -143,6 +148,9 @@ def jobs(
         for v in FBEP
         if keep(ds)
     ]
+    ds, mode, k, v = NUS333_JOB
+    if keep(ds):
+        out.append(_job(ds, "mcp", mode, k, SOLVE_PHASES, root_dirs, v))
     out += [
         _job(ds, "mcp", mode, k, SOLVE_PHASES, root_dirs, v, "neos")
         for mode, rows in NEOS_JOBS.items()
@@ -165,7 +173,9 @@ def jobs(
 def job_command(job: Job, *, tool_version: str, root: Path = DATA_ROOT) -> list[str]:
     """write_source.py recording one job (the model folder is hashed whole)."""
     py = sys.executable
-    if job.form == "nl":
+    if job.dataset == NUS333_JOB[0]:
+        inner = [py, str(REGEN_NUS333), "--out", str(job.folder), "--fbep", job.fbep]
+    elif job.form == "nl":
         inner = [py, str(NL_STANDALONE), "--dataset", job.dataset, "--phase", *job.phases,
                  "--ifsub", str(job.ifsub), "--out-dir", str(job.folder),
                  "--fbep", job.fbep]  # fmt: skip
