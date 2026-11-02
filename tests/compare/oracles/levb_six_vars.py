@@ -40,7 +40,8 @@ from _diff_core import GDXDUMP  # type: ignore  # noqa: E402
 
 from equilibria.babel.har.reader import read_har  # noqa: E402
 
-GDX_3X3 = ROOT / "tests/fixtures/gtap7/gtap7_3x3/out_gtap_shock_ifsub0.gdx"
+# el especimen de data/gdx_tests: byte a byte el fixture con que se escribio
+GDX_3X3 = ROOT / "data/gdx_tests/gtap7_3x3_out_gtap_shock_ifsub0.gdx"
 
 
 def _arr(h, k):

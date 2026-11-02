@@ -179,7 +179,6 @@ ALLOWED_PREFIXES: tuple[str, ...] = (
     "src/equilibria/templates/reference/pep/",
     "src/equilibria/templates/reference/pep2/data/",
     "src/equilibria/templates/reference/pep2/scripts/",
-    "src/equilibria/templates/reference/gtap/",
     # GTAP 7 GAMS distribution: upstream file names (GFTCET.gms, ...).
     "data/gtap7/gams/",
     "data/gtap7/gams_jgea/",

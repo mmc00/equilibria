@@ -695,3 +695,46 @@ class TestEdgeCases:
         result = compare_gtap_gams_parity(py_snap, gams_ref, tolerance=1e-6)
         # inf - inf = nan, so this is tricky
         assert result is not None
+
+
+def test_snapshot_from_gdx_keeps_one_period():
+    # a GAMS reference holds base/check/shock on its last index; period= keeps
+    # one of them and drops the period from the keys
+    from equilibria.babel.gdx.reader import read_gdx, read_variable_values
+    from equilibria.sources import reference
+    from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
+
+    gdx = (
+        reference("gtap7_3x3", "gams", form="mcp", mode="gtap", ifsub=1, fbep="header")
+        / "out.gdx"
+    )
+    levels = read_variable_values(read_gdx(gdx), "xf")
+    for period in ("base", "shock"):
+        snap = GTAPVariableSnapshot.from_gdx(gdx, GTAPSets(), period=period)
+        want = {k[:-1]: v["level"] for k, v in levels.items() if k[-1] == period}
+        assert snap.xf == want
+        assert snap.pnum == 1.0
+
+
+def test_snapshot_from_gdx_reads_gams_v7_names():
+    # GAMS v7 writes xd/pa/xa (agent-indexed), not xda/paa/xaa; ug, arent and
+    # facty are region-keyed; xtmg keeps a 1-tuple key like the CSV loader
+    from equilibria.babel.gdx.reader import read_gdx, read_variable_values
+    from equilibria.sources import reference
+    from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
+
+    gdx = (
+        reference("gtap7_3x3", "gams", form="mcp", mode="gtap", ifsub=1, fbep="header")
+        / "out.gdx"
+    )
+    g = read_gdx(gdx)
+    snap = GTAPVariableSnapshot.from_gdx(gdx, GTAPSets(), period="base")
+
+    def base(name):
+        levels = read_variable_values(g, name)
+        return {k[:-1]: v["level"] for k, v in levels.items() if k[-1] == "base"}
+
+    assert snap.xd == base("xd") and snap.paa == base("pa") and snap.xaa == base("xa")
+    for name, gams in (("ug", "ug"), ("arent", "arent"), ("facty", "factY")):
+        assert getattr(snap, name) == {k[0]: v for k, v in base(gams).items()}, name
+    assert snap.xtmg and all(isinstance(k, tuple) for k in snap.xtmg)

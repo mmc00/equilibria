@@ -50,11 +50,68 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_builders_read_the_repository_model(builder: str, monkeypatch) -> None:
     # The results must come from the model whose hash source.yaml records,
     # never from a copy outside the repository.
-    monkeypatch.syspath_prepend(str(ROOT / "scripts" / "gtap"))
-    spec = importlib.util.spec_from_file_location(
-        builder, ROOT / "scripts" / "gtap" / f"{builder}.py"
+    from equilibria.sources import GAMS_TOOLS_DIR
+
+    folder = (
+        GAMS_TOOLS_DIR
+        if (GAMS_TOOLS_DIR / f"{builder}.py").exists()
+        else ROOT / "scripts" / "gtap"
     )
+    monkeypatch.syspath_prepend(str(ROOT / "scripts" / "gtap"))
+    monkeypatch.syspath_prepend(str(GAMS_TOOLS_DIR))
+    spec = importlib.util.spec_from_file_location(builder, folder / f"{builder}.py")
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     assert Path(module.UPSTREAM) == GAMS_MODEL_DIR
+
+
+TOOLS = (
+    "build_gtap7_pure_local_bundle.py",
+    "build_gtap7_altertax_neos_bundle.py",
+    "gdx_to_gams_inline.py",
+    "regen_gams_reference.py",
+    "regenerate_gams.py",
+    "nl_standalone.py",
+)
+
+
+@pytest.mark.parametrize("name", TOOLS)
+def test_generators_live_with_the_model(name: str) -> None:
+    # every result hashes the model folder whole, so a generator inside it
+    # makes the results it produced stale when it changes
+    from equilibria.sources import GAMS_TOOLS_DIR
+
+    assert GAMS_TOOLS_DIR == GAMS_MODEL_DIR / "tools"
+    assert (GAMS_TOOLS_DIR / name).is_file()
+    assert not (ROOT / "scripts" / "gtap" / name).exists()
+
+
+def _model_hashes(folder: Path) -> dict[str, str]:
+    from equilibria.sources import own_files, sha256_file
+
+    return {p.relative_to(folder).as_posix(): sha256_file(p) for p in own_files(folder)}
+
+
+def test_tools_change_the_model_hash(tmp_path: Path) -> None:
+    import shutil
+
+    copy = tmp_path / "gams"
+    shutil.copytree(GAMS_MODEL_DIR, copy)
+    before = _model_hashes(copy)
+    tool = copy / "tools" / "regenerate_gams.py"
+    tool.write_text(tool.read_text() + "\n# edited\n")
+    assert _model_hashes(copy) != before
+
+
+def test_pycache_is_not_part_of_a_record(tmp_path: Path) -> None:
+    # running a tool writes __pycache__; that must not make results stale
+    import shutil
+
+    copy = tmp_path / "gams"
+    shutil.copytree(GAMS_MODEL_DIR, copy, ignore=shutil.ignore_patterns("__pycache__"))
+    before = _model_hashes(copy)
+    cache = copy / "tools" / "__pycache__"
+    cache.mkdir(parents=True, exist_ok=True)
+    (cache / "regenerate_gams.cpython-313.pyc").write_bytes(b"\x00")
+    assert _model_hashes(copy) == before

@@ -94,7 +94,7 @@ def _fmt_stats(label: str, s: dict[str, float]) -> str:
 def _fixture_gdx(dataset: str, mode: str, ifsub: int) -> Path | None:
     """The GAMS NLP reference recorded in data/ (mode "pure" is recorded as "gtap")."""
     model = "gtap" if mode == "pure" else mode
-    folder = find_reference(dataset, "gams", form="nlp", mode=model, ifsub=ifsub)
+    folder = find_reference(dataset, "gams", form="nlp", mode=model, ifsub=ifsub, fbep="header")
     return None if folder is None else folder / "out.gdx"
 
 
@@ -120,6 +120,9 @@ def _time_python_once(dataset: str, mode: str, ifsub: int, gdx: Path) -> float:
     p = GTAPParameters()
     p.load_from_har(basedata_path=d / "basedata.har", sets_path=d / "sets.har",
                     default_path=d / "default.prm", baserate_path=d / "baserate.har")
+    # the data's FBEP sign, as the fbep=header reference has it; the default
+    # "gams" basis keeps the old sign (#191)
+    p.set_va_subsidy_basis("gempack")
     rr = list(p.sets.r)[-1]
 
     if mode == "altertax":
@@ -170,7 +173,7 @@ def _build_nlp_gms(dataset: str, mode: str, ifsub: int) -> Path:
         out_dir = ROOT / "output" / f"{dataset}_pure_local_bundle"
         gms_stem = f"comp_{dataset}_gtap_shock_ifsub{ifsub}"
 
-    subprocess.run(["uv", "run", "python", str(ROOT / "scripts/gtap" / builder),
+    subprocess.run(["uv", "run", "python", str(ROOT / "data/gtap7/gams/tools" / builder),
                     "--dataset", dataset, "--ifsub", str(ifsub)],
                    check=True, cwd=str(ROOT), capture_output=True, text=True)
     gms = out_dir / f"{gms_stem}.gms"
@@ -315,15 +318,13 @@ def main() -> int:
 
 
 def _find_seed(dataset: str, mode: str, ifsub: int) -> Path | None:
-    """Locate a seed GDX for a dataset that has no NLP fixture (e.g. 15x10).
-    Falls back to the committed MCP/altertax fixture used by the parity gate."""
-    for cand in (
-        ROOT / "tests" / "fixtures" / "gtap7_altertax" / dataset / f"out_altertax_ifsub{ifsub}.gdx",
-        ROOT / "tests" / "fixtures" / "gtap7" / dataset / f"out_gtap_shock_ifsub{ifsub}.gdx",
-    ):
-        if cand.exists():
-            return cand
-    return None
+    """Locate a seed GDX for a dataset that has no NLP reference (e.g. 15x10).
+    Falls back to the GAMS MCP reference the parity gate uses."""
+    folder = find_reference(
+        dataset, "gams", form="mcp", mode="altertax" if mode == "altertax" else "gtap",
+        ifsub=ifsub, fbep="header",
+    )
+    return None if folder is None else folder / "out.gdx"
 
 
 if __name__ == "__main__":

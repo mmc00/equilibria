@@ -6,7 +6,7 @@ explicitly-solved vars the study compares) must stay consistent across modes: if
 changes representation, not the real quantities. This gate asserts that consistency;
 per-mode GAMS fidelity is the coverage matrix's job.
 
-LOCAL-only, gated on the shock GDX fixtures being present.
+LOCAL-only, gated on the GAMS MCP references (fbep=header) being recorded.
 """
 
 from __future__ import annotations
@@ -35,12 +35,10 @@ FLOOR = 0.90
 @pytest.mark.needs_path
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_ifsub_primary_block_consistent(dataset):
-    from verify_ifsub_equivalence import compare_primary_across_modes
+    from verify_ifsub_equivalence import compare_primary_across_modes, ref_gdx
 
     d = dataset_dir(dataset) / "basedata.har"
-    g1 = ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub1.gdx"
-    g0 = ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub0.gdx"
-    if not (d.exists() and g1.exists() and g0.exists()):
+    if not (d.exists() and ref_gdx(dataset, 1) and ref_gdx(dataset, 0)):
         pytest.skip(f"missing inputs for {dataset}")
     r = compare_primary_across_modes(dataset, tol_rel=1e-4)
     assert r["frac_agree"] >= FLOOR, (

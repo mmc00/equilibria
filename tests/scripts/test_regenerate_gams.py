@@ -13,7 +13,7 @@ import pytest
 from tests.data._records import data_record, write_record
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts" / "gtap" / "regenerate_gams.py"
+SCRIPT = ROOT / "data" / "gtap7" / "gams" / "tools" / "regenerate_gams.py"
 
 
 @pytest.fixture
@@ -45,17 +45,74 @@ def _gams(tmp_path: Path, version: str) -> Path:
 
 def test_jobs_are_the_table(driver: Any) -> None:
     js = driver.jobs()
-    assert len(js) == 26
-    assert sum(j.form == "nl" for j in js) == 10
-    assert sum(j.form == "nlp" for j in js) == 14
-    assert {(j.dataset, j.mode, j.ifsub) for j in js if j.form == "mcp"} == {
+    assert len(js) == 89
+
+    def count(form: str, where: str) -> int:
+        return sum(j.form == form and j.where == where for j in js)
+
+    assert (count("nl", "local"), count("nlp", "local")) == (20, 28)
+    assert (count("mcp", "local"), count("mcp", "neos")) == (5, 34)
+    assert count("nlp", "neos") == 2
+    assert {j.fbep for j in js} == {"header", "zero"}
+    assert (sum(j.fbep == "header" for j in js), sum(j.fbep == "zero" for j in js)) == (
+        44,
+        45,
+    )
+    assert {
+        (j.dataset, j.mode, j.ifsub)
+        for j in js
+        if j.where == "local" and j.form == "mcp"
+    } == {
         ("gtap7_3x3", "gtap", 1),
         ("gtap7_3x3", "altertax", 1),
+        ("nus333", "gtap", 0),
     }
-    # no mcp for 3x4: above the demo cap
-    assert {j.folder.name for j in js if j.dataset == "gtap7_3x4"} == {
-        f"gams_{f}_altertax_ifsub{k}" for f in ("nl", "nlp") for k in (0, 1)
-    }
+    # nus333: FBEP is zero in its data, one variant
+    assert [j.folder.name for j in js if j.dataset == "nus333"] == [
+        "gams_mcp_gtap_ifsub0_fbep-zero"
+    ]
+    neos = {(j.dataset, j.mode, j.ifsub) for j in js if j.where == "neos"}
+    assert ("gtap7_20x41", "gtap", 1) in neos and ("gtap7_20x41", "gtap", 0) not in neos
+    # 20x41: PATH stalls on CHE's zcons ~1e-10 (SUBPAR at the GTAP floor), even at a 1% shock
+    assert {j.form for j in js if j.dataset == "gtap7_20x41"} == {"nlp"}
+    assert ("gtap7_3x3", "gtap", 1) not in neos  # solved locally
+    # 9x10: comp.gms's own default (ifSUB=1), which the old COMP.csv was
+    assert {(m, k) for ds, m, k in neos if ds == "9x10"} == {("gtap", 1)}
+    assert len({j.folder for j in js}) == 89
+    # no local mcp for 3x4: above the license cap
+    assert {j.folder.name for j in js if j.dataset == "gtap7_3x4" and j.where == "local"} == {
+        f"gams_{f}_altertax_ifsub{k}_fbep-{v}"
+        for f in ("nl", "nlp") for k in (0, 1) for v in ("header", "zero")
+    }  # fmt: skip
+
+
+def test_neos_rows_carry_remote(driver: Any) -> None:
+    for j in driver.jobs():
+        cmd = driver.job_command(j, tool_version="53.5.0")
+        pairs = list(zip(cmd, cmd[1:], strict=False))
+        assert ("--variant", f"fbep={j.fbep}") in pairs
+        assert ("--fbep", j.fbep) in pairs
+        if j.where == "neos":
+            assert ("--where", "neos") in pairs and ("--remote", "neos") in pairs
+            assert "--tool-version" not in cmd  # NEOS reports its own GAMS
+        else:
+            assert "--remote" not in cmd and ("--tool-version", "53.5.0") in pairs
+
+
+def test_where_selects_rows(driver: Any, tmp_path: Path, capsys: Any) -> None:
+    gams = str(_gams(tmp_path, "53.5.0"))
+    for where, n in (("local", 53), ("neos", 36), ("all", 89)):
+        argv = [
+            "--tool-version",
+            "53.5.0",
+            "--gams",
+            gams,
+            "--where",
+            where,
+            "--dry-run",
+        ]
+        assert driver.main(argv) == 0
+        assert capsys.readouterr().out.startswith(f"{n} job(s)")
 
 
 def test_nl_jobs_keep_todays_phases(driver: Any) -> None:
@@ -70,7 +127,10 @@ def test_job_command_records_what_ran(driver: Any) -> None:
     job = next(
         j
         for j in driver.jobs()
-        if j.form == "nl" and j.dataset == "gtap7_3x3" and j.ifsub == 0
+        if j.form == "nl"
+        and j.dataset == "gtap7_3x3"
+        and j.ifsub == 0
+        and j.fbep == "zero"
     )
     cmd = driver.job_command(job, tool_version="53.5.0")
     pairs = list(zip(cmd, cmd[1:], strict=False))
@@ -85,14 +145,15 @@ def test_job_command_records_what_ran(driver: Any) -> None:
         ("--out-dir", str(job.folder)),
     ]:
         assert (flag, value) in pairs, (flag, value)
-    assert "--gams-local" in cmd and "--skip-python" in cmd
+    assert str(driver.NL_STANDALONE) in cmd
+    assert "--gams-local" not in cmd and "--skip-python" not in cmd
 
 
 def test_resume_skips_recorded(driver: Any, tmp_path: Path, monkeypatch: Any) -> None:
     root = _root(tmp_path)
     ran: list[list[str]] = []
     monkeypatch.setattr(driver, "run_job", lambda cmd, env=None: ran.append(cmd) or 0)
-    done = root / "gtap7" / "gtap7_3x3" / "gams_nl_altertax_ifsub0"
+    done = root / "gtap7" / "gtap7_3x3" / "gams_nl_altertax_ifsub0_fbep-zero"
     write_record(
         done,
         {
@@ -104,8 +165,8 @@ def test_resume_skips_recorded(driver: Any, tmp_path: Path, monkeypatch: Any) ->
         },
     )
     argv = ["--tool-version", "53.5.0", "--gams", str(_gams(tmp_path, "53.5.0")),
-            "--data-root", str(root), "--datasets", "gtap7_3x3", "--only", "gams_nl_altertax_ifsub0",
-            "--only", "gams_nl_altertax_ifsub1"]  # fmt: skip
+            "--data-root", str(root), "--datasets", "gtap7_3x3", "--only", "gams_nl_altertax_ifsub0_fbep-zero",
+            "--only", "gams_nl_altertax_ifsub1_fbep-zero"]  # fmt: skip
     assert driver.main(argv) == 0
     assert len(ran) == 1 and "ifsub=1" in ran[0]
 
@@ -125,11 +186,13 @@ def test_failed_job_leaves_no_folder(
 
     monkeypatch.setattr(driver, "run_job", fail_first)
     argv = ["--tool-version", "53.5.0", "--gams", str(_gams(tmp_path, "53.5.0")),
-            "--data-root", str(root), "--datasets", "gtap7_3x3", "--only", "gams_nl_altertax_ifsub0",
-            "--only", "gams_nl_altertax_ifsub1"]  # fmt: skip
+            "--data-root", str(root), "--datasets", "gtap7_3x3", "--only", "gams_nl_altertax_ifsub0_fbep-zero",
+            "--only", "gams_nl_altertax_ifsub1_fbep-zero"]  # fmt: skip
     assert driver.main(argv) != 0
     assert len(ran) == 2  # the next job still ran
-    assert not (root / "gtap7" / "gtap7_3x3" / "gams_nl_altertax_ifsub0").exists()
+    assert not (
+        root / "gtap7" / "gtap7_3x3" / "gams_nl_altertax_ifsub0_fbep-zero"
+    ).exists()
 
 
 def test_wrong_tool_version_stops(
@@ -167,7 +230,50 @@ def test_main_leaves_the_environment_alone(
     before = os.environ.get("PATH")
     gams = _gams(tmp_path, "53.5.0")
     argv = ["--tool-version", "53.5.0", "--gams", str(gams), "--data-root", str(root),
-            "--datasets", "gtap7_3x3", "--only", "gams_nl_altertax_ifsub0"]  # fmt: skip
+            "--datasets", "gtap7_3x3", "--only", "gams_nl_altertax_ifsub0_fbep-zero"]  # fmt: skip
     assert driver.main(argv) == 0
     assert os.environ.get("PATH") == before
     assert seen and seen[0].split(os.pathsep)[0] == str(gams.parent)
+
+
+def test_tight_path_opt_only_for_15x10_altertax_neos(driver: Any) -> None:
+    for j in driver.jobs():
+        cmd = driver.job_command(j, tool_version="53.5.0")
+        pairs = list(zip(cmd, cmd[1:], strict=False))
+        assert ("--solver-options-file", "path.opt") in pairs
+        tight = (
+            j.where == "neos" and j.mode == "altertax" and j.dataset == "gtap7_15x10"
+        )
+        assert ("--path-opt" in cmd) == tight, j.folder.name
+
+
+def test_20x41_neos_row_is_conopt_with_zcons_scaled(driver: Any) -> None:
+    rows = [j for j in driver.jobs() if j.dataset == "gtap7_20x41"]
+    assert {j.fbep for j in rows} == {"header", "zero"}
+    for j in rows:
+        assert (j.form, j.where, j.nlp_solver, j.scale_zcons) == (
+            "nlp",
+            "neos",
+            "conopt",
+            True,
+        )
+        cmd = driver.job_command(j, tool_version="53.5.0")
+        pairs = list(zip(cmd, cmd[1:], strict=False))
+        assert ("--solver", "CONOPT") in pairs and ("--nlp-solver", "conopt") in pairs
+        assert "--scale-zcons" in cmd
+        notes = cmd[cmd.index("--notes") + 1]
+        assert "zcons" in notes and "SUBPAR" in notes  # disclosed: not in the original
+    # every other row is unchanged: IPOPT for NLP, nothing scaled
+    for j in driver.jobs():
+        if j.dataset != "gtap7_20x41":
+            assert (j.nlp_solver, j.scale_zcons) == ("ipopt", False)
+            cmd = driver.job_command(j, tool_version="53.5.0")
+            assert "--scale-zcons" not in cmd and "--notes" not in cmd
+
+
+def test_nus333_runs_its_own_generator(driver: Any) -> None:
+    (job,) = [j for j in driver.jobs() if j.dataset == "nus333"]
+    cmd = driver.job_command(job, tool_version="53.5.0")
+    inner = cmd[cmd.index("--") + 1 :]
+    assert inner[1].endswith("regen_nus333.py")
+    assert inner[2:] == ["--out", str(job.folder), "--fbep", "zero"]

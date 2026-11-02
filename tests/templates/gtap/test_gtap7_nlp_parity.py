@@ -121,7 +121,9 @@ def _fixture_gdx(dataset: str, mode: str, ifsub: int) -> Path | None:
     The matrix calls the pure model "pure"; data/ records it as mode "gtap".
     """
     model = "gtap" if mode == "pure" else mode
-    folder = find_reference(dataset, "gams", form="nlp", mode=model, ifsub=ifsub)
+    folder = find_reference(
+        dataset, "gams", form="nlp", mode=model, ifsub=ifsub, fbep="header"
+    )
     return None if folder is None else folder / "out.gdx"
 
 
@@ -158,6 +160,9 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
+    # the data's FBEP sign, as the fbep=header reference has it; the default
+    # "gams" basis keeps the old sign (#191)
+    p.set_va_subsidy_basis("gempack")
     rr = list(p.sets.r)[-1]
 
     if mode == "altertax":

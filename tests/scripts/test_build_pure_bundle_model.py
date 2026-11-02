@@ -13,7 +13,10 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def _builder(monkeypatch: Any) -> Any:
     monkeypatch.syspath_prepend(str(ROOT / "scripts" / "gtap"))
-    path = ROOT / "scripts" / "gtap" / "build_gtap7_pure_local_bundle.py"
+    monkeypatch.syspath_prepend(str(ROOT / "data" / "gtap7" / "gams" / "tools"))
+    path = (
+        ROOT / "data" / "gtap7" / "gams" / "tools" / "build_gtap7_pure_local_bundle.py"
+    )
     spec = importlib.util.spec_from_file_location("build_gtap7_pure_local_bundle", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)

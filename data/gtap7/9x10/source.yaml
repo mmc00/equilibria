@@ -14,5 +14,7 @@ outputs:
   default.prm: 1b180fbfa725f413ae4bf9bd50c4a4cd085d44ae95e5d4055625ba5bb358611d
   sets-9x10.gdx: 6da94a328ea9982ed604b10bd34929b51e93c059d7973dceefb6055e3e4ab1f8
   sets.har: 317f6905ebc458bf7ad3aa01fca1ffbfd362e8dff8c9d9208a200f85832af533
+  v7_consolidated.gdx: f96a23f852e615e693ced16030741d1b563e642669f660954ae9958c76e9845f
 status: verified
-notes: ''
+notes: v7_consolidated.gdx is written from the HARs by data/gtap7/gams/tools/har_to_consolidated.py
+  (the GAMS bundles inline it); its values equal 9x10Dat.gdx / 9x10Prm.gdx (tests/scripts/test_har_to_consolidated.py)

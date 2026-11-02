@@ -9,12 +9,15 @@ from pathlib import Path
 
 import pytest
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, find_reference
 
 ROOT = Path(__file__).resolve().parents[3]
 DATASET = "gtap7_3x3"
 RESIDUAL_REGION = "ROW"
-GDX = ROOT / "tests" / "fixtures" / "gtap7" / DATASET / "out_gtap_shock_ifsub0.gdx"
+# the GAMS MCP reference with FBEP split out; Python takes the data's subsidy
+# sign to match it (the default "gams" basis keeps the old sign, #191)
+_REF = find_reference(DATASET, "gams", form="mcp", mode="gtap", ifsub=0, fbep="header")
+GDX = None if _REF is None else _REF / "out.gdx"
 FLOOR = 99.0
 
 import sys  # noqa: E402
@@ -37,6 +40,7 @@ def _load_params():
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
+    p.set_va_subsidy_basis("gempack")
     return p
 
 
@@ -52,6 +56,7 @@ def _closure():
         fix_technology=False,
         if_sub=False,
         numeraire="pnum",
+        va_subsidy_basis="gempack",
     )
 
 
@@ -108,7 +113,7 @@ def _measure(m, period):
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not GDX.exists(), reason="gtap7_3x3 reference GDX missing")
+@pytest.mark.skipif(GDX is None, reason="gtap7_3x3 GAMS reference missing")
 def test_loglevels_3x3_nlp_matches_gams():
     from equilibria.templates.gtap.gtap_block_model import solve_block_model
     from equilibria.templates.gtap_loglevels.multiperiod import build_loglevels_model_mp

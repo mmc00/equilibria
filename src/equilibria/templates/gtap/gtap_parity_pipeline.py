@@ -437,6 +437,20 @@ def _load_csv_rows(csv_path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
+def standard_gtap_reference_gdx() -> Path | None:
+    """The recorded GAMS reference of the GTAP Standard 7 distribution's 9x10.
+
+    comp.gms on 9x10 (MCP, ifSUB=1, official getData: fbep = 0), solved on NEOS
+    and recorded under data/gtap7/9x10/. None outside a checkout with data/.
+    """
+    from equilibria.sources import find_reference
+
+    folder = find_reference(
+        "9x10", "gams", form="mcp", mode="gtap", ifsub=1, fbep="zero"
+    )
+    return None if folder is None else folder / "out.gdx"
+
+
 def _resolve_standard_gtap_reference_csv(
     csv_path: Path, sets: GTAPSets | None = None
 ) -> Path:
@@ -1047,20 +1061,41 @@ class GTAPVariableSnapshot:
         )
 
     @classmethod
-    def from_gdx(cls, gdx_path: Path, sets: GTAPSets) -> GTAPVariableSnapshot:
-        """Extract a snapshot from a GAMS result GDX."""
+    def from_gdx(
+        cls, gdx_path: Path, sets: GTAPSets, *, period: str | None = None
+    ) -> GTAPVariableSnapshot:
+        """Extract a snapshot from a GAMS result GDX.
+
+        A multi-period GAMS reference carries base/check/shock on the last index;
+        ``period`` keeps that period only and drops it from the keys.
+        """
         gdx_data = read_gdx(gdx_path)
+
+        def one_period(values: dict[Any, float]) -> dict[Any, float]:
+            if period is None:
+                return values
+            out: dict[Any, float] = {}
+            for key, value in values.items():
+                if isinstance(key, tuple) and key and key[-1] == period:
+                    rest = key[:-1]
+                    out[rest[0] if len(rest) == 1 else rest] = value
+            return out
 
         def read_level(name: str) -> dict[Any, float]:
             try:
                 values = read_variable_values(gdx_data, name)
-                return {
-                    key: float(attrs.get("level", 0.0)) for key, attrs in values.items()
-                }
+                return one_period(
+                    {
+                        key: float(attrs.get("level", 0.0))
+                        for key, attrs in values.items()
+                    }
+                )
             except Exception:
                 try:
                     values = read_parameter_values(gdx_data, name)
-                    return {key: float(value) for key, value in values.items()}
+                    return one_period(
+                        {key: float(value) for key, value in values.items()}
+                    )
                 except Exception:
                     return {}
 
@@ -1072,13 +1107,13 @@ class GTAPVariableSnapshot:
             x=read_level("x"),
             xs=read_level("xs"),
             xds=read_level("xds") or read_level("xd"),
-            xd=read_level("xda"),
+            xd=read_level("xda") or read_level("xd"),
             px=read_level("px"),
             pp=read_level("pp"),
             ps=read_level("ps"),
             pd=read_level("pd"),
             pa=read_level("pa"),
-            paa=read_level("paa"),
+            paa=read_level("paa") or read_level("pa"),
             pdp=read_level("pdp"),
             pmt=read_level("pmt"),
             pmcif=read_level("pmcif"),
@@ -1089,11 +1124,14 @@ class GTAPVariableSnapshot:
             xw=read_level("xw"),
             xmt=read_level("xmt"),
             xet=read_level("xet"),
-            xaa=read_level("xaa"),
+            xaa=read_level("xaa") or read_level("xa"),
             xwmg=read_level("xwmg"),
             xmgm=read_level("xmgm"),
             pwmg=read_level("pwmg"),
-            xtmg=read_level("xtmg"),
+            xtmg={
+                (k if isinstance(k, tuple) else (k,)): v
+                for k, v in read_level("xtmg").items()
+            },
             ptmg=_normalize_singleton_keys(read_level("ptmg")),
             xf=read_level("xf"),
             xft=read_level("xft"),
@@ -1110,6 +1148,9 @@ class GTAPVariableSnapshot:
             yi=read_level("yi"),
             pnum=float(next(iter(pnum_values.values()))) if pnum_values else None,
             pabs=read_level("pabs"),
+            ug=read_level("ug"),
+            arent=read_level("arent"),
+            facty=read_level("facty") or read_level("factY"),
             walras=float(next(iter(walras_values.values()))) if walras_values else None,
         )
 

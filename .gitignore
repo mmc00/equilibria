@@ -214,21 +214,8 @@ tests/fixtures/*.txt
 225a/
 225b/
 
-# Local outputs / reports
-# Se excluye por CONTENIDO (`output/*`, no `output/`): con `output/` git no
-# desciende al directorio y cualquier negate de adentro es inalcanzable. Con
-# `output/*` si desciende, y se puede re-incluir el camino hasta un archivo.
-# Verificado con `git check-ignore -v` en los dos sentidos.
-output/*
-!output/nus333_neos/
-output/nus333_neos/*
-# El GDX de referencia de nus333 NO es una salida local: es el ORACULO de GAMS
-# contra el que se mide la paridad. `_parity_datasets.py:155` y
-# `docs/site/guide/benchmarks.md` apuntan a esta ruta, pero la regla `output/`
-# lo dejaba fuera del repo, asi que en un clon limpio no existia y
-# `diff_nus333_full.py` abortaba. Son 177KB y hacen que la paridad se pueda
-# replicar sin tener GAMS instalado.
-!output/nus333_neos/out.gdx
+# Local outputs / reports (the nus333 GAMS reference lives in data/gtap7/nus333/)
+output/
 results/*.pkl
 DifFile.gdx
 notes/
@@ -266,11 +253,8 @@ scripts/gtap/*
 !scripts/gtap/_closure_patches.py
 !scripts/gtap/build_9x10_altertax_neos_bundle.py
 !scripts/gtap/build_altertax_neos_bundle.py
-!scripts/gtap/build_gtap7_altertax_neos_bundle.py
-!scripts/gtap/build_gtap7_pure_local_bundle.py
 !scripts/gtap/submit_9x10_altertax_neos.py
 !scripts/gtap/submit_altertax_neos.py
-!scripts/gtap/gdx_to_gams_inline.py
 !scripts/gtap/diff_9x10_altertax.py
 !scripts/gtap/diff_nus333_altertax.py
 !scripts/gtap/diff_altertax.py
@@ -321,8 +305,6 @@ scripts/gtap/*
 !scripts/gtap/measure_gempack_blocks.py
 !scripts/gtap/measure_nlp_vs_nlp.py
 !scripts/gtap/measure_nlp_vs_nlp_altertax.py
-!scripts/gtap/regen_gams_reference.py
-!scripts/gtap/regenerate_gams.py
 !scripts/gtap/blocks_diag.py
 !scripts/gtap/run_burfisher.py
 
@@ -427,3 +409,9 @@ GTAP_VALIDATION_STATUS.md
 2026-*-*.md
 plan_*.md
 gtap7_status_sweep_*.md
+
+# Recorded NEOS results keep the listing and log they came back with: their
+# source.yaml lists them as outputs (ADR-0010), so *.lst / *.log above must
+# not hide them.
+!data/**/gams_*/model.lst
+!data/**/gams_*/neos.log

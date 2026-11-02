@@ -208,7 +208,7 @@ def merge_gdx(out_path: Path) -> None:
 def run_inliner(in_gdx: Path, out_data: Path, out_params: Path) -> None:
     cmd = [
         "uv", "run", "--with", "gamsapi", "--with", "pandas",
-        "python", str(ROOT / "scripts/gtap/gdx_to_gams_inline.py"),
+        "python", str(ROOT / "data/gtap7/gams/tools/gdx_to_gams_inline.py"),
         "--gdx", str(in_gdx),
         "--out", str(out_data),
         "--out-params", str(out_params),

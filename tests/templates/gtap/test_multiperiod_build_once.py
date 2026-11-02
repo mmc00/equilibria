@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from pyomo.environ import Constraint
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, find_reference
 from equilibria.templates.gtap import GTAPParameters
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 from equilibria.templates.gtap.gtap_model_multiperiod import (
@@ -202,7 +202,11 @@ def test_block_path_byte_identical():
 # --- Solve parity: build both ways, seed + solve, compare Python solutions --- #
 
 _ROOT = Path(__file__).resolve().parents[3]
-_GDX_10x7 = _ROOT / "tests/fixtures/gtap7/gtap7_10x7/out_gtap_shock_ifsub0.gdx"
+# seed only: both build paths solve from the same point and are compared
+_REF_10x7 = find_reference(
+    "gtap7_10x7", "gams", form="mcp", mode="gtap", ifsub=0, fbep="header"
+)
+_GDX_10x7 = None if _REF_10x7 is None else _REF_10x7 / "out.gdx"
 
 
 def _seed_and_solve(build_fn):
@@ -245,7 +249,7 @@ def _seed_and_solve(build_fn):
 
 
 @pytest.mark.skipif(
-    not (_GDX_10x7.exists() and DATA.exists()),
+    not (_GDX_10x7 is not None and DATA.exists()),
     reason="gtap7_10x7 dataset or reference GDX not present",
 )
 @pytest.mark.needs_path

@@ -16,7 +16,7 @@ Usage:
 Emits one JSON line to stdout; all logs to stderr.
 """
 from __future__ import annotations
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, reference
 
 import argparse
 import contextlib
@@ -59,6 +59,9 @@ def _land_response(dataset: str, base_calibrated: bool, ref_gdx: Path) -> dict:
         name="base", closure_type="MCP", capital_mobility="sluggish",
         fix_endowments=False, fix_taxes=False, fix_technology=False,
         if_sub=False, numeraire="pnum",
+        # the data's FBEP sign, as the fbep=header reference has it; the default
+        # "gams" basis keeps the old sign (#191). build_block_model applies it.
+        va_subsidy_basis="gempack",
     )
     with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
         m, mp = build_block_model(p, p.sets, gc, rr, base_calibrated=base_calibrated)
@@ -119,6 +122,9 @@ def _quantity_match(dataset: str, base_calibrated: bool, ref_gdx: Path,
         name="base", closure_type="MCP", capital_mobility="sluggish",
         fix_endowments=False, fix_taxes=False, fix_technology=False,
         if_sub=False, numeraire="pnum",
+        # the data's FBEP sign, as the fbep=header reference has it; the default
+        # "gams" basis keeps the old sign (#191). build_block_model applies it.
+        va_subsidy_basis="gempack",
     )
     with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
         m, mp = build_block_model(p, p.sets, gc, rr, base_calibrated=base_calibrated)
@@ -162,7 +168,8 @@ def main() -> None:
     a = ap.parse_args()
 
     ref = Path(a.ref_gdx) if a.ref_gdx else (
-        ROOT / "tests/fixtures/gtap7" / a.dataset / "out_gtap_shock_ifsub1.gdx"
+        reference(a.dataset, "gams", form="mcp", mode="gtap", ifsub=1, fbep="header")
+        / "out.gdx"
     )
     out = {
         "tool": "measure_gempack_blocks",

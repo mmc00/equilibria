@@ -9,8 +9,9 @@ tests; neither holds data.
 > Migration in progress (`specs/data/changes/one-data-folder/`). Until each
 > phase lands, its files are still in their old places: `tests/fixtures/`,
 > `src/equilibria/templates/reference/`, `runs/`. The input datasets moved in
-> phase 1; the GAMS model and the GAMS results that run locally in phase 2a.
-> The MCP results that need NEOS are phase 2b.
+> phase 1; the GAMS model and the GAMS results that run locally in phase 2a;
+> the GAMS results that need NEOS, both FBEP variants, nus333 and 9x10 in
+> phase 2b.
 
 ## Layout
 
@@ -24,9 +25,9 @@ data/
     gams/                     the GAMS GTAP v7 model that runs (derived_from gams_jgea)
     gtap7_3x3/
       basedata.har sets.har default.prm ...   + source.yaml (kind: data)
-      gams_nl_altertax_ifsub0/   .nl per phase   + source.yaml (kind: result)
-      gams_nlp_gtap_ifsub1/      GDX
-      gams_mcp_gtap_ifsub1/      GDX
+      gams_nl_altertax_ifsub0_fbep-zero/     .nl per phase + source.yaml (kind: result)
+      gams_nlp_gtap_ifsub1_fbep-header/      GDX
+      gams_mcp_gtap_ifsub1_fbep-header/      GDX
     gtap7_10x7/ ...
     nus333/ ...
   gtap6/ ...
@@ -83,22 +84,69 @@ To add a dataset: copy its files into `data/<model>/<name>/` and record it with
 
 `data/gtap7/gams/` is the model that runs; `source.yaml` there lists every file
 that differs from `gams_jgea/` with what changed and why. Each result folder is
-`gams_<form>_<mode>_ifsub<k>`:
+`gams_<form>_<mode>_ifsub<k>_fbep-<variant>`:
 
 | Part | Values |
 |---|---|
 | `form` | `nl` (CONVERT `.nl` of each phase), `nlp` (IPOPT solve), `mcp` (PATH solve) |
 | `mode` | `gtap`: the pure model (`comp.gms`), base then the tariff shock; `altertax`: `comp_altertax.gms`, whose `check` step uses the altertax CD elasticities before the shock |
 | `ifsub<k>` | GAMS `ifSUB`: `0` keeps the substituted equations explicit, `1` substitutes them |
+| `fbep-<variant>` | how the factor subsidies enter (#187): `zero` is the official `getData.gms` (`fbep = 0`, `ftrv = evfp - evfb`); `header` injects the HAR's FTRV and FBEP headers after it, FBEP with its sign flipped (the HAR stores the subsidy negative, `cal.gms` takes `fctts = -fbep/evfb`), and `FTRV = 0` where a cell is subsidised with no factor tax. The MCP references used the injection since #24, but with the HAR's sign: those old files carried the subsidy as a tax |
 
-`scripts/gtap/regenerate_gams.py` regenerates them from `data/gtap7/gams/`, one
+Every result exists in both variants, so a test names the one it compares
+against (below). `nus333` has no FBEP header; its one result is `fbep-zero`.
+
+What is recorded:
+
+| Dataset | Results |
+|---|---|
+| `gtap7_3x3`, `gtap7_5x5`, `gtap7_10x7` | `nl` altertax, `nlp` and `mcp` in both modes, ifSUB 0 and 1 |
+| `gtap7_3x4` | altertax only: `nl`, `nlp`, `mcp`, ifSUB 0 and 1 |
+| `gtap7_15x10` | `nl` altertax; `mcp` in both modes, ifSUB 0 and 1 |
+| `gtap7_20x41` | `nlp` gtap ifSUB=1 only, solved with CONOPT on NEOS (below) |
+| `9x10` | `mcp` gtap ifSUB=1 (`comp.gms`); `fbep-zero` replaces the old `COMP.csv` |
+| `nus333` | `mcp` gtap ifSUB=0, `fbep-zero` (the book's model, `comp_nus333.gms`) |
+
+`gtap7_5x5` has no `nlp` altertax ifSUB=0: with the altertax elasticities at
+1 the CES price equations become `1 = 1` and the `check` step has no unique
+solution (#192).
+
+`data/gtap7/gams/tools/regenerate_gams.py` regenerates them from `data/gtap7/gams/`, one
 job per folder through `write_source.py`; a folder that already has a
 `source.yaml` is skipped, so a stopped run resumes.
 
 Local or NEOS: CONVERT and IPOPT have no size limit with the local license, so
-every `nl` and `nlp` result is local. PATH stops at 1000 rows, so the only local
-`mcp` results are `gtap7_3x3` ifSUB=1; the other MCP results come from NEOS
-(phase 2b) and keep the NEOS run date and configuration in their `source.yaml`.
+every `nl` and `nlp` result is local, except `gtap7_20x41`. PATH stops at 1000
+rows, so the local `mcp` results are `gtap7_3x3` ifSUB=1 and `nus333` (under
+the limit); the other MCP results, and `gtap7_20x41`, run on NEOS
+(`regen_gams_reference.py --where neos`). A NEOS result records
+`run.machine.os: "NEOS server"` with the other machine fields empty, and a
+`neos:` block with what is needed to replicate it:
+
+```yaml
+neos:
+  job: 24345626                 # NEOS job number
+  submitted_utc: '2026-11-02T17:06:31+00:00'
+  finished_utc: '2026-11-02T17:07:03+00:00'
+  category: cp                  # NEOS queue: category, solver, input method
+  solver: PATH
+  input_method: GAMS
+  options: ''
+  sent_sha256: 34c5...          # sha256 of the exact model.gms sent
+```
+
+`tool_version` is the GAMS version NEOS reports in the returned `.lst`, not the
+local one. The job password and the e-mail address are never written. A job
+that fails, or comes back with a model status other than 1 or 2, records
+nothing.
+
+`gtap7_20x41`: PATH does not solve it on NEOS (time limit, or a stall in the
+CHE consumer block), so its results are NLP solves with CONOPT
+(`--nlp-solver conopt`). They go through the same NEOS queue, so `neos.solver`
+says `PATH` while `solver.name` says CONOPT. `SUBPAR` of CHE sits at the GTAP
+floor (1e-6), which puts `zcons(CHE)` near 1e-10, below the solvers'
+tolerances; these runs scale `zcons` and `zconseq` by their calibrated level
+(`--scale-zcons`), and `notes` says so.
 
 ## Using a reference in a test
 
@@ -107,14 +155,16 @@ Ask for it by what it is, never by path:
 ```python
 from equilibria.sources import reference
 
-folder = reference("gtap7_3x3", "gams", form="nl", mode="altertax", ifsub=0)
+folder = reference("gtap7_3x3", "gams", form="nl", mode="altertax", ifsub=0,
+                   fbep="zero")
 ```
 
 `find_reference()` takes the same arguments and returns `None` instead of
 raising, for a test that skips when the result is not there.
 
 It raises when no folder matches (say, the result exists only for `ifsub=1`) or
-when more than one does (two closures: the test has to say which).
+when more than one does (leave out `fbep` and both variants match: the test has
+to say which).
 
 ## Rules
 

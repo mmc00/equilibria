@@ -1,5 +1,13 @@
 """F3.5 base-calibrated mode — adopt the settled (check) point as base so the
-shock response matches GEMPACK instead of the check-contaminated GAMS path."""
+shock response matches GEMPACK instead of the check-contaminated GAMS path.
+
+2026-11-01: the contamination was the FBEP sign. The old GAMS fixtures injected
+the subsidy with the HAR's sign, so the base was no equilibrium and the check
+moved EU_28 Land from 1.0 to 0.845. With the data's sign (the fbep=header
+reference, Python's va_subsidy_basis="gempack") the base is an equilibrium: the
+settle leaves it where it is, and GAMS's raw shock response already matches
+GEMPACK. These tests now pin that; base_calibrated stays a harmless no-op here.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from equilibria._local_refs import path_capi_src
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, reference
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
@@ -18,7 +26,12 @@ _PATH_CAPI = path_capi_src()
 if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI))
 
-REF_GDX = ROOT / "tests/fixtures/gtap7/gtap7_3x3/out_gtap_shock_ifsub1.gdx"
+# the GAMS MCP reference with FBEP split out; Python takes the data's subsidy
+# sign to match it (the default "gams" basis keeps the old sign, #191)
+REF_GDX = (
+    reference("gtap7_3x3", "gams", form="mcp", mode="gtap", ifsub=1, fbep="header")
+    / "out.gdx"
+)
 # GEMPACK con el MISMO cierre que estos tests (capFix = RORDELTA 0). El nombre sin
 # sufijo (sl4dump_gtap7_3x3_tm10.har) es capFlex (RORDELTA 1) desde 06dd878, que
 # regenero los fixtures con el cierre estandar: comparado contra capFix, el match de
@@ -59,21 +72,20 @@ def _ref_slice(period: str) -> dict[tuple[str, tuple], float]:
 
 @pytest.mark.needs_gdxdump
 def test_settled_base_land_response_matches_gempack():
-    """The mechanism, on the reference: shock-vs-SETTLED-base land price is small
-    (~-3%, near GEMPACK's -2.68%); shock-vs-RAW-base is the -18% contaminated path."""
+    """On the reference: the check stays at the base (no contamination; the old
+    fixture had it at 0.845), and the raw shock response of the Land price is
+    GEMPACK's (pfe[Land,Food,EU_28] = -3.6126% in the capFix fixture)."""
     base = _ref_slice("base")
     check = _ref_slice("check")
     shock = _ref_slice("shock")
     k = ("pft", ("EU_28", "Land"))
+    assert check[k] == pytest.approx(base[k], rel=1e-5), (
+        f"check moved off the base: {base[k]} -> {check[k]}"
+    )
     raw_resp = 100.0 * (shock[k] - base[k]) / base[k]
-    settled_resp = 100.0 * (shock[k] - check[k]) / check[k]
-    assert raw_resp < -15.0, (
-        f"expected contaminated raw path <-15%, got {raw_resp:.2f}%"
+    assert raw_resp == pytest.approx(-3.6126, abs=0.05), (
+        f"GAMS land response {raw_resp:.3f}% is not GEMPACK's -3.6126%"
     )
-    assert -8.0 < settled_resp < 0.0, (
-        f"expected clean settled response, got {settled_resp:.2f}%"
-    )
-    assert abs(settled_resp - (-2.68)) < abs(raw_resp - (-2.68))
 
 
 def _load_params(dataset="gtap7_3x3"):
@@ -87,6 +99,7 @@ def _load_params(dataset="gtap7_3x3"):
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
+    p.set_va_subsidy_basis("gempack")
     return p
 
 
@@ -102,6 +115,7 @@ def _base_closure(p):
         fix_technology=False,
         if_sub=False,
         numeraire="pnum",
+        va_subsidy_basis="gempack",
     )
 
 
@@ -109,7 +123,8 @@ def _base_closure(p):
 @pytest.mark.needs_gdxdump
 def test_calibrate_base_returns_settled_land_price():
     """calibrate_base runs the settle solve and returns the CHECK-period point;
-    the Land price in it is the settled ~0.845, not the raw 1.0."""
+    with the data's subsidy sign the base is already an equilibrium, so the
+    settled Land price is the data's 1.0 (it was 0.845 with the old sign)."""
     from equilibria.blocks.gtap.factor import FactorBlock
 
     p = _load_params()
@@ -117,7 +132,7 @@ def test_calibrate_base_returns_settled_land_price():
     fb = FactorBlock(sets=p.sets, params=p)
     settled = fb.calibrate_base(p, p.sets, _base_closure(p), rr, ref_gdx=REF_GDX)
     pft = settled["pft"][("EU_28", "Land")]
-    assert pft == pytest.approx(0.84476, abs=5e-3), f"settled Land price off: {pft}"
+    assert pft == pytest.approx(1.0, abs=1e-5), f"settled Land price off: {pft}"
 
 
 @pytest.mark.skipif(not _has_solver(), reason="PATH solver not available")
@@ -134,15 +149,14 @@ def test_composer_stamps_settled_seed():
 
     m_cal, _ = build_block_model(p, p.sets, _base_closure(p), rr, base_calibrated=True)
     assert m_cal._base_calibrated is True
-    assert m_cal._settled_seed["pft"][("EU_28", "Land")] == pytest.approx(
-        0.84476, abs=5e-3
-    )
+    assert m_cal._settled_seed["pft"][("EU_28", "Land")] == pytest.approx(1.0, abs=1e-5)
 
 
 @pytest.mark.skipif(not _has_solver(), reason="PATH solver not available")
 def test_base_calibrated_shock_response_is_clean():
-    """End-to-end: base-calibrated → base seeded to settled ~0.845, shock land
-    response ~-3% (near GEMPACK), NOT -18%, all solved code=1, no check phase."""
+    """End-to-end: base-calibrated → base seeded to the settled point (the
+    data's 1.0 with the data's subsidy sign), shock land response ~-3.6% (near
+    GEMPACK), NOT -18%, all solved code=1, no check phase."""
     from pyomo.environ import value as V
 
     from equilibria.templates.gtap.gtap_block_model import build_block_model
@@ -162,7 +176,7 @@ def test_base_calibrated_shock_response_is_clean():
     assert res.get("check") is None
     base = float(V(m.pft["EU_28", "Land", "base"]))
     shock = float(V(m.pft["EU_28", "Land", "shock"]))
-    assert base == pytest.approx(0.84476, abs=1e-2), f"base not settled: {base}"
+    assert base == pytest.approx(1.0, abs=1e-5), f"base not settled: {base}"
     resp = 100.0 * (shock - base) / base
     assert -8.0 < resp < 0.0, f"land response not clean: {resp:.2f}%"
 
@@ -216,11 +230,11 @@ def test_calibrated_land_response_beats_default_vs_gempack():
 
 @pytest.mark.skipif(not _has_solver(), reason="PATH solver not available")
 @pytest.mark.needs_gdxdump
-def test_base_calibrated_lifts_overall_quantity_match_vs_gempack():
-    """Not just the land price: base-calibrated lifts the OVERALL against-GEMPACK
-    quantity match (all Q_TO_VAR vars, ~190 cells) from ~76% to ~96% within 1pp,
-    matching the F3 'excluding check-movers' figure. Derived-demand vars (xg/xc/…)
-    are NOT re-based, so they re-derive consistently."""
+def test_overall_quantity_match_vs_gempack_is_clean_either_way():
+    """The OVERALL against-GEMPACK quantity match (all Q_TO_VAR vars, ~190 cells)
+    is clean with or without base calibration: 99.5% within 1pp both. The old
+    ~76% -> ~96% "lift" from calibrating the base was the FBEP sign, like the
+    check contamination above; with the old sign the default path falls to ~76%."""
     sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
     from measure_gempack_blocks import _quantity_match
 
@@ -231,6 +245,6 @@ def test_base_calibrated_lifts_overall_quantity_match_vs_gempack():
     default = _quantity_match("gtap7_3x3", False, REF_GDX, gem)
     calib = _quantity_match("gtap7_3x3", True, REF_GDX, gem)
     assert "within_1pp_pct" in default and "within_1pp_pct" in calib
-    # calibrated is a clear improvement over default on the whole quantity set
+    assert default["within_1pp_pct"] >= 94.0, f"default match too low: {default}"
     assert calib["within_1pp_pct"] >= 94.0, f"calibrated match too low: {calib}"
-    assert calib["within_1pp_pct"] > default["within_1pp_pct"] + 10.0
+    assert abs(calib["within_1pp_pct"] - default["within_1pp_pct"]) <= 1.0

@@ -1,6 +1,6 @@
 """GTAP7 .nl structural parity gate.
 
-For each dataset in tests/fixtures/gtap7/, regenerates the Python .nl and
+For each gtap7_* dataset of the coverage matrix's .nl rows, regenerates the Python .nl and
 compares its coefficients family-by-family against the GAMS reference .nl
 fixture (generated once via NEOS and committed to the repo).
 
@@ -47,7 +47,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 # The gate builds Python with ifSUB=0 (GTAPClosureConfig(if_sub=False)), so it
 # reads the GAMS .nl recorded with ifSUB=0 (#23: the old fixtures were ifSUB=1).
-NL_VARIANT = {"form": "nl", "mode": "altertax", "ifsub": 0}
+NL_VARIANT = {"form": "nl", "mode": "altertax", "ifsub": 0, "fbep": "zero"}
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 

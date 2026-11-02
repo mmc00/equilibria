@@ -1,9 +1,9 @@
 """Fidelity gate: pure-gtap multi-period shock vs the GAMS LOCAL reference.
 
 This is the Task 2 fidelity gate.  It builds the pure-gtap (NON-altertax)
-multi-period model, seeds it from the committed GAMS GDX fixture
-(out_gtap_shock_ifsub{0,1}.gdx — solved Variables with the base/check/shock
-t-axis), solves base->check->shock via solve_multiperiod in gtap-mode, and
+multi-period model, seeds it from the recorded GAMS MCP reference
+(data/gtap7/<ds>/gams_mcp_gtap_ifsub{0,1}_fbep-header/out.gdx — solved Variables
+with the base/check/shock t-axis), solves base->check->shock via solve_multiperiod in gtap-mode, and
 asserts:
   1. all 3 periods converge (termination code == 1), and
   2. the SHOCK-period real-cell match vs the GAMS GDX is >= a MEASURED floor.
@@ -35,14 +35,13 @@ from pathlib import Path
 import pytest
 
 from equilibria._local_refs import path_capi_src
-from equilibria.sources import dataset_dir, has_dataset
+from equilibria.sources import dataset_dir, find_reference, has_dataset
 
 # needs_gdxdump: estos tests leen el GDX de referencia con gdxdump; sin el
 # binario fallaban con FileNotFoundError en vez de saltarse.
 pytestmark = pytest.mark.needs_gdxdump
 
 ROOT = Path(__file__).resolve().parents[3]
-FIXTURES_DIR = ROOT / "tests/fixtures/gtap7"
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
@@ -117,9 +116,11 @@ def _strip(s):
     return s
 
 
-def _fixture_gdx(dataset: str, if_sub: bool) -> Path:
-    suffix = "ifsub1" if if_sub else "ifsub0"
-    return FIXTURES_DIR / dataset / f"out_gtap_shock_{suffix}.gdx"
+def _reference_gdx(dataset: str, if_sub: bool) -> Path | None:
+    folder = find_reference(
+        dataset, "gams", form="mcp", mode="gtap", ifsub=int(if_sub), fbep="header"
+    )
+    return None if folder is None else folder / "out.gdx"
 
 
 def _gtap_closure(if_sub: bool):
@@ -150,7 +151,7 @@ def _solve_and_match(dataset: str, if_sub: bool, period: str = "shock"):
     from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-    ref = _fixture_gdx(dataset, if_sub)
+    ref = _reference_gdx(dataset, if_sub)
     d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
@@ -159,6 +160,9 @@ def _solve_and_match(dataset: str, if_sub: bool, period: str = "shock"):
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
+    # the data's FBEP sign, as the fbep=header reference has it; the default
+    # "gams" basis keeps the old sign (#191)
+    p.set_va_subsidy_basis("gempack")
     rr = list(p.sets.r)[-1]
     gc = _gtap_closure(if_sub)
     mp = GTAPBlockMultiPeriodModel(p.sets, p, gc, residual_region=rr)
@@ -246,9 +250,9 @@ def test_gtap_mp_shock_matches_gams_3x3():
     if_sub = False
     if not has_dataset(dataset):
         pytest.skip(f"dataset HAR missing for {dataset}")
-    ref = _fixture_gdx(dataset, if_sub)
-    if not ref.exists():
-        pytest.skip(f"fixture GDX missing: {ref}")
+    ref = _reference_gdx(dataset, if_sub)
+    if ref is None:
+        pytest.skip(f"no GAMS MCP reference recorded for {dataset}")
 
     codes, match_pct, tot, worst = _solve_and_match(dataset, if_sub, "shock")
 

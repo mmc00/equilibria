@@ -42,6 +42,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from equilibria.sources import find_reference
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -62,16 +64,13 @@ def _find_gams() -> str:
 
 
 def _source_gms(dataset: str, if_sub: bool) -> Path:
-    suffix = "ifsub1" if if_sub else "ifsub0"
-    # comp .gms naming: comp_<dataset>_gtap_shock_<suffix>.gms (committed fixtures)
-    candidates = list((ROOT / "tests" / "fixtures" / "gtap7" / dataset).glob(
-        f"comp_{dataset}_*_{suffix}.gms"))
-    if not candidates:
-        raise RuntimeError(
-            f"No comp .gms found for {dataset}/{suffix} under tests/fixtures/gtap7/{dataset}/")
-    # prefer the shock comp (the canonical altertax/gtap shock reference)
-    shock = [c for c in candidates if "shock" in c.name]
-    return (shock or candidates)[0]
+    # the bundle recorded with the GAMS MCP shock reference (data/<model>/<dataset>/)
+    folder = find_reference(
+        dataset, "gams", form="mcp", mode="gtap", ifsub=int(if_sub), fbep="header"
+    )
+    if folder is None:
+        raise RuntimeError(f"No GAMS MCP reference recorded for {dataset} ifSUB={int(if_sub)}")
+    return folder / "model.gms"
 
 
 def _rewrite_for_convert(src_text: str, period: str) -> str:

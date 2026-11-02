@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from pyomo.environ import Var
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, reference
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
 DS = dataset_dir("gtap7_3x3")
@@ -35,6 +35,7 @@ def _build(sf):
         capital_mobility="sluggish",
         if_sub=False,
         savf_flag=sf,
+        va_subsidy_basis="gempack",
     )
     with (
         contextlib.redirect_stderr(io.StringIO()),
@@ -70,7 +71,12 @@ def test_capfixdp_eq_phi_rsav_live_betas():
     assert "betas" in body, "capFixDp: eq_phi/eq_rsav must reference the betas Var"
 
 
-REF = Path("tests/fixtures/gtap7/gtap7_3x3/out_gtap_shock_ifsub1.gdx")
+# seed and benchmark: the GAMS MCP reference with FBEP split out, so Python takes
+# the data's subsidy sign (the default "gams" basis keeps the old sign, #191)
+REF = (
+    reference("gtap7_3x3", "gams", form="mcp", mode="gtap", ifsub=1, fbep="header")
+    / "out.gdx"
+)
 
 
 def _solve(sf):
@@ -91,6 +97,7 @@ def _solve(sf):
         capital_mobility="sluggish",
         if_sub=False,
         savf_flag=sf,
+        va_subsidy_basis="gempack",
     )
     with (
         contextlib.redirect_stderr(io.StringIO()),
