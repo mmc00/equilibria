@@ -160,6 +160,9 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
+    # the data's FBEP sign, as the fbep=header reference has it; the default
+    # "gams" basis keeps the old sign (#191)
+    p.set_va_subsidy_basis("gempack")
     rr = list(p.sets.r)[-1]
 
     if mode == "altertax":

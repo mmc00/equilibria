@@ -1,6 +1,6 @@
 """GTAP7 .nl structural parity gate.
 
-For each dataset in tests/fixtures/gtap7/, regenerates the Python .nl and
+For each gtap7_* dataset of the coverage matrix's .nl rows, regenerates the Python .nl and
 compares its coefficients family-by-family against the GAMS reference .nl
 fixture (generated once via NEOS and committed to the repo).
 

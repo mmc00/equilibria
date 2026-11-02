@@ -57,7 +57,7 @@ BASELINE_COUNT = 20194
 # (_solve_welfare_tail); antes quedaban en la semilla. Medido contra el fixture
 # anterior: mismas 20194 claves, 35 celdas >1e-9 y TODAS de bienestar (5 vars x 7
 # regiones, hasta 1 % de cambio); el resto identico. Las 35 nuevas = check de GAMS
-# (gtap7_10x7/out_gtap_shock_ifsub0.gdx) a <=1,4e-5 relativo. Solo se cambiaron esas.
+# (el fixture gtap7_10x7/out_gtap_shock_ifsub0.gdx, ya borrado) a <=1,4e-5 relativo. Solo se cambiaron esas.
 #
 # Recapturado 2026-10-24: psave sigue a GTAP v7 (ajuste chiSave, no el chiSave**2 de
 # GAMS). Medido contra el seed del commit anterior (identico al fixture viejo): mismas

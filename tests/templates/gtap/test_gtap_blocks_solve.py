@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 from equilibria._local_refs import path_capi_src
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, find_reference
 
 ROOT = Path(__file__).resolve().parents[3]
 for _p in (ROOT / "src", ROOT / "scripts" / "gtap"):
@@ -38,7 +38,10 @@ pytestmark = pytest.mark.integration
 DATASET = "gtap7_3x3"
 RESIDUAL_REGION = "ROW"
 FLOOR = 0.99
-GDX = ROOT / "tests" / "fixtures" / "gtap7" / DATASET / "out_gtap_shock_ifsub0.gdx"
+# the GAMS MCP reference with FBEP split out; Python takes the data's subsidy
+# sign to match it (the default "gams" basis keeps the old sign, #191)
+_REF = find_reference(DATASET, "gams", form="mcp", mode="gtap", ifsub=0, fbep="header")
+GDX = None if _REF is None else _REF / "out.gdx"
 PERIODS = ("base", "check", "shock")
 
 
@@ -53,6 +56,7 @@ def _load_params():
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
+    p.set_va_subsidy_basis("gempack")
     return p
 
 
@@ -68,6 +72,7 @@ def _closure():
         fix_technology=False,
         if_sub=False,
         numeraire="pnum",
+        va_subsidy_basis="gempack",
     )
 
 
@@ -155,7 +160,7 @@ def _build_seed_solve(nlp: bool):
 
 
 @pytest.mark.needs_gdxdump
-@pytest.mark.skipif(not GDX.exists(), reason="gtap7_3x3 reference GDX missing")
+@pytest.mark.skipif(GDX is None, reason="gtap7_3x3 GAMS reference missing")
 def test_3x3_nlp_via_blocks_matches_gams():
     """gtap7_3x3 solves via the composed 7-block framework (NLP/IPOPT) and matches
     GAMS >= 99% on every period."""
@@ -171,7 +176,7 @@ def test_3x3_nlp_via_blocks_matches_gams():
         assert pct >= FLOOR, f"NLP {per} match {pct:.4f} < {FLOOR}"
 
 
-@pytest.mark.skipif(not GDX.exists(), reason="gtap7_3x3 reference GDX missing")
+@pytest.mark.skipif(GDX is None, reason="gtap7_3x3 GAMS reference missing")
 @pytest.mark.needs_gdxdump
 def test_3x3_mcp_via_blocks_matches_gams():
     """gtap7_3x3 solves via the composed 7-block framework (MCP/PATH) and matches

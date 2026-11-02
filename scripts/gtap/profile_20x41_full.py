@@ -23,7 +23,7 @@ import sys
 import time
 from pathlib import Path
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, find_reference
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -56,7 +56,9 @@ def run(dataset):
     from equilibria.templates.gtap_sparse.multiperiod import build_sparse_model_mp
 
     d = dataset_dir(dataset)
-    gdx = ROOT / "tests/fixtures/gtap7" / dataset / "out_gtap_shock_ifsub0.gdx"
+    # no GAMS ifSUB=0 reference for 20x41 (only NLP ifSUB=1): runs unseeded, as before
+    ref = find_reference(dataset, "gams", form="nlp", mode="gtap", ifsub=0, fbep="header")
+    gdx = None if ref is None else str(ref / "out.gdx")
 
     with _Phase("load_params"):
         p = GTAPParameters()
@@ -78,12 +80,12 @@ def run(dataset):
     report_timing(rt_buf)
     with _Phase("build_sparse_model_mp(base_calibrated=True)  [build + calibrate settle]"):
         m, mp, _ = build_sparse_model_mp(
-            p, p.sets, gc, rr, base_calibrated=True, ref_gdx=str(gdx) if gdx.exists() else None
+            p, p.sets, gc, rr, base_calibrated=True, ref_gdx=gdx
         )
     report_timing(False)
 
     with _Phase("solve_block_model  [squareness patches + base->check->shock PATH]"):
-        res = solve_block_model(m, p, gc, ref_gdx=str(gdx) if gdx.exists() else None, mode="gtap")
+        res = solve_block_model(m, p, gc, ref_gdx=gdx, mode="gtap")
 
     print("\n===== report_timing (Pyomo component construction) =====", flush=True)
     print(rt_buf.getvalue(), flush=True)

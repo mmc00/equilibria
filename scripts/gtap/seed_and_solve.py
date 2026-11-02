@@ -36,7 +36,7 @@ eight other leads. See project_gtap7_3x3_gap_is_factor_bias.
 
 Usage:
     uv run python scripts/gtap/seed_and_solve.py --dataset gtap7_3x3 \\
-        --gdx tests/fixtures/gtap7_altertax/gtap7_3x3/out_altertax_ifsub0.gdx \\
+        --gdx data/gtap7/gtap7_3x3/gams_mcp_altertax_ifsub0_fbep-header/out.gdx \\
         --period shock --top 20
 
 JSON contract (shared _parity_json schema): status=clean (STAYS = equilibrium selection,

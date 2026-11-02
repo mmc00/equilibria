@@ -257,7 +257,7 @@ _PURE_NOTE_NLP = ("<b>The 5×5 shock was the fix.</b> It read 59.56% / code 2 "
 
 _PURE_NOTE_MCP = ("<b>Pure MCP is 100% with clean refs.</b> Every pure dataset "
     "(3×3/5×5/10×7/15×10, both ifSUB) matches 100% across all three stages against the "
-    "NEOS-regenerated subsidy-aware <code>out_gtap_shock_ifsub{N}.gdx</code>. The earlier "
+    "GAMS MCP references recorded under <code>data/gtap7/</code> (NEOS, <code>fbep=header</code>). The earlier "
     "~63% was a subsidy-blind reference (<code>ytax[ft]=0</code>), not the model. The one "
     "✕ (15×10 ifSUB=1 shock) is a PATH code=2 near-miss on the tight threshold — the point "
     "is still 100% correct cell-by-cell.")
@@ -269,7 +269,7 @@ _ALT_NOTE_NLP = ("<b>The check/shock ceiling is the reference, not the model.</b
     "rest is MCP references (NEOS), not a code change.")
 
 _ALT_NOTE_MCP = ("<b>Clean MCP refs land 99%+.</b> Base/check are exact and shock is "
-    "≥99.3 against the NEOS-regenerated subsidy-aware <code>out_altertax_ifsub{N}.gdx</code> "
+    "≥99.3 against the GAMS MCP references recorded under <code>data/gtap7/</code> "
     "— this is the daily fidelity gate. 15×10 shock ~95% is the known eq_paa Armington "
     "micro-cell family; the ~89–97 the NLP gate reads was its mis-converged NLP ref.")
 

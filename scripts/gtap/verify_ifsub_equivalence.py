@@ -22,7 +22,7 @@ Usage:
 """
 from __future__ import annotations
 
-from equilibria.sources import dataset_dir, has_dataset
+from equilibria.sources import dataset_dir, find_reference, has_dataset
 import argparse
 import statistics
 import sys
@@ -52,6 +52,14 @@ PRIMARY_VARS = [
 ]
 
 
+def ref_gdx(dataset: str, ifsub: int) -> Path | None:
+    """The GAMS MCP reference (fbep=header) that seeds the solve, None if absent."""
+    folder = find_reference(
+        dataset, "gams", form="mcp", mode="gtap", ifsub=ifsub, fbep="header"
+    )
+    return None if folder is None else folder / "out.gdx"
+
+
 def _solve(dataset: str, ifsub: int):
     """Build + seed + solve base→check→shock (gtap pure MCP), return (model, code)."""
     from equilibria.templates.gtap import GTAPParameters
@@ -68,6 +76,9 @@ def _solve(dataset: str, ifsub: int):
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
+    # the data's FBEP sign, as the fbep=header seed has it (the default "gams"
+    # basis keeps the old sign, #191)
+    p.set_va_subsidy_basis("gempack")
     rr = list(p.sets.r)[-1]
     ac = GTAPClosureConfig(
         name="base",
@@ -79,7 +90,7 @@ def _solve(dataset: str, ifsub: int):
         if_sub=bool(ifsub),
         numeraire="pnum",
     )
-    gdx = ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub{ifsub}.gdx"
+    gdx = ref_gdx(dataset, ifsub)
     # Construir por BLOQUES: el driver replica el fixing desde un SP de bloques
     # (F3, bd4d2fe). Construir el modelo con el MONOLITO y resolverlo con esa
     # referencia desalinea modelo y fixing — medido: frac_agree 0.00% con
@@ -182,9 +193,7 @@ def main() -> int:
         if not has_dataset(ds):
             print(f"{ds:14s} {'--':>7s} {'skip':>8s} {'--':>9s}  (no dataset HAR)")
             continue
-        g1 = ROOT / f"tests/fixtures/gtap7/{ds}/out_gtap_shock_ifsub1.gdx"
-        g0 = ROOT / f"tests/fixtures/gtap7/{ds}/out_gtap_shock_ifsub0.gdx"
-        if not (g1.exists() and g0.exists()):
+        if ref_gdx(ds, 1) is None or ref_gdx(ds, 0) is None:
             print(f"{ds:14s} {'--':>7s} {'skip':>8s} {'--':>9s}  (no shock GDX)")
             continue
         r = compare_primary_across_modes(ds, args.tol_rel)

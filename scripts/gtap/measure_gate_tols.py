@@ -16,7 +16,7 @@ Usage:
 """
 from __future__ import annotations
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, find_reference
 import argparse
 import json
 import sys
@@ -29,8 +29,6 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 _PATH_CAPI = path_capi_src()
 if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI))
-
-FIXTURES_DIR = ROOT / "tests/fixtures/gtap7_altertax"
 
 # Identical exclusion/alias sets to the committed gate.
 SKIP = {"walras", "ev", "cv", "uh", "u", "ug", "us"}
@@ -51,9 +49,11 @@ def _strip(s):
     return s
 
 
-def _fixture_gdx(dataset: str, if_sub: bool) -> Path:
-    suffix = "ifsub1" if if_sub else "ifsub0"
-    return FIXTURES_DIR / dataset / f"out_altertax_{suffix}.gdx"
+def _reference_gdx(dataset: str, if_sub: bool) -> Path | None:
+    folder = find_reference(
+        dataset, "gams", form="mcp", mode="altertax", ifsub=int(if_sub), fbep="header"
+    )
+    return None if folder is None else folder / "out.gdx"
 
 
 def solve_and_measure(dataset: str, if_sub: bool):
@@ -68,7 +68,7 @@ def solve_and_measure(dataset: str, if_sub: bool):
     from pyomo.environ import value as V
     from _diff_core import gams_levels, list_populated_vars, split_t
 
-    ref = _fixture_gdx(dataset, if_sub)
+    ref = _reference_gdx(dataset, if_sub)
     d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
@@ -77,6 +77,9 @@ def solve_and_measure(dataset: str, if_sub: bool):
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
+    # the data's FBEP sign, as the fbep=header reference has it; the default
+    # "gams" basis keeps the old sign (#191)
+    p.set_va_subsidy_basis("gempack")
     rr = list(p.sets.r)[-1]
     pa = apply_altertax_elasticities(p, in_place=False)
     ac = GTAPClosureConfig(
