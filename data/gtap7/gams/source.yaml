@@ -126,12 +126,12 @@ changes:
   commit: 9ac8ce1
 - file: tools/build_gtap7_altertax_neos_bundle.py
   change: added
-  what: builds the altertax NEOS/local bundle (moved from scripts/gtap/)
+  what: 'builds the altertax NEOS/local bundle (moved from scripts/gtap/); --fbep header|zero (#187): header injects the HAR''s FTRV and -FBEP after getData''s fbep = 0 (the HAR stores the subsidy negative, cal.gms takes fctts = -fbep/evfb; 3ba4f88), writes FTRV = 0 where a cell is subsidised with no factor tax (16679d7), and keeps HAR labels that already carry the a_ prefix (5368acce); zero leaves getData as published'
   why: generates GAMS results from this model, so it lives with it and the model-folder sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
   commit: 56b170e, this change
 - file: tools/build_gtap7_pure_local_bundle.py
   change: added
-  what: builds the pure GTAP local bundle (moved from scripts/gtap/)
+  what: 'builds the pure GTAP local bundle (moved from scripts/gtap/); --fbep header|zero (#187): header injects the HAR''s FTRV and -FBEP after getData''s fbep = 0 (the HAR stores the subsidy negative, cal.gms takes fctts = -fbep/evfb; 3ba4f88), writes FTRV = 0 where a cell is subsidised with no factor tax (16679d7), and keeps HAR labels that already carry the a_ prefix (5368acce); zero leaves getData as published'
   why: generates GAMS results from this model, so it lives with it and the model-folder sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
   commit: 5e0360b, this change
 - file: tools/gdx_to_gams_inline.py

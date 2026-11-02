@@ -91,7 +91,7 @@ that differs from `gams_jgea/` with what changed and why. Each result folder is
 | `form` | `nl` (CONVERT `.nl` of each phase), `nlp` (IPOPT solve), `mcp` (PATH solve) |
 | `mode` | `gtap`: the pure model (`comp.gms`), base then the tariff shock; `altertax`: `comp_altertax.gms`, whose `check` step uses the altertax CD elasticities before the shock |
 | `ifsub<k>` | GAMS `ifSUB`: `0` keeps the substituted equations explicit, `1` substitutes them |
-| `fbep-<variant>` | how the factor subsidies enter (#187): `zero` is the official `getData.gms` (`fbep = 0`, `ftrv = evfp - evfb`); `header` injects the HAR's FBEP and FTRV headers after it (what the MCP references used since #24) |
+| `fbep-<variant>` | how the factor subsidies enter (#187): `zero` is the official `getData.gms` (`fbep = 0`, `ftrv = evfp - evfb`); `header` injects the HAR's FTRV and FBEP headers after it, FBEP with its sign flipped (the HAR stores the subsidy negative, `cal.gms` takes `fctts = -fbep/evfb`), and `FTRV = 0` where a cell is subsidised with no factor tax. The MCP references used the injection since #24, but with the HAR's sign: those old files carried the subsidy as a tax |
 
 Every result exists in both variants, so a test names the one it compares
 against (below). `nus333` has no FBEP header; its one result is `fbep-zero`.
