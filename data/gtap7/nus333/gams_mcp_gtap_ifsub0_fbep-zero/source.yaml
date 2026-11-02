@@ -166,14 +166,14 @@ solver:
 command: /Users/marmol/proyectos/equilibria-phase2b/.venv/bin/python /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gams/tools/regen_nus333.py
   --out /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/nus333/gams_mcp_gtap_ifsub0_fbep-zero
   --fbep zero
-equilibria_commit: 88d33048
+equilibria_commit: 5d3ca135
 exit:
   code: 0
 outputs:
   out.gdx: f4abee6fabd819bb4d6d02e16db24a73a877982f1a53d581b8e8ed56739d6de1
 run:
-  date: '2026-11-01T21:33:59-06:00'
-  duration_s: 1.34
+  date: '2026-11-01T22:06:10-06:00'
+  duration_s: 1.249
   machine:
     os: macOS 26.2 (Darwin 25.2.0)
     cpu: Apple M3 Pro

@@ -81,28 +81,28 @@ solver:
 command: /Users/marmol/proyectos/equilibria-phase2b/.venv/bin/python /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gams/tools/regen_gams_reference.py
   --dataset 9x10 --mode gtap --form mcp --ifsub 1 --out /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/9x10/gams_mcp_gtap_ifsub1_fbep-header
   --fbep header --where neos
-equilibria_commit: 4ce4c348
+equilibria_commit: 5d3ca135
 exit:
   code: 0
 outputs:
   model.gms: 34c58a7b5d19eed7e52d0b12dec9e2f072dd935fc7c8ce6da58c555421116c64
-  model.lst: fbe2269dc473832be1cb04d82d55bcf21e1ed0feacc61fc3b3ef5a4da7a5bdb2
-  neos.log: 50ce3fe96e253723aa1b41b7c302ac364673e71659b43c99f69a4a34d339278f
-  neos_job.json: 992140f19bee7ffe02a8f6b52d78a47854c0befb7166ce68b7a6e214fb0298b2
+  model.lst: cde0f23b242a7fa83b3976e73652a6136b8ede7531bd2dc44e8f09f0cb309a8d
+  neos.log: 4e5fb2cfee695a38c8202c2860898a8c625c52f74aa42afbb84741d6b2525348
+  neos_job.json: 61a55380ecb3819c982d53c571d4a78a47bf6ecbe69de048b522d06b825c47fb
   out.gdx: 015f7005a72f91a6a274d462a7ed02ac0d046c71ff26d0d2bee8b8bbe46d3c37
   path.opt: 47ab97f3f1331ab6505c79903e7febdc2beb5a253083cbfb8175b746b3f33aaf
 run:
-  date: '2026-11-02T03:35:16+00:00'
-  duration_s: 20.675
+  date: '2026-11-02T04:20:10+00:00'
+  duration_s: 19.622
   machine:
     os: NEOS server
     cpu: ''
     cores: null
     ram_gb: null
 neos:
-  job: 24339989
-  submitted_utc: '2026-11-02T03:34:59+00:00'
-  finished_utc: '2026-11-02T03:35:16+00:00'
+  job: 24340071
+  submitted_utc: '2026-11-02T04:19:53+00:00'
+  finished_utc: '2026-11-02T04:20:10+00:00'
   category: cp
   solver: PATH
   input_method: GAMS
