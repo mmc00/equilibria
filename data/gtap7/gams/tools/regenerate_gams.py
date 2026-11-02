@@ -64,7 +64,7 @@ MCP_JOBS = (("gtap7_3x3", "gtap", 1), ("gtap7_3x3", "altertax", 1))
 # above the local PATH license (1000 rows): solved on NEOS
 NEOS_JOBS = {
     "gtap": (("gtap7_3x3", 0), ("gtap7_5x5", 0), ("gtap7_5x5", 1), ("gtap7_10x7", 0),
-             ("gtap7_10x7", 1), ("gtap7_15x10", 0), ("gtap7_15x10", 1)),
+             ("gtap7_10x7", 1), ("gtap7_15x10", 0), ("gtap7_15x10", 1), ("9x10", 1)),
     "altertax": (("gtap7_3x3", 0), ("gtap7_3x4", 0), ("gtap7_3x4", 1), ("gtap7_5x5", 0),
                  ("gtap7_5x5", 1), ("gtap7_10x7", 0), ("gtap7_10x7", 1), ("gtap7_15x10", 0),
                  ("gtap7_15x10", 1)),
@@ -115,7 +115,7 @@ def _job(
 def jobs(
     datasets: list[str] | None = None, root: Path = DATA_ROOT, where: str = "all"
 ) -> list[Job]:
-    """The 86 jobs of the plan's table, restricted to ``datasets`` and ``where``."""
+    """The 88 jobs of the plan's table, restricted to ``datasets`` and ``where``."""
     keep = (lambda ds: True) if datasets is None else (lambda ds: ds in datasets)
     named = {*NL_PHASES, *(ds for names in NLP_DATASETS.values() for ds in names),
              *(ds for rows in NEOS_JOBS.values() for ds, _ in rows),

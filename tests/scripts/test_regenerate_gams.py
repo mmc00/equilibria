@@ -45,17 +45,17 @@ def _gams(tmp_path: Path, version: str) -> Path:
 
 def test_jobs_are_the_table(driver: Any) -> None:
     js = driver.jobs()
-    assert len(js) == 86
+    assert len(js) == 88
 
     def count(form: str, where: str) -> int:
         return sum(j.form == form and j.where == where for j in js)
 
     assert (count("nl", "local"), count("nlp", "local")) == (20, 28)
-    assert (count("mcp", "local"), count("mcp", "neos")) == (4, 32)
+    assert (count("mcp", "local"), count("mcp", "neos")) == (4, 34)
     assert count("nlp", "neos") == 2
     assert {j.fbep for j in js} == {"header", "zero"}
     for fbep in ("header", "zero"):
-        assert sum(j.fbep == fbep for j in js) == 43
+        assert sum(j.fbep == fbep for j in js) == 44
     assert {
         (j.dataset, j.mode, j.ifsub)
         for j in js
@@ -69,7 +69,9 @@ def test_jobs_are_the_table(driver: Any) -> None:
     # 20x41: PATH stalls on CHE's zcons ~1e-10 (SUBPAR at the GTAP floor), even at a 1% shock
     assert {j.form for j in js if j.dataset == "gtap7_20x41"} == {"nlp"}
     assert ("gtap7_3x3", "gtap", 1) not in neos  # solved locally
-    assert len({j.folder for j in js}) == 86
+    # 9x10: comp.gms's own default (ifSUB=1), which the old COMP.csv was
+    assert {(m, k) for ds, m, k in neos if ds == "9x10"} == {("gtap", 1)}
+    assert len({j.folder for j in js}) == 88
     # no local mcp for 3x4: above the license cap
     assert {j.folder.name for j in js if j.dataset == "gtap7_3x4" and j.where == "local"} == {
         f"gams_{f}_altertax_ifsub{k}_fbep-{v}"
@@ -92,7 +94,7 @@ def test_neos_rows_carry_remote(driver: Any) -> None:
 
 def test_where_selects_rows(driver: Any, tmp_path: Path, capsys: Any) -> None:
     gams = str(_gams(tmp_path, "53.5.0"))
-    for where, n in (("local", 52), ("neos", 34), ("all", 86)):
+    for where, n in (("local", 52), ("neos", 36), ("all", 88)):
         argv = [
             "--tool-version",
             "53.5.0",
