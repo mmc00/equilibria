@@ -259,10 +259,10 @@ def _fbep_ftrv_har_as_assignments(har_path: Path, header: str, inlined: str) -> 
     nz = _np.argwhere(h.array != 0)
     for idx in nz:
         f_lbl = endw_labels[idx[0]]
-        a_lbl = acts_labels[idx[1]]
+        a_lbl = alt._act_label(act_prefix, acts_labels[idx[1]])
         r_lbl = reg_labels[idx[2]]
         val = float(h.array[tuple(idx)])
-        lines.append(f"{header}('{f_lbl}','{act_prefix}{a_lbl}','{r_lbl}') = {val:.10g} ;")
+        lines.append(f"{header}('{f_lbl}','{a_lbl}','{r_lbl}') = {val:.10g} ;")
     return "\n".join(lines) if len(lines) > 1 else ""
 
 

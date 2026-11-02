@@ -162,3 +162,14 @@ def test_verify_header_rejects_blind(monkeypatch: Any, tmp_path: Path) -> None:
     rgr._verify_subsidy_aware(blind, tmp_path / "out.gdx", "zero")
     with pytest.raises(SystemExit, match="subsidy-blind"):
         rgr._verify_subsidy_aware(blind, tmp_path / "out.gdx", "header")
+
+
+@pytest.mark.parametrize("mode", ["gtap", "altertax"])
+def test_header_keeps_prefixed_har_labels(mode: str, tmp_path: Path) -> None:
+    # 9x10's HARs already say a_agricultur (gtap7_3x3's say Food): the injected
+    # FBEP/FTRV keys must use the activity as the inlined sets spell it
+    text = _bundle(mode, tmp_path / "b", "--fbep", "header", dataset="9x10")
+    assert "a_a_" not in text
+    assert re.search(
+        r"""FBEP\(['"]Land['"],['"]a_agricultur['"],['"]Oceania['"]\) = """, text
+    )

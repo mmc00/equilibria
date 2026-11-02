@@ -32,6 +32,12 @@ ROOT = Path(__file__).resolve().parents[4]
 UPSTREAM = GAMS_MODEL_DIR
 
 
+def _act_label(prefix: str, label: str) -> str:
+    """A HAR activity label as the inlined sets spell it: 9x10's HARs carry the
+    a_ prefix already (a_agricultur), gtap7_3x3's do not (Food)."""
+    return label if label.startswith(prefix) else prefix + label
+
+
 def _read(name: str) -> str:
     return (UPSTREAM / name).read_text()
 
@@ -542,7 +548,10 @@ def ftrv_zero_where_only_subsidised(har_path: Path, inlined: str) -> str:
         act_prefix = m.group(1) + "_"
     endw, acts, regs = fbep.set_elements
     cells = _np.argwhere((fbep.array != 0) & (ftrv.array == 0))
-    lines = [f"FTRV('{endw[i]}','{act_prefix}{acts[j]}','{regs[k]}') = 0 ;" for i, j, k in cells]
+    lines = [
+        f"FTRV('{endw[i]}','{_act_label(act_prefix, acts[j])}','{regs[k]}') = 0 ;"
+        for i, j, k in cells
+    ]
     if not lines:
         return ""
     return "* FTRV zero where only subsidised (from basedata.har)\n" + "\n".join(lines)
@@ -588,10 +597,10 @@ def _fbep_ftrv_har_as_assignments(har_path: Path, header: str, inlined: str) -> 
     nz = _np.argwhere(h.array != 0)
     for idx in nz:
         f_lbl = endw_labels[idx[0]]
-        a_lbl = acts_labels[idx[1]]
+        a_lbl = _act_label(act_prefix, acts_labels[idx[1]])
         r_lbl = reg_labels[idx[2]]
         val = float(h.array[tuple(idx)])
-        lines.append(f"{header}('{f_lbl}','{act_prefix}{a_lbl}','{r_lbl}') = {val:.10g} ;")
+        lines.append(f"{header}('{f_lbl}','{a_lbl}','{r_lbl}') = {val:.10g} ;")
     return "\n".join(lines) if len(lines) > 1 else ""
 
 
