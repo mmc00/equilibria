@@ -4,7 +4,7 @@ Mirrors diff_9x10_full.py but for the NUS333 (3 sectors × 3 regions × 3
 factors) dataset. Reuses the solver pipeline from compare_nus333_vs_neos
 (HAR loader, residual_region="ROW", power-form 10% imptx shock, structural
 matching with eq_pwfact pin) and walks every populated Var symbol in the
-NEOS reference GDX (output/nus333_neos/out.gdx) to count match/diverge
+GAMS reference GDX (data/gtap7/nus333/gams_mcp_gtap_ifsub0_fbep-zero/out.gdx) to count match/diverge
 cells per phase (base, shock).
 
 Pass --csv PATH to emit benchmark rows in the same schema as the 9x10 diff.
@@ -12,7 +12,7 @@ Pass --csv PATH to emit benchmark rows in the same schema as the 9x10 diff.
 Resultado esperado (tol_rel=1e-3, tol_abs=1e-6): 100,00% en las dos fases —
 base 1304/1304 celdas, shock 1310/1310, sobre 139 variables.
 
-El GDX de referencia (`output/nus333_neos/out.gdx`) esta VERSIONADO, asi que
+El GDX de referencia (`data/gtap7/nus333/gams_mcp_gtap_ifsub0_fbep-zero/out.gdx`) esta VERSIONADO, asi que
 esto corre en un clon limpio sin necesidad de tener GAMS. Antes no: la regla
 `output/` de .gitignore lo dejaba afuera y el script abortaba.
 
@@ -37,6 +37,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 # moria con NameError en la linea 19. No se detecto porque correrlo exige
 # output/nus333_neos/out.gdx, que no existia en el repo.
 from equilibria._local_refs import nus333_dir, path_capi_src  # noqa: E402
+from equilibria.sources import reference  # noqa: E402
 
 sys.path.insert(0, str(path_capi_src()))
 
@@ -46,7 +47,7 @@ from _diff_core import (  # noqa: E402
 )
 
 NUS333_HAR = Path(str(nus333_dir()))
-GAMS_OUT = ROOT / "output/nus333_neos/out.gdx"
+GAMS_OUT = reference("nus333", "gams", form="mcp", mode="gtap", ifsub=0, fbep="zero") / "out.gdx"
 
 
 def _nus333_key_remap(body: tuple) -> tuple:

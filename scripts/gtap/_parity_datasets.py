@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, reference
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "data/gtap7/9x10"
@@ -191,13 +191,13 @@ class ParityDataset:
 DATASETS: dict[str, ParityDataset] = {
     "nus333": ParityDataset(
         name="nus333", mode="compstat", build=_build_nus333,
-        gams_ref_gdx=ROOT / "output/nus333_neos/out.gdx",
+        gams_ref_gdx=reference("nus333", "gams", form="mcp", mode="gtap", ifsub=0, fbep="zero") / "out.gdx",
         gams_period="shock", key_remap="nus333",
     ),
     "9x10": ParityDataset(
         name="9x10", mode="multiperiod", build=_build_9x10,
         agg_gdx=DATA_DIR / "basedata-9x10.gdx",
-        gams_ref_gdx=ROOT / "src/equilibria/templates/reference/gtap/output/COMP.gdx",
+        gams_ref_gdx=reference("9x10", "gams", form="mcp", mode="gtap", ifsub=1, fbep="zero") / "out.gdx",
         gams_period="shock", key_remap="none",
         nl_contract="gtap_standard7_9x10",
         nl_full_muv=(("Oceania", "NAmerica", "EU_28"),
