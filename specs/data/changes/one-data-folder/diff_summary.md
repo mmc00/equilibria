@@ -3,7 +3,10 @@
 Every GAMS result exists in two variants (#187): `fbep=header` (basedata.har's
 FBEP/FTRV injected after getData.gms's `fbep = 0`, FBEP with the sign cal.gms
 expects) and `fbep=zero` (the official getData.gms). All of them were rerun once
-on 2026-11-01 with the current generators (commit 7164d9ff): 84 of 86 recorded.
+with the final generators (commit e85f9107, after Task 6 added nus333 and 9x10):
+87 of 89 jobs recorded; the two missing are gtap7_5x5 `gams_nlp_altertax_ifsub0`
+(#192, below). Every output of that rerun is byte-identical to the run before
+it (7164d9ff), NEOS `out.gdx` included.
 
 Rewritten after the FBEP sign fix (3ba4f88). The first version of this file
 compared header results built with the wrong sign, so it listed 130+ differing
@@ -50,6 +53,7 @@ bookkeeping (`fbep`, `fctts`, `fcttx`, `ftrv`, `sam`, `ytax*`):
 | gtap7_5x5 `gams_nlp_altertax_ifsub1` | equation marginals only (pvaeq, pxeq) |
 | gtap7_5x5 `gams_nlp_gtap_ifsub0` | equation marginals only (arenteq) |
 | gtap7_5x5 `gams_nlp_gtap_ifsub1` | equation marginals only (arenteq, kapEndeq, pabseq, pfacteq, rorceq) |
+| 9x10 `gams_mcp_gtap_ifsub1` | none |
 
 - **none**: the variants agree to 1e-6 everywhere outside the bookkeeping.
 - **equation marginals only** (NLP results): the equation levels agree (checked:
@@ -123,3 +127,26 @@ in every period, and for three reasons:
 `tests/fixtures/gtap7/gtap7_20x41/out_gtap_shock_ifsub1.gdx` has no MCP
 counterpart: it was never a GAMS result (9ef28cbc made it with Python, Newton-TR
 + MUMPS, as a calibration seed). The 20x41 GAMS reference is the NLP above.
+
+## nus333 and 9x10
+
+They had GAMS results outside `data/`, and now they are recorded like every
+other dataset (Task 6).
+
+- **nus333** (`gams_mcp_gtap_ifsub0_fbep-zero`, local PATH, under its 1000-row limit): one
+  variant, since its data have no FBEP header. Its `out.gdx` is byte-identical
+  to the `output/nus333_neos/out.gdx` it replaces (md5 2e4d348a; `gdxdiff
+  RelEps 1e-8`: no differences). `diff_nus333_full` gives base 100% (1304
+  cells), shock 99.62% (1305 cells), identical on origin/main.
+- **9x10** (`gams_mcp_gtap_ifsub1_fbep-{header,zero}`, NEOS; recorded jobs
+  24340071 header / 24340072 zero, from the final rerun; first runs
+  24339989/24339990; `comp.gms`, ifSUB=1). The old
+  `COMP_generated.csv`/`COMP.csv` had no generator anywhere (maintainer
+  2026-11-01: regenerate). Base and check of `fbep-zero`, the official run,
+  match `COMP.csv` year 2 (`u(Oceania)` 0.99999997 vs 0.999999971, `pft(Oceania,
+  Land)` 1.0000019415 vs 1.000001931). The shock is not comparable: the old
+  year 3 multiplied prices by 1.5 (a homogeneity test), not the +10% tariff
+  shock. Header vs zero: see the table above. The 9x10 consumers (the auto seed,
+  `path_capi` warm start, `run_gtap --compare-gams`) read `fbep-zero`; on
+  10101 cells the seed is identical to the CSV one, except `facty`, which the
+  CSV loader derived as `-ytax` and the GDX carries as GAMS's own `factY`.

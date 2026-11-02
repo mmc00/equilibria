@@ -117,8 +117,8 @@ job per folder through `write_source.py`; a folder that already has a
 
 Local or NEOS: CONVERT and IPOPT have no size limit with the local license, so
 every `nl` and `nlp` result is local, except `gtap7_20x41`. PATH stops at 1000
-rows, so the local `mcp` results are `gtap7_3x3` ifSUB=1 and `nus333` (651
-rows); the other MCP results, and `gtap7_20x41`, run on NEOS
+rows, so the local `mcp` results are `gtap7_3x3` ifSUB=1 and `nus333` (under
+the limit); the other MCP results, and `gtap7_20x41`, run on NEOS
 (`regen_gams_reference.py --where neos`). A NEOS result records
 `run.machine.os: "NEOS server"` with the other machine fields empty, and a
 `neos:` block with what is needed to replicate it:
