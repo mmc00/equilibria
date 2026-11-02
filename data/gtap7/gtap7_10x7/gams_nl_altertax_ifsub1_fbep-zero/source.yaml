@@ -42,13 +42,13 @@ generated_from:
       solve.gms: 03d3a8e9488a24881febe86e53575403675d41d29b029338332002f9cf64e5d2
       tariff_sim.gms: 67df15d47505614917bbe5ac2613807ed1829aac0dd57fa8d1b4e6c85613e507
       tariff_sim_fixed.gms: e009d246ad5726e50db587db32cc2c642487ba2504b4ec0b2b77c9ceaf1cad5b
-      tools/build_gtap7_altertax_neos_bundle.py: 31073ca85f127122fa63547907e7ac9a4d58f220d5cb7b7bd8f61042002e137e
-      tools/build_gtap7_pure_local_bundle.py: 21607a00c50a76b1e30cb2388a60a573a291cc5f2364c05b1ede40c0b2e9d837
+      tools/build_gtap7_altertax_neos_bundle.py: eefd85693130862cdca0db291e87641a0812042f16a3efed5f2bf2de6252e503
+      tools/build_gtap7_pure_local_bundle.py: 681f96eb84766e38474f73a49d73a2bafb537a7900ba1627df1d6c66f1c3bee7
       tools/gdx_to_gams_inline.py: 325d18b91f3eabddf050f8b2aaf77bf90f0a74d266f0e42bf665c6a514e24396
       tools/neos_job.py: 923744a65f0a2c51e831f133c2dcdb91b49f6a3a20aa7ea933300318d9cafe5e
-      tools/nl_standalone.py: 10cc0eb5dcc400986222139a339d7f07ad6e9cba34aebce388f3987a6ad24478
-      tools/regen_gams_reference.py: 7b987ed66f7beed684a3ede1a69b2bca7578026923cdc3ea9d831bd7d088bb38
-      tools/regenerate_gams.py: 436743f19654e04bf19c8c571e891ad65e96bf6e799f18746433ba3304e84edb
+      tools/nl_standalone.py: 156594006f71822dbf4f6e3e3e5ca8d4cf9fcf35430d3813379669cdb3b63015
+      tools/regen_gams_reference.py: f816612856449809cfd925110821fbbe2e717e66543f633a742a49a358a5b5ee
+      tools/regenerate_gams.py: 598e094572596632575da4309b94ae30fb61a0657491e087d121e8d9af5bf9ee
   data:
     path: gtap7/gtap7_10x7
     sha256:
@@ -62,7 +62,7 @@ solver:
 command: /Users/marmol/proyectos/equilibria-phase2b/.venv/bin/python /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gams/tools/nl_standalone.py
   --dataset gtap7_10x7 --phase base check shock altertax --ifsub 1 --out-dir /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gtap7_10x7/gams_nl_altertax_ifsub1_fbep-zero
   --fbep zero
-equilibria_commit: 8b16a3cc
+equilibria_commit: d981ddd6
 exit:
   code: 0
 outputs:
@@ -83,8 +83,8 @@ outputs:
   gams_shock.nl: 764290bdfb3b0f1953eb8551ce33d05d0daf1d1e20ec1c360669bb0443470287
   gams_shock.row: ac5c745c4213d02ecb5b21571e02c84e89a59d255ea82a790cd1e052f94d4676
 run:
-  date: '2026-11-01T00:36:59-06:00'
-  duration_s: 4.804
+  date: '2026-11-01T17:50:48-06:00'
+  duration_s: 4.84
   machine:
     os: macOS 26.2 (Darwin 25.2.0)
     cpu: Apple M3 Pro

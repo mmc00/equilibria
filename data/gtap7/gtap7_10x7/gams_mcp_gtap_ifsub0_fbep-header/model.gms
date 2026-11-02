@@ -8193,6 +8193,13 @@ FTRV('NatRes','a_ForestFish','CHN') = 749.3397217 ;
 FTRV('NatRes','a_ForestFish','JPN') = 90.48292542 ;
 FTRV('NatRes','a_ForestFish','SSA') = 21.3194828 ;
 FTRV('NatRes','a_ForestFish','ROW') = 457.319519 ;
+* FTRV zero where only subsidised (from basedata.har)
+FTRV('Land','a_Rice','IND') = 0 ;
+FTRV('Land','a_Crops','IND') = 0 ;
+FTRV('Land','a_Livestock','IND') = 0 ;
+FTRV('Capital','a_Rice','IND') = 0 ;
+FTRV('Capital','a_Crops','IND') = 0 ;
+FTRV('Capital','a_Livestock','IND') = 0 ;
 
 * --------------------------------------------------------------------------------------------------
 *

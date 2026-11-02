@@ -20967,6 +20967,17 @@ FTRV('NatRes','OtherFood','CHN') = 252.6437225 ;
 FTRV('NatRes','OtherFood','JPN') = 26.19293213 ;
 FTRV('NatRes','OtherFood','BRA') = 83.5248642 ;
 FTRV('NatRes','OtherFood','ROW') = 706.7672729 ;
+* FTRV zero where only subsidised (from basedata.har)
+FTRV('Land','Rice','IND') = 0 ;
+FTRV('Land','Grains','IND') = 0 ;
+FTRV('Land','VegFruit','IND') = 0 ;
+FTRV('Land','OtherCrops','IND') = 0 ;
+FTRV('Land','Livestock','IND') = 0 ;
+FTRV('Capital','Rice','IND') = 0 ;
+FTRV('Capital','Grains','IND') = 0 ;
+FTRV('Capital','VegFruit','IND') = 0 ;
+FTRV('Capital','OtherCrops','IND') = 0 ;
+FTRV('Capital','Livestock','IND') = 0 ;
 
 ptax(i0,a0,r) = makb(i0,a0,r) - maks(i0,a0,r) ;
 

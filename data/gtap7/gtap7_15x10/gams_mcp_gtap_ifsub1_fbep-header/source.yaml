@@ -41,13 +41,13 @@ generated_from:
       solve.gms: 03d3a8e9488a24881febe86e53575403675d41d29b029338332002f9cf64e5d2
       tariff_sim.gms: 67df15d47505614917bbe5ac2613807ed1829aac0dd57fa8d1b4e6c85613e507
       tariff_sim_fixed.gms: e009d246ad5726e50db587db32cc2c642487ba2504b4ec0b2b77c9ceaf1cad5b
-      tools/build_gtap7_altertax_neos_bundle.py: 31073ca85f127122fa63547907e7ac9a4d58f220d5cb7b7bd8f61042002e137e
-      tools/build_gtap7_pure_local_bundle.py: 21607a00c50a76b1e30cb2388a60a573a291cc5f2364c05b1ede40c0b2e9d837
+      tools/build_gtap7_altertax_neos_bundle.py: eefd85693130862cdca0db291e87641a0812042f16a3efed5f2bf2de6252e503
+      tools/build_gtap7_pure_local_bundle.py: 681f96eb84766e38474f73a49d73a2bafb537a7900ba1627df1d6c66f1c3bee7
       tools/gdx_to_gams_inline.py: 325d18b91f3eabddf050f8b2aaf77bf90f0a74d266f0e42bf665c6a514e24396
       tools/neos_job.py: 923744a65f0a2c51e831f133c2dcdb91b49f6a3a20aa7ea933300318d9cafe5e
-      tools/nl_standalone.py: 10cc0eb5dcc400986222139a339d7f07ad6e9cba34aebce388f3987a6ad24478
-      tools/regen_gams_reference.py: 7b987ed66f7beed684a3ede1a69b2bca7578026923cdc3ea9d831bd7d088bb38
-      tools/regenerate_gams.py: 436743f19654e04bf19c8c571e891ad65e96bf6e799f18746433ba3304e84edb
+      tools/nl_standalone.py: 156594006f71822dbf4f6e3e3e5ca8d4cf9fcf35430d3813379669cdb3b63015
+      tools/regen_gams_reference.py: f816612856449809cfd925110821fbbe2e717e66543f633a742a49a358a5b5ee
+      tools/regenerate_gams.py: 598e094572596632575da4309b94ae30fb61a0657491e087d121e8d9af5bf9ee
   data:
     path: gtap7/gtap7_15x10
     sha256:
@@ -74,32 +74,32 @@ solver:
 command: /Users/marmol/proyectos/equilibria-phase2b/.venv/bin/python /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gams/tools/regen_gams_reference.py
   --dataset gtap7_15x10 --mode gtap --form mcp --ifsub 1 --out /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gtap7_15x10/gams_mcp_gtap_ifsub1_fbep-header
   --fbep header --where neos
-equilibria_commit: 8b16a3cc
+equilibria_commit: d981ddd6
 exit:
   code: 0
 outputs:
-  model.gms: b46e23f430a68543dae735a295915f43636d89357c3a32664a6397f60f932c4b
-  model.lst: 45a0b44d138e0af0c53a487ced6b76305d3239ff4b2882d69a705a9a4c126526
-  neos.log: 7905c21b5ddba326d9516fead6b291e17afe8cbbab29fcfd23c3c111d3649be3
-  neos_job.json: 35260881b0be2b12c031b5de3eb7f190f05f519c4d3ffcc1c862de38bbe62618
-  out.gdx: 9b9b83ef853200516c561d5fe4e5aa27d0eb8d305da124e8aafb29e6b95ec00e
+  model.gms: 540715ddd0e073dd8fe6a2e87e767b7b67bffcb0ab7874e86e5008bf546baeba
+  model.lst: 56529dd8827b028ef55dc931b2af42011229338e9fe1b10b56497e50664eee73
+  neos.log: ecda291f1a26a01dfe9ed57a8b3b498db3934ecbc6cc4752242bb65a7d058415
+  neos_job.json: b16342a5839cf67877d8770a029942a4b874707ff39f7ab983215e620f75db06
+  out.gdx: 77d6794266a9183c398da15b9aeaff04fdff503f3d33e036b9fd5121c3fb5a3b
   path.opt: 47ab97f3f1331ab6505c79903e7febdc2beb5a253083cbfb8175b746b3f33aaf
 run:
-  date: '2026-11-01T06:50:32+00:00'
-  duration_s: 282.058
+  date: '2026-11-02T00:06:30+00:00'
+  duration_s: 251.124
   machine:
     os: NEOS server
     cpu: ''
     cores: null
     ram_gb: null
 neos:
-  job: 24325820
-  submitted_utc: '2026-11-01T06:45:54+00:00'
-  finished_utc: '2026-11-01T06:50:32+00:00'
+  job: 24339790
+  submitted_utc: '2026-11-02T00:02:23+00:00'
+  finished_utc: '2026-11-02T00:06:30+00:00'
   category: cp
   solver: PATH
   input_method: GAMS
   options: ''
-  sent_sha256: b46e23f430a68543dae735a295915f43636d89357c3a32664a6397f60f932c4b
+  sent_sha256: 540715ddd0e073dd8fe6a2e87e767b7b67bffcb0ab7874e86e5008bf546baeba
 status: verified
 notes: ''

@@ -42,13 +42,13 @@ generated_from:
       solve.gms: 03d3a8e9488a24881febe86e53575403675d41d29b029338332002f9cf64e5d2
       tariff_sim.gms: 67df15d47505614917bbe5ac2613807ed1829aac0dd57fa8d1b4e6c85613e507
       tariff_sim_fixed.gms: e009d246ad5726e50db587db32cc2c642487ba2504b4ec0b2b77c9ceaf1cad5b
-      tools/build_gtap7_altertax_neos_bundle.py: 31073ca85f127122fa63547907e7ac9a4d58f220d5cb7b7bd8f61042002e137e
-      tools/build_gtap7_pure_local_bundle.py: 21607a00c50a76b1e30cb2388a60a573a291cc5f2364c05b1ede40c0b2e9d837
+      tools/build_gtap7_altertax_neos_bundle.py: eefd85693130862cdca0db291e87641a0812042f16a3efed5f2bf2de6252e503
+      tools/build_gtap7_pure_local_bundle.py: 681f96eb84766e38474f73a49d73a2bafb537a7900ba1627df1d6c66f1c3bee7
       tools/gdx_to_gams_inline.py: 325d18b91f3eabddf050f8b2aaf77bf90f0a74d266f0e42bf665c6a514e24396
       tools/neos_job.py: 923744a65f0a2c51e831f133c2dcdb91b49f6a3a20aa7ea933300318d9cafe5e
-      tools/nl_standalone.py: 10cc0eb5dcc400986222139a339d7f07ad6e9cba34aebce388f3987a6ad24478
-      tools/regen_gams_reference.py: 7b987ed66f7beed684a3ede1a69b2bca7578026923cdc3ea9d831bd7d088bb38
-      tools/regenerate_gams.py: 436743f19654e04bf19c8c571e891ad65e96bf6e799f18746433ba3304e84edb
+      tools/nl_standalone.py: 156594006f71822dbf4f6e3e3e5ca8d4cf9fcf35430d3813379669cdb3b63015
+      tools/regen_gams_reference.py: f816612856449809cfd925110821fbbe2e717e66543f633a742a49a358a5b5ee
+      tools/regenerate_gams.py: 598e094572596632575da4309b94ae30fb61a0657491e087d121e8d9af5bf9ee
   data:
     path: gtap7/gtap7_10x7
     sha256:
@@ -62,29 +62,29 @@ solver:
 command: /Users/marmol/proyectos/equilibria-phase2b/.venv/bin/python /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gams/tools/nl_standalone.py
   --dataset gtap7_10x7 --phase base check shock altertax --ifsub 0 --out-dir /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gtap7_10x7/gams_nl_altertax_ifsub0_fbep-header
   --fbep header
-equilibria_commit: 8b16a3cc
+equilibria_commit: d981ddd6
 exit:
   code: 0
 outputs:
   gams_altertax.col: efc8739e87edae118f36f2ce99ebdb6537c813b2f5a0c770986ccc1de1455029
-  gams_altertax.gms: 51f763c38f50f81725c584be1cbbc4bca3a694097d76191a922de5052b77bd0f
-  gams_altertax.nl: 51dae9dab6875054c74682c73ab7fac39776b3b76cbe33e7a9891e9ecdd4ed06
+  gams_altertax.gms: f102a0b44413d2c435511b20dcd495d63a276e0f3f1c191dd31b4894a92179b1
+  gams_altertax.nl: c9690a61b1ff75b1d8e2d4058962fff2fdc3e52fc019f9e0404b9cf79616c57c
   gams_altertax.row: 97078f22068785646bee3999d70df9330217f2a12d2d19874eb657e5e47a2baa
   gams_base.col: 5c106c95b5b725dc3435dbebf77795523f44011c33073977ecb59a6722e86567
-  gams_base.gms: e3e813da57ec372c3520d28179af2dffd261c5484004f719fbb740660dd86df9
-  gams_base.nl: c75c90b764349497461a25e22bb4f8453c9a2875b37d36fb88fc6a8b2dfdb22a
+  gams_base.gms: 36337b571410d65d1dfdb1199d83b90daf929e640799b782a82b89c33c5e1266
+  gams_base.nl: 5dfdb85279ef71bde5e276f3e89442a649c7b77192c339532ca731fe5ce9e87b
   gams_base.row: bb24d8bb86f7be908c3b7ffbed00db9e83f6fbd514ba44ec5fb9f12a4811622e
   gams_check.col: 69fe48c895d29b9c4cce730f01b430ceb07882aa9b69868d9b4aff348c5fd0ee
-  gams_check.gms: 2375c35d233db8bbc03f90e2f821d55a738dcb6723ce7d049685f9829ed93935
-  gams_check.nl: d3ddd16d4346664d819ff729cf94dd4ebe28fbd13556441bf99137e0c0c56430
+  gams_check.gms: 5300e8654bafab3e8e3ec67e57c3bc8c115442d6c1c372a3aed67f4987608b1d
+  gams_check.nl: 604cd73ed5fad642d4a0b0472c37e7ab37f3b712c4743e132ad8af820f2574a1
   gams_check.row: 0fbca0c80c3627e76650eea9dd810067121cef8f0f9ca5246f3930c9388b76e8
   gams_shock.col: db3b0027cf02b671b55a29a5b90cc0495a53ec319fa4b9f37fbd0ecd610d20ac
-  gams_shock.gms: 8ba077bdf3a9695fb4aca1d6e864dd8b03872f0826251b43f873694fa56634bc
-  gams_shock.nl: 7aaef4956828f348de1e5b4f0945ca7e10011d3dd80b58add19c5d03ad630c38
+  gams_shock.gms: dc836dbfee8cbbaed8e464bfd7c131eec43c810f254daf1a6928f1448c0dad98
+  gams_shock.nl: 7e2ba3d7c4fcba4cd4b381675af49e855a1baf04e07682c1a8c3d494b98e7a8f
   gams_shock.row: be4ba0c43a17871f668807c2385103843bf73afc79d8d5c26300b694d3160ebc
 run:
-  date: '2026-11-01T00:36:43-06:00'
-  duration_s: 4.833
+  date: '2026-11-01T17:50:33-06:00'
+  duration_s: 4.568
   machine:
     os: macOS 26.2 (Darwin 25.2.0)
     cpu: Apple M3 Pro
