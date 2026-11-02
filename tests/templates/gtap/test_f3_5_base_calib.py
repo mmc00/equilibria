@@ -230,11 +230,11 @@ def test_calibrated_land_response_beats_default_vs_gempack():
 
 @pytest.mark.skipif(not _has_solver(), reason="PATH solver not available")
 @pytest.mark.needs_gdxdump
-def test_base_calibrated_lifts_overall_quantity_match_vs_gempack():
-    """Not just the land price: base-calibrated lifts the OVERALL against-GEMPACK
-    quantity match (all Q_TO_VAR vars, ~190 cells) from ~76% to ~96% within 1pp,
-    matching the F3 'excluding check-movers' figure. Derived-demand vars (xg/xc/…)
-    are NOT re-based, so they re-derive consistently."""
+def test_overall_quantity_match_vs_gempack_is_clean_either_way():
+    """The OVERALL against-GEMPACK quantity match (all Q_TO_VAR vars, ~190 cells)
+    is clean with or without base calibration: 99.5% within 1pp both. The old
+    ~76% -> ~96% "lift" from calibrating the base was the FBEP sign, like the
+    check contamination above; with the old sign the default path falls to ~76%."""
     sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
     from measure_gempack_blocks import _quantity_match
 
@@ -245,6 +245,6 @@ def test_base_calibrated_lifts_overall_quantity_match_vs_gempack():
     default = _quantity_match("gtap7_3x3", False, REF_GDX, gem)
     calib = _quantity_match("gtap7_3x3", True, REF_GDX, gem)
     assert "within_1pp_pct" in default and "within_1pp_pct" in calib
-    # calibrated is a clear improvement over default on the whole quantity set
+    assert default["within_1pp_pct"] >= 94.0, f"default match too low: {default}"
     assert calib["within_1pp_pct"] >= 94.0, f"calibrated match too low: {calib}"
-    assert calib["within_1pp_pct"] > default["within_1pp_pct"] + 10.0
+    assert abs(calib["within_1pp_pct"] - default["within_1pp_pct"]) <= 1.0
