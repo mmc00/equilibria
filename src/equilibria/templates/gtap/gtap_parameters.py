@@ -954,6 +954,9 @@ class GTAPBenchmarkValues:
     ftrv: dict[tuple[str, str, str], float] = field(
         default_factory=dict
     )  # (r, f, a) - Gross factor employment tax revenue (HAR FTRV); GAMS fcttx = inScale*ftrv/(pf*xf) = ftrv/evfb
+    ftrv_har: dict[tuple[str, str, str], float] = field(
+        default_factory=dict
+    )  # (r, f, a) - the FTRV header alone (ftrv above falls back to EVFP - EVFB); the gempack basis's tax
     vmfp: dict[tuple[str, str, str], float] = field(
         default_factory=dict
     )  # (r, i, a) - Imported factors at purchaser prices?
@@ -1488,7 +1491,8 @@ class GTAPBenchmarkValues:
             )
             if _v != 0.0:
                 self.ftrv[_k] = _v
-        self.ftrv.update(_h("FTRV", ["ENDW", "ACTS", "REG"], r201))
+        self.ftrv_har.update(_h("FTRV", ["ENDW", "ACTS", "REG"], r201))
+        self.ftrv.update(self.ftrv_har)
 
         # 3D trade (COMM, REG, REG) → (r, i, rp)
         self.vxsb.update(_h("VXSB", ["COMM", "REG", "REG"], r102))
