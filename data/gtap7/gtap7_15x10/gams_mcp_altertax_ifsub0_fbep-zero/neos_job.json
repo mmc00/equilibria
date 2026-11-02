@@ -1,7 +1,7 @@
 {
-  "job": 24340092,
-  "submitted_utc": "2026-11-02T04:26:38+00:00",
-  "finished_utc": "2026-11-02T04:27:56+00:00",
+  "job": 24345922,
+  "submitted_utc": "2026-11-02T17:15:15+00:00",
+  "finished_utc": "2026-11-02T17:16:33+00:00",
   "category": "cp",
   "solver": "PATH",
   "input_method": "GAMS",

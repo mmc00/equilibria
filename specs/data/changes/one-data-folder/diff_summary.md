@@ -3,10 +3,12 @@
 Every GAMS result exists in two variants (#187): `fbep=header` (basedata.har's
 FBEP/FTRV injected after getData.gms's `fbep = 0`, FBEP with the sign cal.gms
 expects) and `fbep=zero` (the official getData.gms). All of them were rerun once
-with the final generators (commit e85f9107, after Task 6 added nus333 and 9x10):
-87 of 89 jobs recorded; the two missing are gtap7_5x5 `gams_nlp_altertax_ifsub0`
-(#192, below). Every output of that rerun is byte-identical to the run before
-it (7164d9ff), NEOS `out.gdx` included.
+with the final generators (after the final review moved nus333's HAR-to-GDX
+mapping into the model's tools/, 276de253): 87 of 89 jobs recorded; the two
+missing are gtap7_5x5 `gams_nlp_altertax_ifsub0` (#192, below). Every result
+file of that rerun is byte-identical to the two runs before it (e85f9107,
+7164d9ff), NEOS `out.gdx` included; only the NEOS job metadata (`neos.log`,
+`neos_job.json`) and the listings' remote work paths change.
 
 Rewritten after the FBEP sign fix (3ba4f88). The first version of this file
 compared header results built with the wrong sign, so it listed 130+ differing
@@ -139,7 +141,7 @@ other dataset (Task 6).
   RelEps 1e-8`: no differences). `diff_nus333_full` gives base 100% (1304
   cells), shock 99.62% (1305 cells), identical on origin/main.
 - **9x10** (`gams_mcp_gtap_ifsub1_fbep-{header,zero}`, NEOS; recorded jobs
-  24340071 header / 24340072 zero, from the final rerun; first runs
+  24345626 header / 24345650 zero, from the final rerun; first runs
   24339989/24339990; `comp.gms`, ifSUB=1). The old
   `COMP_generated.csv`/`COMP.csv` had no generator anywhere (maintainer
   2026-11-01: regenerate). Base and check of `fbep-zero`, the official run,

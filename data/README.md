@@ -125,9 +125,9 @@ the limit); the other MCP results, and `gtap7_20x41`, run on NEOS
 
 ```yaml
 neos:
-  job: 24340071                 # NEOS job number
-  submitted_utc: '2026-11-02T04:19:53+00:00'
-  finished_utc: '2026-11-02T04:20:10+00:00'
+  job: 24345626                 # NEOS job number
+  submitted_utc: '2026-11-02T17:06:31+00:00'
+  finished_utc: '2026-11-02T17:07:03+00:00'
   category: cp                  # NEOS queue: category, solver, input method
   solver: PATH
   input_method: GAMS
