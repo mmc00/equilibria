@@ -12,8 +12,9 @@ cell the HAR subsidises (FBEP != 0):
             every subsidised cell, also where FTRV is zero (IND agriculture in
             10x7/15x10/20x41)
 
-    ytax(fs) is checked for zero only: header's ytax(fs) depends on more
-    than these four headers.
+    ytax(fs) is checked for zero; header only has to show it somewhere
+    (its value depends on more than these four headers): a header run whose
+    injection silently did not happen would otherwise pass as header.
 
 Amended 2026-11-01 (3ba4f88): the first version asked header for
 1 + (ftrv - FBEP)/EVFB, the subsidy counted as a tax. That rule came from
@@ -104,12 +105,15 @@ def variant_problems(gdx: Path, dataset: str, fbep: str) -> list[str]:
         got = pfa[key] / pf[key]
         if not wedge_ok(got, evfp, evfb, ft, fb):
             problems.append(f"{key}: pfa/pf {got:.9g}, {fbep} needs {want:.9g}")
+    ytax_fs = {key: v for key, v in _gdx(gdx, "ytax").items() if "fs" in key}
     if fbep == "zero":
         problems += [
             f"ytax{key} = {v:.6g}, zero needs 0"
-            for key, v in _gdx(gdx, "ytax").items()
-            if "fs" in key and abs(v) > 1e-9
+            for key, v in ytax_fs.items()
+            if abs(v) > 1e-9
         ]
+    elif len(cells) and not any(abs(v) > 1e-9 for v in ytax_fs.values()):
+        problems.append("ytax(fs) = 0 everywhere, header needs the subsidy split out")
     return problems
 
 
@@ -170,3 +174,11 @@ def test_wedge_tolerance_is_the_data_precision() -> None:
         map(wedge_ok, old_sign[visible], evfp[visible], evfb[visible],
             ftrv[visible], fbep[visible])
     )  # fmt: skip
+
+
+def test_oracle_rejects_zero_read_as_header() -> None:
+    # the mirror: a header run whose injection silently did not happen looks
+    # like zero, so the zero reference read as header must be red too
+    gdx = dataset_dir("gtap7_3x3") / RESULT.replace("header", "zero") / "out.gdx"
+    problems = variant_problems(gdx, "gtap7_3x3", "header")
+    assert any("ytax" in p for p in problems)
