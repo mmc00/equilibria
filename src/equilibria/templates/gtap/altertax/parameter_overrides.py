@@ -96,6 +96,8 @@ def apply_altertax_elasticities(
     _override_dict(e.sigmav, o.sigmav)
     _override_dict(e.sigmap, o.sigmap)
     _override_dict(e.sigmand, o.sigmand)
+    # cal.gms runs after these overrides and turns the 1s into 1.01 (#192)
+    e.guard_unit_production_elasticities()
     for key in list(e.etrae.keys()):
         e.etrae[key] = o.etrae
     # GAMS parameter_altertax.gms: esubg(r)=esubi(r)=1 for all regions.
@@ -272,6 +274,7 @@ def _recalibrate_af_shares(params: GTAPParameters) -> None:  # noqa: F821
         return 1.0 / max(1.0 - _kappa(r, f, a), 1e-12)
 
     basis = va_subsidy_basis(params)
+    target_sigmav = params.elasticities.sigmav
 
     def _wedge(r: str, f: str, a: str) -> float:
         # fctts + fcttx = (ftrv - fbep) / evfb  — the factor SUBSIDY+TAX wedge
@@ -306,7 +309,9 @@ def _recalibrate_af_shares(params: GTAPParameters) -> None:  # noqa: F821
             va_val = sum(pfa_xf.values())
             if va_val <= 0.0:
                 continue
+            sigmav = float(target_sigmav.get((r, a), 1.0))
             for f, pxa in pfa_xf.items():
-                af_param[(r, f, a)] = pxa / va_val
+                # af = (xf/va)*(pfa/pva)**sigmav with pva = 1 (cal.gms:729)
+                af_param[(r, f, a)] = pxa / va_val * _pfa(r, f, a) ** (sigmav - 1.0)
 
     cal.af_param.update(af_param)

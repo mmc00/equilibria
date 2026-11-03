@@ -203,6 +203,12 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
     m._residual_region = rr
     mp.seed_all_periods(m, gdx)
 
+    # altertax: check and shock start from Python's own previous period and nothing
+    # is held at the reference. Seeding them with the answer and holding pva/pnd
+    # there matched any reference, the old (sigma = 1, free pva/pnd/px) and the new
+    # (#192) alike, at 100 % @0.01 %: the gate could not fail. Measured this way the
+    # sigma = 1 Python scored 53-77 % on the check, the sigma = 1.01 one 100 %.
+    altertax = mode == "altertax"
     res = solve_multiperiod(
         m,
         p,
@@ -210,8 +216,8 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
         ref_gdx=gdx,
         skip_base_solve=True,
         mute_welfare=True,
-        seed_from_prior=False,
-        holdfix_cd=True,
+        seed_from_prior=altertax,
+        holdfix_cd=not altertax,
         mode=solve_mode,
     )
     codes = {k: res[k]["code"] for k in res}
