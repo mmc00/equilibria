@@ -73,6 +73,7 @@ def test_a_model_built_at_sigma_one_refuses(nest, builder):
 
 @pytest.mark.integration
 @pytest.mark.needs_path
+@pytest.mark.needs_gdxdump  # seed_all_periods reads the GDX with gdxdump
 def test_altertax_by_default_leaves_the_production_nest_free(monkeypatch):
     """pva, pnd and px are solved, not held at their seed, in check and shock.
 
