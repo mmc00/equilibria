@@ -51,7 +51,7 @@ def solve_and_measure(dataset: str, if_sub: bool, gdx: Path):
     rr = list(p.sets.r)[-1]
     # ALTERTAX setup (mirrors test_altertax_multiperiod_parity._solve_and_match):
     # altertax elasticities + name="altertax" mobile closure + fix_taxes/technology
-    # + holdfix_cd=True, mode default (altertax). NOT gtap-mode.
+    # + mode default (altertax). NOT gtap-mode.
     pa = apply_altertax_elasticities(p, in_place=False)
     ac = GTAPClosureConfig(name="altertax", closure_type="MCP", capital_mobility="mobile",
                            fix_endowments=False, fix_taxes=True, fix_technology=True,
@@ -67,7 +67,7 @@ def solve_and_measure(dataset: str, if_sub: bool, gdx: Path):
 
     res = solve_multiperiod(m, p, ac, ref_gdx=gdx,
                             skip_base_solve=True, mute_welfare=True,
-                            seed_from_prior=False, holdfix_cd=True)
+                            seed_from_prior=False)
     codes = {k: res[k]["code"] for k in res}
 
     def measure(period: str):

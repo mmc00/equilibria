@@ -173,7 +173,7 @@ def _solve_shock_10(dataset: str):
     mp.seed_all_periods(m, gdx)
     solve_multiperiod(
         m, p, ac, ref_gdx=gdx, skip_base_solve=True, mute_welfare=True,
-        seed_from_prior=False, holdfix_cd=True, mode="gtap",
+        seed_from_prior=False, mode="gtap",
     )
     return m
 

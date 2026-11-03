@@ -330,19 +330,8 @@ class ProductionSupplyBlock(Block):
                 if and_val <= 0.0 and ava_val <= 0.0:
                     return None
                 sigmap = _get_sigmap(r, a)
+                el.require_non_unit_production_sigma("sigmap", r, a, sigmap)
                 expo = 1.0 - sigmap
-                if abs(expo) < 1e-8:
-                    nd_term = (
-                        (m.pnd[r, a] / max(_lambdand(r, a), 1e-8)) ** and_val
-                        if and_val > 0.0
-                        else 1.0
-                    )
-                    va_term = (
-                        (m.pva[r, a] / m.lambdava[r, a]) ** ava_val
-                        if ava_val > 0.0
-                        else 1.0
-                    )
-                    return m.px[r, a] == nd_term * va_term
                 shift = m.axp[r, a] ** (sigmap - 1.0)
                 lambdand = max(_lambdand(r, a), 1e-8)
                 lambdava = m.lambdava[r, a]
@@ -365,27 +354,8 @@ class ProductionSupplyBlock(Block):
                 m = pyomo_model
                 r, a = indices
                 sigmand = _get_sigmand(r, a)
+                el.require_non_unit_production_sigma("sigmand", r, a, sigmand)
                 expo = 1.0 - sigmand
-                if abs(expo) < 1e-8:
-                    terms = []
-                    for i in m.i:
-                        io_val = (
-                            value(m.io_param[r, i, a])
-                            if hasattr(m, "io_param")
-                            else value(m.p_io[r, i, a])
-                        )
-                        if not pshifts_lambdaio:
-                            io_val = value(m.p_io[r, i, a])
-                        if io_val <= 0.0:
-                            continue
-                        lambdaio = max(value(m.lambdaio[r, i, a]), 1e-8)
-                        terms.append((m.pa[r, i, a] / lambdaio) ** io_val)
-                    if not terms:
-                        return None
-                    prod = 1.0
-                    for term in terms:
-                        prod *= term
-                    return m.pnd[r, a] == prod
                 terms = []
                 for i in m.i:
                     io_val = (
@@ -414,9 +384,8 @@ class ProductionSupplyBlock(Block):
                 m = pyomo_model
                 r, a = indices
                 sigmav = _get_sigmav(r, a)
+                el.require_non_unit_production_sigma("sigmav", r, a, sigmav)
                 expo = 1.0 - sigmav
-                if abs(expo) < 1e-8:
-                    return exp(log(m.pva[r, a])) == m.pva[r, a]
                 terms = []
                 for f in m.f:
                     af_val = (

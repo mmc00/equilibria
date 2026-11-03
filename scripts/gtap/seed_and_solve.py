@@ -388,7 +388,7 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
     res = solve_multiperiod(
         m, p, gc, ref_gdx=gdx_path,
         skip_base_solve=True, mute_welfare=True,
-        seed_from_prior=False, holdfix_cd=False, mode="gtap")
+        seed_from_prior=False, mode="gtap")
     code = res.get(period, {}).get("code")
     resid = float(res.get(period, {}).get("residual") or 0.0)
     _, sent_after = _sentinel()

@@ -4,7 +4,7 @@ and report the cell-by-cell real-match% at tol 0.1% / 0.5% / 1% plus the
 per-period PATH termination codes.
 
 This is the SAME build/seed/solve/compare machinery as the committed gate
-(holdfix_cd=True, equation_scaling via solve_multiperiod, the same SKIP/RF/ALIAS
+(equation_scaling via solve_multiperiod, the same SKIP/RF/ALIAS
 sets, the same shock-period denominator). The ONLY addition is reading the
 already-solved model at three tolerance bands instead of the single hardcoded 1%.
 
@@ -99,7 +99,7 @@ def solve_and_measure(dataset: str, if_sub: bool):
     res = solve_multiperiod(
         m, p, ac, ref_gdx=ref,
         skip_base_solve=True, mute_welfare=True,
-        seed_from_prior=False, holdfix_cd=True,
+        seed_from_prior=False,
     )
     codes = {k: res[k]["code"] for k in res}
 

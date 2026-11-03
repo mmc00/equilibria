@@ -904,7 +904,6 @@ def solve_block_model(
         skip_base_solve=True,
         mute_welfare=True,
         seed_from_prior=False,
-        holdfix_cd=False,
         mode=mode,
         settle_only=settle_only,
     )

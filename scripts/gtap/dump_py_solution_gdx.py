@@ -35,7 +35,7 @@ for per in PERIODS: mp.build_equations_intra(m, per)
 mp.build_equations_fisher(m); m._residual_region = rr
 mp.seed_all_periods(m, gdx_ref)
 solve_multiperiod(m, p, gc, ref_gdx=gdx_ref, skip_base_solve=True, mute_welfare=True,
-                  seed_from_prior=False, holdfix_cd=False, mode="gtap")
+                  seed_from_prior=False, mode="gtap")
 
 # collect ALL variable AND parameter values (all periods) into per-symbol dicts.
 # Params are dumped with a p_ prefix so the diff can compare calibrated inputs

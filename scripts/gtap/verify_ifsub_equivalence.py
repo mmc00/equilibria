@@ -111,7 +111,6 @@ def _solve(dataset: str, ifsub: int):
         skip_base_solve=True,
         mute_welfare=True,
         seed_from_prior=False,
-        holdfix_cd=True,
         mode="gtap",
     )
     return m, int(res["shock"]["code"])

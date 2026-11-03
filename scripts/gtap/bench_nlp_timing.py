@@ -132,14 +132,14 @@ def _time_python_once(dataset: str, mode: str, ifsub: int, gdx: Path) -> float:
                                capital_mobility="mobile", fix_endowments=False,
                                fix_taxes=True, fix_technology=True,
                                if_sub=bool(ifsub), numeraire="pnum")
-        solve_mode, holdfix_cd = "altertax", True
+        solve_mode = "altertax"
     else:  # pure real-CES
         pa = p
         ac = GTAPClosureConfig(name="base", closure_type="MCP",
                                capital_mobility="sluggish", fix_endowments=False,
                                fix_taxes=False, fix_technology=False,
                                if_sub=bool(ifsub), numeraire="pnum")
-        solve_mode, holdfix_cd = "gtap", False
+        solve_mode = "gtap"
 
     mp = GTAPMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
     m = mp.build_sets()
@@ -153,7 +153,7 @@ def _time_python_once(dataset: str, mode: str, ifsub: int, gdx: Path) -> float:
     t0 = time.perf_counter()
     solve_multiperiod(m, p, ac, ref_gdx=gdx, skip_base_solve=True,
                       mute_welfare=True, seed_from_prior=False,
-                      holdfix_cd=holdfix_cd, mode=solve_mode)
+                      mode=solve_mode)
     return time.perf_counter() - t0
 
 

@@ -62,7 +62,7 @@ def solve_and_measure(dataset: str, if_sub: bool, gdx: Path):
 
     res = solve_multiperiod(m, p, gc, ref_gdx=gdx,
                             skip_base_solve=True, mute_welfare=True,
-                            seed_from_prior=False, holdfix_cd=False, mode="gtap")
+                            seed_from_prior=False, mode="gtap")
     codes = {k: res[k]["code"] for k in res}
 
     def measure(period: str):
