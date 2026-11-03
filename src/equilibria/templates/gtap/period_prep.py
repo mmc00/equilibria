@@ -62,10 +62,6 @@ F35_DERIVED_DEMAND = frozenset(
 # recalibra siempre desde el check, aun cuando se siembre desde el base (F3.5).
 _RECALIBRATE_FROM = {"check": "base", "shock": "check"}
 
-# Precios del nido CD que holdfix_cd fija en el shock: llegan con la semilla GAMS
-# del shock y sembrar desde el previo los pisaria (ROW/Mnfcs 1.0078 -> 0.7592).
-_CD_SEED_PRICES = ("pva", "pnd", "px")
-
 # Ancla del numerario en el shock (GAMS fija pnum en el periodo del shock).
 _SHOCK_PNUM = 1.5
 
@@ -145,31 +141,6 @@ def _seed_from_prior_if_asked(c: _Ctx) -> None:
 def _seed_from_prior(c: _Ctx) -> None:
     """Arranque en caliente desde el periodo previo ya resuelto."""
     _drv()._seed_period_from_prior(c.m, c.prep.seed_prior(c.period), c.period)
-
-
-def _seed_from_prior_keeping_cd_seed(c: _Ctx) -> None:
-    """altertax: como _seed_from_prior, pero con holdfix_cd conserva la semilla
-    GAMS de pva/pnd/px del periodo, porque _cd_nest_if_holdfix los fija ahi.
-
-    px entro a la familia con el hold de eq_pxeq: el primer intento fallo porque
-    px quedaba fijo en el valor del check (px[MEX,Rice] 1.0 vs 0.672 de la
-    referencia, gate 87.76 -> 86.09)."""
-    if not c.prep.holdfix_cd:
-        _seed_from_prior(c)
-        return
-    m, cd_seed = c.m, {}
-    for vn in _CD_SEED_PRICES:
-        v = getattr(m, vn, None)
-        if v is None:
-            continue
-        for idx in v:
-            t = idx[-1] if isinstance(idx, tuple) else idx
-            if t == c.period and v[idx].value is not None:
-                cd_seed[(vn, idx)] = float(v[idx].value)
-    _seed_from_prior(c)
-    for (vn, idx), val in cd_seed.items():
-        with contextlib.suppress(Exception):
-            getattr(m, vn)[idx].set_value(val)
 
 
 def _unfix_regy(c: _Ctx) -> None:
@@ -287,26 +258,6 @@ def _mute_welfare_if_asked(c: _Ctx) -> None:
         )
 
 
-def _derived_seed_if_holdfix(c: _Ctx) -> None:
-    """altertax + holdfix_cd: siembra las vars de demanda derivadas (xc/xg/xi/xd/
-    xmt/xiagg) desde las primales sembradas, asi el punto GAMS es un punto fijo."""
-    if not c.prep.holdfix_cd:
-        return
-    n = _drv()._complete_derived_seed(c.m, c.period)
-    if n:
-        _log.info("%s period: seeded %d derived demand-volume cells", c.period, n)
-
-
-def _cd_nest_if_holdfix(c: _Ctx) -> None:
-    """altertax + holdfix_cd: holdfix del nido VA/ND degenerado bajo CD (pva/pnd)
-    en los valores sembrados (GAMS holdfixed=1); si no, PATH los desliza."""
-    if not c.prep.holdfix_cd:
-        return
-    n = _drv()._holdfix_cd_nest(c.m, c.period)
-    if n:
-        _log.info("%s period: holdfixed %d CD-nest cells (pva/pnd)", c.period, n)
-
-
 def _fnm_pf(c: _Ctx) -> None:
     """pf de factores especificos con etaff=0 fijo al periodo previo (GAMS
     pf.fx(r,fp,a,tsim-1)); si no es un grado de libertad que PATH hace explotar."""
@@ -361,8 +312,6 @@ _RECIPES: dict[tuple[str, str], _Recipe] = {
             _deactivate_redundant_xft,
             _replicate_sp_reference,
             _mute_welfare_if_asked,
-            _derived_seed_if_holdfix,
-            _cd_nest_if_holdfix,
             _fnm_pf,
         ),
         closure="altertax",
@@ -387,14 +336,12 @@ _RECIPES: dict[tuple[str, str], _Recipe] = {
         steps=(
             _freeze_inactive,
             _recalibrate_shares,
-            _seed_from_prior_keeping_cd_seed,
+            _seed_from_prior,
             _unfix_regy,
             _fix_shock_numeraire,
             _deactivate_redundant_xft,
             _replicate_own_sp_reference,
             _mute_welfare_if_asked,
-            _derived_seed_if_holdfix,
-            _cd_nest_if_holdfix,
             _fnm_pf,
         ),
         closure="altertax",
@@ -445,7 +392,6 @@ class PeriodPreparer:
         residual_region: str,
         mute_welfare: bool = True,
         seed_from_prior: bool = False,
-        holdfix_cd: bool = True,
         base_calibrated: bool = False,
         solve_check: bool = False,
     ) -> None:
@@ -455,7 +401,6 @@ class PeriodPreparer:
         self.residual_region = residual_region
         self.mute_welfare = mute_welfare
         self.seed_from_prior = seed_from_prior
-        self.holdfix_cd = holdfix_cd
         self.base_calibrated = base_calibrated
         self.solve_check = solve_check
         self._closures = {"base": base_closure, "altertax": alt_closure}

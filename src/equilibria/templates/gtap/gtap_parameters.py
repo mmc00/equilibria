@@ -566,6 +566,18 @@ class GTAPElasticities:
                 if value == 1.0:
                     nest[key] = 1.01
 
+    @staticmethod
+    def require_non_unit_production_sigma(
+        nest: str, r: str, a: str, sigma: float
+    ) -> None:
+        """Refuse a production nest at sigma = 1: its price equation would read
+        1 = 1 and stop pinning its price (#192). The guard above prevents it."""
+        if abs(1.0 - sigma) < 1e-8:
+            raise ValueError(
+                f"{nest}[{r},{a}] = {sigma}: production nests at sigma = 1 leave "
+                "their price free (#192); call guard_unit_production_elasticities()"
+            )
+
     def initialize_nested_elasticities(self, sets: GTAPSets) -> None:
         """Ensure sigmap, sigmand and sigmav cover every (region, activity)."""
         default_value = 1.0

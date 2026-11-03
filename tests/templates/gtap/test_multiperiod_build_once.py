@@ -241,7 +241,6 @@ def _seed_and_solve(build_fn):
         skip_base_solve=True,
         mute_welfare=True,
         seed_from_prior=False,
-        holdfix_cd=True,
         mode="gtap",
     )
     out = {}

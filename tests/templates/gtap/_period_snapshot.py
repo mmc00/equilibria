@@ -40,8 +40,8 @@ FIXTURE = ROOT / "tests" / "fixtures" / "period_prep_snapshot.json"
 # Cada caso: (nombre, mode, if_sub, opciones de build, opciones del driver). La
 # opcion "shock" no va al driver: se escribe en el ShockBlock con apply_shock.
 # Cubren cada receta: base, check normal, check copiado del base (F3.5), shock,
-# en los dos modos, y las ramas de las opciones (holdfix_cd, seed_from_prior,
-# mute_welfare, skip_base_solve, solve_check, shock de instrumento).
+# en los dos modos, y las ramas de las opciones (seed_from_prior, mute_welfare,
+# skip_base_solve, solve_check, shock de instrumento).
 CASES: dict[str, tuple[str, bool, dict[str, Any], dict[str, Any]]] = {
     "gtap_ifsub0": ("gtap", False, {}, {}),
     "gtap_ifsub1": ("gtap", True, {}, {}),
@@ -52,7 +52,6 @@ CASES: dict[str, tuple[str, bool, dict[str, Any], dict[str, Any]]] = {
         False,
         {},
         {
-            "holdfix_cd": False,
             "seed_from_prior": True,
             "mute_welfare": False,
             "skip_base_solve": True,

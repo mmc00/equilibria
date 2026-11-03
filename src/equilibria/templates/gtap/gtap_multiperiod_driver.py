@@ -1780,60 +1780,6 @@ def _solve_welfare_tail(m, period: str) -> int:
 
 
 # ---------------------------------------------------------------------------
-# _complete_derived_seed — seed the Python-only demand-volume vars for a period
-# ---------------------------------------------------------------------------
-def _complete_derived_seed(m, period: str) -> int:
-    """Seed the Python-ONLY demand-volume vars that GAMS does not carry, from the
-    already-seeded GAMS primals of `period`, so the GAMS point is a true fixed point
-    of Python's model.  Otherwise xc/xg/xi/xd/xmt/xiagg stay at init → large
-    eq_xc/eq_xg/eq_xi/eq_xd_agg residuals that knock PATH off the GAMS basin.
-    t-aware mirror of diff_altertax.complete_derived_seed.  Returns cells set.
-
-      xc[r,i]  = xaa[r,i,hhd]      ; xg[r,i] = xaa[r,i,gov] ; xi[r,i] = xaa[r,i,inv]
-      xd[r,i]  = Σ_aa xda/xscale   ; xmt[r,i] = Σ_aa xma/xscale ; xiagg[r] = Σ_i xi
-    """
-    from pyomo.environ import value as _pv
-
-    def _set(v, idx, val):
-        try:
-            v[idx].set_value(float(val))
-            return 1
-        except Exception:
-            return 0
-
-    n = 0
-    for r in m.r:
-        for i in m.i:
-            for vn, agent in (("xc", "hhd"), ("xg", "gov"), ("xi", "inv")):
-                v = getattr(m, vn, None)
-                if v is None:
-                    continue
-                with contextlib.suppress(Exception):
-                    n += _set(v, (r, i, period), _pv(m.xaa[r, i, agent, period]))
-            try:
-                s = sum(
-                    float(_pv(m.xda[r, i, aa, period])) / float(_pv(m.xscale[r, aa]))
-                    for aa in m.aa
-                )
-                n += _set(m.xd, (r, i, period), s)
-            except Exception:
-                pass
-            try:
-                s = sum(
-                    float(_pv(m.xma[r, i, aa, period])) / float(_pv(m.xscale[r, aa]))
-                    for aa in m.aa
-                )
-                n += _set(m.xmt, (r, i, period), s)
-            except Exception:
-                pass
-        with contextlib.suppress(Exception):
-            n += _set(
-                m.xiagg, (r, period), sum(float(_pv(m.xi[r, i, period])) for i in m.i)
-            )
-    return n
-
-
-# ---------------------------------------------------------------------------
 # _recompute_ifsub_report_vars — post-solve fill of the ifSUB report variables
 # ---------------------------------------------------------------------------
 def _recompute_ifsub_report_vars(m, params, period: str) -> int:
@@ -2011,57 +1957,6 @@ def _recompute_ifsub_report_vars(m, params, period: str) -> int:
 
 
 # ---------------------------------------------------------------------------
-# _holdfix_cd_nest — replicate GAMS gtap.holdfixed=1 on the CD-degenerate nest
-# ---------------------------------------------------------------------------
-def _holdfix_cd_nest(m, period: str) -> int:
-    """FIX pva/pnd for `period` at their current (GAMS-seeded) values AND deactivate
-    eq_pvaeq/eq_pndeq for that period.
-
-    Under forced-CD (sigmav=sigmap=1) eq_pvaeq/eq_pndeq degenerate to the GAMS
-    tautologies 1=Σaf / 1=Σio — they do NOT determine pva/pnd, so PATH slides them
-    to a different (valid) branch, collapsing a whole region's price level (USA:
-    pgdpmp 0.99→0.67 in the multi-period check).  GAMS pins them via holdfixed=1 in
-    EVERY period.  A fixed var must free its paired row, exactly as holdfixed does.
-    Mirrors diff_altertax.holdfix_cd_nest but t-aware (only the given period).
-    Returns the count of pva/pnd cells fixed.  See project_gtap7_10x7_check_holdfix.
-
-    px is the third member of the degenerate family: GAMS pxeq at sigmap=1 is the
-    tautology px**0 == and+ava, so px parks wherever the run's path/bounds leave it
-    (GAMS-vs-GAMS proof: three refs of the same system park pva/px differently; the
-    tight one-shot ref parks pva[USA,Chemicals,shock] AT its 0.001 bound). Python's
-    eq_pxeq CD branch is an ADDED determinant (px=pnd^and·pva^ava) GAMS does not
-    have — with pva pinned at the ref's parking it CONTRADICTS the ref's px
-    (eq_pxeq[USA,Chemicals]=0.915 at the seeded point) and blows the block up
-    (xd[USA,Chemicals,*] ~11×). Pin px at the ref's shock slice (re-seeded upstream)
-    and deactivate the added dual — replicating the ref's parking wholesale.
-    """
-    hf = 0
-    for vn, eqn in (("pva", "eq_pvaeq"), ("pnd", "eq_pndeq"), ("px", "eq_pxeq")):
-        v = getattr(m, vn, None)
-        if v is not None:
-            for idx in v:
-                t = idx[-1] if isinstance(idx, tuple) else idx
-                if t != period:
-                    continue
-                vd = v[idx]
-                if vd.value is not None and not vd.fixed:
-                    vd.fix(float(vd.value))
-                    hf += 1
-        e = getattr(m, eqn, None)
-        if e is not None:
-            for idx in e:
-                t = idx[-1] if isinstance(idx, tuple) else idx
-                if t != period:
-                    continue
-                try:
-                    if e[idx].active:
-                        e[idx].deactivate()
-                except Exception:
-                    pass
-    return hf
-
-
-# ---------------------------------------------------------------------------
 # _holdfix_fnm_pf — replicate GAMS pf.fx(r,fp,a,tsim-1)=pf.l(r,fp,a,tsim-1)
 # for sector-specific (fnm) factors with etaff=0.
 # ---------------------------------------------------------------------------
@@ -2077,8 +1972,7 @@ def _holdfix_fnm_pf(m, params, period: str) -> int:
     (not a Python bug — confirmed via comp.gms: `etaff(r,fp,a) = 0 ;` is
     GAMS's OWN default). GAMS anchors it by FIXING pf.fx(r,fp,a,tsim-1) to the
     previous period's solved value in EVERY period's loop iteration (comp.gms
-    line ~24947) — the same holdfix mechanism as _holdfix_cd_nest, just for a
-    different degenerate family. Without this, PATH's line search lets pf
+    line ~24947), GAMS's holdfix mechanism for this degenerate family. Without this, PATH's line search lets pf
     float freely and explodes (confirmed via PATH_CAPI_PROGRESS_HISTORY_FILE
     trace: pf[JPN,NatRes,OtherFood,check] repeatedly hit ~12000 mid-line-search
     before backtracking, the worst-x-inf-norm family in the whole solve).
@@ -2187,7 +2081,6 @@ def _solve_multiperiod_inner(
     skip_base_solve: bool = False,
     mute_welfare: bool = True,
     seed_from_prior: bool = False,
-    holdfix_cd: bool = True,
     mode: str = "altertax",
     solve_check: bool = False,
     settle_only: bool = False,
@@ -2363,7 +2256,6 @@ def _solve_multiperiod_inner(
         residual_region=res_region,
         mute_welfare=mute_welfare,
         seed_from_prior=seed_from_prior,
-        holdfix_cd=holdfix_cd,
         base_calibrated=_base_calibrated,
         solve_check=solve_check,
     )
@@ -2534,7 +2426,6 @@ def solve_multiperiod(
     skip_base_solve: bool = False,
     mute_welfare: bool = True,
     seed_from_prior: bool = False,
-    holdfix_cd: bool = True,
     mode: str = "altertax",
     solve_check: bool = False,
     settle_only: bool = False,
@@ -2581,7 +2472,6 @@ def solve_multiperiod(
             skip_base_solve=skip_base_solve,
             mute_welfare=mute_welfare,
             seed_from_prior=seed_from_prior,
-            holdfix_cd=holdfix_cd,
             mode=mode,
             solve_check=solve_check,
             settle_only=settle_only,

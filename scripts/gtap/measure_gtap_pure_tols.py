@@ -1,7 +1,7 @@
 """Fresh status sweep for the PURE-GTAP (non-altertax) multi-period SOLVE gate.
 
 Mirrors test_gtap_multiperiod_parity._solve_and_match exactly (mode="gtap",
-holdfix_cd=False, skip_base_solve=True, same SKIP/RF/ALIAS sets, the recorded
+skip_base_solve=True, same SKIP/RF/ALIAS sets, the recorded
 GAMS MCP reference, fbep=header) but:
   - measures BOTH ifSUB modes,
   - reports CHECK and SHOCK match% at tol 0.1% / 0.5% / 1%,
@@ -94,7 +94,7 @@ def solve_and_measure(dataset: str, if_sub: bool):
     res = solve_multiperiod(
         m, p, gc, ref_gdx=ref,
         skip_base_solve=True, mute_welfare=True,
-        seed_from_prior=False, holdfix_cd=False, mode="gtap",
+        seed_from_prior=False, mode="gtap",
     )
     codes = {k: res[k]["code"] for k in res}
 
