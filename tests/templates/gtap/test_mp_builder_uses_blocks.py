@@ -147,6 +147,9 @@ def test_blocks_and_monolith_build_the_same_system():
             "eq_pp_rai",
             "eq_pfaeq",
             "eq_xfeq",
+            # CES form since #192 (sigmav 1 -> 1.01): reads lambdaf (afeall), as
+            # in test_gtap_blocks_form; the CD tautology it replaced read nothing
+            "eq_pvaeq",
             "eq_dintxeq",
             "eq_mintxeq",
             "eq_pmeq",

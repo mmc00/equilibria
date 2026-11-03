@@ -1,22 +1,22 @@
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 1
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 1
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 Include File Summary
 
 
    SEQ   GLOBAL TYPE      PARENT   LOCAL  INCLVL  FILENAME
 
-     1        1 INPUT          0       0       0  /var/lib/condor/execute/dir_9
-                                                  9500/gamsexec/MODEL.gms
+     1        1 INPUT          0       0       0  /var/lib/condor/execute/dir_2
+                                                  811901/gamsexec/MODEL.gms
      2     1213 IF EXIST       1    1215       0  ./9x10Emiss.gdx
 
 
-COMPILATION TIME     =        0.010 SECONDS      3 MB  53.5.1 f2e5fac3 LEX-LEG
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 2
+COMPILATION TIME     =        0.011 SECONDS      3 MB  53.5.1 f2e5fac3 LEX-LEG
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 2
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
-----   3652 VARIABLE eh.L  CDE expansion parameters
+----   3660 VARIABLE eh.L  CDE expansion parameters
 
                    base       check       shock
 
@@ -34,7 +34,7 @@ ROW  .Mnfcs       0.893       0.893       0.893
 ROW  .Svces       1.209       1.209       1.209
 
 
-----   3652 VARIABLE bh.L  CDE substitution parameters
+----   3660 VARIABLE bh.L  CDE substitution parameters
 
                    base       check       shock
 
@@ -52,7 +52,7 @@ ROW  .Mnfcs       0.481       0.481       0.481
 ROW  .Svces       0.378       0.378       0.378
 
 
-----   3652 PARAMETER eh0  CDE expansion parameter
+----   3660 PARAMETER eh0  CDE expansion parameter
 
              Food       Mnfcs       Svces
 
@@ -62,7 +62,7 @@ EGY         0.523       0.839       1.315
 ROW         0.437       0.893       1.209
 
 
-----   3652 PARAMETER bh0  CDE substitution parameter
+----   3660 PARAMETER bh0  CDE substitution parameter
 
              Food       Mnfcs       Svces
 
@@ -72,7 +72,7 @@ EGY         0.812       0.732       0.640
 ROW         0.716       0.481       0.378
 
 
-----   3652 VARIABLE phiP.L  Elasticity of private exp. wrt to private utility
+----   3660 VARIABLE phiP.L  Elasticity of private exp. wrt to private utility
 
              base       check       shock
 
@@ -82,7 +82,7 @@ EGY         1.000       1.000       1.000
 ROW         1.000       1.000       1.000
 
 
-----   3652 VARIABLE xcshr.L  Household budget shares
+----   3660 VARIABLE xcshr.L  Household budget shares
 
 INDEX 1 = USA
 
@@ -117,7 +117,7 @@ Mnfcs.hhd       0.167       0.167       0.167
 Svces.hhd       0.631       0.631       0.631
 
 
-----   3654 PARAMETER kron  Kronecker delta
+----   3662 PARAMETER kron  Kronecker delta
 
                 USA       EU_28         EGY         ROW        Food       Mnfcs
 
@@ -162,9 +162,9 @@ ctax                      1.000
 bop                                   1.000
 tot                                               1.000
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 3
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 3
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Range Statistics    SOLVE betaCal Using MCP From line 3692
+Range Statistics    SOLVE betaCal Using MCP From line 3700
 
 
 RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
@@ -173,9 +173,9 @@ RHS       [min, max] : [ 1.234E-02, 2.353E+01]
 Bound     [min, max] : [        NA,        NA]
 Matrix    [min, max] : [ 1.234E-02, 3.926E+01]
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 4
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 4
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Model Statistics    SOLVE betaCal Using MCP From line 3692
+Model Statistics    SOLVE betaCal Using MCP From line 3700
 
 
 LOOPS                           *            base
@@ -189,24 +189,24 @@ NON ZERO ELEMENTS            40     NON LINEAR N-Z             40
 CODE LENGTH                 113     CONSTANT POOL              24
 
 
-GENERATION TIME      =        0.003 SECONDS      5 MB  53.5.1 f2e5fac3 LEX-LEG
+GENERATION TIME      =        0.002 SECONDS      5 MB  53.5.1 f2e5fac3 LEX-LEG
                L O O P S         *          base
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 5
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 5
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Solution Report     SOLVE betaCal Using MCP From line 3692
+Solution Report     SOLVE betaCal Using MCP From line 3700
 
 
                S O L V E      S U M M A R Y
 
      MODEL   betaCal             
      TYPE    MCP                 
-     SOLVER  PATH                FROM LINE  3692
+     SOLVER  PATH                FROM LINE  3700
 
 **** SOLVER STATUS     1 Normal Completion
 **** MODEL STATUS      1 Optimal
 
- RESOURCE USAGE, LIMIT          0.032 10000000000.000
+ RESOURCE USAGE, LIMIT          0.022 10000000000.000
  ITERATION COUNT, LIMIT         0    2147483647
  EVALUATION ERRORS              0             0
 16 row/cols, 40 non-zeros, 15.62% dense.
@@ -319,12 +319,12 @@ ROW  .base     -INF      0.216     +INF  -1.24E-14
                              0  UNBOUNDED
                              0  REDEFINED
                              0     ERRORS
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 6
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 6
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
-----   3885 PARAMETER xdFlag  XD flags
+----   3893 PARAMETER xdFlag  XD flags
 
              Food       Mnfcs       Svces
 
@@ -334,7 +334,7 @@ EGY         1.000       1.000       1.000
 ROW         1.000       1.000       1.000
 
 
-----   3885 PARAMETER xetFlag  XET flags
+----   3893 PARAMETER xetFlag  XET flags
 
              Food       Mnfcs       Svces
 
@@ -344,7 +344,7 @@ EGY         1.000       1.000       1.000
 ROW         1.000       1.000       1.000
 
 
-----   3885 PARAMETER xsFlag  XS flags
+----   3893 PARAMETER xsFlag  XS flags
 
              Food       Mnfcs       Svces
 
@@ -354,7 +354,7 @@ EGY         1.000       1.000       1.000
 ROW         1.000       1.000       1.000
 
 
-----   3885 VARIABLE xs.L  Domestic supply
+----   3893 VARIABLE xs.L  Domestic supply
 
                    base       check       shock
 
@@ -372,10 +372,10 @@ ROW  .Mnfcs      30.099      30.099      30.099
 ROW  .Svces      51.896      51.896      51.896
 
 
-----   4338 VARIABLE walras.L              =        0.000  Walras check
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 7
+----   4346 VARIABLE walras.L              =        0.000  Walras check
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 7
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Equation Listing    SOLVE gtap Using MCP From line 4313
+Equation Listing    SOLVE gtap Using MCP From line 4321
 
 
 ---- axpeq  =E=  Production frontier shifter
@@ -413,31 +413,33 @@ REMAINING 9 ENTRIES SKIPPED
 
 ---- ndeq  =E=  Demand for aggregate intermediate (ND)
 
-ndeq(USA,Food,check)..  (0)*axp(USA,Food,check) + (0)*lambdand(USA,Food,check)
+ndeq(USA,Food,check)..  - (0.01092954184063)*axp(USA,Food,check)
      
-      + nd(USA,Food,check) - (1.092954184063)*px(USA,Food,check)
+      - (0.01092954184063)*lambdand(USA,Food,check) + nd(USA,Food,check)
      
-      + (1.092954184063)*pnd(USA,Food,check)
+      - (1.10388372590363)*px(USA,Food,check)
+     
+      + (1.10388372590363)*pnd(USA,Food,check)
      
       - (0.692078017847454)*xp(USA,Food,check) =E= 0 ; (LHS = 0)
      
-ndeq(USA,Mnfcs,check)..  (0)*axp(USA,Mnfcs,check)
+ndeq(USA,Mnfcs,check)..  - (0.003511507068117)*axp(USA,Mnfcs,check)
      
-      + (0)*lambdand(USA,Mnfcs,check) + nd(USA,Mnfcs,check)
+      - (0.003511507068117)*lambdand(USA,Mnfcs,check) + nd(USA,Mnfcs,check)
      
-      - (0.3511507068117)*px(USA,Mnfcs,check)
+      - (0.354662213879817)*px(USA,Mnfcs,check)
      
-      + (0.3511507068117)*pnd(USA,Mnfcs,check)
+      + (0.354662213879817)*pnd(USA,Mnfcs,check)
      
       - (0.61202835999537)*xp(USA,Mnfcs,check) =E= 0 ; (LHS = 0)
      
-ndeq(USA,Svces,check)..  (0)*axp(USA,Svces,check)
+ndeq(USA,Svces,check)..  - (0.00983025104688001)*axp(USA,Svces,check)
      
-      + (0)*lambdand(USA,Svces,check) + nd(USA,Svces,check)
+      - (0.00983025104688001)*lambdand(USA,Svces,check) + nd(USA,Svces,check)
      
-      - (0.983025104688)*px(USA,Svces,check)
+      - (0.99285535573488)*px(USA,Svces,check)
      
-      + (0.983025104688)*pnd(USA,Svces,check)
+      + (0.99285535573488)*pnd(USA,Svces,check)
      
       - (0.397146004263243)*xp(USA,Svces,check) =E= 0 ; (LHS = 0)
      
@@ -446,29 +448,33 @@ REMAINING 9 ENTRIES SKIPPED
 
 ---- vaeq  =E=  Demand for aggregate value added  (VA)
 
-vaeq(USA,Food,check)..  (0)*axp(USA,Food,check) + (0)*lambdava(USA,Food,check)
+vaeq(USA,Food,check)..  - (0.004862813296763)*axp(USA,Food,check)
      
-      + va(USA,Food,check) - (0.4862813296763)*px(USA,Food,check)
+      - (0.004862813296763)*lambdava(USA,Food,check) + va(USA,Food,check)
      
-      + (0.4862813296763)*pva(USA,Food,check)
+      - (0.491144142973063)*px(USA,Food,check)
+     
+      + (0.491144142973063)*pva(USA,Food,check)
      
       - (0.307921982152546)*xp(USA,Food,check) =E= 0 ; (LHS = 0)
      
-vaeq(USA,Mnfcs,check)..  (0)*axp(USA,Mnfcs,check)
+vaeq(USA,Mnfcs,check)..  - (0.002225983704604)*axp(USA,Mnfcs,check)
      
-      + (0)*lambdava(USA,Mnfcs,check) + va(USA,Mnfcs,check)
+      - (0.002225983704604)*lambdava(USA,Mnfcs,check) + va(USA,Mnfcs,check)
      
-      - (0.2225983704604)*px(USA,Mnfcs,check)
+      - (0.224824354165004)*px(USA,Mnfcs,check)
      
-      + (0.2225983704604)*pva(USA,Mnfcs,check)
+      + (0.224824354165004)*pva(USA,Mnfcs,check)
      
       - (0.38797164000463)*xp(USA,Mnfcs,check) =E= 0 ; (LHS = 0)
      
-vaeq(USA,Svces,check)..  (0)*axp(USA,Svces,check)
+vaeq(USA,Svces,check)..  - (0.0149219835)*axp(USA,Svces,check)
      
-      + (0)*lambdava(USA,Svces,check) + va(USA,Svces,check)
+      - (0.0149219835)*lambdava(USA,Svces,check) + va(USA,Svces,check)
      
-      - (1.49219835)*px(USA,Svces,check) + (1.49219835)*pva(USA,Svces,check)
+      - (1.5071203335)*px(USA,Svces,check)
+     
+      + (1.5071203335)*pva(USA,Svces,check)
      
       - (0.602853995736757)*xp(USA,Svces,check) =E= 0 ; (LHS = 0)
      
@@ -477,27 +483,35 @@ REMAINING 9 ENTRIES SKIPPED
 
 ---- pxeq  =E=  Unit cost of production
 
-pxeq(USA,Food,check)..  (0)*axp(USA,Food,check) + (0)*lambdand(USA,Food,check)
+pxeq(USA,Food,check)..  - (0.01)*axp(USA,Food,check)
      
-      + (0)*lambdava(USA,Food,check) + (0)*px(USA,Food,check)
+      - (0.00692078017847454)*lambdand(USA,Food,check)
      
-      + (0)*pnd(USA,Food,check) + (0)*pva(USA,Food,check) =E= 0 ; (LHS = 0)
+      - (0.00307921982152547)*lambdava(USA,Food,check)
      
-pxeq(USA,Mnfcs,check)..  (0)*axp(USA,Mnfcs,check)
+      - (0.01)*px(USA,Food,check) + (0.00692078017847454)*pnd(USA,Food,check)
      
-      + (0)*lambdand(USA,Mnfcs,check) + (0)*lambdava(USA,Mnfcs,check)
+      + (0.00307921982152547)*pva(USA,Food,check) =E= 0 ; (LHS = 0)
      
-      + (0)*px(USA,Mnfcs,check) + (0)*pnd(USA,Mnfcs,check)
+pxeq(USA,Mnfcs,check)..  - (0.01)*axp(USA,Mnfcs,check)
      
-      + (0)*pva(USA,Mnfcs,check) =E= 0 ; (LHS = 0)
+      - (0.0061202835999537)*lambdand(USA,Mnfcs,check)
      
-pxeq(USA,Svces,check)..  (0)*axp(USA,Svces,check)
+      - (0.00387971640004631)*lambdava(USA,Mnfcs,check)
      
-      + (0)*lambdand(USA,Svces,check) + (0)*lambdava(USA,Svces,check)
+      - (0.01)*px(USA,Mnfcs,check) + (0.0061202835999537)*pnd(USA,Mnfcs,check)
      
-      + (0)*px(USA,Svces,check) + (0)*pnd(USA,Svces,check)
+      + (0.00387971640004631)*pva(USA,Mnfcs,check) =E= 0 ; (LHS = 0)
      
-      + (0)*pva(USA,Svces,check) =E= 0 ; (LHS = 0)
+pxeq(USA,Svces,check)..  - (0.01)*axp(USA,Svces,check)
+     
+      - (0.00397146004263243)*lambdand(USA,Svces,check)
+     
+      - (0.00602853995736757)*lambdava(USA,Svces,check)
+     
+      - (0.01)*px(USA,Svces,check) + (0.00397146004263243)*pnd(USA,Svces,check)
+     
+      + (0.00602853995736757)*pva(USA,Svces,check) =E= 0 ; (LHS = 0)
      
 REMAINING 9 ENTRIES SKIPPED
 
@@ -521,35 +535,51 @@ REMAINING 33 ENTRIES SKIPPED
 
 ---- pndeq  =E=  Price of ND bundle
 
-pndeq(USA,Food,check)..  (0)*lambdaio(USA,Food,Food,check)
+pndeq(USA,Food,check)..  - (0.00536976634462631)*lambdaio(USA,Food,Food,check)
      
-      + (0)*lambdaio(USA,Mnfcs,Food,check) + (0)*lambdaio(USA,Svces,Food,check)
+      - (0.00155960725706115)*lambdaio(USA,Mnfcs,Food,check)
      
-      + (0)*pnd(USA,Food,check) + (0)*pa(USA,Food,Food,check)
+      - (0.00307062639831255)*lambdaio(USA,Svces,Food,check)
      
-      + (0)*pa(USA,Mnfcs,Food,check) + (0)*pa(USA,Svces,Food,check) =E= 0 ;
+      - (0.01)*pnd(USA,Food,check)
      
-      (LHS = 0)
+      + (0.00536976634462631)*pa(USA,Food,Food,check)
      
-pndeq(USA,Mnfcs,check)..  (0)*lambdaio(USA,Food,Mnfcs,check)
+      + (0.00155960725706115)*pa(USA,Mnfcs,Food,check)
      
-      + (0)*lambdaio(USA,Mnfcs,Mnfcs,check)
+      + (0.00307062639831255)*pa(USA,Svces,Food,check) =E= 0 ; (LHS = 0)
      
-      + (0)*lambdaio(USA,Svces,Mnfcs,check) + (0)*pnd(USA,Mnfcs,check)
+pndeq(USA,Mnfcs,check)..  
      
-      + (0)*pa(USA,Food,Mnfcs,check) + (0)*pa(USA,Mnfcs,Mnfcs,check)
+     - (0.000123207170248414)*lambdaio(USA,Food,Mnfcs,check)
      
-      + (0)*pa(USA,Svces,Mnfcs,check) =E= 0 ; (LHS = 0)
+      - (0.00671422007492723)*lambdaio(USA,Mnfcs,Mnfcs,check)
      
-pndeq(USA,Svces,check)..  (0)*lambdaio(USA,Food,Svces,check)
+      - (0.00316257275482436)*lambdaio(USA,Svces,Mnfcs,check)
      
-      + (0)*lambdaio(USA,Mnfcs,Svces,check)
+      - (0.01)*pnd(USA,Mnfcs,check)
      
-      + (0)*lambdaio(USA,Svces,Svces,check) + (0)*pnd(USA,Svces,check)
+      + (0.000123207170248414)*pa(USA,Food,Mnfcs,check)
      
-      + (0)*pa(USA,Food,Svces,check) + (0)*pa(USA,Mnfcs,Svces,check)
+      + (0.00671422007492723)*pa(USA,Mnfcs,Mnfcs,check)
      
-      + (0)*pa(USA,Svces,Svces,check) =E= 0 ; (LHS = 0)
+      + (0.00316257275482436)*pa(USA,Svces,Mnfcs,check) =E= 0 ; (LHS = 0)
+     
+pndeq(USA,Svces,check)..  
+     
+     - (0.000204274475313358)*lambdaio(USA,Food,Svces,check)
+     
+      - (0.00177423584268844)*lambdaio(USA,Mnfcs,Svces,check)
+     
+      - (0.00802148968199822)*lambdaio(USA,Svces,Svces,check)
+     
+      - (0.01)*pnd(USA,Svces,check)
+     
+      + (0.000204274475313358)*pa(USA,Food,Svces,check)
+     
+      + (0.00177423584268844)*pa(USA,Mnfcs,Svces,check)
+     
+      + (0.00802148968199822)*pa(USA,Svces,Svces,check) =E= 0 ; (LHS = 0)
      
 REMAINING 9 ENTRIES SKIPPED
 
@@ -558,26 +588,27 @@ REMAINING 9 ENTRIES SKIPPED
 
 xapeq(USA,Food,Food,check)..  - (0.53697663446263)*nd(USA,Food,check)
      
-      + (0)*lambdaio(USA,Food,Food,check) - (0.58689085938)*pnd(USA,Food,check)
+      - (0.0058689085938)*lambdaio(USA,Food,Food,check)
      
-      + xa(USA,Food,Food,check) + (0.58689085938)*pa(USA,Food,Food,check) =E= 0
-      ; (LHS = 0)
+      - (0.5927597679738)*pnd(USA,Food,check) + xa(USA,Food,Food,check)
+     
+      + (0.5927597679738)*pa(USA,Food,Food,check) =E= 0 ; (LHS = 0)
      
 xapeq(USA,Food,Mnfcs,check)..  - (0.0123207170248414)*nd(USA,Mnfcs,check)
      
-      + (0)*lambdaio(USA,Food,Mnfcs,check)
+      - (4.3264284917E-5)*lambdaio(USA,Food,Mnfcs,check)
      
-      - (0.0043264284917)*pnd(USA,Mnfcs,check) + xa(USA,Food,Mnfcs,check)
+      - (0.004369692776617)*pnd(USA,Mnfcs,check) + xa(USA,Food,Mnfcs,check)
      
-      + (0.0043264284917)*pa(USA,Food,Mnfcs,check) =E= 0 ; (LHS = 0)
+      + (0.004369692776617)*pa(USA,Food,Mnfcs,check) =E= 0 ; (LHS = 0)
      
 xapeq(USA,Food,Svces,check)..  - (0.0204274475313358)*nd(USA,Svces,check)
      
-      + (0)*lambdaio(USA,Food,Svces,check)
+      - (0.00020080693748)*lambdaio(USA,Food,Svces,check)
      
-      - (0.020080693748)*pnd(USA,Svces,check) + xa(USA,Food,Svces,check)
+      - (0.02028150068548)*pnd(USA,Svces,check) + xa(USA,Food,Svces,check)
      
-      + (0.020080693748)*pa(USA,Food,Svces,check) =E= 0 ; (LHS = 0)
+      + (0.02028150068548)*pa(USA,Food,Svces,check) =E= 0 ; (LHS = 0)
      
 REMAINING 33 ENTRIES SKIPPED
 
@@ -695,69 +726,90 @@ REMAINING 45 ENTRIES SKIPPED
 
 xfeq(USA,Land,Food,check)..  - (0.0815771506925971)*va(USA,Food,check)
      
-      + (0)*lambdaf(USA,Land,Food,check) + xf(USA,Land,Food,check)
+      - (0.0003966944531)*lambdaf(USA,Land,Food,check)
      
-      - (0.03966944531)*pva(USA,Food,check)
+      + xf(USA,Land,Food,check) - (0.0400661397631)*pva(USA,Food,check)
      
-      + (0.0462801254634109)*pfa(USA,Land,Food,check) =E= 0 ; (LHS = 0)
+      + (0.046742926718045)*pfa(USA,Land,Food,check) =E= 0 ; (LHS = 0)
      
 xfeq(USA,UnSkLab,Food,check)..  - (0.185260589132568)*va(USA,Food,check)
      
-      + (0)*lambdaf(USA,UnSkLab,Food,check) + xf(USA,UnSkLab,Food,check)
+      - (0.000900887656200001)*lambdaf(USA,UnSkLab,Food,check)
      
-      - (0.09008876562)*pva(USA,Food,check)
+      + xf(USA,UnSkLab,Food,check) - (0.0909896532762)*pva(USA,Food,check)
      
-      + (0.0571835669832293)*pfa(USA,UnSkLab,Food,check) =E= 0 ; (LHS = 0)
+      + (0.0577554026530616)*pfa(USA,UnSkLab,Food,check) =E= 0 ; (LHS = 0)
      
 xfeq(USA,UnSkLab,Mnfcs,check)..  - (0.238480350912739)*va(USA,Mnfcs,check)
      
-      + (0)*lambdaf(USA,UnSkLab,Mnfcs,check) + xf(USA,UnSkLab,Mnfcs,check)
+      - (0.000530853375)*lambdaf(USA,UnSkLab,Mnfcs,check)
      
-      - (0.0530853375)*pva(USA,Mnfcs,check)
+      + xf(USA,UnSkLab,Mnfcs,check) - (0.053616190875)*pva(USA,Mnfcs,check)
      
-      + (0.0332107990643181)*pfa(USA,UnSkLab,Mnfcs,check) =E= 0 ; (LHS = 0)
+      + (0.0335429070549613)*pfa(USA,UnSkLab,Mnfcs,check) =E= 0 ; (LHS = 0)
      
 REMAINING 45 ENTRIES SKIPPED
 
 
 ---- pvaeq  =E=  Price of value added
 
-pvaeq(USA,Food,check)..  (0)*lambdaf(USA,Land,Food,check)
+pvaeq(USA,Food,check)..  - (0.000699246228384599)*lambdaf(USA,Land,Food,check)
      
-      + (0)*lambdaf(USA,UnSkLab,Food,check) + (0)*lambdaf(USA,SkLab,Food,check)
+      - (0.00291865280070442)*lambdaf(USA,UnSkLab,Food,check)
      
-      + (0)*lambdaf(USA,Capital,Food,check)
+      - (0.00147449471981023)*lambdaf(USA,SkLab,Food,check)
      
-      + (0)*lambdaf(USA,NatRes,Food,check) + (0)*pva(USA,Food,check)
+      - (0.00479345056239696)*lambdaf(USA,Capital,Food,check)
      
-      + (0)*pfa(USA,Land,Food,check) + (0)*pfa(USA,UnSkLab,Food,check)
+      - (0.000114155688703805)*lambdaf(USA,NatRes,Food,check)
      
-      + (0)*pfa(USA,SkLab,Food,check) + (0)*pfa(USA,Capital,Food,check)
+      - (0.01)*pva(USA,Food,check)
      
-      + (0)*pfa(USA,NatRes,Food,check) =E= 0 ; (LHS = 0)
+      + (0.000815771506925971)*pfa(USA,Land,Food,check)
      
-pvaeq(USA,Mnfcs,check)..  (0)*lambdaf(USA,UnSkLab,Mnfcs,check)
+      + (0.00185260589132568)*pfa(USA,UnSkLab,Food,check)
      
-      + (0)*lambdaf(USA,SkLab,Mnfcs,check)
+      + (0.000948487730974631)*pfa(USA,SkLab,Food,check)
      
-      + (0)*lambdaf(USA,Capital,Mnfcs,check)
+      + (0.00444746633690347)*pfa(USA,Capital,Food,check)
      
-      + (0)*lambdaf(USA,NatRes,Mnfcs,check) + (0)*pva(USA,Mnfcs,check)
+      + (0.000104289362217049)*pfa(USA,NatRes,Food,check) =E= 0 ; (LHS = 0)
      
-      + (0)*pfa(USA,UnSkLab,Mnfcs,check) + (0)*pfa(USA,SkLab,Mnfcs,check)
+pvaeq(USA,Mnfcs,check)..  
      
-      + (0)*pfa(USA,Capital,Mnfcs,check) + (0)*pfa(USA,NatRes,Mnfcs,check) =E= 
-     0 ; (LHS = 0)
+     - (0.00381195583123532)*lambdaf(USA,UnSkLab,Mnfcs,check)
      
-pvaeq(USA,Svces,check)..  (0)*lambdaf(USA,UnSkLab,Svces,check)
+      - (0.00126119363690465)*lambdaf(USA,SkLab,Mnfcs,check)
      
-      + (0)*lambdaf(USA,SkLab,Svces,check)
+      - (0.0045689249386079)*lambdaf(USA,Capital,Mnfcs,check)
      
-      + (0)*lambdaf(USA,Capital,Svces,check) + (0)*pva(USA,Svces,check)
+      - (0.000357925593252148)*lambdaf(USA,NatRes,Mnfcs,check)
      
-      + (0)*pfa(USA,UnSkLab,Svces,check) + (0)*pfa(USA,SkLab,Svces,check)
+      - (0.01)*pva(USA,Mnfcs,check)
      
-      + (0)*pfa(USA,Capital,Svces,check) =E= 0 ; (LHS = 0)
+      + (0.00238480350912739)*pfa(USA,UnSkLab,Mnfcs,check)
+     
+      + (0.000789017315970178)*pfa(USA,SkLab,Mnfcs,check)
+     
+      + (0.00417403830530418)*pfa(USA,Capital,Mnfcs,check)
+     
+      + (0.000326990545121483)*pfa(USA,NatRes,Mnfcs,check) =E= 0 ; (LHS = 0)
+     
+pvaeq(USA,Svces,check)..  
+     
+     - (0.00267965117539502)*lambdaf(USA,UnSkLab,Svces,check)
+     
+      - (0.00306354141022874)*lambdaf(USA,SkLab,Svces,check)
+     
+      - (0.00425680741437625)*lambdaf(USA,Capital,Svces,check)
+     
+      - (0.01)*pva(USA,Svces,check)
+     
+      + (0.00167642056433047)*pfa(USA,UnSkLab,Svces,check)
+     
+      + (0.00191658685991712)*pfa(USA,SkLab,Svces,check)
+     
+      + (0.00388889687486922)*pfa(USA,Capital,Svces,check) =E= 0 ; (LHS = 0)
      
 REMAINING 9 ENTRIES SKIPPED
 
@@ -3765,9 +3817,9 @@ walraseq..  rsav(ROW,check) + (4.9078855)*pi(ROW,check) - yi(ROW,check)
       + savf(ROW,check) + walras + (0.040000000489009)*kstock(ROW,check) =E= 0
       ; (LHS = 0)
      
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 8
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 8
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Column Listing      SOLVE gtap Using MCP From line 4313
+Column Listing      SOLVE gtap Using MCP From line 4321
 
 
 ---- axp  Production frontier shifter
@@ -3775,23 +3827,23 @@ Column Listing      SOLVE gtap Using MCP From line 4313
 axp(USA,Food,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       axpeq(USA,Food,check)
-       (0)      ndeq(USA,Food,check)
-       (0)      vaeq(USA,Food,check)
-       (0)      pxeq(USA,Food,check)
+      (-0.0109) ndeq(USA,Food,check)
+      (-0.0049) vaeq(USA,Food,check)
+      (-0.01)   pxeq(USA,Food,check)
 
 axp(USA,Mnfcs,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       axpeq(USA,Mnfcs,check)
-       (0)      ndeq(USA,Mnfcs,check)
-       (0)      vaeq(USA,Mnfcs,check)
-       (0)      pxeq(USA,Mnfcs,check)
+      (-0.0035) ndeq(USA,Mnfcs,check)
+      (-0.0022) vaeq(USA,Mnfcs,check)
+      (-0.01)   pxeq(USA,Mnfcs,check)
 
 axp(USA,Svces,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       axpeq(USA,Svces,check)
-       (0)      ndeq(USA,Svces,check)
-       (0)      vaeq(USA,Svces,check)
-       (0)      pxeq(USA,Svces,check)
+      (-0.0098) ndeq(USA,Svces,check)
+      (-0.0149) vaeq(USA,Svces,check)
+      (-0.01)   pxeq(USA,Svces,check)
 
 REMAINING 9 ENTRIES SKIPPED
 
@@ -3800,20 +3852,20 @@ REMAINING 9 ENTRIES SKIPPED
 lambdand(USA,Food,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdandeq(USA,Food,check)
-       (0)      ndeq(USA,Food,check)
-       (0)      pxeq(USA,Food,check)
+      (-0.0109) ndeq(USA,Food,check)
+      (-0.0069) pxeq(USA,Food,check)
 
 lambdand(USA,Mnfcs,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdandeq(USA,Mnfcs,check)
-       (0)      ndeq(USA,Mnfcs,check)
-       (0)      pxeq(USA,Mnfcs,check)
+      (-0.0035) ndeq(USA,Mnfcs,check)
+      (-0.0061) pxeq(USA,Mnfcs,check)
 
 lambdand(USA,Svces,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdandeq(USA,Svces,check)
-       (0)      ndeq(USA,Svces,check)
-       (0)      pxeq(USA,Svces,check)
+      (-0.0098) ndeq(USA,Svces,check)
+      (-0.004)  pxeq(USA,Svces,check)
 
 REMAINING 9 ENTRIES SKIPPED
 
@@ -3822,20 +3874,20 @@ REMAINING 9 ENTRIES SKIPPED
 lambdava(USA,Food,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdavaeq(USA,Food,check)
-       (0)      vaeq(USA,Food,check)
-       (0)      pxeq(USA,Food,check)
+      (-0.0049) vaeq(USA,Food,check)
+      (-0.0031) pxeq(USA,Food,check)
 
 lambdava(USA,Mnfcs,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdavaeq(USA,Mnfcs,check)
-       (0)      vaeq(USA,Mnfcs,check)
-       (0)      pxeq(USA,Mnfcs,check)
+      (-0.0022) vaeq(USA,Mnfcs,check)
+      (-0.0039) pxeq(USA,Mnfcs,check)
 
 lambdava(USA,Svces,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdavaeq(USA,Svces,check)
-       (0)      vaeq(USA,Svces,check)
-       (0)      pxeq(USA,Svces,check)
+      (-0.0149) vaeq(USA,Svces,check)
+      (-0.006)  pxeq(USA,Svces,check)
 
 REMAINING 9 ENTRIES SKIPPED
 
@@ -3896,25 +3948,25 @@ REMAINING 9 ENTRIES SKIPPED
 
 px(USA,Food,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-      (-1.093)  ndeq(USA,Food,check)
-      (-0.4863) vaeq(USA,Food,check)
-       (0)      pxeq(USA,Food,check)
+      (-1.1039) ndeq(USA,Food,check)
+      (-0.4911) vaeq(USA,Food,check)
+      (-0.01)   pxeq(USA,Food,check)
       (-8.1029) xeq(USA,Food,Food,check)
       (-6)      xpeq(USA,Food,check)
 
 px(USA,Mnfcs,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-      (-0.3512) ndeq(USA,Mnfcs,check)
-      (-0.2226) vaeq(USA,Mnfcs,check)
-       (0)      pxeq(USA,Mnfcs,check)
+      (-0.3547) ndeq(USA,Mnfcs,check)
+      (-0.2248) vaeq(USA,Mnfcs,check)
+      (-0.01)   pxeq(USA,Mnfcs,check)
      (-29.3037) xeq(USA,Mnfcs,Mnfcs,check)
       (-6)      xpeq(USA,Mnfcs,check)
 
 px(USA,Svces,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-      (-0.983)  ndeq(USA,Svces,check)
-      (-1.4922) vaeq(USA,Svces,check)
-       (0)      pxeq(USA,Svces,check)
+      (-0.9929) ndeq(USA,Svces,check)
+      (-1.5071) vaeq(USA,Svces,check)
+      (-0.01)   pxeq(USA,Svces,check)
     (-129.044)  xeq(USA,Svces,Svces,check)
       (-6)      xpeq(USA,Svces,check)
 
@@ -3925,20 +3977,20 @@ REMAINING 9 ENTRIES SKIPPED
 lambdaio(USA,Food,Food,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdaioeq(USA,Food,Food,check)
-       (0)      pndeq(USA,Food,check)
-       (0)      xapeq(USA,Food,Food,check)
+      (-0.0054) pndeq(USA,Food,check)
+      (-0.0059) xapeq(USA,Food,Food,check)
 
 lambdaio(USA,Food,Mnfcs,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdaioeq(USA,Food,Mnfcs,check)
-       (0)      pndeq(USA,Mnfcs,check)
-       (0)      xapeq(USA,Food,Mnfcs,check)
+      (-0.0001) pndeq(USA,Mnfcs,check)
+ (-4.326428E-5) xapeq(USA,Food,Mnfcs,check)
 
 lambdaio(USA,Food,Svces,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdaioeq(USA,Food,Svces,check)
-       (0)      pndeq(USA,Svces,check)
-       (0)      xapeq(USA,Food,Svces,check)
+      (-0.0002) pndeq(USA,Svces,check)
+      (-0.0002) xapeq(USA,Food,Svces,check)
 
 REMAINING 33 ENTRIES SKIPPED
 
@@ -3946,30 +3998,30 @@ REMAINING 33 ENTRIES SKIPPED
 
 pnd(USA,Food,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (1.093)  ndeq(USA,Food,check)
-       (0)      pxeq(USA,Food,check)
-       (0)      pndeq(USA,Food,check)
-      (-0.5869) xapeq(USA,Food,Food,check)
-      (-0.1705) xapeq(USA,Mnfcs,Food,check)
-      (-0.3356) xapeq(USA,Svces,Food,check)
+       (1.1039) ndeq(USA,Food,check)
+       (0.0069) pxeq(USA,Food,check)
+      (-0.01)   pndeq(USA,Food,check)
+      (-0.5928) xapeq(USA,Food,Food,check)
+      (-0.1722) xapeq(USA,Mnfcs,Food,check)
+      (-0.339)  xapeq(USA,Svces,Food,check)
 
 pnd(USA,Mnfcs,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0.3512) ndeq(USA,Mnfcs,check)
-       (0)      pxeq(USA,Mnfcs,check)
-       (0)      pndeq(USA,Mnfcs,check)
-      (-0.0043) xapeq(USA,Food,Mnfcs,check)
-      (-0.2358) xapeq(USA,Mnfcs,Mnfcs,check)
-      (-0.1111) xapeq(USA,Svces,Mnfcs,check)
+       (0.3547) ndeq(USA,Mnfcs,check)
+       (0.0061) pxeq(USA,Mnfcs,check)
+      (-0.01)   pndeq(USA,Mnfcs,check)
+      (-0.0044) xapeq(USA,Food,Mnfcs,check)
+      (-0.2381) xapeq(USA,Mnfcs,Mnfcs,check)
+      (-0.1122) xapeq(USA,Svces,Mnfcs,check)
 
 pnd(USA,Svces,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0.983)  ndeq(USA,Svces,check)
-       (0)      pxeq(USA,Svces,check)
-       (0)      pndeq(USA,Svces,check)
-      (-0.0201) xapeq(USA,Food,Svces,check)
-      (-0.1744) xapeq(USA,Mnfcs,Svces,check)
-      (-0.7885) xapeq(USA,Svces,Svces,check)
+       (0.9929) ndeq(USA,Svces,check)
+       (0.004)  pxeq(USA,Svces,check)
+      (-0.01)   pndeq(USA,Svces,check)
+      (-0.0203) xapeq(USA,Food,Svces,check)
+      (-0.1762) xapeq(USA,Mnfcs,Svces,check)
+      (-0.7964) xapeq(USA,Svces,Svces,check)
 
 REMAINING 9 ENTRIES SKIPPED
 
@@ -3978,20 +4030,20 @@ REMAINING 9 ENTRIES SKIPPED
 lambdaf(USA,Land,Food,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdafeq(USA,Land,Food,check)
-       (0)      xfeq(USA,Land,Food,check)
-       (0)      pvaeq(USA,Food,check)
+      (-0.0004) xfeq(USA,Land,Food,check)
+      (-0.0007) pvaeq(USA,Food,check)
 
 lambdaf(USA,UnSkLab,Food,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdafeq(USA,UnSkLab,Food,check)
-       (0)      xfeq(USA,UnSkLab,Food,check)
-       (0)      pvaeq(USA,Food,check)
+      (-0.0009) xfeq(USA,UnSkLab,Food,check)
+      (-0.0029) pvaeq(USA,Food,check)
 
 lambdaf(USA,UnSkLab,Mnfcs,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdafeq(USA,UnSkLab,Mnfcs,check)
-       (0)      xfeq(USA,UnSkLab,Mnfcs,check)
-       (0)      pvaeq(USA,Mnfcs,check)
+      (-0.0005) xfeq(USA,UnSkLab,Mnfcs,check)
+      (-0.0038) pvaeq(USA,Mnfcs,check)
 
 REMAINING 45 ENTRIES SKIPPED
 
@@ -4035,33 +4087,33 @@ REMAINING 45 ENTRIES SKIPPED
 
 pva(USA,Food,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0.4863) vaeq(USA,Food,check)
-       (0)      pxeq(USA,Food,check)
-      (-0.0397) xfeq(USA,Land,Food,check)
-      (-0.0901) xfeq(USA,UnSkLab,Food,check)
-      (-0.0461) xfeq(USA,SkLab,Food,check)
-      (-0.2163) xfeq(USA,Capital,Food,check)
+       (0.4911) vaeq(USA,Food,check)
+       (0.0031) pxeq(USA,Food,check)
+      (-0.0401) xfeq(USA,Land,Food,check)
+      (-0.091)  xfeq(USA,UnSkLab,Food,check)
+      (-0.0466) xfeq(USA,SkLab,Food,check)
+      (-0.2184) xfeq(USA,Capital,Food,check)
       (-0.0051) xfeq(USA,NatRes,Food,check)
-       (0)      pvaeq(USA,Food,check)
+      (-0.01)   pvaeq(USA,Food,check)
 
 pva(USA,Mnfcs,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0.2226) vaeq(USA,Mnfcs,check)
-       (0)      pxeq(USA,Mnfcs,check)
-      (-0.0531) xfeq(USA,UnSkLab,Mnfcs,check)
-      (-0.0176) xfeq(USA,SkLab,Mnfcs,check)
-      (-0.0929) xfeq(USA,Capital,Mnfcs,check)
-      (-0.0073) xfeq(USA,NatRes,Mnfcs,check)
-       (0)      pvaeq(USA,Mnfcs,check)
+       (0.2248) vaeq(USA,Mnfcs,check)
+       (0.0039) pxeq(USA,Mnfcs,check)
+      (-0.0536) xfeq(USA,UnSkLab,Mnfcs,check)
+      (-0.0177) xfeq(USA,SkLab,Mnfcs,check)
+      (-0.0938) xfeq(USA,Capital,Mnfcs,check)
+      (-0.0074) xfeq(USA,NatRes,Mnfcs,check)
+      (-0.01)   pvaeq(USA,Mnfcs,check)
 
 pva(USA,Svces,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (1.4922) vaeq(USA,Svces,check)
-       (0)      pxeq(USA,Svces,check)
-      (-0.2502) xfeq(USA,UnSkLab,Svces,check)
-      (-0.286)  xfeq(USA,SkLab,Svces,check)
-      (-0.5803) xfeq(USA,Capital,Svces,check)
-       (0)      pvaeq(USA,Svces,check)
+       (1.5071) vaeq(USA,Svces,check)
+       (0.006)  pxeq(USA,Svces,check)
+      (-0.2527) xfeq(USA,UnSkLab,Svces,check)
+      (-0.2889) xfeq(USA,SkLab,Svces,check)
+      (-0.5861) xfeq(USA,Capital,Svces,check)
+      (-0.01)   pvaeq(USA,Svces,check)
 
 REMAINING 9 ENTRIES SKIPPED
 
@@ -4756,24 +4808,24 @@ REMAINING 69 ENTRIES SKIPPED
 
 pa(USA,Food,Food,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0)      pndeq(USA,Food,check)
-       (0.5869) xapeq(USA,Food,Food,check)
+       (0.0054) pndeq(USA,Food,check)
+       (0.5928) xapeq(USA,Food,Food,check)
        (0.05)   paeq(USA,Food,Food,check)
       (-0.5152) xdeq(USA,Food,Food,check)
       (-0.0424) xmeq(USA,Food,Food,check)
 
 pa(USA,Food,Mnfcs,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0)      pndeq(USA,Mnfcs,check)
-       (0.0043) xapeq(USA,Food,Mnfcs,check)
+       (0.0001) pndeq(USA,Mnfcs,check)
+       (0.0044) xapeq(USA,Food,Mnfcs,check)
        (0.05)   paeq(USA,Food,Mnfcs,check)
       (-0.0039) xdeq(USA,Food,Mnfcs,check)
       (-0.0002) xmeq(USA,Food,Mnfcs,check)
 
 pa(USA,Food,Svces,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0)      pndeq(USA,Svces,check)
-       (0.0201) xapeq(USA,Food,Svces,check)
+       (0.0002) pndeq(USA,Svces,check)
+       (0.0203) xapeq(USA,Food,Svces,check)
        (0.05)   paeq(USA,Food,Svces,check)
       (-0.0168) xdeq(USA,Food,Svces,check)
       (-0.0022) xmeq(USA,Food,Svces,check)
@@ -5448,22 +5500,22 @@ REMAINING 17 ENTRIES SKIPPED
 pfa(USA,Land,Food,check)
                 (.LO, .L, .UP, .M = 0.000857159415900086, 0.857159415900086, 
 +INF, 0)
-       (0.0463) xfeq(USA,Land,Food,check)
-       (0)      pvaeq(USA,Food,check)
+       (0.0467) xfeq(USA,Land,Food,check)
+       (0.0008) pvaeq(USA,Food,check)
         1       pfaeq(USA,Land,Food,check)
 
 pfa(USA,UnSkLab,Food,check)
                 (.LO, .L, .UP, .M = 0.00157543102630203, 1.57543102630203, +INF
 , 0)
-       (0.0572) xfeq(USA,UnSkLab,Food,check)
-       (0)      pvaeq(USA,Food,check)
+       (0.0578) xfeq(USA,UnSkLab,Food,check)
+       (0.0019) pvaeq(USA,Food,check)
         1       pfaeq(USA,UnSkLab,Food,check)
 
 pfa(USA,UnSkLab,Mnfcs,check)
                 (.LO, .L, .UP, .M = 0.00159843602068085, 1.59843602068085, +INF
 , 0)
-       (0.0332) xfeq(USA,UnSkLab,Mnfcs,check)
-       (0)      pvaeq(USA,Mnfcs,check)
+       (0.0335) xfeq(USA,UnSkLab,Mnfcs,check)
+       (0.0024) pvaeq(USA,Mnfcs,check)
         1       pfaeq(USA,UnSkLab,Mnfcs,check)
 
 REMAINING 45 ENTRIES SKIPPED
@@ -5878,9 +5930,9 @@ cv(EGY,hhd,check)
       (-3.3302) cveq(EGY,hhd,check)
 
 REMAINING ENTRY SKIPPED
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 9
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 9
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Range Statistics    SOLVE gtap Using MCP From line 4313
+Range Statistics    SOLVE gtap Using MCP From line 4321
 
 
 RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
@@ -5889,9 +5941,9 @@ RHS       [min, max] : [ 4.000E-02, 1.000E+00] - Zero values observed as well
 Bound     [min, max] : [ 7.125E-04, 2.128E-03]
 Matrix    [min, max] : [ 5.294E-13, 2.617E+02] - Zero values observed as well
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 10
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 10
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Model Statistics    SOLVE gtap Using MCP From line 4313
+Model Statistics    SOLVE gtap Using MCP From line 4321
 
 
 LOOPS                                 tsim   check
@@ -5902,27 +5954,27 @@ MODEL STATISTICS
 BLOCKS OF EQUATIONS          97     SINGLE EQUATIONS        1,577
 BLOCKS OF VARIABLES         135     SINGLE VARIABLES        1,577
 NON ZERO ELEMENTS         6,379     NON LINEAR N-Z          4,025
-CODE LENGTH              13,172     CONSTANT POOL           1,325
+CODE LENGTH              13,172     CONSTANT POOL           1,326
 
 
-GENERATION TIME      =        0.022 SECONDS      6 MB  53.5.1 f2e5fac3 LEX-LEG
+GENERATION TIME      =        0.021 SECONDS      6 MB  53.5.1 f2e5fac3 LEX-LEG
                L O O P S               tsim check
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 11
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 11
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Solution Report     SOLVE gtap Using MCP From line 4313
+Solution Report     SOLVE gtap Using MCP From line 4321
 
 
                S O L V E      S U M M A R Y
 
      MODEL   gtap                
      TYPE    MCP                 
-     SOLVER  PATH                FROM LINE  4313
+     SOLVER  PATH                FROM LINE  4321
 
 **** SOLVER STATUS     1 Normal Completion
 **** MODEL STATUS      1 Optimal
 
- RESOURCE USAGE, LIMIT          0.058 10000000000.000
+ RESOURCE USAGE, LIMIT          0.052 10000000000.000
  ITERATION COUNT, LIMIT         0          1000
  EVALUATION ERRORS              0             0
 1577 row/cols, 6379 non-zeros, 0.26% dense.
@@ -5931,43 +5983,6 @@ Path 5.2.01 (Wed May 20 07:48:22 2026)
 Written by Todd Munson, Steven Dirkse, Youngdae Kim, and Michael Ferris
 
 INITIAL POINT STATISTICS
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EGY,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EGY,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EGY,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EGY,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EGY,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EGY,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EGY,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EGY,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EGY,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,Svces,check))
-Total zero rows . . . . . . . .  36
 Maximum of X. . . . . . . . . .  1.2270e+02 var: (kstock(ROW,check))
 Maximum of F. . . . . . . . . .  1.8484e-05 eqn: (yceq(ROW,check))
 Maximum of Grad F . . . . . . .  2.6168e+02 eqn: (xeq(ROW,Svces,Svces,check))
@@ -5975,58 +5990,21 @@ Maximum of Grad F . . . . . . .  2.6168e+02 eqn: (xeq(ROW,Svces,Svces,check))
 
 INITIAL JACOBIAN NORM STATISTICS
 Maximum Row Norm. . . . . . . .  6.2301e+02 eqn: (xeq(ROW,Svces,Svces,check))
-Minimum Row Norm. . . . . . . .  2.0000e-02 eqn: (pgeq(USA,check))
+Minimum Row Norm. . . . . . . .  1.6780e-02 eqn: (pvaeq(EU_28,Mnfcs,check))
 Maximum Column Norm . . . . . .  2.6918e+02 var: (p(ROW,Svces,Svces,check))
 Minimum Column Norm . . . . . .  6.9635e-03 var: (ev(USA,hhd,check))
 
 FINAL STATISTICS
-Inf-Norm of Complementarity . .  2.5246e-11 eqn: (xweq(ROW,Mnfcs,ROW,check))
-Inf-Norm of Normal Map. . . . .  2.5246e-11 eqn: (xweq(ROW,Mnfcs,ROW,check))
-Inf-Norm of Minimum Map . . . .  2.5246e-11 eqn: (xweq(ROW,Mnfcs,ROW,check))
-Inf-Norm of Fischer Function. .  2.5246e-11 eqn: (xweq(ROW,Mnfcs,ROW,check))
-Inf-Norm of Grad Fischer Fcn. .  3.6151e-10 eqn: (xmeq(ROW,Mnfcs,Svces,check))
-Two-Norm of Grad Fischer Fcn. .  4.6707e-10
+Inf-Norm of Complementarity . .  4.2736e-11 eqn: (xweq(ROW,Mnfcs,ROW,check))
+Inf-Norm of Normal Map. . . . .  4.2736e-11 eqn: (xweq(ROW,Mnfcs,ROW,check))
+Inf-Norm of Minimum Map . . . .  4.2736e-11 eqn: (xweq(ROW,Mnfcs,ROW,check))
+Inf-Norm of Fischer Function. .  4.2736e-11 eqn: (xweq(ROW,Mnfcs,ROW,check))
+Inf-Norm of Grad Fischer Fcn. .  2.4517e-10 eqn: (peq(ROW,Svces,Svces,check))
+Two-Norm of Grad Fischer Fcn. .  5.5575e-10
 
 FINAL POINT STATISTICS
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EGY,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EGY,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EGY,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EGY,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EGY,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EGY,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EGY,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EGY,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EGY,Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,Food,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,Mnfcs,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,Svces,check))
-Total zero rows . . . . . . . .  36
 Maximum of X. . . . . . . . . .  1.2270e+02 var: (kstock(ROW,check))
-Maximum of F. . . . . . . . . .  2.5246e-11 eqn: (xweq(ROW,Mnfcs,ROW,check))
+Maximum of F. . . . . . . . . .  4.2736e-11 eqn: (xweq(ROW,Mnfcs,ROW,check))
 Maximum of Grad F . . . . . . .  2.6168e+02 eqn: (xeq(ROW,Svces,Svces,check))
                                             var: (p(ROW,Svces,Svces,check))
 
@@ -6037,15 +6015,15 @@ Maximum of Grad F . . . . . . .  2.6168e+02 eqn: (xeq(ROW,Svces,Svces,check))
                              0  UNBOUNDED
                              0  REDEFINED
                              0     ERRORS
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 12
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 12
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
-----   4338 VARIABLE walras.L              =  -8.7457E-12  Walras check
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 13
+----   4346 VARIABLE walras.L              =  5.21019E-12  Walras check
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 13
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Equation Listing    SOLVE gtap Using MCP From line 4313
+Equation Listing    SOLVE gtap Using MCP From line 4321
 
 
 ---- axpeq  =E=  Production frontier shifter
@@ -6083,31 +6061,33 @@ REMAINING 9 ENTRIES SKIPPED
 
 ---- ndeq  =E=  Demand for aggregate intermediate (ND)
 
-ndeq(USA,Food,shock)..  (0)*axp(USA,Food,shock) + (0)*lambdand(USA,Food,shock)
+ndeq(USA,Food,shock)..  - (0.01092954184063)*axp(USA,Food,shock)
      
-      + nd(USA,Food,shock) - (1.092954184063)*px(USA,Food,shock)
+      - (0.01092954184063)*lambdand(USA,Food,shock) + nd(USA,Food,shock)
      
-      + (1.092954184063)*pnd(USA,Food,shock)
+      - (1.10388372590363)*px(USA,Food,shock)
+     
+      + (1.10388372590363)*pnd(USA,Food,shock)
      
       - (0.692078017847454)*xp(USA,Food,shock) =E= 0 ; (LHS = 0)
      
-ndeq(USA,Mnfcs,shock)..  (0)*axp(USA,Mnfcs,shock)
+ndeq(USA,Mnfcs,shock)..  - (0.003511507068117)*axp(USA,Mnfcs,shock)
      
-      + (0)*lambdand(USA,Mnfcs,shock) + nd(USA,Mnfcs,shock)
+      - (0.003511507068117)*lambdand(USA,Mnfcs,shock) + nd(USA,Mnfcs,shock)
      
-      - (0.3511507068117)*px(USA,Mnfcs,shock)
+      - (0.354662213879817)*px(USA,Mnfcs,shock)
      
-      + (0.3511507068117)*pnd(USA,Mnfcs,shock)
+      + (0.354662213879817)*pnd(USA,Mnfcs,shock)
      
       - (0.61202835999537)*xp(USA,Mnfcs,shock) =E= 0 ; (LHS = 0)
      
-ndeq(USA,Svces,shock)..  (0)*axp(USA,Svces,shock)
+ndeq(USA,Svces,shock)..  - (0.00983025104688001)*axp(USA,Svces,shock)
      
-      + (0)*lambdand(USA,Svces,shock) + nd(USA,Svces,shock)
+      - (0.00983025104688001)*lambdand(USA,Svces,shock) + nd(USA,Svces,shock)
      
-      - (0.983025104688)*px(USA,Svces,shock)
+      - (0.99285535573488)*px(USA,Svces,shock)
      
-      + (0.983025104688)*pnd(USA,Svces,shock)
+      + (0.99285535573488)*pnd(USA,Svces,shock)
      
       - (0.397146004263243)*xp(USA,Svces,shock) =E= 0 ; (LHS = 0)
      
@@ -6116,29 +6096,33 @@ REMAINING 9 ENTRIES SKIPPED
 
 ---- vaeq  =E=  Demand for aggregate value added  (VA)
 
-vaeq(USA,Food,shock)..  (0)*axp(USA,Food,shock) + (0)*lambdava(USA,Food,shock)
+vaeq(USA,Food,shock)..  - (0.004862813296763)*axp(USA,Food,shock)
      
-      + va(USA,Food,shock) - (0.4862813296763)*px(USA,Food,shock)
+      - (0.004862813296763)*lambdava(USA,Food,shock) + va(USA,Food,shock)
      
-      + (0.4862813296763)*pva(USA,Food,shock)
+      - (0.491144142973063)*px(USA,Food,shock)
+     
+      + (0.491144142973063)*pva(USA,Food,shock)
      
       - (0.307921982152546)*xp(USA,Food,shock) =E= 0 ; (LHS = 0)
      
-vaeq(USA,Mnfcs,shock)..  (0)*axp(USA,Mnfcs,shock)
+vaeq(USA,Mnfcs,shock)..  - (0.002225983704604)*axp(USA,Mnfcs,shock)
      
-      + (0)*lambdava(USA,Mnfcs,shock) + va(USA,Mnfcs,shock)
+      - (0.002225983704604)*lambdava(USA,Mnfcs,shock) + va(USA,Mnfcs,shock)
      
-      - (0.2225983704604)*px(USA,Mnfcs,shock)
+      - (0.224824354165004)*px(USA,Mnfcs,shock)
      
-      + (0.2225983704604)*pva(USA,Mnfcs,shock)
+      + (0.224824354165004)*pva(USA,Mnfcs,shock)
      
       - (0.38797164000463)*xp(USA,Mnfcs,shock) =E= 0 ; (LHS = 0)
      
-vaeq(USA,Svces,shock)..  (0)*axp(USA,Svces,shock)
+vaeq(USA,Svces,shock)..  - (0.0149219835)*axp(USA,Svces,shock)
      
-      + (0)*lambdava(USA,Svces,shock) + va(USA,Svces,shock)
+      - (0.0149219835)*lambdava(USA,Svces,shock) + va(USA,Svces,shock)
      
-      - (1.49219835)*px(USA,Svces,shock) + (1.49219835)*pva(USA,Svces,shock)
+      - (1.5071203335)*px(USA,Svces,shock)
+     
+      + (1.5071203335)*pva(USA,Svces,shock)
      
       - (0.602853995736757)*xp(USA,Svces,shock) =E= 0 ; (LHS = 0)
      
@@ -6147,27 +6131,35 @@ REMAINING 9 ENTRIES SKIPPED
 
 ---- pxeq  =E=  Unit cost of production
 
-pxeq(USA,Food,shock)..  (0)*axp(USA,Food,shock) + (0)*lambdand(USA,Food,shock)
+pxeq(USA,Food,shock)..  - (0.01)*axp(USA,Food,shock)
      
-      + (0)*lambdava(USA,Food,shock) + (0)*px(USA,Food,shock)
+      - (0.00692078017847454)*lambdand(USA,Food,shock)
      
-      + (0)*pnd(USA,Food,shock) + (0)*pva(USA,Food,shock) =E= 0 ; (LHS = 0)
+      - (0.00307921982152547)*lambdava(USA,Food,shock)
      
-pxeq(USA,Mnfcs,shock)..  (0)*axp(USA,Mnfcs,shock)
+      - (0.01)*px(USA,Food,shock) + (0.00692078017847454)*pnd(USA,Food,shock)
      
-      + (0)*lambdand(USA,Mnfcs,shock) + (0)*lambdava(USA,Mnfcs,shock)
+      + (0.00307921982152547)*pva(USA,Food,shock) =E= 0 ; (LHS = 0)
      
-      + (0)*px(USA,Mnfcs,shock) + (0)*pnd(USA,Mnfcs,shock)
+pxeq(USA,Mnfcs,shock)..  - (0.01)*axp(USA,Mnfcs,shock)
      
-      + (0)*pva(USA,Mnfcs,shock) =E= 0 ; (LHS = 0)
+      - (0.0061202835999537)*lambdand(USA,Mnfcs,shock)
      
-pxeq(USA,Svces,shock)..  (0)*axp(USA,Svces,shock)
+      - (0.00387971640004631)*lambdava(USA,Mnfcs,shock)
      
-      + (0)*lambdand(USA,Svces,shock) + (0)*lambdava(USA,Svces,shock)
+      - (0.01)*px(USA,Mnfcs,shock) + (0.0061202835999537)*pnd(USA,Mnfcs,shock)
      
-      + (0)*px(USA,Svces,shock) + (0)*pnd(USA,Svces,shock)
+      + (0.00387971640004631)*pva(USA,Mnfcs,shock) =E= 0 ; (LHS = 0)
      
-      + (0)*pva(USA,Svces,shock) =E= 0 ; (LHS = 0)
+pxeq(USA,Svces,shock)..  - (0.01)*axp(USA,Svces,shock)
+     
+      - (0.00397146004263243)*lambdand(USA,Svces,shock)
+     
+      - (0.00602853995736757)*lambdava(USA,Svces,shock)
+     
+      - (0.01)*px(USA,Svces,shock) + (0.00397146004263243)*pnd(USA,Svces,shock)
+     
+      + (0.00602853995736757)*pva(USA,Svces,shock) =E= 0 ; (LHS = 0)
      
 REMAINING 9 ENTRIES SKIPPED
 
@@ -6191,35 +6183,51 @@ REMAINING 33 ENTRIES SKIPPED
 
 ---- pndeq  =E=  Price of ND bundle
 
-pndeq(USA,Food,shock)..  (0)*lambdaio(USA,Food,Food,shock)
+pndeq(USA,Food,shock)..  - (0.00536976634462631)*lambdaio(USA,Food,Food,shock)
      
-      + (0)*lambdaio(USA,Mnfcs,Food,shock) + (0)*lambdaio(USA,Svces,Food,shock)
+      - (0.00155960725706115)*lambdaio(USA,Mnfcs,Food,shock)
      
-      + (0)*pnd(USA,Food,shock) + (0)*pa(USA,Food,Food,shock)
+      - (0.00307062639831255)*lambdaio(USA,Svces,Food,shock)
      
-      + (0)*pa(USA,Mnfcs,Food,shock) + (0)*pa(USA,Svces,Food,shock) =E= 0 ;
+      - (0.01)*pnd(USA,Food,shock)
      
-      (LHS = 0)
+      + (0.00536976634462631)*pa(USA,Food,Food,shock)
      
-pndeq(USA,Mnfcs,shock)..  (0)*lambdaio(USA,Food,Mnfcs,shock)
+      + (0.00155960725706115)*pa(USA,Mnfcs,Food,shock)
      
-      + (0)*lambdaio(USA,Mnfcs,Mnfcs,shock)
+      + (0.00307062639831255)*pa(USA,Svces,Food,shock) =E= 0 ; (LHS = 0)
      
-      + (0)*lambdaio(USA,Svces,Mnfcs,shock) + (0)*pnd(USA,Mnfcs,shock)
+pndeq(USA,Mnfcs,shock)..  
      
-      + (0)*pa(USA,Food,Mnfcs,shock) + (0)*pa(USA,Mnfcs,Mnfcs,shock)
+     - (0.000123207170248414)*lambdaio(USA,Food,Mnfcs,shock)
      
-      + (0)*pa(USA,Svces,Mnfcs,shock) =E= 0 ; (LHS = 0)
+      - (0.00671422007492723)*lambdaio(USA,Mnfcs,Mnfcs,shock)
      
-pndeq(USA,Svces,shock)..  (0)*lambdaio(USA,Food,Svces,shock)
+      - (0.00316257275482436)*lambdaio(USA,Svces,Mnfcs,shock)
      
-      + (0)*lambdaio(USA,Mnfcs,Svces,shock)
+      - (0.01)*pnd(USA,Mnfcs,shock)
      
-      + (0)*lambdaio(USA,Svces,Svces,shock) + (0)*pnd(USA,Svces,shock)
+      + (0.000123207170248414)*pa(USA,Food,Mnfcs,shock)
      
-      + (0)*pa(USA,Food,Svces,shock) + (0)*pa(USA,Mnfcs,Svces,shock)
+      + (0.00671422007492723)*pa(USA,Mnfcs,Mnfcs,shock)
      
-      + (0)*pa(USA,Svces,Svces,shock) =E= 0 ; (LHS = 0)
+      + (0.00316257275482436)*pa(USA,Svces,Mnfcs,shock) =E= 0 ; (LHS = 0)
+     
+pndeq(USA,Svces,shock)..  
+     
+     - (0.000204274475313358)*lambdaio(USA,Food,Svces,shock)
+     
+      - (0.00177423584268844)*lambdaio(USA,Mnfcs,Svces,shock)
+     
+      - (0.00802148968199822)*lambdaio(USA,Svces,Svces,shock)
+     
+      - (0.01)*pnd(USA,Svces,shock)
+     
+      + (0.000204274475313358)*pa(USA,Food,Svces,shock)
+     
+      + (0.00177423584268844)*pa(USA,Mnfcs,Svces,shock)
+     
+      + (0.00802148968199822)*pa(USA,Svces,Svces,shock) =E= 0 ; (LHS = 0)
      
 REMAINING 9 ENTRIES SKIPPED
 
@@ -6228,26 +6236,27 @@ REMAINING 9 ENTRIES SKIPPED
 
 xapeq(USA,Food,Food,shock)..  - (0.53697663446263)*nd(USA,Food,shock)
      
-      + (0)*lambdaio(USA,Food,Food,shock) - (0.58689085938)*pnd(USA,Food,shock)
+      - (0.0058689085938)*lambdaio(USA,Food,Food,shock)
      
-      + xa(USA,Food,Food,shock) + (0.58689085938)*pa(USA,Food,Food,shock) =E= 0
-      ; (LHS = 0)
+      - (0.5927597679738)*pnd(USA,Food,shock) + xa(USA,Food,Food,shock)
+     
+      + (0.5927597679738)*pa(USA,Food,Food,shock) =E= 0 ; (LHS = 0)
      
 xapeq(USA,Food,Mnfcs,shock)..  - (0.0123207170248414)*nd(USA,Mnfcs,shock)
      
-      + (0)*lambdaio(USA,Food,Mnfcs,shock)
+      - (4.3264284917E-5)*lambdaio(USA,Food,Mnfcs,shock)
      
-      - (0.0043264284917)*pnd(USA,Mnfcs,shock) + xa(USA,Food,Mnfcs,shock)
+      - (0.004369692776617)*pnd(USA,Mnfcs,shock) + xa(USA,Food,Mnfcs,shock)
      
-      + (0.0043264284917)*pa(USA,Food,Mnfcs,shock) =E= 0 ; (LHS = 0)
+      + (0.004369692776617)*pa(USA,Food,Mnfcs,shock) =E= 0 ; (LHS = 0)
      
 xapeq(USA,Food,Svces,shock)..  - (0.0204274475313358)*nd(USA,Svces,shock)
      
-      + (0)*lambdaio(USA,Food,Svces,shock)
+      - (0.00020080693748)*lambdaio(USA,Food,Svces,shock)
      
-      - (0.020080693748)*pnd(USA,Svces,shock) + xa(USA,Food,Svces,shock)
+      - (0.02028150068548)*pnd(USA,Svces,shock) + xa(USA,Food,Svces,shock)
      
-      + (0.020080693748)*pa(USA,Food,Svces,shock) =E= 0 ; (LHS = 0)
+      + (0.02028150068548)*pa(USA,Food,Svces,shock) =E= 0 ; (LHS = 0)
      
 REMAINING 33 ENTRIES SKIPPED
 
@@ -6365,69 +6374,90 @@ REMAINING 45 ENTRIES SKIPPED
 
 xfeq(USA,Land,Food,shock)..  - (0.0815771506925971)*va(USA,Food,shock)
      
-      + (0)*lambdaf(USA,Land,Food,shock) + xf(USA,Land,Food,shock)
+      - (0.0003966944531)*lambdaf(USA,Land,Food,shock)
      
-      - (0.03966944531)*pva(USA,Food,shock)
+      + xf(USA,Land,Food,shock) - (0.0400661397631)*pva(USA,Food,shock)
      
-      + (0.0462801254634109)*pfa(USA,Land,Food,shock) =E= 0 ; (LHS = 0)
+      + (0.046742926718045)*pfa(USA,Land,Food,shock) =E= 0 ; (LHS = 0)
      
 xfeq(USA,UnSkLab,Food,shock)..  - (0.185260589132568)*va(USA,Food,shock)
      
-      + (0)*lambdaf(USA,UnSkLab,Food,shock) + xf(USA,UnSkLab,Food,shock)
+      - (0.000900887656200001)*lambdaf(USA,UnSkLab,Food,shock)
      
-      - (0.09008876562)*pva(USA,Food,shock)
+      + xf(USA,UnSkLab,Food,shock) - (0.0909896532762)*pva(USA,Food,shock)
      
-      + (0.0571835669832293)*pfa(USA,UnSkLab,Food,shock) =E= 0 ; (LHS = 0)
+      + (0.0577554026530616)*pfa(USA,UnSkLab,Food,shock) =E= 0 ; (LHS = 0)
      
 xfeq(USA,UnSkLab,Mnfcs,shock)..  - (0.238480350912739)*va(USA,Mnfcs,shock)
      
-      + (0)*lambdaf(USA,UnSkLab,Mnfcs,shock) + xf(USA,UnSkLab,Mnfcs,shock)
+      - (0.000530853375)*lambdaf(USA,UnSkLab,Mnfcs,shock)
      
-      - (0.0530853375)*pva(USA,Mnfcs,shock)
+      + xf(USA,UnSkLab,Mnfcs,shock) - (0.053616190875)*pva(USA,Mnfcs,shock)
      
-      + (0.0332107990643181)*pfa(USA,UnSkLab,Mnfcs,shock) =E= 0 ; (LHS = 0)
+      + (0.0335429070549613)*pfa(USA,UnSkLab,Mnfcs,shock) =E= 0 ; (LHS = 0)
      
 REMAINING 45 ENTRIES SKIPPED
 
 
 ---- pvaeq  =E=  Price of value added
 
-pvaeq(USA,Food,shock)..  (0)*lambdaf(USA,Land,Food,shock)
+pvaeq(USA,Food,shock)..  - (0.000699246228384599)*lambdaf(USA,Land,Food,shock)
      
-      + (0)*lambdaf(USA,UnSkLab,Food,shock) + (0)*lambdaf(USA,SkLab,Food,shock)
+      - (0.00291865280070442)*lambdaf(USA,UnSkLab,Food,shock)
      
-      + (0)*lambdaf(USA,Capital,Food,shock)
+      - (0.00147449471981023)*lambdaf(USA,SkLab,Food,shock)
      
-      + (0)*lambdaf(USA,NatRes,Food,shock) + (0)*pva(USA,Food,shock)
+      - (0.00479345056239696)*lambdaf(USA,Capital,Food,shock)
      
-      + (0)*pfa(USA,Land,Food,shock) + (0)*pfa(USA,UnSkLab,Food,shock)
+      - (0.000114155688703805)*lambdaf(USA,NatRes,Food,shock)
      
-      + (0)*pfa(USA,SkLab,Food,shock) + (0)*pfa(USA,Capital,Food,shock)
+      - (0.01)*pva(USA,Food,shock)
      
-      + (0)*pfa(USA,NatRes,Food,shock) =E= 0 ; (LHS = 0)
+      + (0.000815771506925971)*pfa(USA,Land,Food,shock)
      
-pvaeq(USA,Mnfcs,shock)..  (0)*lambdaf(USA,UnSkLab,Mnfcs,shock)
+      + (0.00185260589132568)*pfa(USA,UnSkLab,Food,shock)
      
-      + (0)*lambdaf(USA,SkLab,Mnfcs,shock)
+      + (0.000948487730974631)*pfa(USA,SkLab,Food,shock)
      
-      + (0)*lambdaf(USA,Capital,Mnfcs,shock)
+      + (0.00444746633690347)*pfa(USA,Capital,Food,shock)
      
-      + (0)*lambdaf(USA,NatRes,Mnfcs,shock) + (0)*pva(USA,Mnfcs,shock)
+      + (0.000104289362217049)*pfa(USA,NatRes,Food,shock) =E= 0 ; (LHS = 0)
      
-      + (0)*pfa(USA,UnSkLab,Mnfcs,shock) + (0)*pfa(USA,SkLab,Mnfcs,shock)
+pvaeq(USA,Mnfcs,shock)..  
      
-      + (0)*pfa(USA,Capital,Mnfcs,shock) + (0)*pfa(USA,NatRes,Mnfcs,shock) =E= 
-     0 ; (LHS = 0)
+     - (0.00381195583123532)*lambdaf(USA,UnSkLab,Mnfcs,shock)
      
-pvaeq(USA,Svces,shock)..  (0)*lambdaf(USA,UnSkLab,Svces,shock)
+      - (0.00126119363690465)*lambdaf(USA,SkLab,Mnfcs,shock)
      
-      + (0)*lambdaf(USA,SkLab,Svces,shock)
+      - (0.0045689249386079)*lambdaf(USA,Capital,Mnfcs,shock)
      
-      + (0)*lambdaf(USA,Capital,Svces,shock) + (0)*pva(USA,Svces,shock)
+      - (0.000357925593252148)*lambdaf(USA,NatRes,Mnfcs,shock)
      
-      + (0)*pfa(USA,UnSkLab,Svces,shock) + (0)*pfa(USA,SkLab,Svces,shock)
+      - (0.01)*pva(USA,Mnfcs,shock)
      
-      + (0)*pfa(USA,Capital,Svces,shock) =E= 0 ; (LHS = 0)
+      + (0.00238480350912739)*pfa(USA,UnSkLab,Mnfcs,shock)
+     
+      + (0.000789017315970178)*pfa(USA,SkLab,Mnfcs,shock)
+     
+      + (0.00417403830530418)*pfa(USA,Capital,Mnfcs,shock)
+     
+      + (0.000326990545121483)*pfa(USA,NatRes,Mnfcs,shock) =E= 0 ; (LHS = 0)
+     
+pvaeq(USA,Svces,shock)..  
+     
+     - (0.00267965117539502)*lambdaf(USA,UnSkLab,Svces,shock)
+     
+      - (0.00306354141022874)*lambdaf(USA,SkLab,Svces,shock)
+     
+      - (0.00425680741437625)*lambdaf(USA,Capital,Svces,shock)
+     
+      - (0.01)*pva(USA,Svces,shock)
+     
+      + (0.00167642056433047)*pfa(USA,UnSkLab,Svces,shock)
+     
+      + (0.00191658685991712)*pfa(USA,SkLab,Svces,shock)
+     
+      + (0.00388889687486922)*pfa(USA,Capital,Svces,shock) =E= 0 ; (LHS = 0)
      
 REMAINING 9 ENTRIES SKIPPED
 
@@ -9437,11 +9467,11 @@ REMAINING ENTRY SKIPPED
 walraseq..  rsav(ROW,shock) + (4.9078855)*pi(ROW,shock) - yi(ROW,shock)
      
       + savf(ROW,shock) + walras + (0.040000000489009)*kstock(ROW,shock) =E= 0
-      ; (LHS = -8.74570105937711E-12)
+      ; (LHS = 5.21018604999259E-12)
      
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 14
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 14
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Column Listing      SOLVE gtap Using MCP From line 4313
+Column Listing      SOLVE gtap Using MCP From line 4321
 
 
 ---- axp  Production frontier shifter
@@ -9449,23 +9479,23 @@ Column Listing      SOLVE gtap Using MCP From line 4313
 axp(USA,Food,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       axpeq(USA,Food,shock)
-       (0)      ndeq(USA,Food,shock)
-       (0)      vaeq(USA,Food,shock)
-       (0)      pxeq(USA,Food,shock)
+      (-0.0109) ndeq(USA,Food,shock)
+      (-0.0049) vaeq(USA,Food,shock)
+      (-0.01)   pxeq(USA,Food,shock)
 
 axp(USA,Mnfcs,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       axpeq(USA,Mnfcs,shock)
-       (0)      ndeq(USA,Mnfcs,shock)
-       (0)      vaeq(USA,Mnfcs,shock)
-       (0)      pxeq(USA,Mnfcs,shock)
+      (-0.0035) ndeq(USA,Mnfcs,shock)
+      (-0.0022) vaeq(USA,Mnfcs,shock)
+      (-0.01)   pxeq(USA,Mnfcs,shock)
 
 axp(USA,Svces,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       axpeq(USA,Svces,shock)
-       (0)      ndeq(USA,Svces,shock)
-       (0)      vaeq(USA,Svces,shock)
-       (0)      pxeq(USA,Svces,shock)
+      (-0.0098) ndeq(USA,Svces,shock)
+      (-0.0149) vaeq(USA,Svces,shock)
+      (-0.01)   pxeq(USA,Svces,shock)
 
 REMAINING 9 ENTRIES SKIPPED
 
@@ -9474,20 +9504,20 @@ REMAINING 9 ENTRIES SKIPPED
 lambdand(USA,Food,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdandeq(USA,Food,shock)
-       (0)      ndeq(USA,Food,shock)
-       (0)      pxeq(USA,Food,shock)
+      (-0.0109) ndeq(USA,Food,shock)
+      (-0.0069) pxeq(USA,Food,shock)
 
 lambdand(USA,Mnfcs,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdandeq(USA,Mnfcs,shock)
-       (0)      ndeq(USA,Mnfcs,shock)
-       (0)      pxeq(USA,Mnfcs,shock)
+      (-0.0035) ndeq(USA,Mnfcs,shock)
+      (-0.0061) pxeq(USA,Mnfcs,shock)
 
 lambdand(USA,Svces,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdandeq(USA,Svces,shock)
-       (0)      ndeq(USA,Svces,shock)
-       (0)      pxeq(USA,Svces,shock)
+      (-0.0098) ndeq(USA,Svces,shock)
+      (-0.004)  pxeq(USA,Svces,shock)
 
 REMAINING 9 ENTRIES SKIPPED
 
@@ -9496,20 +9526,20 @@ REMAINING 9 ENTRIES SKIPPED
 lambdava(USA,Food,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdavaeq(USA,Food,shock)
-       (0)      vaeq(USA,Food,shock)
-       (0)      pxeq(USA,Food,shock)
+      (-0.0049) vaeq(USA,Food,shock)
+      (-0.0031) pxeq(USA,Food,shock)
 
 lambdava(USA,Mnfcs,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdavaeq(USA,Mnfcs,shock)
-       (0)      vaeq(USA,Mnfcs,shock)
-       (0)      pxeq(USA,Mnfcs,shock)
+      (-0.0022) vaeq(USA,Mnfcs,shock)
+      (-0.0039) pxeq(USA,Mnfcs,shock)
 
 lambdava(USA,Svces,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdavaeq(USA,Svces,shock)
-       (0)      vaeq(USA,Svces,shock)
-       (0)      pxeq(USA,Svces,shock)
+      (-0.0149) vaeq(USA,Svces,shock)
+      (-0.006)  pxeq(USA,Svces,shock)
 
 REMAINING 9 ENTRIES SKIPPED
 
@@ -9569,26 +9599,26 @@ REMAINING 9 ENTRIES SKIPPED
 ---- px  Unit cost of production
 
 px(USA,Food,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-      (-1.093)  ndeq(USA,Food,shock)
-      (-0.4863) vaeq(USA,Food,shock)
-       (0)      pxeq(USA,Food,shock)
+                (.LO, .L, .UP, .M = 0.00100000031268603, 1, +INF, 0)
+      (-1.1039) ndeq(USA,Food,shock)
+      (-0.4911) vaeq(USA,Food,shock)
+      (-0.01)   pxeq(USA,Food,shock)
       (-8.1029) xeq(USA,Food,Food,shock)
       (-6)      xpeq(USA,Food,shock)
 
 px(USA,Mnfcs,shock)
-                (.LO, .L, .UP, .M = 0.000999999992077746, 1, +INF, 0)
-      (-0.3512) ndeq(USA,Mnfcs,shock)
-      (-0.2226) vaeq(USA,Mnfcs,shock)
-       (0)      pxeq(USA,Mnfcs,shock)
+                (.LO, .L, .UP, .M = 0.0010000004769282, 1, +INF, 0)
+      (-0.3547) ndeq(USA,Mnfcs,shock)
+      (-0.2248) vaeq(USA,Mnfcs,shock)
+      (-0.01)   pxeq(USA,Mnfcs,shock)
      (-29.3037) xeq(USA,Mnfcs,Mnfcs,shock)
       (-6)      xpeq(USA,Mnfcs,shock)
 
 px(USA,Svces,shock)
-                (.LO, .L, .UP, .M = 0.000999999996317465, 1, +INF, 0)
-      (-0.983)  ndeq(USA,Svces,shock)
-      (-1.4922) vaeq(USA,Svces,shock)
-       (0)      pxeq(USA,Svces,shock)
+                (.LO, .L, .UP, .M = 0.00100000023460568, 1, +INF, 0)
+      (-0.9929) ndeq(USA,Svces,shock)
+      (-1.5071) vaeq(USA,Svces,shock)
+      (-0.01)   pxeq(USA,Svces,shock)
     (-129.044)  xeq(USA,Svces,Svces,shock)
       (-6)      xpeq(USA,Svces,shock)
 
@@ -9599,51 +9629,51 @@ REMAINING 9 ENTRIES SKIPPED
 lambdaio(USA,Food,Food,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdaioeq(USA,Food,Food,shock)
-       (0)      pndeq(USA,Food,shock)
-       (0)      xapeq(USA,Food,Food,shock)
+      (-0.0054) pndeq(USA,Food,shock)
+      (-0.0059) xapeq(USA,Food,Food,shock)
 
 lambdaio(USA,Food,Mnfcs,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdaioeq(USA,Food,Mnfcs,shock)
-       (0)      pndeq(USA,Mnfcs,shock)
-       (0)      xapeq(USA,Food,Mnfcs,shock)
+      (-0.0001) pndeq(USA,Mnfcs,shock)
+ (-4.326428E-5) xapeq(USA,Food,Mnfcs,shock)
 
 lambdaio(USA,Food,Svces,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdaioeq(USA,Food,Svces,shock)
-       (0)      pndeq(USA,Svces,shock)
-       (0)      xapeq(USA,Food,Svces,shock)
+      (-0.0002) pndeq(USA,Svces,shock)
+      (-0.0002) xapeq(USA,Food,Svces,shock)
 
 REMAINING 33 ENTRIES SKIPPED
 
 ---- pnd  Price of ND bundle
 
 pnd(USA,Food,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (1.093)  ndeq(USA,Food,shock)
-       (0)      pxeq(USA,Food,shock)
-       (0)      pndeq(USA,Food,shock)
-      (-0.5869) xapeq(USA,Food,Food,shock)
-      (-0.1705) xapeq(USA,Mnfcs,Food,shock)
-      (-0.3356) xapeq(USA,Svces,Food,shock)
+                (.LO, .L, .UP, .M = 0.00100000040584452, 1, +INF, 0)
+       (1.1039) ndeq(USA,Food,shock)
+       (0.0069) pxeq(USA,Food,shock)
+      (-0.01)   pndeq(USA,Food,shock)
+      (-0.5928) xapeq(USA,Food,Food,shock)
+      (-0.1722) xapeq(USA,Mnfcs,Food,shock)
+      (-0.339)  xapeq(USA,Svces,Food,shock)
 
 pnd(USA,Mnfcs,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0.3512) ndeq(USA,Mnfcs,shock)
-       (0)      pxeq(USA,Mnfcs,shock)
-       (0)      pndeq(USA,Mnfcs,shock)
-      (-0.0043) xapeq(USA,Food,Mnfcs,shock)
-      (-0.2358) xapeq(USA,Mnfcs,Mnfcs,shock)
-      (-0.1111) xapeq(USA,Svces,Mnfcs,shock)
+                (.LO, .L, .UP, .M = 0.00100000070967595, 1, +INF, 0)
+       (0.3547) ndeq(USA,Mnfcs,shock)
+       (0.0061) pxeq(USA,Mnfcs,shock)
+      (-0.01)   pndeq(USA,Mnfcs,shock)
+      (-0.0044) xapeq(USA,Food,Mnfcs,shock)
+      (-0.2381) xapeq(USA,Mnfcs,Mnfcs,shock)
+      (-0.1122) xapeq(USA,Svces,Mnfcs,shock)
 
 pnd(USA,Svces,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0.983)  ndeq(USA,Svces,shock)
-       (0)      pxeq(USA,Svces,shock)
-       (0)      pndeq(USA,Svces,shock)
-      (-0.0201) xapeq(USA,Food,Svces,shock)
-      (-0.1744) xapeq(USA,Mnfcs,Svces,shock)
-      (-0.7885) xapeq(USA,Svces,Svces,shock)
+                (.LO, .L, .UP, .M = 0.00100000042691411, 1, +INF, 0)
+       (0.9929) ndeq(USA,Svces,shock)
+       (0.004)  pxeq(USA,Svces,shock)
+      (-0.01)   pndeq(USA,Svces,shock)
+      (-0.0203) xapeq(USA,Food,Svces,shock)
+      (-0.1762) xapeq(USA,Mnfcs,Svces,shock)
+      (-0.7964) xapeq(USA,Svces,Svces,shock)
 
 REMAINING 9 ENTRIES SKIPPED
 
@@ -9652,20 +9682,20 @@ REMAINING 9 ENTRIES SKIPPED
 lambdaf(USA,Land,Food,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdafeq(USA,Land,Food,shock)
-       (0)      xfeq(USA,Land,Food,shock)
-       (0)      pvaeq(USA,Food,shock)
+      (-0.0004) xfeq(USA,Land,Food,shock)
+      (-0.0007) pvaeq(USA,Food,shock)
 
 lambdaf(USA,UnSkLab,Food,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdafeq(USA,UnSkLab,Food,shock)
-       (0)      xfeq(USA,UnSkLab,Food,shock)
-       (0)      pvaeq(USA,Food,shock)
+      (-0.0009) xfeq(USA,UnSkLab,Food,shock)
+      (-0.0029) pvaeq(USA,Food,shock)
 
 lambdaf(USA,UnSkLab,Mnfcs,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdafeq(USA,UnSkLab,Mnfcs,shock)
-       (0)      xfeq(USA,UnSkLab,Mnfcs,shock)
-       (0)      pvaeq(USA,Mnfcs,shock)
+      (-0.0005) xfeq(USA,UnSkLab,Mnfcs,shock)
+      (-0.0038) pvaeq(USA,Mnfcs,shock)
 
 REMAINING 45 ENTRIES SKIPPED
 
@@ -9708,34 +9738,34 @@ REMAINING 45 ENTRIES SKIPPED
 ---- pva  Price of value added
 
 pva(USA,Food,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0.4863) vaeq(USA,Food,shock)
-       (0)      pxeq(USA,Food,shock)
-      (-0.0397) xfeq(USA,Land,Food,shock)
-      (-0.0901) xfeq(USA,UnSkLab,Food,shock)
-      (-0.0461) xfeq(USA,SkLab,Food,shock)
-      (-0.2163) xfeq(USA,Capital,Food,shock)
+                (.LO, .L, .UP, .M = 0.00100000010330526, 1, +INF, 0)
+       (0.4911) vaeq(USA,Food,shock)
+       (0.0031) pxeq(USA,Food,shock)
+      (-0.0401) xfeq(USA,Land,Food,shock)
+      (-0.091)  xfeq(USA,UnSkLab,Food,shock)
+      (-0.0466) xfeq(USA,SkLab,Food,shock)
+      (-0.2184) xfeq(USA,Capital,Food,shock)
       (-0.0051) xfeq(USA,NatRes,Food,shock)
-       (0)      pvaeq(USA,Food,shock)
+      (-0.01)   pvaeq(USA,Food,shock)
 
 pva(USA,Mnfcs,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0.2226) vaeq(USA,Mnfcs,shock)
-       (0)      pxeq(USA,Mnfcs,shock)
-      (-0.0531) xfeq(USA,UnSkLab,Mnfcs,shock)
-      (-0.0176) xfeq(USA,SkLab,Mnfcs,shock)
-      (-0.0929) xfeq(USA,Capital,Mnfcs,shock)
-      (-0.0073) xfeq(USA,NatRes,Mnfcs,shock)
-       (0)      pvaeq(USA,Mnfcs,shock)
+                (.LO, .L, .UP, .M = 0.00100000010976675, 1, +INF, 0)
+       (0.2248) vaeq(USA,Mnfcs,shock)
+       (0.0039) pxeq(USA,Mnfcs,shock)
+      (-0.0536) xfeq(USA,UnSkLab,Mnfcs,shock)
+      (-0.0177) xfeq(USA,SkLab,Mnfcs,shock)
+      (-0.0938) xfeq(USA,Capital,Mnfcs,shock)
+      (-0.0074) xfeq(USA,NatRes,Mnfcs,shock)
+      (-0.01)   pvaeq(USA,Mnfcs,shock)
 
 pva(USA,Svces,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (1.4922) vaeq(USA,Svces,shock)
-       (0)      pxeq(USA,Svces,shock)
-      (-0.2502) xfeq(USA,UnSkLab,Svces,shock)
-      (-0.286)  xfeq(USA,SkLab,Svces,shock)
-      (-0.5803) xfeq(USA,Capital,Svces,shock)
-       (0)      pvaeq(USA,Svces,shock)
+                (.LO, .L, .UP, .M = 0.0010000001079174, 1, +INF, 0)
+       (1.5071) vaeq(USA,Svces,shock)
+       (0.006)  pxeq(USA,Svces,shock)
+      (-0.2527) xfeq(USA,UnSkLab,Svces,shock)
+      (-0.2889) xfeq(USA,SkLab,Svces,shock)
+      (-0.5861) xfeq(USA,Capital,Svces,shock)
+      (-0.01)   pvaeq(USA,Svces,shock)
 
 REMAINING 9 ENTRIES SKIPPED
 
@@ -10001,7 +10031,7 @@ REMAINING ENTRY SKIPPED
 ---- uh  Private utility per capita
 
 uh(USA,hhd,shock)
-                (.LO, .L, .UP, .M = 0.000999999899139106, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999627480389, 1, +INF, 0)
       (-0.7548) ueq(USA,shock)
       (-0.0005) zconseq(USA,Food,hhd,shock)
       (-0.0009) zconseq(USA,Mnfcs,hhd,shock)
@@ -10009,7 +10039,7 @@ uh(USA,hhd,shock)
        (0.0928) eveq(USA,hhd,shock)
 
 uh(EU_28,hhd,shock)
-                (.LO, .L, .UP, .M = 0.000999999551749919, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999133573264, 1, +INF, 0)
       (-0.6322) ueq(EU_28,shock)
       (-0.0053) zconseq(EU_28,Food,hhd,shock)
       (-0.0092) zconseq(EU_28,Mnfcs,hhd,shock)
@@ -10017,7 +10047,7 @@ uh(EU_28,hhd,shock)
        (0.2292) eveq(EU_28,hhd,shock)
 
 uh(EGY,hhd,shock)
-                (.LO, .L, .UP, .M = 0.00100000005900881, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999105705888, 1, +INF, 0)
       (-0.9472) ueq(EGY,shock)
       (-0.0755) zconseq(EGY,Food,hhd,shock)
       (-0.1025) zconseq(EGY,Mnfcs,hhd,shock)
@@ -10029,17 +10059,17 @@ REMAINING ENTRY SKIPPED
 ---- ug  Utility per capita from public expenditure
 
 ug(USA,shock)
-                (.LO, .L, .UP, .M = 0.00099999998843251, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999762457356, 1, +INF, 0)
         1       ugeq(USA,shock)
       (-0.1557) ueq(USA,shock)
 
 ug(EU_28,shock)
-                (.LO, .L, .UP, .M = 0.000999999679558214, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999388119518, 1, +INF, 0)
         1       ugeq(EU_28,shock)
       (-0.2318) ueq(EU_28,shock)
 
 ug(EGY,shock)
-                (.LO, .L, .UP, .M = 0.00100000007124083, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999267018113, 1, +INF, 0)
         1       ugeq(EGY,shock)
       (-0.1085) ueq(EGY,shock)
 
@@ -10048,17 +10078,17 @@ REMAINING ENTRY SKIPPED
 ---- us  Utility per capita from savings
 
 us(USA,shock)
-                (.LO, .L, .UP, .M = 0.000999999804291905, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999461641703, 1, +INF, 0)
         1       useq(USA,shock)
       (-0.0895) ueq(USA,shock)
 
 us(EU_28,shock)
-                (.LO, .L, .UP, .M = 0.00099999938686494, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999998888859213, 1, +INF, 0)
         1       useq(EU_28,shock)
       (-0.1359) ueq(EU_28,shock)
 
 us(EGY,shock)
-                (.LO, .L, .UP, .M = 0.000999999815912997, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999998944660665, 1, +INF, 0)
         1       useq(EGY,shock)
        (0.0557) ueq(EGY,shock)
 
@@ -10067,15 +10097,15 @@ REMAINING ENTRY SKIPPED
 ---- u  Total per capita utility
 
 u(USA,shock)
-                (.LO, .L, .UP, .M = 0.000999999904552638, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999633652861, 1, +INF, 0)
        (1)      ueq(USA,shock)
 
 u(EU_28,shock)
-                (.LO, .L, .UP, .M = 0.000999999558974054, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999159332484, 1, +INF, 0)
        (1)      ueq(EU_28,shock)
 
 u(EGY,shock)
-                (.LO, .L, .UP, .M = 0.00100000007386828, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999132169273, 1, +INF, 0)
        (1)      ueq(EGY,shock)
 
 REMAINING ENTRY SKIPPED
@@ -10136,15 +10166,15 @@ REMAINING 9 ENTRIES SKIPPED
 ---- pcons  Consumer expenditure deflator
 
 pcons(USA,shock)
-                (.LO, .L, .UP, .M = 0.00100000010878695, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000039559743, 1, +INF, 0)
         1       pconseq(USA,shock)
 
 pcons(EU_28,shock)
-                (.LO, .L, .UP, .M = 0.00100000027608555, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000059810473, 1, +INF, 0)
         1       pconseq(EU_28,shock)
 
 pcons(EGY,shock)
-                (.LO, .L, .UP, .M = 0.00100000012339814, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000117494906, 1, +INF, 0)
         1       pconseq(EGY,shock)
 
 REMAINING ENTRY SKIPPED
@@ -10152,7 +10182,7 @@ REMAINING ENTRY SKIPPED
 ---- pg  Public expenditure price deflator
 
 pg(USA,shock)
-                (.LO, .L, .UP, .M = 0.00100000002531547, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000026371682, 1, +INF, 0)
       (-0.001)  xageq(USA,Food,gov,shock)
       (-0.0007) xageq(USA,Mnfcs,gov,shock)
       (-2.7757) xageq(USA,Svces,gov,shock)
@@ -10160,7 +10190,7 @@ pg(USA,shock)
        (2.75)   xgeq(USA,shock)
 
 pg(EU_28,shock)
-                (.LO, .L, .UP, .M = 0.00100000003725994, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000021413753, 1, +INF, 0)
       (-0.0057) xageq(EU_28,Food,gov,shock)
       (-0.1189) xageq(EU_28,Mnfcs,gov,shock)
       (-3.5522) xageq(EU_28,Svces,gov,shock)
@@ -10168,7 +10198,7 @@ pg(EU_28,shock)
        (3.6405) xgeq(EU_28,shock)
 
 pg(EGY,shock)
-                (.LO, .L, .UP, .M = 0.00100000002017108, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000075405473, 1, +INF, 0)
       (-0.0001) xageq(EGY,Food,gov,shock)
       (-0.0002) xageq(EGY,Mnfcs,gov,shock)
       (-0.0239) xageq(EGY,Svces,gov,shock)
@@ -10208,7 +10238,7 @@ REMAINING ENTRY SKIPPED
 ---- pi  Investment expenditure price deflator
 
 pi(USA,shock)
-                (.LO, .L, .UP, .M = 0.00100000021134275, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000056720857, 1, +INF, 0)
        (1.8163) factYeq(USA,shock)
       (-0.0006) xaieq(USA,Food,inv,shock)
       (-1.2799) xaieq(USA,Mnfcs,inv,shock)
@@ -10223,7 +10253,7 @@ pi(USA,shock)
       (-2.2323) pigbleq(shock)
 
 pi(EU_28,shock)
-                (.LO, .L, .UP, .M = 0.00100000033183988, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000071607394, 1, +INF, 0)
        (1.8098) factYeq(EU_28,shock)
       (-0.0076) xaieq(EU_28,Food,inv,shock)
       (-1.1165) xaieq(EU_28,Mnfcs,inv,shock)
@@ -10238,7 +10268,7 @@ pi(EU_28,shock)
       (-1.8414) pigbleq(shock)
 
 pi(EGY,shock)
-                (.LO, .L, .UP, .M = 0.00100000027738564, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000107908828, 1, +INF, 0)
        (0.0141) factYeq(EGY,shock)
       (-0.0002) xaieq(EGY,Food,inv,shock)
       (-0.008)  xaieq(EGY,Mnfcs,inv,shock)
@@ -10379,21 +10409,21 @@ REMAINING 69 ENTRIES SKIPPED
 ---- pdp  Purchasers price of domestic goods
 
 pdp(USA,Food,Food,shock)
-                (.LO, .L, .UP, .M = 0.000999657974548305, 0.999657973098801, 
+                (.LO, .L, .UP, .M = 0.000999658287127387, 0.999657973098801, 
 +INF, 0)
         1       pdpeq(USA,Food,Food,shock)
       (-0.0462) paeq(USA,Food,Food,shock)
        (0.5154) xdeq(USA,Food,Food,shock)
 
 pdp(USA,Food,Mnfcs,shock)
-                (.LO, .L, .UP, .M = 0.000995754222508058, 0.995754221064213, 
+                (.LO, .L, .UP, .M = 0.000995754533866491, 0.995754221064213, 
 +INF, 0)
         1       pdpeq(USA,Food,Mnfcs,shock)
       (-0.0477) paeq(USA,Food,Mnfcs,shock)
        (0.0039) xdeq(USA,Food,Mnfcs,shock)
 
 pdp(USA,Food,Svces,shock)
-                (.LO, .L, .UP, .M = 0.00100292181430651, 1.00292181285227, +INF
+                (.LO, .L, .UP, .M = 0.00100292212790615, 1.00292181285227, +INF
 , 0)
         1       pdpeq(USA,Food,Svces,shock)
       (-0.0441) paeq(USA,Food,Svces,shock)
@@ -10404,21 +10434,21 @@ REMAINING 73 ENTRIES SKIPPED
 ---- pmp  Purchasers price of imported goods
 
 pmp(USA,Food,Food,shock)
-                (.LO, .L, .UP, .M = 0.00100202249103996, 1.00202178143616, +INF
+                (.LO, .L, .UP, .M = 0.00100202290300593, 1.00202178143616, +INF
 , 0)
         1       pmpeq(USA,Food,Food,shock)
       (-0.0038) paeq(USA,Food,Food,shock)
        (0.0423) xmeq(USA,Food,Food,shock)
 
 pmp(USA,Food,Mnfcs,shock)
-                (.LO, .L, .UP, .M = 0.000998833892549052, 0.998833185203325, 
+                (.LO, .L, .UP, .M = 0.000998834303204077, 0.998833185203325, 
 +INF, 0)
         1       pmpeq(USA,Food,Mnfcs,shock)
       (-0.0025) paeq(USA,Food,Mnfcs,shock)
        (0.0002) xmeq(USA,Food,Mnfcs,shock)
 
 pmp(USA,Food,Svces,shock)
-                (.LO, .L, .UP, .M = 0.00100336374060065, 1.00336303004701, +INF
+                (.LO, .L, .UP, .M = 0.00100336415311805, 1.00336303004701, +INF
 , 0)
         1       pmpeq(USA,Food,Svces,shock)
       (-0.0057) paeq(USA,Food,Svces,shock)
@@ -10429,25 +10459,25 @@ REMAINING 69 ENTRIES SKIPPED
 ---- pa  Agents price of Armington good
 
 pa(USA,Food,Food,shock)
-                (.LO, .L, .UP, .M = 0.00100000005530233, 1, +INF, 0)
-       (0)      pndeq(USA,Food,shock)
-       (0.5869) xapeq(USA,Food,Food,shock)
+                (.LO, .L, .UP, .M = 0.00100000037549042, 1, +INF, 0)
+       (0.0054) pndeq(USA,Food,shock)
+       (0.5928) xapeq(USA,Food,Food,shock)
        (0.05)   paeq(USA,Food,Food,shock)
       (-0.5152) xdeq(USA,Food,Food,shock)
       (-0.0424) xmeq(USA,Food,Food,shock)
 
 pa(USA,Food,Mnfcs,shock)
-                (.LO, .L, .UP, .M = 0.00100000003644229, 1, +INF, 0)
-       (0)      pndeq(USA,Mnfcs,shock)
-       (0.0043) xapeq(USA,Food,Mnfcs,shock)
+                (.LO, .L, .UP, .M = 0.00100000035400303, 1, +INF, 0)
+       (0.0001) pndeq(USA,Mnfcs,shock)
+       (0.0044) xapeq(USA,Food,Mnfcs,shock)
        (0.05)   paeq(USA,Food,Mnfcs,shock)
       (-0.0039) xdeq(USA,Food,Mnfcs,shock)
       (-0.0002) xmeq(USA,Food,Mnfcs,shock)
 
 pa(USA,Food,Svces,shock)
-                (.LO, .L, .UP, .M = 0.00100000008283642, 1, +INF, 0)
-       (0)      pndeq(USA,Svces,shock)
-       (0.0201) xapeq(USA,Food,Svces,shock)
+                (.LO, .L, .UP, .M = 0.00100000040686022, 1, +INF, 0)
+       (0.0002) pndeq(USA,Svces,shock)
+       (0.0203) xapeq(USA,Food,Svces,shock)
        (0.05)   paeq(USA,Food,Svces,shock)
       (-0.0168) xdeq(USA,Food,Svces,shock)
       (-0.0022) xmeq(USA,Food,Svces,shock)
@@ -10522,7 +10552,7 @@ REMAINING 45 ENTRIES SKIPPED
 ---- pmt  Price of aggregate imports
 
 pmt(USA,Food,shock)
-                (.LO, .L, .UP, .M = 0.00100000070817217, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000111930678, 1, +INF, 0)
       (-0.0002) ytaxeq(USA,fc,shock)
        (0.0001) ytaxeq(USA,pc,shock)
        -1.002   pmpeq(USA,Food,Food,shock)
@@ -10538,7 +10568,7 @@ pmt(USA,Food,shock)
        (0.05)   pmteq(USA,Food,shock)
 
 pmt(USA,Mnfcs,shock)
-                (.LO, .L, .UP, .M = 0.00100000109509452, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000191321402, 1, +INF, 0)
       (-0.0491) ytaxeq(USA,fc,shock)
       (-0.0219) ytaxeq(USA,pc,shock)
       (-0.0177) ytaxeq(USA,ic,shock)
@@ -10555,7 +10585,7 @@ pmt(USA,Mnfcs,shock)
        (0.05)   pmteq(USA,Mnfcs,shock)
 
 pmt(USA,Svces,shock)
-                (.LO, .L, .UP, .M = 0.00100000360924737, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000384439716, 1, +INF, 0)
       (-0.0036) ytaxeq(USA,fc,shock)
       (-0.0051) ytaxeq(USA,pc,shock)
        (0.0114) ytaxeq(USA,ic,shock)
@@ -10655,19 +10685,19 @@ REMAINING 9 ENTRIES SKIPPED
 ---- ps  Price of domestic supply
 
 ps(USA,Food,shock)
-                (.LO, .L, .UP, .M = 0.00100000000144999, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000031413603, 1, +INF, 0)
         1       peq(USA,Food,Food,shock)
         1       xdseq(USA,Food,shock)
         1       xeteq(USA,Food,shock)
 
 ps(USA,Mnfcs,shock)
-                (.LO, .L, .UP, .M = 0.000999999999999936, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000048485041, 1, +INF, 0)
         1       peq(USA,Mnfcs,Mnfcs,shock)
         1       xdseq(USA,Mnfcs,shock)
         1       xeteq(USA,Mnfcs,shock)
 
 ps(USA,Svces,shock)
-                (.LO, .L, .UP, .M = 0.00099999999999982, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000023828805, 1, +INF, 0)
         1       peq(USA,Svces,Svces,shock)
         1       xdseq(USA,Svces,shock)
         1       xeteq(USA,Svces,shock)
@@ -10699,7 +10729,7 @@ REMAINING 9 ENTRIES SKIPPED
 ---- p  Pre-tax price of X
 
 p(USA,Food,Food,shock)
-                (.LO, .L, .UP, .M = 0.00097448460701423, 0.974484605601232, 
+                (.LO, .L, .UP, .M = 0.000974484911721958, 0.974484605601232, 
 +INF, 0)
        (8.3151) xeq(USA,Food,Food,shock)
        (6.1571) xpeq(USA,Food,shock)
@@ -10707,7 +10737,7 @@ p(USA,Food,Food,shock)
       (-0.0424) ytaxeq(USA,pt,shock)
 
 p(USA,Mnfcs,Mnfcs,shock)
-                (.LO, .L, .UP, .M = 0.000978970985896589, 0.978970985896652, 
+                (.LO, .L, .UP, .M = 0.000978971460551136, 0.978970985896652, 
 +INF, 0)
       (29.9331) xeq(USA,Mnfcs,Mnfcs,shock)
        (6.1289) xpeq(USA,Mnfcs,shock)
@@ -10715,7 +10745,7 @@ p(USA,Mnfcs,Mnfcs,shock)
       (-0.1259) ytaxeq(USA,pt,shock)
 
 p(USA,Svces,Svces,shock)
-                (.LO, .L, .UP, .M = 0.000959061792876676, 0.959061792876848, 
+                (.LO, .L, .UP, .M = 0.000959062021409812, 0.959061792876848, 
 +INF, 0)
      (134.5523) xeq(USA,Svces,Svces,shock)
        (6.2561) xpeq(USA,Svces,shock)
@@ -10746,18 +10776,18 @@ REMAINING 9 ENTRIES SKIPPED
 ---- pe  Bilateral export supply
 
 pe(USA,Food,USA,shock)
-                (.LO, .L, .UP, .M = 0.00100000000145, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000031413603, 1, +INF, 0)
        -1       peeq(USA,Food,USA,shock)
        -1       pefobeq(USA,Food,USA,shock)
 
 pe(USA,Food,EU_28,shock)
-                (.LO, .L, .UP, .M = 0.00100000000145, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000031413603, 1, +INF, 0)
  (-2.840527E-5) ytaxeq(USA,et,shock)
        -1       peeq(USA,Food,EU_28,shock)
        -1.0022  pefobeq(USA,Food,EU_28,shock)
 
 pe(USA,Food,EGY,shock)
-                (.LO, .L, .UP, .M = 0.00100000000145, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000031413603, 1, +INF, 0)
  (-5.530823E-6) ytaxeq(USA,et,shock)
        -1       peeq(USA,Food,EGY,shock)
        -1.007   pefobeq(USA,Food,EGY,shock)
@@ -10767,7 +10797,7 @@ REMAINING 45 ENTRIES SKIPPED
 ---- pet  Price of aggregate exports
 
 pet(USA,Food,shock)
-                (.LO, .L, .UP, .M = 0.00100000000145, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000031413603, 1, +INF, 0)
        -1       xeteq(USA,Food,shock)
         1       peeq(USA,Food,USA,shock)
         1       peeq(USA,Food,EU_28,shock)
@@ -10775,7 +10805,7 @@ pet(USA,Food,shock)
         1       peeq(USA,Food,ROW,shock)
 
 pet(USA,Mnfcs,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000048485041, 1, +INF, 0)
        -1       xeteq(USA,Mnfcs,shock)
         1       peeq(USA,Mnfcs,USA,shock)
         1       peeq(USA,Mnfcs,EU_28,shock)
@@ -10783,7 +10813,7 @@ pet(USA,Mnfcs,shock)
         1       peeq(USA,Mnfcs,ROW,shock)
 
 pet(USA,Svces,shock)
-                (.LO, .L, .UP, .M = 0.00100000000000008, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000023828805, 1, +INF, 0)
        -1       xeteq(USA,Svces,shock)
         1       peeq(USA,Svces,USA,shock)
         1       peeq(USA,Svces,EU_28,shock)
@@ -10833,19 +10863,19 @@ REMAINING 25 ENTRIES SKIPPED
 ---- pwmg  Average price of TT services by node
 
 pwmg(USA,Food,EU_28,shock)
-                (.LO, .L, .UP, .M = 0.000999996659495541, 0.999996661793826, 
+                (.LO, .L, .UP, .M = 0.000999996876889506, 0.999996661793826, 
 +INF, 0)
         1       pwmgeq(USA,Food,EU_28,shock)
        -0.0538  pmcifeq(USA,Food,EU_28,shock)
 
 pwmg(USA,Food,EGY,shock)
-                (.LO, .L, .UP, .M = 0.000999999930316968, 0.99999993261526, 
-+INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000014771164, 0.99999993261526, +INF
+, 0)
         1       pwmgeq(USA,Food,EGY,shock)
        -0.0722  pmcifeq(USA,Food,EGY,shock)
 
 pwmg(USA,Food,ROW,shock)
-                (.LO, .L, .UP, .M = 0.00100000067823994, 1.00000068053823, +INF
+                (.LO, .L, .UP, .M = 0.00100000089563477, 1.00000068053823, +INF
 , 0)
         1       pwmgeq(USA,Food,ROW,shock)
        -0.0554  pmcifeq(USA,Food,ROW,shock)
@@ -10866,7 +10896,7 @@ xtmg(Svces,shock)
 ---- ptmg  Global price index of TT services by mode
 
 ptmg(Svces,shock)
-                (.LO, .L, .UP, .M = 0.000999999997701708, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.0010000002150964, 1, +INF, 0)
        -1       pwmgeq(USA,Food,EU_28,shock)
        -1       pwmgeq(USA,Food,EGY,shock)
        -1       pwmgeq(USA,Food,ROW,shock)
@@ -10905,7 +10935,7 @@ ptmg(Svces,shock)
 ---- pefob  Border price of exports
 
 pefob(USA,Food,USA,shock)
-                (.LO, .L, .UP, .M = 0.00100000000145, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000031413603, 1, +INF, 0)
         1       pefobeq(USA,Food,USA,shock)
        -1       pmcifeq(USA,Food,USA,shock)
  (-2.20000E-11) gdpmpeq(USA,shock)
@@ -10913,7 +10943,7 @@ pefob(USA,Food,USA,shock)
  (-1.07469E-12) pmuveq(shock)
 
 pefob(USA,Food,EU_28,shock)
-                (.LO, .L, .UP, .M = 0.00100220413486685, 1.00220413341365, +INF
+                (.LO, .L, .UP, .M = 0.00100220444824208, 1.00220413341365, +INF
 , 0)
         1       pefobeq(USA,Food,EU_28,shock)
        -1       pmcifeq(USA,Food,EU_28,shock)
@@ -10922,7 +10952,7 @@ pefob(USA,Food,EU_28,shock)
       (-0.0006) pmuveq(shock)
 
 pefob(USA,Food,EGY,shock)
-                (.LO, .L, .UP, .M = 0.00100704790591173, 1.00704790445151, +INF
+                (.LO, .L, .UP, .M = 0.00100704822080154, 1.00704790445151, +INF
 , 0)
         1       pefobeq(USA,Food,EGY,shock)
        -1       pmcifeq(USA,Food,EGY,shock)
@@ -10935,14 +10965,14 @@ REMAINING 45 ENTRIES SKIPPED
 ---- pmcif  Border price of imports
 
 pmcif(USA,Food,USA,shock)
-                (.LO, .L, .UP, .M = 0.00100000000145, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000031413603, 1, +INF, 0)
        -1       pmeq(USA,Food,USA,shock)
         1       pmcifeq(USA,Food,USA,shock)
  (2.200000E-11) gdpmpeq(USA,shock)
  (-1.10000E-11) rgdpmpeq(USA,shock)
 
 pmcif(USA,Food,EU_28,shock)
-                (.LO, .L, .UP, .M = 0.00105604355912026, 1.05604373751846, +INF
+                (.LO, .L, .UP, .M = 0.00105604388419986, 1.05604373751846, +INF
 , 0)
       (-0.0007) ytaxeq(EU_28,mt,shock)
        -1.0535  pmeq(USA,Food,EU_28,shock)
@@ -10951,7 +10981,7 @@ pmcif(USA,Food,EU_28,shock)
       (-0.0064) rgdpmpeq(EU_28,shock)
 
 pmcif(USA,Food,EGY,shock)
-                (.LO, .L, .UP, .M = 0.00107928695705143, 1.07928696062504, +INF
+                (.LO, .L, .UP, .M = 0.00107928728764562, 1.07928696062504, +INF
 , 0)
       (-0.0004) ytaxeq(EGY,mt,shock)
        -1.5658  pmeq(USA,Food,EGY,shock)
@@ -10964,20 +10994,20 @@ REMAINING 45 ENTRIES SKIPPED
 ---- pm  Bilateral price of imports, tariff-inclusive
 
 pm(USA,Food,USA,shock)
-                (.LO, .L, .UP, .M = 0.00100000000145, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000031413603, 1, +INF, 0)
  (2.090000E-11) xweq(USA,Food,USA,shock)
  (-6.79556E-12) pmteq(USA,Food,shock)
         1       pmeq(USA,Food,USA,shock)
 
 pm(USA,Food,EU_28,shock)
-                (.LO, .L, .UP, .M = 0.00110743570046035, 1.10743588754023, +INF
+                (.LO, .L, .UP, .M = 0.00110743604135984, 1.10743588754023, +INF
 , 0)
        (0.0111) xweq(USA,Food,EU_28,shock)
       (-0.0011) pmteq(EU_28,Food,shock)
         1       pmeq(USA,Food,EU_28,shock)
 
 pm(USA,Food,EGY,shock)
-                (.LO, .L, .UP, .M = 0.0016343926668818, 1.63439267229342, +INF
+                (.LO, .L, .UP, .M = 0.0016343931675093, 1.63439267229342, +INF
 , 0)
        (0.0005) xweq(USA,Food,EGY,shock)
       (-0.0025) pmteq(EGY,Food,shock)
@@ -10988,7 +11018,7 @@ REMAINING 45 ENTRIES SKIPPED
 ---- pd  Supply of domestically produced goods
 
 pd(USA,Food,shock)
-                (.LO, .L, .UP, .M = 0.00100000000145, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000031413603, 1, +INF, 0)
       (-0.0002) ytaxeq(USA,fc,shock)
        (0.0015) ytaxeq(USA,pc,shock)
        -0.9997  pdpeq(USA,Food,Food,shock)
@@ -11000,7 +11030,7 @@ pd(USA,Food,shock)
        -1       xdseq(USA,Food,shock)
 
 pd(USA,Mnfcs,shock)
-                (.LO, .L, .UP, .M = 0.000999999999999978, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000048485041, 1, +INF, 0)
       (-0.1242) ytaxeq(USA,fc,shock)
       (-0.0196) ytaxeq(USA,pc,shock)
       (-0.0099) ytaxeq(USA,ic,shock)
@@ -11013,7 +11043,7 @@ pd(USA,Mnfcs,shock)
        -1       xdseq(USA,Mnfcs,shock)
 
 pd(USA,Svces,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000023828805, 1, +INF, 0)
       (-0.0798) ytaxeq(USA,fc,shock)
       (-0.227)  ytaxeq(USA,pc,shock)
       (-0.1852) ytaxeq(USA,gc,shock)
@@ -11055,7 +11085,7 @@ REMAINING 17 ENTRIES SKIPPED
 ---- pf  Factor price tax exclusive
 
 pf(USA,Land,Food,shock)
-                (.LO, .L, .UP, .M = 0.00104240013098599, 1.04240009576277, +INF
+                (.LO, .L, .UP, .M = 0.00104240019916311, 1.04240009576277, +INF
 , 0)
       (-0.0016) ytaxeq(USA,dt,shock)
       (-0.002)  ytaxeq(USA,ft,shock)
@@ -11067,7 +11097,7 @@ pf(USA,Land,Food,shock)
       (-0.0006) pwfacteq(shock)
 
 pf(USA,UnSkLab,Food,shock)
-                (.LO, .L, .UP, .M = 0.00132807977983865, 1.3280797186707, +INF
+                (.LO, .L, .UP, .M = 0.00132807985633931, 1.3280797186707, +INF
 , 0)
       (-0.0223) ytaxeq(USA,dt,shock)
       (-0.0183) ytaxeq(USA,ft,shock)
@@ -11079,7 +11109,7 @@ pf(USA,UnSkLab,Food,shock)
       (-0.0013) pwfacteq(shock)
 
 pf(USA,UnSkLab,Mnfcs,shock)
-                (.LO, .L, .UP, .M = 0.00132807971303628, 1.32807964628651, +INF
+                (.LO, .L, .UP, .M = 0.00132807979207698, 1.32807964628651, +INF
 , 0)
       (-0.1311) ytaxeq(USA,dt,shock)
       (-0.1081) ytaxeq(USA,ft,shock)
@@ -11120,24 +11150,24 @@ REMAINING 17 ENTRIES SKIPPED
 ---- pfa  Factor prices tax inclusive
 
 pfa(USA,Land,Food,shock)
-                (.LO, .L, .UP, .M = 0.000857159444863921, 0.857159415900086, 
+                (.LO, .L, .UP, .M = 0.000857159500925568, 0.857159415900086, 
 +INF, 0)
-       (0.0463) xfeq(USA,Land,Food,shock)
-       (0)      pvaeq(USA,Food,shock)
+       (0.0467) xfeq(USA,Land,Food,shock)
+       (0.0008) pvaeq(USA,Food,shock)
         1       pfaeq(USA,Land,Food,shock)
 
 pfa(USA,UnSkLab,Food,shock)
-                (.LO, .L, .UP, .M = 0.00157543109886234, 1.57543102630203, +INF
+                (.LO, .L, .UP, .M = 0.00157543118961106, 1.57543102630203, +INF
 , 0)
-       (0.0572) xfeq(USA,UnSkLab,Food,shock)
-       (0)      pvaeq(USA,Food,shock)
+       (0.0578) xfeq(USA,UnSkLab,Food,shock)
+       (0.0019) pvaeq(USA,Food,shock)
         1       pfaeq(USA,UnSkLab,Food,shock)
 
 pfa(USA,UnSkLab,Mnfcs,shock)
-                (.LO, .L, .UP, .M = 0.00159843610101882, 1.59843602068085, +INF
+                (.LO, .L, .UP, .M = 0.0015984361961498, 1.59843602068085, +INF
 , 0)
-       (0.0332) xfeq(USA,UnSkLab,Mnfcs,shock)
-       (0)      pvaeq(USA,Mnfcs,shock)
+       (0.0335) xfeq(USA,UnSkLab,Mnfcs,shock)
+       (0.0024) pvaeq(USA,Mnfcs,shock)
         1       pfaeq(USA,UnSkLab,Mnfcs,shock)
 
 REMAINING 45 ENTRIES SKIPPED
@@ -11404,7 +11434,7 @@ pwfact(shock)
 ---- walras  Walras check
 
 walras
-                (.LO, .L, .UP, .M = -INF, -8.74570105937711E-12, +INF, 0)
+                (.LO, .L, .UP, .M = -INF, 5.21018604999259E-12, +INF, 0)
         1       walraseq
 
 
@@ -11552,9 +11582,9 @@ cv(EGY,hhd,shock)
       (-3.3302) cveq(EGY,hhd,shock)
 
 REMAINING ENTRY SKIPPED
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 15
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 15
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Range Statistics    SOLVE gtap Using MCP From line 4313
+Range Statistics    SOLVE gtap Using MCP From line 4321
 
 
 RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
@@ -11563,9 +11593,9 @@ RHS       [min, max] : [ 4.000E-02, 1.000E+00] - Zero values observed as well
 Bound     [min, max] : [ 7.125E-04, 2.128E-03]
 Matrix    [min, max] : [ 5.294E-13, 2.617E+02] - Zero values observed as well
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 16
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 16
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Model Statistics    SOLVE gtap Using MCP From line 4313
+Model Statistics    SOLVE gtap Using MCP From line 4321
 
 
 LOOPS                                 tsim   shock
@@ -11576,27 +11606,27 @@ MODEL STATISTICS
 BLOCKS OF EQUATIONS          97     SINGLE EQUATIONS        1,577
 BLOCKS OF VARIABLES         135     SINGLE VARIABLES        1,577
 NON ZERO ELEMENTS         6,379     NON LINEAR N-Z          4,025
-CODE LENGTH              13,172     CONSTANT POOL           1,325
+CODE LENGTH              13,172     CONSTANT POOL           1,326
 
 
-GENERATION TIME      =        0.024 SECONDS      6 MB  53.5.1 f2e5fac3 LEX-LEG
+GENERATION TIME      =        0.023 SECONDS      6 MB  53.5.1 f2e5fac3 LEX-LEG
                L O O P S               tsim shock
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 17
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 17
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Solution Report     SOLVE gtap Using MCP From line 4313
+Solution Report     SOLVE gtap Using MCP From line 4321
 
 
                S O L V E      S U M M A R Y
 
      MODEL   gtap                
      TYPE    MCP                 
-     SOLVER  PATH                FROM LINE  4313
+     SOLVER  PATH                FROM LINE  4321
 
 **** SOLVER STATUS     1 Normal Completion
 **** MODEL STATUS      1 Optimal
 
- RESOURCE USAGE, LIMIT          0.069 10000000000.000
+ RESOURCE USAGE, LIMIT          0.061 10000000000.000
  ITERATION COUNT, LIMIT         1          1000
  EVALUATION ERRORS              0             0
 1577 row/cols, 6379 non-zeros, 0.26% dense.
@@ -11605,43 +11635,6 @@ Path 5.2.01 (Wed May 20 07:48:22 2026)
 Written by Todd Munson, Steven Dirkse, Youngdae Kim, and Michael Ferris
 
 INITIAL POINT STATISTICS
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EGY,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EGY,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EGY,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EGY,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EGY,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EGY,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EGY,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EGY,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EGY,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,Svces,shock))
-Total zero rows . . . . . . . .  36
 Maximum of X. . . . . . . . . .  1.2270e+02 var: (kstock(ROW,shock))
 Maximum of F. . . . . . . . . .  5.5511e-02 eqn: (pmeq(USA,Food,EGY,shock))
 Maximum of Grad F . . . . . . .  2.6168e+02 eqn: (xeq(ROW,Svces,Svces,shock))
@@ -11649,59 +11642,22 @@ Maximum of Grad F . . . . . . .  2.6168e+02 eqn: (xeq(ROW,Svces,Svces,shock))
 
 INITIAL JACOBIAN NORM STATISTICS
 Maximum Row Norm. . . . . . . .  6.2301e+02 eqn: (xeq(ROW,Svces,Svces,shock))
-Minimum Row Norm. . . . . . . .  2.0000e-02 eqn: (pgeq(USA,shock))
+Minimum Row Norm. . . . . . . .  1.6780e-02 eqn: (pvaeq(EU_28,Mnfcs,shock))
 Maximum Column Norm . . . . . .  2.6918e+02 var: (p(ROW,Svces,Svces,shock))
 Minimum Column Norm . . . . . .  6.9635e-03 var: (ev(USA,hhd,shock))
 
 FINAL STATISTICS
-Inf-Norm of Complementarity . .  4.2211e-08 eqn: (xaceq(EU_28,Svces,hhd,shock))
-Inf-Norm of Normal Map. . . . .  4.2211e-08 eqn: (xaceq(EU_28,Svces,hhd,shock))
-Inf-Norm of Minimum Map . . . .  4.2211e-08 eqn: (xaceq(EU_28,Svces,hhd,shock))
-Inf-Norm of Fischer Function. .  4.2211e-08 eqn: (xaceq(EU_28,Svces,hhd,shock))
-Inf-Norm of Grad Fischer Fcn. .  1.4971e-06 eqn: (rsaveq(EGY,shock))
-Two-Norm of Grad Fischer Fcn. .  2.7476e-06
+Inf-Norm of Complementarity . .  8.0353e-10 eqn: (xieq(ROW,shock))
+Inf-Norm of Normal Map. . . . .  8.0353e-10 eqn: (xieq(ROW,shock))
+Inf-Norm of Minimum Map . . . .  8.0353e-10 eqn: (xieq(ROW,shock))
+Inf-Norm of Fischer Function. .  8.0353e-10 eqn: (xieq(ROW,shock))
+Inf-Norm of Grad Fischer Fcn. .  1.4871e-08 eqn: (pieq(ROW,shock))
+Two-Norm of Grad Fischer Fcn. .  2.3283e-08
 
 FINAL POINT STATISTICS
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EGY,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EGY,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EGY,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EGY,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EGY,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EGY,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EGY,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EGY,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EGY,Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,Food,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,Mnfcs,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,Svces,shock))
-Total zero rows . . . . . . . .  36
 Maximum of X. . . . . . . . . .  1.2270e+02 var: (kstock(ROW,shock))
-Maximum of F. . . . . . . . . .  4.2211e-08 eqn: (xaceq(EU_28,Svces,hhd,shock))
-Maximum of Grad F . . . . . . .  2.6188e+02 eqn: (xeq(ROW,Svces,Svces,shock))
+Maximum of F. . . . . . . . . .  8.0353e-10 eqn: (xieq(ROW,shock))
+Maximum of Grad F . . . . . . .  2.6145e+02 eqn: (xeq(ROW,Svces,Svces,shock))
                                             var: (p(ROW,Svces,Svces,shock))
 
 
@@ -11711,20 +11667,20 @@ Maximum of Grad F . . . . . . .  2.6188e+02 eqn: (xeq(ROW,Svces,Svces,shock))
                              0  UNBOUNDED
                              0  REDEFINED
                              0     ERRORS
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:08:11 Page 18
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:19:51 Page 18
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
-----   4338 VARIABLE walras.L              =  2.230160E-7  Walras check
+----   4346 VARIABLE walras.L              =  -3.2274E-10  Walras check
 
 **** REPORT FILE SUMMARY
 
-csv /var/lib/condor/execute/dir_99500/gamsexec/COMP.csv
-screen /var/lib/condor/execute/dir_99500/gamsexec/con
+csv /var/lib/condor/execute/dir_2811901/gamsexec/COMP.csv
+screen /var/lib/condor/execute/dir_2811901/gamsexec/con
 
 
-EXECUTION TIME       =        0.311 SECONDS      8 MB  53.5.1 f2e5fac3 LEX-LEG
+EXECUTION TIME       =        0.281 SECONDS      8 MB  53.5.1 f2e5fac3 LEX-LEG
 
 
 USER: NEOS Server License - Production               G250831+0003Ac-GEN
@@ -11734,5 +11690,5 @@ USER: NEOS Server License - Production               G250831+0003Ac-GEN
 
 **** FILE SUMMARY
 
-Input      /var/lib/condor/execute/dir_99500/gamsexec/MODEL.gms
-Output     /var/lib/condor/execute/dir_99500/gamsexec/solve.lst
+Input      /var/lib/condor/execute/dir_2811901/gamsexec/MODEL.gms
+Output     /var/lib/condor/execute/dir_2811901/gamsexec/solve.lst

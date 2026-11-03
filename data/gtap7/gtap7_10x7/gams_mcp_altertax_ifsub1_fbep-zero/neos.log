@@ -1,23 +1,23 @@
-Executed on prod-exec-7.neos-server.org
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 1
+Executed on prod-exec-1.neos-server.org
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 1
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 Include File Summary
 
 
    SEQ   GLOBAL TYPE      PARENT   LOCAL  INCLVL  FILENAME
 
-     1        1 INPUT          0       0       0  /var/lib/condor/execute/dir_1
-                                                  240924/gamsexec/MODEL.gms
+     1        1 INPUT          0       0       0  /var/lib/condor/execute/dir_2
+                                                  851141/gamsexec/MODEL.gms
      2     7353 IF EXIST       1    7355       0  ./9x10Emiss.gdx
 
 
-COMPILATION TIME     =        0.019 SECONDS      4 MB  53.5.1 f2e5fac3 LEX-LEG
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 2
+COMPILATION TIME     =        0.027 SECONDS      4 MB  53.5.1 f2e5fac3 LEX-LEG
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 2
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
-----  10072 VARIABLE eh.L  CDE expansion parameters
+----  10080 VARIABLE eh.L  CDE expansion parameters
 
                           base       check       shock
 
@@ -93,7 +93,7 @@ ROW  .c_ForestFish       0.669       0.669       0.669
 ROW  .c_Svces            1.179       1.179       1.179
 
 
-----  10072 VARIABLE bh.L  CDE substitution parameters
+----  10080 VARIABLE bh.L  CDE substitution parameters
 
                           base       check       shock
 
@@ -169,7 +169,7 @@ ROW  .c_ForestFish       0.673       0.673       0.673
 ROW  .c_Svces            0.360       0.360       0.360
 
 
-----  10072 PARAMETER eh0  CDE expansion parameter
+----  10080 PARAMETER eh0  CDE expansion parameter
 
            c_Rice     c_Crops  c_Livesto~  c_FoodProc    c_Energy  c_Textiles
 
@@ -192,7 +192,7 @@ SSA         0.930       0.944       0.787       1.381
 ROW         1.032       1.018       0.669       1.179
 
 
-----  10072 PARAMETER bh0  CDE substitution parameter
+----  10080 PARAMETER bh0  CDE substitution parameter
 
            c_Rice     c_Crops  c_Livesto~  c_FoodProc    c_Energy  c_Textiles
 
@@ -215,7 +215,7 @@ SSA         0.717       0.694       0.785       0.609
 ROW         0.433       0.392       0.673       0.360
 
 
-----  10072 VARIABLE phiP.L  Elasticity of private exp. wrt to private utility
+----  10080 VARIABLE phiP.L  Elasticity of private exp. wrt to private utility
 
              base       check       shock
 
@@ -228,7 +228,7 @@ SSA         1.000       1.000       1.000
 ROW         1.000       1.000       1.000
 
 
-----  10072 VARIABLE xcshr.L  Household budget shares
+----  10080 VARIABLE xcshr.L  Household budget shares
 
 INDEX 1 = USA
 
@@ -336,7 +336,7 @@ c_ForestFish.hhd       0.007       0.007       0.007
 c_Svces     .hhd       0.632       0.632       0.632
 
 
-----  10074 PARAMETER kron  Kronecker delta
+----  10082 PARAMETER kron  Kronecker delta
 
                   a_Rice     a_Crops  a_Livesto~  a_FoodProc    a_Energy
 
@@ -416,9 +416,9 @@ ctax               1.000
 bop                            1.000
 tot                                        1.000
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 3
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 3
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Range Statistics    SOLVE betaCal Using MCP From line 10112
+Range Statistics    SOLVE betaCal Using MCP From line 10120
 
 
 RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
@@ -427,9 +427,9 @@ RHS       [min, max] : [ 2.098E-01, 1.338E+01]
 Bound     [min, max] : [        NA,        NA]
 Matrix    [min, max] : [ 2.098E-01, 2.054E+01]
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 4
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 4
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Model Statistics    SOLVE betaCal Using MCP From line 10112
+Model Statistics    SOLVE betaCal Using MCP From line 10120
 
 
 LOOPS                           *            base
@@ -443,24 +443,24 @@ NON ZERO ELEMENTS            70     NON LINEAR N-Z             70
 CODE LENGTH                 197     CONSTANT POOL              30
 
 
-GENERATION TIME      =        0.002 SECONDS     12 MB  53.5.1 f2e5fac3 LEX-LEG
+GENERATION TIME      =        0.003 SECONDS     12 MB  53.5.1 f2e5fac3 LEX-LEG
                L O O P S         *          base
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 5
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 5
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Solution Report     SOLVE betaCal Using MCP From line 10112
+Solution Report     SOLVE betaCal Using MCP From line 10120
 
 
                S O L V E      S U M M A R Y
 
      MODEL   betaCal             
      TYPE    MCP                 
-     SOLVER  PATH                FROM LINE  10112
+     SOLVER  PATH                FROM LINE  10120
 
 **** SOLVER STATUS     1 Normal Completion
 **** MODEL STATUS      1 Optimal
 
- RESOURCE USAGE, LIMIT          0.031 10000000000.000
+ RESOURCE USAGE, LIMIT          0.032 10000000000.000
  ITERATION COUNT, LIMIT         0    2147483647
  EVALUATION ERRORS              0             0
 28 row/cols, 70 non-zeros, 8.93% dense.
@@ -597,12 +597,12 @@ ROW  .base     -INF      0.166     +INF  -6.66E-15
                              0  UNBOUNDED
                              0  REDEFINED
                              0     ERRORS
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 6
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 6
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
-----  10305 PARAMETER xdFlag  XD flags
+----  10313 PARAMETER xdFlag  XD flags
 
            c_Rice     c_Crops  c_Livesto~  c_FoodProc    c_Energy  c_Textiles
 
@@ -625,7 +625,7 @@ SSA         1.000       1.000       1.000       1.000
 ROW         1.000       1.000       1.000       1.000
 
 
-----  10305 PARAMETER xetFlag  XET flags
+----  10313 PARAMETER xetFlag  XET flags
 
            c_Rice     c_Crops  c_Livesto~  c_FoodProc    c_Energy  c_Textiles
 
@@ -648,7 +648,7 @@ SSA         1.000       1.000       1.000       1.000
 ROW         1.000       1.000       1.000       1.000
 
 
-----  10305 PARAMETER xsFlag  XS flags
+----  10313 PARAMETER xsFlag  XS flags
 
            c_Rice     c_Crops  c_Livesto~  c_FoodProc    c_Energy  c_Textiles
 
@@ -671,7 +671,7 @@ SSA         1.000       1.000       1.000       1.000
 ROW         1.000       1.000       1.000       1.000
 
 
-----  10305 VARIABLE xs.L  Domestic supply
+----  10313 VARIABLE xs.L  Domestic supply
 
                           base       check       shock
 
@@ -747,10 +747,10 @@ ROW  .c_ForestFish       0.274       0.274       0.274
 ROW  .c_Svces           25.256      25.256      25.256
 
 
-----  10758 VARIABLE walras.L              =        0.000  Walras check
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 7
+----  10766 VARIABLE walras.L              =        0.000  Walras check
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 7
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Equation Listing    SOLVE gtap Using MCP From line 10733
+Equation Listing    SOLVE gtap Using MCP From line 10741
 
 
 ---- axpeq  =E=  Production frontier shifter
@@ -792,33 +792,37 @@ REMAINING 67 ENTRIES SKIPPED
 
 ---- ndeq  =E=  Demand for aggregate intermediate (ND)
 
-ndeq(USA,a_Rice,check)..  (0)*axp(USA,a_Rice,check)
+ndeq(USA,a_Rice,check)..  - (0.00882918054424695)*axp(USA,a_Rice,check)
      
-      + (0)*lambdand(USA,a_Rice,check) + nd(USA,a_Rice,check)
+      - (0.00882918054424695)*lambdand(USA,a_Rice,check) + nd(USA,a_Rice,check)
      
-      - (0.882918054424694)*px(USA,a_Rice,check)
+      - (0.891747234968941)*px(USA,a_Rice,check)
      
-      + (0.882918054424694)*pnd(USA,a_Rice,check)
+      + (0.891747234968941)*pnd(USA,a_Rice,check)
      
       - (0.836596691394213)*xp(USA,a_Rice,check) =E= 0 ; (LHS = 0)
      
-ndeq(USA,a_Crops,check)..  (0)*axp(USA,a_Crops,check)
+ndeq(USA,a_Crops,check)..  - (0.011594389940167)*axp(USA,a_Crops,check)
      
-      + (0)*lambdand(USA,a_Crops,check) + nd(USA,a_Crops,check)
+      - (0.011594389940167)*lambdand(USA,a_Crops,check) + nd(USA,a_Crops,check)
      
-      - (1.1594389940167)*px(USA,a_Crops,check)
+      - (1.17103338395686)*px(USA,a_Crops,check)
      
-      + (1.1594389940167)*pnd(USA,a_Crops,check)
+      + (1.17103338395686)*pnd(USA,a_Crops,check)
      
       - (0.510755927395297)*xp(USA,a_Crops,check) =E= 0 ; (LHS = 0)
      
-ndeq(USA,a_Livestock,check)..  (0)*axp(USA,a_Livestock,check)
+ndeq(USA,a_Livestock,check)..  
      
-      + (0)*lambdand(USA,a_Livestock,check) + nd(USA,a_Livestock,check)
+     - (0.0115158440857377)*axp(USA,a_Livestock,check)
      
-      - (1.15158440857377)*px(USA,a_Livestock,check)
+      - (0.0115158440857377)*lambdand(USA,a_Livestock,check)
      
-      + (1.15158440857377)*pnd(USA,a_Livestock,check)
+      + nd(USA,a_Livestock,check)
+     
+      - (1.16310025265951)*px(USA,a_Livestock,check)
+     
+      + (1.16310025265951)*pnd(USA,a_Livestock,check)
      
       - (0.664742140669945)*xp(USA,a_Livestock,check) =E= 0 ; (LHS = 0)
      
@@ -827,33 +831,35 @@ REMAINING 67 ENTRIES SKIPPED
 
 ---- vaeq  =E=  Demand for aggregate value added  (VA)
 
-vaeq(USA,a_Rice,check)..  (0)*axp(USA,a_Rice,check)
+vaeq(USA,a_Rice,check)..  - (0.0017245075531)*axp(USA,a_Rice,check)
      
-      + (0)*lambdava(USA,a_Rice,check) + va(USA,a_Rice,check)
+      - (0.0017245075531)*lambdava(USA,a_Rice,check) + va(USA,a_Rice,check)
      
-      - (0.17245075531)*px(USA,a_Rice,check)
+      - (0.1741752628631)*px(USA,a_Rice,check)
      
-      + (0.17245075531)*pva(USA,a_Rice,check)
+      + (0.1741752628631)*pva(USA,a_Rice,check)
      
       - (0.163403308605787)*xp(USA,a_Rice,check) =E= 0 ; (LHS = 0)
      
-vaeq(USA,a_Crops,check)..  (0)*axp(USA,a_Crops,check)
+vaeq(USA,a_Crops,check)..  - (0.011106061133)*axp(USA,a_Crops,check)
      
-      + (0)*lambdava(USA,a_Crops,check) + va(USA,a_Crops,check)
+      - (0.011106061133)*lambdava(USA,a_Crops,check) + va(USA,a_Crops,check)
      
-      - (1.1106061133)*px(USA,a_Crops,check)
+      - (1.121712174433)*px(USA,a_Crops,check)
      
-      + (1.1106061133)*pva(USA,a_Crops,check)
+      + (1.121712174433)*pva(USA,a_Crops,check)
      
       - (0.489244072604703)*xp(USA,a_Crops,check) =E= 0 ; (LHS = 0)
      
-vaeq(USA,a_Livestock,check)..  (0)*axp(USA,a_Livestock,check)
+vaeq(USA,a_Livestock,check)..  
      
-      + (0)*lambdava(USA,a_Livestock,check) + va(USA,a_Livestock,check)
+     - (0.00580793212940001)*axp(USA,a_Livestock,check)
      
-      - (0.58079321294)*px(USA,a_Livestock,check)
+      - (0.00580793212940001)*lambdava(USA,a_Livestock,check)
      
-      + (0.58079321294)*pva(USA,a_Livestock,check)
+      + va(USA,a_Livestock,check) - (0.5866011450694)*px(USA,a_Livestock,check)
+     
+      + (0.5866011450694)*pva(USA,a_Livestock,check)
      
       - (0.335257859330055)*xp(USA,a_Livestock,check) =E= 0 ; (LHS = 0)
      
@@ -862,31 +868,41 @@ REMAINING 67 ENTRIES SKIPPED
 
 ---- pxeq  =E=  Unit cost of production
 
-pxeq(USA,a_Rice,check)..  (0)*axp(USA,a_Rice,check)
+pxeq(USA,a_Rice,check)..  - (0.01)*axp(USA,a_Rice,check)
      
-      + (0)*lambdand(USA,a_Rice,check) + (0)*lambdava(USA,a_Rice,check)
+      - (0.00836596691394214)*lambdand(USA,a_Rice,check)
      
-      + (0)*px(USA,a_Rice,check) + (0)*pnd(USA,a_Rice,check)
+      - (0.00163403308605787)*lambdava(USA,a_Rice,check)
      
-      + (0)*pva(USA,a_Rice,check) =E= 0 ; (LHS = 0)
+      - (0.01)*px(USA,a_Rice,check)
      
-pxeq(USA,a_Crops,check)..  (0)*axp(USA,a_Crops,check)
+      + (0.00836596691394214)*pnd(USA,a_Rice,check)
      
-      + (0)*lambdand(USA,a_Crops,check) + (0)*lambdava(USA,a_Crops,check)
+      + (0.00163403308605787)*pva(USA,a_Rice,check) =E= 0 ; (LHS = 0)
      
-      + (0)*px(USA,a_Crops,check) + (0)*pnd(USA,a_Crops,check)
+pxeq(USA,a_Crops,check)..  - (0.01)*axp(USA,a_Crops,check)
      
-      + (0)*pva(USA,a_Crops,check) =E= 0 ; (LHS = 0)
+      - (0.00510755927395298)*lambdand(USA,a_Crops,check)
      
-pxeq(USA,a_Livestock,check)..  (0)*axp(USA,a_Livestock,check)
+      - (0.00489244072604703)*lambdava(USA,a_Crops,check)
      
-      + (0)*lambdand(USA,a_Livestock,check)
+      - (0.01)*px(USA,a_Crops,check)
      
-      + (0)*lambdava(USA,a_Livestock,check) + (0)*px(USA,a_Livestock,check)
+      + (0.00510755927395298)*pnd(USA,a_Crops,check)
      
-      + (0)*pnd(USA,a_Livestock,check) + (0)*pva(USA,a_Livestock,check) =E= 0 ;
+      + (0.00489244072604703)*pva(USA,a_Crops,check) =E= 0 ; (LHS = 0)
      
-      (LHS = 0)
+pxeq(USA,a_Livestock,check)..  - (0.01)*axp(USA,a_Livestock,check)
+     
+      - (0.00664742140669945)*lambdand(USA,a_Livestock,check)
+     
+      - (0.00335257859330055)*lambdava(USA,a_Livestock,check)
+     
+      - (0.01)*px(USA,a_Livestock,check)
+     
+      + (0.00664742140669945)*pnd(USA,a_Livestock,check)
+     
+      + (0.00335257859330055)*pva(USA,a_Livestock,check) =E= 0 ; (LHS = 0)
      
 REMAINING 67 ENTRIES SKIPPED
 
@@ -908,115 +924,139 @@ REMAINING 697 ENTRIES SKIPPED
 
 ---- pndeq  =E=  Price of ND bundle
 
-pndeq(USA,a_Rice,check)..  (0)*lambdaio(USA,c_Rice,a_Rice,check)
+pndeq(USA,a_Rice,check)..  
      
-      + (0)*lambdaio(USA,c_Crops,a_Rice,check)
+     - (0.00223233656447798)*lambdaio(USA,c_Rice,a_Rice,check)
      
-      + (0)*lambdaio(USA,c_Livestock,a_Rice,check)
+      - (2.61670405619399E-5)*lambdaio(USA,c_Crops,a_Rice,check)
      
-      + (0)*lambdaio(USA,c_FoodProc,a_Rice,check)
+      - (0.000153632328847761)*lambdaio(USA,c_Livestock,a_Rice,check)
      
-      + (0)*lambdaio(USA,c_Energy,a_Rice,check)
+      - (0.00417073448719933)*lambdaio(USA,c_FoodProc,a_Rice,check)
      
-      + (0)*lambdaio(USA,c_Textiles,a_Rice,check)
+      - (0.000156186568795283)*lambdaio(USA,c_Energy,a_Rice,check)
      
-      + (0)*lambdaio(USA,c_Chem,a_Rice,check)
+      - (3.77701983393345E-5)*lambdaio(USA,c_Textiles,a_Rice,check)
      
-      + (0)*lambdaio(USA,c_Manuf,a_Rice,check)
+      - (0.000490987823782207)*lambdaio(USA,c_Chem,a_Rice,check)
      
-      + (0)*lambdaio(USA,c_ForestFish,a_Rice,check)
+      - (0.000436478508825045)*lambdaio(USA,c_Manuf,a_Rice,check)
      
-      + (0)*lambdaio(USA,c_Svces,a_Rice,check) + (0)*pnd(USA,a_Rice,check)
+      - (0.000194397851080051)*lambdaio(USA,c_ForestFish,a_Rice,check)
      
-      + (0)*pa(USA,c_Rice,a_Rice,check) + (0)*pa(USA,c_Crops,a_Rice,check)
+      - (0.00210130862809108)*lambdaio(USA,c_Svces,a_Rice,check)
      
-      + (0)*pa(USA,c_Livestock,a_Rice,check)
+      - (0.01)*pnd(USA,a_Rice,check)
      
-      + (0)*pa(USA,c_FoodProc,a_Rice,check) + (0)*pa(USA,c_Energy,a_Rice,check)
+      + (0.00223233656447798)*pa(USA,c_Rice,a_Rice,check)
      
-      + (0)*pa(USA,c_Textiles,a_Rice,check) + (0)*pa(USA,c_Chem,a_Rice,check)
+      + (2.61670405619399E-5)*pa(USA,c_Crops,a_Rice,check)
      
-      + (0)*pa(USA,c_Manuf,a_Rice,check)
+      + (0.000153632328847761)*pa(USA,c_Livestock,a_Rice,check)
      
-      + (0)*pa(USA,c_ForestFish,a_Rice,check)
+      + (0.00417073448719933)*pa(USA,c_FoodProc,a_Rice,check)
      
-      + (0)*pa(USA,c_Svces,a_Rice,check) =E= 0 ; (LHS = 0)
+      + (0.000156186568795283)*pa(USA,c_Energy,a_Rice,check)
      
-pndeq(USA,a_Crops,check)..  (0)*lambdaio(USA,c_Rice,a_Crops,check)
+      + (3.77701983393345E-5)*pa(USA,c_Textiles,a_Rice,check)
      
-      + (0)*lambdaio(USA,c_Crops,a_Crops,check)
+      + (0.000490987823782207)*pa(USA,c_Chem,a_Rice,check)
      
-      + (0)*lambdaio(USA,c_Livestock,a_Crops,check)
+      + (0.000436478508825045)*pa(USA,c_Manuf,a_Rice,check)
      
-      + (0)*lambdaio(USA,c_FoodProc,a_Crops,check)
+      + (0.000194397851080051)*pa(USA,c_ForestFish,a_Rice,check)
      
-      + (0)*lambdaio(USA,c_Energy,a_Crops,check)
+      + (0.00210130862809108)*pa(USA,c_Svces,a_Rice,check) =E= 0 ; (LHS = 0)
      
-      + (0)*lambdaio(USA,c_Textiles,a_Crops,check)
+pndeq(USA,a_Crops,check)..  
      
-      + (0)*lambdaio(USA,c_Chem,a_Crops,check)
+     - (3.84802376729081E-7)*lambdaio(USA,c_Rice,a_Crops,check)
      
-      + (0)*lambdaio(USA,c_Manuf,a_Crops,check)
+      - (0.000776490580052921)*lambdaio(USA,c_Crops,a_Crops,check)
      
-      + (0)*lambdaio(USA,c_ForestFish,a_Crops,check)
+      - (2.37505489696368E-5)*lambdaio(USA,c_Livestock,a_Crops,check)
      
-      + (0)*lambdaio(USA,c_Svces,a_Crops,check) + (0)*pnd(USA,a_Crops,check)
+      - (1.99370174354056E-6)*lambdaio(USA,c_FoodProc,a_Crops,check)
      
-      + (0)*pa(USA,c_Rice,a_Crops,check) + (0)*pa(USA,c_Crops,a_Crops,check)
+      - (0.000554948457987376)*lambdaio(USA,c_Energy,a_Crops,check)
      
-      + (0)*pa(USA,c_Livestock,a_Crops,check)
+      - (1.7544478609029E-5)*lambdaio(USA,c_Textiles,a_Crops,check)
      
-      + (0)*pa(USA,c_FoodProc,a_Crops,check)
+      - (0.00205080021214619)*lambdaio(USA,c_Chem,a_Crops,check)
      
-      + (0)*pa(USA,c_Energy,a_Crops,check)
+      - (0.000499598371272011)*lambdaio(USA,c_Manuf,a_Crops,check)
      
-      + (0)*pa(USA,c_Textiles,a_Crops,check) + (0)*pa(USA,c_Chem,a_Crops,check)
+      - (0.00167905099505457)*lambdaio(USA,c_ForestFish,a_Crops,check)
      
-      + (0)*pa(USA,c_Manuf,a_Crops,check)
+      - (0.00439543785178801)*lambdaio(USA,c_Svces,a_Crops,check)
      
-      + (0)*pa(USA,c_ForestFish,a_Crops,check)
+      - (0.01)*pnd(USA,a_Crops,check)
      
-      + (0)*pa(USA,c_Svces,a_Crops,check) =E= 0 ; (LHS = 0)
+      + (3.84802376729081E-7)*pa(USA,c_Rice,a_Crops,check)
      
-pndeq(USA,a_Livestock,check)..  (0)*lambdaio(USA,c_Rice,a_Livestock,check)
+      + (0.000776490580052921)*pa(USA,c_Crops,a_Crops,check)
      
-      + (0)*lambdaio(USA,c_Crops,a_Livestock,check)
+      + (2.37505489696368E-5)*pa(USA,c_Livestock,a_Crops,check)
      
-      + (0)*lambdaio(USA,c_Livestock,a_Livestock,check)
+      + (1.99370174354056E-6)*pa(USA,c_FoodProc,a_Crops,check)
      
-      + (0)*lambdaio(USA,c_FoodProc,a_Livestock,check)
+      + (0.000554948457987376)*pa(USA,c_Energy,a_Crops,check)
      
-      + (0)*lambdaio(USA,c_Energy,a_Livestock,check)
+      + (1.7544478609029E-5)*pa(USA,c_Textiles,a_Crops,check)
      
-      + (0)*lambdaio(USA,c_Textiles,a_Livestock,check)
+      + (0.00205080021214619)*pa(USA,c_Chem,a_Crops,check)
      
-      + (0)*lambdaio(USA,c_Chem,a_Livestock,check)
+      + (0.000499598371272011)*pa(USA,c_Manuf,a_Crops,check)
      
-      + (0)*lambdaio(USA,c_Manuf,a_Livestock,check)
+      + (0.00167905099505457)*pa(USA,c_ForestFish,a_Crops,check)
      
-      + (0)*lambdaio(USA,c_ForestFish,a_Livestock,check)
+      + (0.00439543785178801)*pa(USA,c_Svces,a_Crops,check) =E= 0 ; (LHS = 0)
      
-      + (0)*lambdaio(USA,c_Svces,a_Livestock,check)
+pndeq(USA,a_Livestock,check)..  
      
-      + (0)*pnd(USA,a_Livestock,check) + (0)*pa(USA,c_Rice,a_Livestock,check)
+     - (1.193093492389E-6)*lambdaio(USA,c_Rice,a_Livestock,check)
      
-      + (0)*pa(USA,c_Crops,a_Livestock,check)
+      - (0.000679964601387565)*lambdaio(USA,c_Crops,a_Livestock,check)
      
-      + (0)*pa(USA,c_Livestock,a_Livestock,check)
+      - (0.00161438432431755)*lambdaio(USA,c_Livestock,a_Livestock,check)
      
-      + (0)*pa(USA,c_FoodProc,a_Livestock,check)
+      - (0.00301212692888572)*lambdaio(USA,c_FoodProc,a_Livestock,check)
      
-      + (0)*pa(USA,c_Energy,a_Livestock,check)
+      - (0.000402965795407669)*lambdaio(USA,c_Energy,a_Livestock,check)
      
-      + (0)*pa(USA,c_Textiles,a_Livestock,check)
+      - (3.73603816443507E-6)*lambdaio(USA,c_Textiles,a_Livestock,check)
      
-      + (0)*pa(USA,c_Chem,a_Livestock,check)
+      - (0.000200191026861433)*lambdaio(USA,c_Chem,a_Livestock,check)
      
-      + (0)*pa(USA,c_Manuf,a_Livestock,check)
+      - (0.000296427153892065)*lambdaio(USA,c_Manuf,a_Livestock,check)
      
-      + (0)*pa(USA,c_ForestFish,a_Livestock,check)
+      - (0.00026421223516803)*lambdaio(USA,c_ForestFish,a_Livestock,check)
      
-      + (0)*pa(USA,c_Svces,a_Livestock,check) =E= 0 ; (LHS = 0)
+      - (0.00352479880242315)*lambdaio(USA,c_Svces,a_Livestock,check)
+     
+      - (0.01)*pnd(USA,a_Livestock,check)
+     
+      + (1.193093492389E-6)*pa(USA,c_Rice,a_Livestock,check)
+     
+      + (0.000679964601387565)*pa(USA,c_Crops,a_Livestock,check)
+     
+      + (0.00161438432431755)*pa(USA,c_Livestock,a_Livestock,check)
+     
+      + (0.00301212692888572)*pa(USA,c_FoodProc,a_Livestock,check)
+     
+      + (0.000402965795407669)*pa(USA,c_Energy,a_Livestock,check)
+     
+      + (3.73603816443507E-6)*pa(USA,c_Textiles,a_Livestock,check)
+     
+      + (0.000200191026861433)*pa(USA,c_Chem,a_Livestock,check)
+     
+      + (0.000296427153892065)*pa(USA,c_Manuf,a_Livestock,check)
+     
+      + (0.00026421223516803)*pa(USA,c_ForestFish,a_Livestock,check)
+     
+      + (0.00352479880242315)*pa(USA,c_Svces,a_Livestock,check) =E= 0 ;
+     
+      (LHS = 0)
      
 REMAINING 67 ENTRIES SKIPPED
 
@@ -1025,33 +1065,37 @@ REMAINING 67 ENTRIES SKIPPED
 
 xapeq(USA,c_Rice,a_Rice,check)..  - (0.223233656447798)*nd(USA,a_Rice,check)
      
-      + (0)*lambdaio(USA,c_Rice,a_Rice,check)
+      - (0.00197097025633)*lambdaio(USA,c_Rice,a_Rice,check)
      
-      - (0.197097025633)*pnd(USA,a_Rice,check) + xa(USA,c_Rice,a_Rice,check)
+      - (0.19906799588933)*pnd(USA,a_Rice,check) + xa(USA,c_Rice,a_Rice,check)
      
-      + (0.197097025633)*pa(USA,c_Rice,a_Rice,check) =E= 0 ; (LHS = 0)
+      + (0.19906799588933)*pa(USA,c_Rice,a_Rice,check) =E= 0 ; (LHS = 0)
      
 xapeq(USA,c_Rice,a_Crops,check)..  
      
      - (3.84802376729081E-5)*nd(USA,a_Crops,check)
      
-      + (0)*lambdaio(USA,c_Rice,a_Crops,check)
+      - (4.4615488057E-7)*lambdaio(USA,c_Rice,a_Crops,check)
      
-      - (4.4615488057E-5)*pnd(USA,a_Crops,check) + xa(USA,c_Rice,a_Crops,check)
+      - (4.506164293757E-5)*pnd(USA,a_Crops,check)
      
-      + (4.4615488057E-5)*pa(USA,c_Rice,a_Crops,check) =E= 0 ; (LHS = 0)
+      + xa(USA,c_Rice,a_Crops,check)
+     
+      + (4.506164293757E-5)*pa(USA,c_Rice,a_Crops,check) =E= 0 ; (LHS = 0)
      
 xapeq(USA,c_Rice,a_Livestock,check)..  
      
      - (0.0001193093492389)*nd(USA,a_Livestock,check)
      
-      + (0)*lambdaio(USA,c_Rice,a_Livestock,check)
+      - (1.373947863806E-6)*lambdaio(USA,c_Rice,a_Livestock,check)
      
-      - (0.0001373947863806)*pnd(USA,a_Livestock,check)
+      - (0.000138768734244406)*pnd(USA,a_Livestock,check)
      
       + xa(USA,c_Rice,a_Livestock,check)
      
-      + (0.0001373947863806)*pa(USA,c_Rice,a_Livestock,check) =E= 0 ; (LHS = 0)
+      + (0.000138768734244406)*pa(USA,c_Rice,a_Livestock,check) =E= 0 ;
+     
+      (LHS = 0)
      
 REMAINING 697 ENTRIES SKIPPED
 
@@ -1170,78 +1214,98 @@ REMAINING 249 ENTRIES SKIPPED
 
 xfeq(USA,Land,a_Rice,check)..  - (0.132382187708958)*va(USA,a_Rice,check)
      
-      + (0)*lambdaf(USA,Land,a_Rice,check) + xf(USA,Land,a_Rice,check)
+      - (0.0002282940826)*lambdaf(USA,Land,a_Rice,check)
      
-      - (0.02282940826)*pva(USA,a_Rice,check)
+      + xf(USA,Land,a_Rice,check) - (0.0230577023426)*pva(USA,a_Rice,check)
      
-      + (0.0219008120635626)*pf(USA,Land,a_Rice,check) =E= 0 ; (LHS = 0)
+      + (0.0221198201841983)*pf(USA,Land,a_Rice,check) =E= 0 ; (LHS = 0)
      
 xfeq(USA,Land,a_Crops,check)..  - (0.256441720236657)*va(USA,a_Crops,check)
      
-      + (0)*lambdaf(USA,Land,a_Crops,check) + xf(USA,Land,a_Crops,check)
+      - (0.002848057422)*lambdaf(USA,Land,a_Crops,check)
      
-      - (0.2848057422)*pva(USA,a_Crops,check)
+      + xf(USA,Land,a_Crops,check) - (0.287653799622)*pva(USA,a_Crops,check)
      
-      + (0.273221148494325)*pf(USA,Land,a_Crops,check) =E= 0 ; (LHS = 0)
+      + (0.275953359979268)*pf(USA,Land,a_Crops,check) =E= 0 ; (LHS = 0)
      
 xfeq(USA,Land,a_Livestock,check)..  
      
      - (0.188717376611842)*va(USA,a_Livestock,check)
      
-      + (0)*lambdaf(USA,Land,a_Livestock,check)
+      - (0.001096057715)*lambdaf(USA,Land,a_Livestock,check)
      
       + xf(USA,Land,a_Livestock,check)
      
-      - (0.1096057715)*pva(USA,a_Livestock,check)
+      - (0.110701829215)*pva(USA,a_Livestock,check)
      
-      + (0.105147507411759)*pf(USA,Land,a_Livestock,check) =E= 0 ; (LHS = 0)
+      + (0.106198982485877)*pf(USA,Land,a_Livestock,check) =E= 0 ; (LHS = 0)
      
 REMAINING 249 ENTRIES SKIPPED
 
 
 ---- pvaeq  =E=  Price of value added
 
-pvaeq(USA,a_Rice,check)..  (0)*lambdaf(USA,Land,a_Rice,check)
+pvaeq(USA,a_Rice,check)..  
      
-      + (0)*lambdaf(USA,UnSkLab,a_Rice,check)
+     - (0.00101506718532679)*lambdaf(USA,Land,a_Rice,check)
      
-      + (0)*lambdaf(USA,SkLab,a_Rice,check)
+      - (0.00219905590218085)*lambdaf(USA,UnSkLab,a_Rice,check)
      
-      + (0)*lambdaf(USA,Capital,a_Rice,check) + (0)*pva(USA,a_Rice,check)
+      - (0.00124885478821392)*lambdaf(USA,SkLab,a_Rice,check)
      
-      + (0)*pf(USA,Land,a_Rice,check) + (0)*pf(USA,UnSkLab,a_Rice,check)
+      - (0.00553702212427846)*lambdaf(USA,Capital,a_Rice,check)
      
-      + (0)*pf(USA,SkLab,a_Rice,check) + (0)*pf(USA,Capital,a_Rice,check) =E= 0
-      ; (LHS = 0)
+      - (0.01)*pva(USA,a_Rice,check)
      
-pvaeq(USA,a_Crops,check)..  (0)*lambdaf(USA,Land,a_Crops,check)
+      + (0.000973778882244733)*pf(USA,Land,a_Rice,check)
      
-      + (0)*lambdaf(USA,UnSkLab,a_Crops,check)
+      + (0.00165581616579704)*pf(USA,UnSkLab,a_Rice,check)
      
-      + (0)*lambdaf(USA,SkLab,a_Crops,check)
+      + (0.000940346290859484)*pf(USA,SkLab,a_Rice,check)
      
-      + (0)*lambdaf(USA,Capital,a_Crops,check) + (0)*pva(USA,a_Crops,check)
+      + (0.00531180030479199)*pf(USA,Capital,a_Rice,check) =E= 0 ; (LHS = 0)
      
-      + (0)*pf(USA,Land,a_Crops,check) + (0)*pf(USA,UnSkLab,a_Crops,check)
+pvaeq(USA,a_Crops,check)..  
      
-      + (0)*pf(USA,SkLab,a_Crops,check) + (0)*pf(USA,Capital,a_Crops,check)
-      =E= 0 ; (LHS = 0)
+     - (0.00200000007059209)*lambdaf(USA,Land,a_Crops,check)
      
-pvaeq(USA,a_Livestock,check)..  (0)*lambdaf(USA,Land,a_Livestock,check)
+      - (0.00156811807727693)*lambdaf(USA,UnSkLab,a_Crops,check)
      
-      + (0)*lambdaf(USA,UnSkLab,a_Livestock,check)
+      - (0.00153188188199756)*lambdaf(USA,SkLab,a_Crops,check)
      
-      + (0)*lambdaf(USA,SkLab,a_Livestock,check)
+      - (0.00489999997013343)*lambdaf(USA,Capital,a_Crops,check)
      
-      + (0)*lambdaf(USA,Capital,a_Livestock,check)
+      - (0.01)*pva(USA,a_Crops,check)
      
-      + (0)*pva(USA,a_Livestock,check) + (0)*pf(USA,Land,a_Livestock,check)
+      + (0.00191864922404609)*pf(USA,Land,a_Crops,check)
      
-      + (0)*pf(USA,UnSkLab,a_Livestock,check)
+      + (0.00118074088202306)*pf(USA,UnSkLab,a_Crops,check)
      
-      + (0)*pf(USA,SkLab,a_Livestock,check)
+      + (0.00115345633898027)*pf(USA,SkLab,a_Crops,check)
      
-      + (0)*pf(USA,Capital,a_Livestock,check) =E= 0 ; (LHS = 0)
+      + (0.00470068966074126)*pf(USA,Capital,a_Crops,check) =E= 0 ; (LHS = 0)
+     
+pvaeq(USA,a_Livestock,check)..  
+     
+     - (0.00200000000020662)*lambdaf(USA,Land,a_Livestock,check)
+     
+      - (0.00156811809006812)*lambdaf(USA,UnSkLab,a_Livestock,check)
+     
+      - (0.00153188195174711)*lambdaf(USA,SkLab,a_Livestock,check)
+     
+      - (0.00489999995797816)*lambdaf(USA,Capital,a_Livestock,check)
+     
+      - (0.01)*pva(USA,a_Livestock,check)
+     
+      + (0.00191864910001791)*pf(USA,Land,a_Livestock,check)
+     
+      + (0.00118074097505874)*pf(USA,UnSkLab,a_Livestock,check)
+     
+      + (0.00115345644895611)*pf(USA,SkLab,a_Livestock,check)
+     
+      + (0.00470068979335344)*pf(USA,Capital,a_Livestock,check) =E= 0 ;
+     
+      (LHS = 0)
      
 REMAINING 67 ENTRIES SKIPPED
 
@@ -11701,9 +11765,9 @@ walraseq..  rsav(ROW,check) + (2.264923)*pi(ROW,check) - yi(ROW,check)
       + savf(ROW,check) + walras + (0.0399999964678714)*kstock(ROW,check) =E= 0
       ; (LHS = 0)
      
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 8
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 8
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Column Listing      SOLVE gtap Using MCP From line 10733
+Column Listing      SOLVE gtap Using MCP From line 10741
 
 
 ---- axp  Production frontier shifter
@@ -11711,23 +11775,23 @@ Column Listing      SOLVE gtap Using MCP From line 10733
 axp(USA,a_Rice,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       axpeq(USA,a_Rice,check)
-       (0)      ndeq(USA,a_Rice,check)
-       (0)      vaeq(USA,a_Rice,check)
-       (0)      pxeq(USA,a_Rice,check)
+      (-0.0088) ndeq(USA,a_Rice,check)
+      (-0.0017) vaeq(USA,a_Rice,check)
+      (-0.01)   pxeq(USA,a_Rice,check)
 
 axp(USA,a_Crops,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       axpeq(USA,a_Crops,check)
-       (0)      ndeq(USA,a_Crops,check)
-       (0)      vaeq(USA,a_Crops,check)
-       (0)      pxeq(USA,a_Crops,check)
+      (-0.0116) ndeq(USA,a_Crops,check)
+      (-0.0111) vaeq(USA,a_Crops,check)
+      (-0.01)   pxeq(USA,a_Crops,check)
 
 axp(USA,a_Livestock,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       axpeq(USA,a_Livestock,check)
-       (0)      ndeq(USA,a_Livestock,check)
-       (0)      vaeq(USA,a_Livestock,check)
-       (0)      pxeq(USA,a_Livestock,check)
+      (-0.0115) ndeq(USA,a_Livestock,check)
+      (-0.0058) vaeq(USA,a_Livestock,check)
+      (-0.01)   pxeq(USA,a_Livestock,check)
 
 REMAINING 67 ENTRIES SKIPPED
 
@@ -11736,20 +11800,20 @@ REMAINING 67 ENTRIES SKIPPED
 lambdand(USA,a_Rice,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdandeq(USA,a_Rice,check)
-       (0)      ndeq(USA,a_Rice,check)
-       (0)      pxeq(USA,a_Rice,check)
+      (-0.0088) ndeq(USA,a_Rice,check)
+      (-0.0084) pxeq(USA,a_Rice,check)
 
 lambdand(USA,a_Crops,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdandeq(USA,a_Crops,check)
-       (0)      ndeq(USA,a_Crops,check)
-       (0)      pxeq(USA,a_Crops,check)
+      (-0.0116) ndeq(USA,a_Crops,check)
+      (-0.0051) pxeq(USA,a_Crops,check)
 
 lambdand(USA,a_Livestock,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdandeq(USA,a_Livestock,check)
-       (0)      ndeq(USA,a_Livestock,check)
-       (0)      pxeq(USA,a_Livestock,check)
+      (-0.0115) ndeq(USA,a_Livestock,check)
+      (-0.0066) pxeq(USA,a_Livestock,check)
 
 REMAINING 67 ENTRIES SKIPPED
 
@@ -11758,20 +11822,20 @@ REMAINING 67 ENTRIES SKIPPED
 lambdava(USA,a_Rice,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdavaeq(USA,a_Rice,check)
-       (0)      vaeq(USA,a_Rice,check)
-       (0)      pxeq(USA,a_Rice,check)
+      (-0.0017) vaeq(USA,a_Rice,check)
+      (-0.0016) pxeq(USA,a_Rice,check)
 
 lambdava(USA,a_Crops,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdavaeq(USA,a_Crops,check)
-       (0)      vaeq(USA,a_Crops,check)
-       (0)      pxeq(USA,a_Crops,check)
+      (-0.0111) vaeq(USA,a_Crops,check)
+      (-0.0049) pxeq(USA,a_Crops,check)
 
 lambdava(USA,a_Livestock,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdavaeq(USA,a_Livestock,check)
-       (0)      vaeq(USA,a_Livestock,check)
-       (0)      pxeq(USA,a_Livestock,check)
+      (-0.0058) vaeq(USA,a_Livestock,check)
+      (-0.0034) pxeq(USA,a_Livestock,check)
 
 REMAINING 67 ENTRIES SKIPPED
 
@@ -11853,25 +11917,25 @@ REMAINING 67 ENTRIES SKIPPED
 
 px(USA,a_Rice,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-      (-0.8829) ndeq(USA,a_Rice,check)
-      (-0.1725) vaeq(USA,a_Rice,check)
-       (0)      pxeq(USA,a_Rice,check)
+      (-0.8917) ndeq(USA,a_Rice,check)
+      (-0.1742) vaeq(USA,a_Rice,check)
+      (-0.01)   pxeq(USA,a_Rice,check)
       (-0.0532) xeq(USA,a_Rice,c_Rice,check)
       (-6)      xpeq(USA,a_Rice,check)
 
 px(USA,a_Crops,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-      (-1.1594) ndeq(USA,a_Crops,check)
-      (-1.1106) vaeq(USA,a_Crops,check)
-       (0)      pxeq(USA,a_Crops,check)
+      (-1.171)  ndeq(USA,a_Crops,check)
+      (-1.1217) vaeq(USA,a_Crops,check)
+      (-0.01)   pxeq(USA,a_Crops,check)
       (-1.1348) xeq(USA,a_Crops,c_Crops,check)
       (-6)      xpeq(USA,a_Crops,check)
 
 px(USA,a_Livestock,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-      (-1.1516) ndeq(USA,a_Livestock,check)
-      (-0.5808) vaeq(USA,a_Livestock,check)
-       (0)      pxeq(USA,a_Livestock,check)
+      (-1.1631) ndeq(USA,a_Livestock,check)
+      (-0.5866) vaeq(USA,a_Livestock,check)
+      (-0.01)   pxeq(USA,a_Livestock,check)
       (-0.8662) xeq(USA,a_Livestock,c_Livestock,check)
       (-6)      xpeq(USA,a_Livestock,check)
 
@@ -11882,20 +11946,20 @@ REMAINING 67 ENTRIES SKIPPED
 lambdaio(USA,c_Rice,a_Rice,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdaioeq(USA,c_Rice,a_Rice,check)
-       (0)      pndeq(USA,a_Rice,check)
-       (0)      xapeq(USA,c_Rice,a_Rice,check)
+      (-0.0022) pndeq(USA,a_Rice,check)
+      (-0.002)  xapeq(USA,c_Rice,a_Rice,check)
 
 lambdaio(USA,c_Rice,a_Crops,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdaioeq(USA,c_Rice,a_Crops,check)
-       (0)      pndeq(USA,a_Crops,check)
-       (0)      xapeq(USA,c_Rice,a_Crops,check)
+ (-3.848024E-7) pndeq(USA,a_Crops,check)
+ (-4.461549E-7) xapeq(USA,c_Rice,a_Crops,check)
 
 lambdaio(USA,c_Rice,a_Livestock,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdaioeq(USA,c_Rice,a_Livestock,check)
-       (0)      pndeq(USA,a_Livestock,check)
-       (0)      xapeq(USA,c_Rice,a_Livestock,check)
+ (-1.193093E-6) pndeq(USA,a_Livestock,check)
+ (-1.373948E-6) xapeq(USA,c_Rice,a_Livestock,check)
 
 REMAINING 697 ENTRIES SKIPPED
 
@@ -11903,51 +11967,51 @@ REMAINING 697 ENTRIES SKIPPED
 
 pnd(USA,a_Rice,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0.8829) ndeq(USA,a_Rice,check)
-       (0)      pxeq(USA,a_Rice,check)
-       (0)      pndeq(USA,a_Rice,check)
-      (-0.1971) xapeq(USA,c_Rice,a_Rice,check)
+       (0.8917) ndeq(USA,a_Rice,check)
+       (0.0084) pxeq(USA,a_Rice,check)
+      (-0.01)   pndeq(USA,a_Rice,check)
+      (-0.1991) xapeq(USA,c_Rice,a_Rice,check)
       (-0.0023) xapeq(USA,c_Crops,a_Rice,check)
-      (-0.0136) xapeq(USA,c_Livestock,a_Rice,check)
-      (-0.3682) xapeq(USA,c_FoodProc,a_Rice,check)
-      (-0.0138) xapeq(USA,c_Energy,a_Rice,check)
-      (-0.0033) xapeq(USA,c_Textiles,a_Rice,check)
-      (-0.0434) xapeq(USA,c_Chem,a_Rice,check)
-      (-0.0385) xapeq(USA,c_Manuf,a_Rice,check)
-      (-0.0172) xapeq(USA,c_ForestFish,a_Rice,check)
-      (-0.1855) xapeq(USA,c_Svces,a_Rice,check)
+      (-0.0137) xapeq(USA,c_Livestock,a_Rice,check)
+      (-0.3719) xapeq(USA,c_FoodProc,a_Rice,check)
+      (-0.0139) xapeq(USA,c_Energy,a_Rice,check)
+      (-0.0034) xapeq(USA,c_Textiles,a_Rice,check)
+      (-0.0438) xapeq(USA,c_Chem,a_Rice,check)
+      (-0.0389) xapeq(USA,c_Manuf,a_Rice,check)
+      (-0.0173) xapeq(USA,c_ForestFish,a_Rice,check)
+      (-0.1874) xapeq(USA,c_Svces,a_Rice,check)
 
 pnd(USA,a_Crops,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (1.1594) ndeq(USA,a_Crops,check)
-       (0)      pxeq(USA,a_Crops,check)
-       (0)      pndeq(USA,a_Crops,check)
- (-4.461549E-5) xapeq(USA,c_Rice,a_Crops,check)
-      (-0.09)   xapeq(USA,c_Crops,a_Crops,check)
+       (1.171)  ndeq(USA,a_Crops,check)
+       (0.0051) pxeq(USA,a_Crops,check)
+      (-0.01)   pndeq(USA,a_Crops,check)
+ (-4.506164E-5) xapeq(USA,c_Rice,a_Crops,check)
+      (-0.0909) xapeq(USA,c_Crops,a_Crops,check)
       (-0.0028) xapeq(USA,c_Livestock,a_Crops,check)
       (-0.0002) xapeq(USA,c_FoodProc,a_Crops,check)
-      (-0.0643) xapeq(USA,c_Energy,a_Crops,check)
-      (-0.002)  xapeq(USA,c_Textiles,a_Crops,check)
-      (-0.2378) xapeq(USA,c_Chem,a_Crops,check)
-      (-0.0579) xapeq(USA,c_Manuf,a_Crops,check)
-      (-0.1947) xapeq(USA,c_ForestFish,a_Crops,check)
-      (-0.5096) xapeq(USA,c_Svces,a_Crops,check)
+      (-0.065)  xapeq(USA,c_Energy,a_Crops,check)
+      (-0.0021) xapeq(USA,c_Textiles,a_Crops,check)
+      (-0.2402) xapeq(USA,c_Chem,a_Crops,check)
+      (-0.0585) xapeq(USA,c_Manuf,a_Crops,check)
+      (-0.1966) xapeq(USA,c_ForestFish,a_Crops,check)
+      (-0.5147) xapeq(USA,c_Svces,a_Crops,check)
 
 pnd(USA,a_Livestock,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (1.1516) ndeq(USA,a_Livestock,check)
-       (0)      pxeq(USA,a_Livestock,check)
-       (0)      pndeq(USA,a_Livestock,check)
+       (1.1631) ndeq(USA,a_Livestock,check)
+       (0.0066) pxeq(USA,a_Livestock,check)
+      (-0.01)   pndeq(USA,a_Livestock,check)
       (-0.0001) xapeq(USA,c_Rice,a_Livestock,check)
-      (-0.0783) xapeq(USA,c_Crops,a_Livestock,check)
-      (-0.1859) xapeq(USA,c_Livestock,a_Livestock,check)
-      (-0.3469) xapeq(USA,c_FoodProc,a_Livestock,check)
-      (-0.0464) xapeq(USA,c_Energy,a_Livestock,check)
+      (-0.0791) xapeq(USA,c_Crops,a_Livestock,check)
+      (-0.1878) xapeq(USA,c_Livestock,a_Livestock,check)
+      (-0.3503) xapeq(USA,c_FoodProc,a_Livestock,check)
+      (-0.0469) xapeq(USA,c_Energy,a_Livestock,check)
       (-0.0004) xapeq(USA,c_Textiles,a_Livestock,check)
-      (-0.0231) xapeq(USA,c_Chem,a_Livestock,check)
-      (-0.0341) xapeq(USA,c_Manuf,a_Livestock,check)
-      (-0.0304) xapeq(USA,c_ForestFish,a_Livestock,check)
-      (-0.4059) xapeq(USA,c_Svces,a_Livestock,check)
+      (-0.0233) xapeq(USA,c_Chem,a_Livestock,check)
+      (-0.0345) xapeq(USA,c_Manuf,a_Livestock,check)
+      (-0.0307) xapeq(USA,c_ForestFish,a_Livestock,check)
+      (-0.41)   xapeq(USA,c_Svces,a_Livestock,check)
 
 REMAINING 67 ENTRIES SKIPPED
 
@@ -11956,20 +12020,20 @@ REMAINING 67 ENTRIES SKIPPED
 lambdaf(USA,Land,a_Rice,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdafeq(USA,Land,a_Rice,check)
-       (0)      xfeq(USA,Land,a_Rice,check)
-       (0)      pvaeq(USA,a_Rice,check)
+      (-0.0002) xfeq(USA,Land,a_Rice,check)
+      (-0.001)  pvaeq(USA,a_Rice,check)
 
 lambdaf(USA,Land,a_Crops,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdafeq(USA,Land,a_Crops,check)
-       (0)      xfeq(USA,Land,a_Crops,check)
-       (0)      pvaeq(USA,a_Crops,check)
+      (-0.0028) xfeq(USA,Land,a_Crops,check)
+      (-0.002)  pvaeq(USA,a_Crops,check)
 
 lambdaf(USA,Land,a_Livestock,check)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdafeq(USA,Land,a_Livestock,check)
-       (0)      xfeq(USA,Land,a_Livestock,check)
-       (0)      pvaeq(USA,a_Livestock,check)
+      (-0.0011) xfeq(USA,Land,a_Livestock,check)
+      (-0.002)  pvaeq(USA,a_Livestock,check)
 
 REMAINING 249 ENTRIES SKIPPED
 
@@ -12011,33 +12075,33 @@ REMAINING 249 ENTRIES SKIPPED
 
 pva(USA,a_Rice,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0.1725) vaeq(USA,a_Rice,check)
-       (0)      pxeq(USA,a_Rice,check)
-      (-0.0228) xfeq(USA,Land,a_Rice,check)
-      (-0.0247) xfeq(USA,UnSkLab,a_Rice,check)
-      (-0.0145) xfeq(USA,SkLab,a_Rice,check)
-      (-0.0899) xfeq(USA,Capital,a_Rice,check)
-       (0)      pvaeq(USA,a_Rice,check)
+       (0.1742) vaeq(USA,a_Rice,check)
+       (0.0016) pxeq(USA,a_Rice,check)
+      (-0.0231) xfeq(USA,Land,a_Rice,check)
+      (-0.025)  xfeq(USA,UnSkLab,a_Rice,check)
+      (-0.0146) xfeq(USA,SkLab,a_Rice,check)
+      (-0.0908) xfeq(USA,Capital,a_Rice,check)
+      (-0.01)   pvaeq(USA,a_Rice,check)
 
 pva(USA,a_Crops,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (1.1106) vaeq(USA,a_Crops,check)
-       (0)      pxeq(USA,a_Crops,check)
-      (-0.2848) xfeq(USA,Land,a_Crops,check)
-      (-0.1185) xfeq(USA,UnSkLab,a_Crops,check)
-      (-0.1157) xfeq(USA,SkLab,a_Crops,check)
-      (-0.5223) xfeq(USA,Capital,a_Crops,check)
-       (0)      pvaeq(USA,a_Crops,check)
+       (1.1217) vaeq(USA,a_Crops,check)
+       (0.0049) pxeq(USA,a_Crops,check)
+      (-0.2877) xfeq(USA,Land,a_Crops,check)
+      (-0.1196) xfeq(USA,UnSkLab,a_Crops,check)
+      (-0.1169) xfeq(USA,SkLab,a_Crops,check)
+      (-0.5276) xfeq(USA,Capital,a_Crops,check)
+      (-0.01)   pvaeq(USA,a_Crops,check)
 
 pva(USA,a_Livestock,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0.5808) vaeq(USA,a_Livestock,check)
-       (0)      pxeq(USA,a_Livestock,check)
-      (-0.1096) xfeq(USA,Land,a_Livestock,check)
-      (-0.0603) xfeq(USA,UnSkLab,a_Livestock,check)
-      (-0.0589) xfeq(USA,SkLab,a_Livestock,check)
-      (-0.2678) xfeq(USA,Capital,a_Livestock,check)
-       (0)      pvaeq(USA,a_Livestock,check)
+       (0.5866) vaeq(USA,a_Livestock,check)
+       (0.0034) pxeq(USA,a_Livestock,check)
+      (-0.1107) xfeq(USA,Land,a_Livestock,check)
+      (-0.0609) xfeq(USA,UnSkLab,a_Livestock,check)
+      (-0.0595) xfeq(USA,SkLab,a_Livestock,check)
+      (-0.2704) xfeq(USA,Capital,a_Livestock,check)
+      (-0.01)   pvaeq(USA,a_Livestock,check)
 
 REMAINING 67 ENTRIES SKIPPED
 
@@ -12835,23 +12899,23 @@ REMAINING 893 ENTRIES SKIPPED
 
 pa(USA,c_Rice,a_Rice,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0)      pndeq(USA,a_Rice,check)
-       (0.1971) xapeq(USA,c_Rice,a_Rice,check)
+       (0.0022) pndeq(USA,a_Rice,check)
+       (0.1991) xapeq(USA,c_Rice,a_Rice,check)
        (0.05)   paeq(USA,c_Rice,a_Rice,check)
       (-0.1809) xdeq(USA,c_Rice,a_Rice,check)
       (-0.0057) xmeq(USA,c_Rice,a_Rice,check)
 
 pa(USA,c_Rice,a_Crops,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0)      pndeq(USA,a_Crops,check)
- (4.4615488E-5) xapeq(USA,c_Rice,a_Crops,check)
+ (3.8480238E-7) pndeq(USA,a_Crops,check)
+ (4.5061643E-5) xapeq(USA,c_Rice,a_Crops,check)
        (0.05)   paeq(USA,c_Rice,a_Crops,check)
  (-4.111175E-5) xdeq(USA,c_Rice,a_Crops,check)
  (-1.272967E-6) xmeq(USA,c_Rice,a_Crops,check)
 
 pa(USA,c_Rice,a_Livestock,check)
                 (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0)      pndeq(USA,a_Livestock,check)
+ (1.1930935E-6) pndeq(USA,a_Livestock,check)
        (0.0001) xapeq(USA,c_Rice,a_Livestock,check)
        (0.05)   paeq(USA,c_Rice,a_Livestock,check)
       (-0.0001) xdeq(USA,c_Rice,a_Livestock,check)
@@ -13938,8 +14002,8 @@ REMAINING 32 ENTRIES SKIPPED
 pf(USA,Land,a_Rice,check)
                 (.LO, .L, .UP, .M = 0.00104240008058798, 1.04240008058798, +INF
 , 0)
-       (0.0219) xfeq(USA,Land,a_Rice,check)
-       (0)      pvaeq(USA,a_Rice,check)
+       (0.0221) xfeq(USA,Land,a_Rice,check)
+       (0.001)  pvaeq(USA,a_Rice,check)
  (-9.285962E-6) ytaxeq(USA,dt,check)
        (0.0001) ytaxeq(USA,ft,check)
       (-0.0002) factYeq(USA,check)
@@ -13951,8 +14015,8 @@ pf(USA,Land,a_Rice,check)
 pf(USA,Land,a_Crops,check)
                 (.LO, .L, .UP, .M = 0.00104240006225549, 1.04240006225549, +INF
 , 0)
-       (0.2732) xfeq(USA,Land,a_Crops,check)
-       (0)      pvaeq(USA,a_Crops,check)
+       (0.276)  xfeq(USA,Land,a_Crops,check)
+       (0.0019) pvaeq(USA,a_Crops,check)
       (-0.0012) ytaxeq(USA,dt,check)
        (0.0072) ytaxeq(USA,ft,check)
       (-0.0285) factYeq(USA,check)
@@ -13964,8 +14028,8 @@ pf(USA,Land,a_Crops,check)
 pf(USA,Land,a_Livestock,check)
                 (.LO, .L, .UP, .M = 0.00104240009295496, 1.04240009295496, +INF
 , 0)
-       (0.1051) xfeq(USA,Land,a_Livestock,check)
-       (0)      pvaeq(USA,a_Livestock,check)
+       (0.1062) xfeq(USA,Land,a_Livestock,check)
+       (0.0019) pvaeq(USA,a_Livestock,check)
       (-0.0004) ytaxeq(USA,dt,check)
       (-0.0002) ytaxeq(USA,ft,check)
       (-0.011)  factYeq(USA,check)
@@ -14412,9 +14476,9 @@ cv(CHN,hhd,check)
       (-0.1064) cveq(CHN,hhd,check)
 
 REMAINING 4 ENTRIES SKIPPED
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 9
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 9
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Range Statistics    SOLVE gtap Using MCP From line 10733
+Range Statistics    SOLVE gtap Using MCP From line 10741
 
 
 RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
@@ -14423,9 +14487,9 @@ RHS       [min, max] : [ 4.000E-02, 1.000E+00] - Zero values observed as well
 Bound     [min, max] : [ 8.899E-04, 1.540E-03]
 Matrix    [min, max] : [ 3.730E-15, 1.319E+02] - Zero values observed as well
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 10
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 10
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Model Statistics    SOLVE gtap Using MCP From line 10733
+Model Statistics    SOLVE gtap Using MCP From line 10741
 
 
 LOOPS                                 tsim   check
@@ -14436,27 +14500,27 @@ MODEL STATISTICS
 BLOCKS OF EQUATIONS          97     SINGLE EQUATIONS        7,968
 BLOCKS OF VARIABLES         135     SINGLE VARIABLES        7,968
 NON ZERO ELEMENTS        43,776     NON LINEAR N-Z         33,309
-CODE LENGTH             117,247     CONSTANT POOL          14,090
+CODE LENGTH             117,247     CONSTANT POOL          14,091
 
 
-GENERATION TIME      =        0.119 SECONDS     18 MB  53.5.1 f2e5fac3 LEX-LEG
+GENERATION TIME      =        0.152 SECONDS     18 MB  53.5.1 f2e5fac3 LEX-LEG
                L O O P S               tsim check
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 11
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 11
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Solution Report     SOLVE gtap Using MCP From line 10733
+Solution Report     SOLVE gtap Using MCP From line 10741
 
 
                S O L V E      S U M M A R Y
 
      MODEL   gtap                
      TYPE    MCP                 
-     SOLVER  PATH                FROM LINE  10733
+     SOLVER  PATH                FROM LINE  10741
 
 **** SOLVER STATUS     1 Normal Completion
 **** MODEL STATUS      1 Optimal
 
- RESOURCE USAGE, LIMIT          0.167 10000000000.000
+ RESOURCE USAGE, LIMIT          0.151 10000000000.000
  ITERATION COUNT, LIMIT         0          1000
  EVALUATION ERRORS              0             0
 7968 row/cols, 43776 non-zeros, 0.07% dense.
@@ -14465,239 +14529,6 @@ Path 5.2.01 (Wed May 20 07:48:22 2026)
 Written by Todd Munson, Steven Dirkse, Youngdae Kim, and Michael Ferris
 
 INITIAL POINT STATISTICS
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_ForestFish,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Livestock,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_ForestFish,check
-                                                                             ))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_ForestFish,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_ForestFish,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_ForestFish,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_ForestFish,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_ForestFish,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Livestock,check
-                                                                             ))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_FoodProc,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Textiles,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_ForestFish,chec
-                                                                            k))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Livestock,check
-                                                                             ))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_FoodProc,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Textiles,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_ForestFish,chec
-                                                                            k))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Svces,check))
-Total zero rows . . . . . . . .  210
 Maximum of X. . . . . . . . . .  5.6623e+01 var: (kstock(ROW,check))
 Maximum of F. . . . . . . . . .  1.2721e-05 eqn: (yceq(SSA,check))
 Maximum of Grad F . . . . . . .  1.3189e+02 eqn: (xeq(USA,a_Svces,c_Svces,check
@@ -14707,255 +14538,22 @@ Maximum of Grad F . . . . . . .  1.3189e+02 eqn: (xeq(USA,a_Svces,c_Svces,check
 INITIAL JACOBIAN NORM STATISTICS
 Maximum Row Norm. . . . . . . .  2.6996e+02 eqn: (xeq(USA,a_Svces,c_Svces,check
                                                                              ))
-Minimum Row Norm. . . . . . . .  2.0000e-02 eqn: (pgeq(USA,check))
+Minimum Row Norm. . . . . . . .  1.7937e-02 eqn: (pvaeq(USA,a_Textiles,check))
 Maximum Column Norm . . . . . .  1.4022e+02 var: (p(USA,a_Svces,c_Svces,check))
-Minimum Column Norm . . . . . .  9.7463e-04 var: (pf(IND,SkLab,a_Rice,check))
+Minimum Column Norm . . . . . .  9.8812e-04 var: (pf(IND,SkLab,a_Rice,check))
 
 FINAL STATISTICS
-Inf-Norm of Complementarity . .  8.5174e-12 eqn: (xweq(ROW,c_Energy,CHN,check))
-Inf-Norm of Normal Map. . . . .  8.5174e-12 eqn: (xweq(ROW,c_Energy,CHN,check))
-Inf-Norm of Minimum Map . . . .  8.5174e-12 eqn: (xweq(ROW,c_Energy,CHN,check))
-Inf-Norm of Fischer Function. .  8.5174e-12 eqn: (xweq(ROW,c_Energy,CHN,check))
-Inf-Norm of Grad Fischer Fcn. .  6.6243e-11 eqn: (peq(EU_28,a_Svces,c_Svces,che
-                                                                           ck))
-Two-Norm of Grad Fischer Fcn. .  1.4662e-10
+Inf-Norm of Complementarity . .  9.1619e-12 eqn: (xweq(ROW,c_Energy,CHN,check))
+Inf-Norm of Normal Map. . . . .  9.1619e-12 eqn: (xweq(ROW,c_Energy,CHN,check))
+Inf-Norm of Minimum Map . . . .  9.1619e-12 eqn: (xweq(ROW,c_Energy,CHN,check))
+Inf-Norm of Fischer Function. .  9.1619e-12 eqn: (xweq(ROW,c_Energy,CHN,check))
+Inf-Norm of Grad Fischer Fcn. .  5.4491e-11 eqn: (peq(ROW,a_Svces,c_Svces,check
+                                                                             ))
+Two-Norm of Grad Fischer Fcn. .  1.2171e-10
 
 FINAL POINT STATISTICS
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_ForestFish,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Livestock,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_ForestFish,check
-                                                                             ))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_ForestFish,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_ForestFish,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_ForestFish,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_ForestFish,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_ForestFish,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Livestock,check
-                                                                             ))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_FoodProc,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Textiles,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_ForestFish,chec
-                                                                            k))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Livestock,check
-                                                                             ))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_FoodProc,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Textiles,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_ForestFish,chec
-                                                                            k))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Svces,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Rice,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Crops,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Livestock,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_FoodProc,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Energy,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Textiles,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Chem,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Manuf,check))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_ForestFish,check)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Svces,check))
-Total zero rows . . . . . . . .  210
 Maximum of X. . . . . . . . . .  5.6623e+01 var: (kstock(ROW,check))
-Maximum of F. . . . . . . . . .  8.5174e-12 eqn: (xweq(ROW,c_Energy,CHN,check))
+Maximum of F. . . . . . . . . .  9.1619e-12 eqn: (xweq(ROW,c_Energy,CHN,check))
 Maximum of Grad F . . . . . . .  1.3189e+02 eqn: (xeq(USA,a_Svces,c_Svces,check
                                                                              ))
                                             var: (p(USA,a_Svces,c_Svces,check))
@@ -14967,15 +14565,15 @@ Maximum of Grad F . . . . . . .  1.3189e+02 eqn: (xeq(USA,a_Svces,c_Svces,check
                              0  UNBOUNDED
                              0  REDEFINED
                              0     ERRORS
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 12
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 12
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
-----  10758 VARIABLE walras.L              =  -3.5554E-11  Walras check
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 13
+----  10766 VARIABLE walras.L              =  -6.2496E-12  Walras check
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 13
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Equation Listing    SOLVE gtap Using MCP From line 10733
+Equation Listing    SOLVE gtap Using MCP From line 10741
 
 
 ---- axpeq  =E=  Production frontier shifter
@@ -15017,33 +14615,37 @@ REMAINING 67 ENTRIES SKIPPED
 
 ---- ndeq  =E=  Demand for aggregate intermediate (ND)
 
-ndeq(USA,a_Rice,shock)..  (0)*axp(USA,a_Rice,shock)
+ndeq(USA,a_Rice,shock)..  - (0.00882918054424695)*axp(USA,a_Rice,shock)
      
-      + (0)*lambdand(USA,a_Rice,shock) + nd(USA,a_Rice,shock)
+      - (0.00882918054424695)*lambdand(USA,a_Rice,shock) + nd(USA,a_Rice,shock)
      
-      - (0.882918054424694)*px(USA,a_Rice,shock)
+      - (0.891747234968941)*px(USA,a_Rice,shock)
      
-      + (0.882918054424694)*pnd(USA,a_Rice,shock)
+      + (0.891747234968941)*pnd(USA,a_Rice,shock)
      
       - (0.836596691394213)*xp(USA,a_Rice,shock) =E= 0 ; (LHS = 0)
      
-ndeq(USA,a_Crops,shock)..  (0)*axp(USA,a_Crops,shock)
+ndeq(USA,a_Crops,shock)..  - (0.011594389940167)*axp(USA,a_Crops,shock)
      
-      + (0)*lambdand(USA,a_Crops,shock) + nd(USA,a_Crops,shock)
+      - (0.011594389940167)*lambdand(USA,a_Crops,shock) + nd(USA,a_Crops,shock)
      
-      - (1.1594389940167)*px(USA,a_Crops,shock)
+      - (1.17103338395686)*px(USA,a_Crops,shock)
      
-      + (1.1594389940167)*pnd(USA,a_Crops,shock)
+      + (1.17103338395686)*pnd(USA,a_Crops,shock)
      
       - (0.510755927395297)*xp(USA,a_Crops,shock) =E= 0 ; (LHS = 0)
      
-ndeq(USA,a_Livestock,shock)..  (0)*axp(USA,a_Livestock,shock)
+ndeq(USA,a_Livestock,shock)..  
      
-      + (0)*lambdand(USA,a_Livestock,shock) + nd(USA,a_Livestock,shock)
+     - (0.0115158440857377)*axp(USA,a_Livestock,shock)
      
-      - (1.15158440857377)*px(USA,a_Livestock,shock)
+      - (0.0115158440857377)*lambdand(USA,a_Livestock,shock)
      
-      + (1.15158440857377)*pnd(USA,a_Livestock,shock)
+      + nd(USA,a_Livestock,shock)
+     
+      - (1.16310025265951)*px(USA,a_Livestock,shock)
+     
+      + (1.16310025265951)*pnd(USA,a_Livestock,shock)
      
       - (0.664742140669945)*xp(USA,a_Livestock,shock) =E= 0 ; (LHS = 0)
      
@@ -15052,33 +14654,35 @@ REMAINING 67 ENTRIES SKIPPED
 
 ---- vaeq  =E=  Demand for aggregate value added  (VA)
 
-vaeq(USA,a_Rice,shock)..  (0)*axp(USA,a_Rice,shock)
+vaeq(USA,a_Rice,shock)..  - (0.0017245075531)*axp(USA,a_Rice,shock)
      
-      + (0)*lambdava(USA,a_Rice,shock) + va(USA,a_Rice,shock)
+      - (0.0017245075531)*lambdava(USA,a_Rice,shock) + va(USA,a_Rice,shock)
      
-      - (0.17245075531)*px(USA,a_Rice,shock)
+      - (0.1741752628631)*px(USA,a_Rice,shock)
      
-      + (0.17245075531)*pva(USA,a_Rice,shock)
+      + (0.1741752628631)*pva(USA,a_Rice,shock)
      
       - (0.163403308605787)*xp(USA,a_Rice,shock) =E= 0 ; (LHS = 0)
      
-vaeq(USA,a_Crops,shock)..  (0)*axp(USA,a_Crops,shock)
+vaeq(USA,a_Crops,shock)..  - (0.011106061133)*axp(USA,a_Crops,shock)
      
-      + (0)*lambdava(USA,a_Crops,shock) + va(USA,a_Crops,shock)
+      - (0.011106061133)*lambdava(USA,a_Crops,shock) + va(USA,a_Crops,shock)
      
-      - (1.1106061133)*px(USA,a_Crops,shock)
+      - (1.121712174433)*px(USA,a_Crops,shock)
      
-      + (1.1106061133)*pva(USA,a_Crops,shock)
+      + (1.121712174433)*pva(USA,a_Crops,shock)
      
       - (0.489244072604703)*xp(USA,a_Crops,shock) =E= 0 ; (LHS = 0)
      
-vaeq(USA,a_Livestock,shock)..  (0)*axp(USA,a_Livestock,shock)
+vaeq(USA,a_Livestock,shock)..  
      
-      + (0)*lambdava(USA,a_Livestock,shock) + va(USA,a_Livestock,shock)
+     - (0.00580793212940001)*axp(USA,a_Livestock,shock)
      
-      - (0.58079321294)*px(USA,a_Livestock,shock)
+      - (0.00580793212940001)*lambdava(USA,a_Livestock,shock)
      
-      + (0.58079321294)*pva(USA,a_Livestock,shock)
+      + va(USA,a_Livestock,shock) - (0.5866011450694)*px(USA,a_Livestock,shock)
+     
+      + (0.5866011450694)*pva(USA,a_Livestock,shock)
      
       - (0.335257859330055)*xp(USA,a_Livestock,shock) =E= 0 ; (LHS = 0)
      
@@ -15087,31 +14691,41 @@ REMAINING 67 ENTRIES SKIPPED
 
 ---- pxeq  =E=  Unit cost of production
 
-pxeq(USA,a_Rice,shock)..  (0)*axp(USA,a_Rice,shock)
+pxeq(USA,a_Rice,shock)..  - (0.01)*axp(USA,a_Rice,shock)
      
-      + (0)*lambdand(USA,a_Rice,shock) + (0)*lambdava(USA,a_Rice,shock)
+      - (0.00836596691394214)*lambdand(USA,a_Rice,shock)
      
-      + (0)*px(USA,a_Rice,shock) + (0)*pnd(USA,a_Rice,shock)
+      - (0.00163403308605787)*lambdava(USA,a_Rice,shock)
      
-      + (0)*pva(USA,a_Rice,shock) =E= 0 ; (LHS = 0)
+      - (0.01)*px(USA,a_Rice,shock)
      
-pxeq(USA,a_Crops,shock)..  (0)*axp(USA,a_Crops,shock)
+      + (0.00836596691394214)*pnd(USA,a_Rice,shock)
      
-      + (0)*lambdand(USA,a_Crops,shock) + (0)*lambdava(USA,a_Crops,shock)
+      + (0.00163403308605787)*pva(USA,a_Rice,shock) =E= 0 ; (LHS = 0)
      
-      + (0)*px(USA,a_Crops,shock) + (0)*pnd(USA,a_Crops,shock)
+pxeq(USA,a_Crops,shock)..  - (0.01)*axp(USA,a_Crops,shock)
      
-      + (0)*pva(USA,a_Crops,shock) =E= 0 ; (LHS = 0)
+      - (0.00510755927395298)*lambdand(USA,a_Crops,shock)
      
-pxeq(USA,a_Livestock,shock)..  (0)*axp(USA,a_Livestock,shock)
+      - (0.00489244072604703)*lambdava(USA,a_Crops,shock)
      
-      + (0)*lambdand(USA,a_Livestock,shock)
+      - (0.01)*px(USA,a_Crops,shock)
      
-      + (0)*lambdava(USA,a_Livestock,shock) + (0)*px(USA,a_Livestock,shock)
+      + (0.00510755927395298)*pnd(USA,a_Crops,shock)
      
-      + (0)*pnd(USA,a_Livestock,shock) + (0)*pva(USA,a_Livestock,shock) =E= 0 ;
+      + (0.00489244072604703)*pva(USA,a_Crops,shock) =E= 0 ; (LHS = 0)
      
-      (LHS = 0)
+pxeq(USA,a_Livestock,shock)..  - (0.01)*axp(USA,a_Livestock,shock)
+     
+      - (0.00664742140669945)*lambdand(USA,a_Livestock,shock)
+     
+      - (0.00335257859330055)*lambdava(USA,a_Livestock,shock)
+     
+      - (0.01)*px(USA,a_Livestock,shock)
+     
+      + (0.00664742140669945)*pnd(USA,a_Livestock,shock)
+     
+      + (0.00335257859330055)*pva(USA,a_Livestock,shock) =E= 0 ; (LHS = 0)
      
 REMAINING 67 ENTRIES SKIPPED
 
@@ -15133,115 +14747,139 @@ REMAINING 697 ENTRIES SKIPPED
 
 ---- pndeq  =E=  Price of ND bundle
 
-pndeq(USA,a_Rice,shock)..  (0)*lambdaio(USA,c_Rice,a_Rice,shock)
+pndeq(USA,a_Rice,shock)..  
      
-      + (0)*lambdaio(USA,c_Crops,a_Rice,shock)
+     - (0.00223233656447798)*lambdaio(USA,c_Rice,a_Rice,shock)
      
-      + (0)*lambdaio(USA,c_Livestock,a_Rice,shock)
+      - (2.61670405619399E-5)*lambdaio(USA,c_Crops,a_Rice,shock)
      
-      + (0)*lambdaio(USA,c_FoodProc,a_Rice,shock)
+      - (0.000153632328847761)*lambdaio(USA,c_Livestock,a_Rice,shock)
      
-      + (0)*lambdaio(USA,c_Energy,a_Rice,shock)
+      - (0.00417073448719933)*lambdaio(USA,c_FoodProc,a_Rice,shock)
      
-      + (0)*lambdaio(USA,c_Textiles,a_Rice,shock)
+      - (0.000156186568795283)*lambdaio(USA,c_Energy,a_Rice,shock)
      
-      + (0)*lambdaio(USA,c_Chem,a_Rice,shock)
+      - (3.77701983393345E-5)*lambdaio(USA,c_Textiles,a_Rice,shock)
      
-      + (0)*lambdaio(USA,c_Manuf,a_Rice,shock)
+      - (0.000490987823782207)*lambdaio(USA,c_Chem,a_Rice,shock)
      
-      + (0)*lambdaio(USA,c_ForestFish,a_Rice,shock)
+      - (0.000436478508825045)*lambdaio(USA,c_Manuf,a_Rice,shock)
      
-      + (0)*lambdaio(USA,c_Svces,a_Rice,shock) + (0)*pnd(USA,a_Rice,shock)
+      - (0.000194397851080051)*lambdaio(USA,c_ForestFish,a_Rice,shock)
      
-      + (0)*pa(USA,c_Rice,a_Rice,shock) + (0)*pa(USA,c_Crops,a_Rice,shock)
+      - (0.00210130862809108)*lambdaio(USA,c_Svces,a_Rice,shock)
      
-      + (0)*pa(USA,c_Livestock,a_Rice,shock)
+      - (0.01)*pnd(USA,a_Rice,shock)
      
-      + (0)*pa(USA,c_FoodProc,a_Rice,shock) + (0)*pa(USA,c_Energy,a_Rice,shock)
+      + (0.00223233656447798)*pa(USA,c_Rice,a_Rice,shock)
      
-      + (0)*pa(USA,c_Textiles,a_Rice,shock) + (0)*pa(USA,c_Chem,a_Rice,shock)
+      + (2.61670405619399E-5)*pa(USA,c_Crops,a_Rice,shock)
      
-      + (0)*pa(USA,c_Manuf,a_Rice,shock)
+      + (0.000153632328847761)*pa(USA,c_Livestock,a_Rice,shock)
      
-      + (0)*pa(USA,c_ForestFish,a_Rice,shock)
+      + (0.00417073448719933)*pa(USA,c_FoodProc,a_Rice,shock)
      
-      + (0)*pa(USA,c_Svces,a_Rice,shock) =E= 0 ; (LHS = 0)
+      + (0.000156186568795283)*pa(USA,c_Energy,a_Rice,shock)
      
-pndeq(USA,a_Crops,shock)..  (0)*lambdaio(USA,c_Rice,a_Crops,shock)
+      + (3.77701983393345E-5)*pa(USA,c_Textiles,a_Rice,shock)
      
-      + (0)*lambdaio(USA,c_Crops,a_Crops,shock)
+      + (0.000490987823782207)*pa(USA,c_Chem,a_Rice,shock)
      
-      + (0)*lambdaio(USA,c_Livestock,a_Crops,shock)
+      + (0.000436478508825045)*pa(USA,c_Manuf,a_Rice,shock)
      
-      + (0)*lambdaio(USA,c_FoodProc,a_Crops,shock)
+      + (0.000194397851080051)*pa(USA,c_ForestFish,a_Rice,shock)
      
-      + (0)*lambdaio(USA,c_Energy,a_Crops,shock)
+      + (0.00210130862809108)*pa(USA,c_Svces,a_Rice,shock) =E= 0 ; (LHS = 0)
      
-      + (0)*lambdaio(USA,c_Textiles,a_Crops,shock)
+pndeq(USA,a_Crops,shock)..  
      
-      + (0)*lambdaio(USA,c_Chem,a_Crops,shock)
+     - (3.84802376729081E-7)*lambdaio(USA,c_Rice,a_Crops,shock)
      
-      + (0)*lambdaio(USA,c_Manuf,a_Crops,shock)
+      - (0.000776490580052921)*lambdaio(USA,c_Crops,a_Crops,shock)
      
-      + (0)*lambdaio(USA,c_ForestFish,a_Crops,shock)
+      - (2.37505489696368E-5)*lambdaio(USA,c_Livestock,a_Crops,shock)
      
-      + (0)*lambdaio(USA,c_Svces,a_Crops,shock) + (0)*pnd(USA,a_Crops,shock)
+      - (1.99370174354056E-6)*lambdaio(USA,c_FoodProc,a_Crops,shock)
      
-      + (0)*pa(USA,c_Rice,a_Crops,shock) + (0)*pa(USA,c_Crops,a_Crops,shock)
+      - (0.000554948457987376)*lambdaio(USA,c_Energy,a_Crops,shock)
      
-      + (0)*pa(USA,c_Livestock,a_Crops,shock)
+      - (1.7544478609029E-5)*lambdaio(USA,c_Textiles,a_Crops,shock)
      
-      + (0)*pa(USA,c_FoodProc,a_Crops,shock)
+      - (0.00205080021214619)*lambdaio(USA,c_Chem,a_Crops,shock)
      
-      + (0)*pa(USA,c_Energy,a_Crops,shock)
+      - (0.000499598371272011)*lambdaio(USA,c_Manuf,a_Crops,shock)
      
-      + (0)*pa(USA,c_Textiles,a_Crops,shock) + (0)*pa(USA,c_Chem,a_Crops,shock)
+      - (0.00167905099505457)*lambdaio(USA,c_ForestFish,a_Crops,shock)
      
-      + (0)*pa(USA,c_Manuf,a_Crops,shock)
+      - (0.00439543785178801)*lambdaio(USA,c_Svces,a_Crops,shock)
      
-      + (0)*pa(USA,c_ForestFish,a_Crops,shock)
+      - (0.01)*pnd(USA,a_Crops,shock)
      
-      + (0)*pa(USA,c_Svces,a_Crops,shock) =E= 0 ; (LHS = 0)
+      + (3.84802376729081E-7)*pa(USA,c_Rice,a_Crops,shock)
      
-pndeq(USA,a_Livestock,shock)..  (0)*lambdaio(USA,c_Rice,a_Livestock,shock)
+      + (0.000776490580052921)*pa(USA,c_Crops,a_Crops,shock)
      
-      + (0)*lambdaio(USA,c_Crops,a_Livestock,shock)
+      + (2.37505489696368E-5)*pa(USA,c_Livestock,a_Crops,shock)
      
-      + (0)*lambdaio(USA,c_Livestock,a_Livestock,shock)
+      + (1.99370174354056E-6)*pa(USA,c_FoodProc,a_Crops,shock)
      
-      + (0)*lambdaio(USA,c_FoodProc,a_Livestock,shock)
+      + (0.000554948457987376)*pa(USA,c_Energy,a_Crops,shock)
      
-      + (0)*lambdaio(USA,c_Energy,a_Livestock,shock)
+      + (1.7544478609029E-5)*pa(USA,c_Textiles,a_Crops,shock)
      
-      + (0)*lambdaio(USA,c_Textiles,a_Livestock,shock)
+      + (0.00205080021214619)*pa(USA,c_Chem,a_Crops,shock)
      
-      + (0)*lambdaio(USA,c_Chem,a_Livestock,shock)
+      + (0.000499598371272011)*pa(USA,c_Manuf,a_Crops,shock)
      
-      + (0)*lambdaio(USA,c_Manuf,a_Livestock,shock)
+      + (0.00167905099505457)*pa(USA,c_ForestFish,a_Crops,shock)
      
-      + (0)*lambdaio(USA,c_ForestFish,a_Livestock,shock)
+      + (0.00439543785178801)*pa(USA,c_Svces,a_Crops,shock) =E= 0 ; (LHS = 0)
      
-      + (0)*lambdaio(USA,c_Svces,a_Livestock,shock)
+pndeq(USA,a_Livestock,shock)..  
      
-      + (0)*pnd(USA,a_Livestock,shock) + (0)*pa(USA,c_Rice,a_Livestock,shock)
+     - (1.193093492389E-6)*lambdaio(USA,c_Rice,a_Livestock,shock)
      
-      + (0)*pa(USA,c_Crops,a_Livestock,shock)
+      - (0.000679964601387565)*lambdaio(USA,c_Crops,a_Livestock,shock)
      
-      + (0)*pa(USA,c_Livestock,a_Livestock,shock)
+      - (0.00161438432431755)*lambdaio(USA,c_Livestock,a_Livestock,shock)
      
-      + (0)*pa(USA,c_FoodProc,a_Livestock,shock)
+      - (0.00301212692888572)*lambdaio(USA,c_FoodProc,a_Livestock,shock)
      
-      + (0)*pa(USA,c_Energy,a_Livestock,shock)
+      - (0.000402965795407669)*lambdaio(USA,c_Energy,a_Livestock,shock)
      
-      + (0)*pa(USA,c_Textiles,a_Livestock,shock)
+      - (3.73603816443507E-6)*lambdaio(USA,c_Textiles,a_Livestock,shock)
      
-      + (0)*pa(USA,c_Chem,a_Livestock,shock)
+      - (0.000200191026861433)*lambdaio(USA,c_Chem,a_Livestock,shock)
      
-      + (0)*pa(USA,c_Manuf,a_Livestock,shock)
+      - (0.000296427153892065)*lambdaio(USA,c_Manuf,a_Livestock,shock)
      
-      + (0)*pa(USA,c_ForestFish,a_Livestock,shock)
+      - (0.00026421223516803)*lambdaio(USA,c_ForestFish,a_Livestock,shock)
      
-      + (0)*pa(USA,c_Svces,a_Livestock,shock) =E= 0 ; (LHS = 0)
+      - (0.00352479880242315)*lambdaio(USA,c_Svces,a_Livestock,shock)
+     
+      - (0.01)*pnd(USA,a_Livestock,shock)
+     
+      + (1.193093492389E-6)*pa(USA,c_Rice,a_Livestock,shock)
+     
+      + (0.000679964601387565)*pa(USA,c_Crops,a_Livestock,shock)
+     
+      + (0.00161438432431755)*pa(USA,c_Livestock,a_Livestock,shock)
+     
+      + (0.00301212692888572)*pa(USA,c_FoodProc,a_Livestock,shock)
+     
+      + (0.000402965795407669)*pa(USA,c_Energy,a_Livestock,shock)
+     
+      + (3.73603816443507E-6)*pa(USA,c_Textiles,a_Livestock,shock)
+     
+      + (0.000200191026861433)*pa(USA,c_Chem,a_Livestock,shock)
+     
+      + (0.000296427153892065)*pa(USA,c_Manuf,a_Livestock,shock)
+     
+      + (0.00026421223516803)*pa(USA,c_ForestFish,a_Livestock,shock)
+     
+      + (0.00352479880242315)*pa(USA,c_Svces,a_Livestock,shock) =E= 0 ;
+     
+      (LHS = 0)
      
 REMAINING 67 ENTRIES SKIPPED
 
@@ -15250,33 +14888,37 @@ REMAINING 67 ENTRIES SKIPPED
 
 xapeq(USA,c_Rice,a_Rice,shock)..  - (0.223233656447798)*nd(USA,a_Rice,shock)
      
-      + (0)*lambdaio(USA,c_Rice,a_Rice,shock)
+      - (0.00197097025633)*lambdaio(USA,c_Rice,a_Rice,shock)
      
-      - (0.197097025633)*pnd(USA,a_Rice,shock) + xa(USA,c_Rice,a_Rice,shock)
+      - (0.19906799588933)*pnd(USA,a_Rice,shock) + xa(USA,c_Rice,a_Rice,shock)
      
-      + (0.197097025633)*pa(USA,c_Rice,a_Rice,shock) =E= 0 ; (LHS = 0)
+      + (0.19906799588933)*pa(USA,c_Rice,a_Rice,shock) =E= 0 ; (LHS = 0)
      
 xapeq(USA,c_Rice,a_Crops,shock)..  
      
      - (3.84802376729081E-5)*nd(USA,a_Crops,shock)
      
-      + (0)*lambdaio(USA,c_Rice,a_Crops,shock)
+      - (4.4615488057E-7)*lambdaio(USA,c_Rice,a_Crops,shock)
      
-      - (4.4615488057E-5)*pnd(USA,a_Crops,shock) + xa(USA,c_Rice,a_Crops,shock)
+      - (4.506164293757E-5)*pnd(USA,a_Crops,shock)
      
-      + (4.4615488057E-5)*pa(USA,c_Rice,a_Crops,shock) =E= 0 ; (LHS = 0)
+      + xa(USA,c_Rice,a_Crops,shock)
+     
+      + (4.506164293757E-5)*pa(USA,c_Rice,a_Crops,shock) =E= 0 ; (LHS = 0)
      
 xapeq(USA,c_Rice,a_Livestock,shock)..  
      
      - (0.0001193093492389)*nd(USA,a_Livestock,shock)
      
-      + (0)*lambdaio(USA,c_Rice,a_Livestock,shock)
+      - (1.373947863806E-6)*lambdaio(USA,c_Rice,a_Livestock,shock)
      
-      - (0.0001373947863806)*pnd(USA,a_Livestock,shock)
+      - (0.000138768734244406)*pnd(USA,a_Livestock,shock)
      
       + xa(USA,c_Rice,a_Livestock,shock)
      
-      + (0.0001373947863806)*pa(USA,c_Rice,a_Livestock,shock) =E= 0 ; (LHS = 0)
+      + (0.000138768734244406)*pa(USA,c_Rice,a_Livestock,shock) =E= 0 ;
+     
+      (LHS = 0)
      
 REMAINING 697 ENTRIES SKIPPED
 
@@ -15395,78 +15037,98 @@ REMAINING 249 ENTRIES SKIPPED
 
 xfeq(USA,Land,a_Rice,shock)..  - (0.132382187708958)*va(USA,a_Rice,shock)
      
-      + (0)*lambdaf(USA,Land,a_Rice,shock) + xf(USA,Land,a_Rice,shock)
+      - (0.0002282940826)*lambdaf(USA,Land,a_Rice,shock)
      
-      - (0.02282940826)*pva(USA,a_Rice,shock)
+      + xf(USA,Land,a_Rice,shock) - (0.0230577023426)*pva(USA,a_Rice,shock)
      
-      + (0.0219008120635626)*pf(USA,Land,a_Rice,shock) =E= 0 ; (LHS = 0)
+      + (0.0221198201841983)*pf(USA,Land,a_Rice,shock) =E= 0 ; (LHS = 0)
      
 xfeq(USA,Land,a_Crops,shock)..  - (0.256441720236657)*va(USA,a_Crops,shock)
      
-      + (0)*lambdaf(USA,Land,a_Crops,shock) + xf(USA,Land,a_Crops,shock)
+      - (0.002848057422)*lambdaf(USA,Land,a_Crops,shock)
      
-      - (0.2848057422)*pva(USA,a_Crops,shock)
+      + xf(USA,Land,a_Crops,shock) - (0.287653799622)*pva(USA,a_Crops,shock)
      
-      + (0.273221148494325)*pf(USA,Land,a_Crops,shock) =E= 0 ; (LHS = 0)
+      + (0.275953359979268)*pf(USA,Land,a_Crops,shock) =E= 0 ; (LHS = 0)
      
 xfeq(USA,Land,a_Livestock,shock)..  
      
      - (0.188717376611842)*va(USA,a_Livestock,shock)
      
-      + (0)*lambdaf(USA,Land,a_Livestock,shock)
+      - (0.001096057715)*lambdaf(USA,Land,a_Livestock,shock)
      
       + xf(USA,Land,a_Livestock,shock)
      
-      - (0.1096057715)*pva(USA,a_Livestock,shock)
+      - (0.110701829215)*pva(USA,a_Livestock,shock)
      
-      + (0.105147507411759)*pf(USA,Land,a_Livestock,shock) =E= 0 ; (LHS = 0)
+      + (0.106198982485877)*pf(USA,Land,a_Livestock,shock) =E= 0 ; (LHS = 0)
      
 REMAINING 249 ENTRIES SKIPPED
 
 
 ---- pvaeq  =E=  Price of value added
 
-pvaeq(USA,a_Rice,shock)..  (0)*lambdaf(USA,Land,a_Rice,shock)
+pvaeq(USA,a_Rice,shock)..  
      
-      + (0)*lambdaf(USA,UnSkLab,a_Rice,shock)
+     - (0.00101506718532679)*lambdaf(USA,Land,a_Rice,shock)
      
-      + (0)*lambdaf(USA,SkLab,a_Rice,shock)
+      - (0.00219905590218085)*lambdaf(USA,UnSkLab,a_Rice,shock)
      
-      + (0)*lambdaf(USA,Capital,a_Rice,shock) + (0)*pva(USA,a_Rice,shock)
+      - (0.00124885478821392)*lambdaf(USA,SkLab,a_Rice,shock)
      
-      + (0)*pf(USA,Land,a_Rice,shock) + (0)*pf(USA,UnSkLab,a_Rice,shock)
+      - (0.00553702212427846)*lambdaf(USA,Capital,a_Rice,shock)
      
-      + (0)*pf(USA,SkLab,a_Rice,shock) + (0)*pf(USA,Capital,a_Rice,shock) =E= 0
-      ; (LHS = 0)
+      - (0.01)*pva(USA,a_Rice,shock)
      
-pvaeq(USA,a_Crops,shock)..  (0)*lambdaf(USA,Land,a_Crops,shock)
+      + (0.000973778882244733)*pf(USA,Land,a_Rice,shock)
      
-      + (0)*lambdaf(USA,UnSkLab,a_Crops,shock)
+      + (0.00165581616579704)*pf(USA,UnSkLab,a_Rice,shock)
      
-      + (0)*lambdaf(USA,SkLab,a_Crops,shock)
+      + (0.000940346290859484)*pf(USA,SkLab,a_Rice,shock)
      
-      + (0)*lambdaf(USA,Capital,a_Crops,shock) + (0)*pva(USA,a_Crops,shock)
+      + (0.00531180030479199)*pf(USA,Capital,a_Rice,shock) =E= 0 ; (LHS = 0)
      
-      + (0)*pf(USA,Land,a_Crops,shock) + (0)*pf(USA,UnSkLab,a_Crops,shock)
+pvaeq(USA,a_Crops,shock)..  
      
-      + (0)*pf(USA,SkLab,a_Crops,shock) + (0)*pf(USA,Capital,a_Crops,shock)
-      =E= 0 ; (LHS = 0)
+     - (0.00200000007059209)*lambdaf(USA,Land,a_Crops,shock)
      
-pvaeq(USA,a_Livestock,shock)..  (0)*lambdaf(USA,Land,a_Livestock,shock)
+      - (0.00156811807727693)*lambdaf(USA,UnSkLab,a_Crops,shock)
      
-      + (0)*lambdaf(USA,UnSkLab,a_Livestock,shock)
+      - (0.00153188188199756)*lambdaf(USA,SkLab,a_Crops,shock)
      
-      + (0)*lambdaf(USA,SkLab,a_Livestock,shock)
+      - (0.00489999997013343)*lambdaf(USA,Capital,a_Crops,shock)
      
-      + (0)*lambdaf(USA,Capital,a_Livestock,shock)
+      - (0.01)*pva(USA,a_Crops,shock)
      
-      + (0)*pva(USA,a_Livestock,shock) + (0)*pf(USA,Land,a_Livestock,shock)
+      + (0.00191864922404609)*pf(USA,Land,a_Crops,shock)
      
-      + (0)*pf(USA,UnSkLab,a_Livestock,shock)
+      + (0.00118074088202306)*pf(USA,UnSkLab,a_Crops,shock)
      
-      + (0)*pf(USA,SkLab,a_Livestock,shock)
+      + (0.00115345633898027)*pf(USA,SkLab,a_Crops,shock)
      
-      + (0)*pf(USA,Capital,a_Livestock,shock) =E= 0 ; (LHS = 0)
+      + (0.00470068966074126)*pf(USA,Capital,a_Crops,shock) =E= 0 ; (LHS = 0)
+     
+pvaeq(USA,a_Livestock,shock)..  
+     
+     - (0.00200000000020662)*lambdaf(USA,Land,a_Livestock,shock)
+     
+      - (0.00156811809006812)*lambdaf(USA,UnSkLab,a_Livestock,shock)
+     
+      - (0.00153188195174711)*lambdaf(USA,SkLab,a_Livestock,shock)
+     
+      - (0.00489999995797816)*lambdaf(USA,Capital,a_Livestock,shock)
+     
+      - (0.01)*pva(USA,a_Livestock,shock)
+     
+      + (0.00191864910001791)*pf(USA,Land,a_Livestock,shock)
+     
+      + (0.00118074097505874)*pf(USA,UnSkLab,a_Livestock,shock)
+     
+      + (0.00115345644895611)*pf(USA,SkLab,a_Livestock,shock)
+     
+      + (0.00470068979335344)*pf(USA,Capital,a_Livestock,shock) =E= 0 ;
+     
+      (LHS = 0)
      
 REMAINING 67 ENTRIES SKIPPED
 
@@ -25926,11 +25588,11 @@ REMAINING 4 ENTRIES SKIPPED
 walraseq..  rsav(ROW,shock) + (2.264923)*pi(ROW,shock) - yi(ROW,shock)
      
       + savf(ROW,shock) + walras + (0.0399999964678714)*kstock(ROW,shock) =E= 0
-      ; (LHS = -3.55540121814037E-11)
+      ; (LHS = -6.24961512899478E-12)
      
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 14
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 14
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Column Listing      SOLVE gtap Using MCP From line 10733
+Column Listing      SOLVE gtap Using MCP From line 10741
 
 
 ---- axp  Production frontier shifter
@@ -25938,23 +25600,23 @@ Column Listing      SOLVE gtap Using MCP From line 10733
 axp(USA,a_Rice,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       axpeq(USA,a_Rice,shock)
-       (0)      ndeq(USA,a_Rice,shock)
-       (0)      vaeq(USA,a_Rice,shock)
-       (0)      pxeq(USA,a_Rice,shock)
+      (-0.0088) ndeq(USA,a_Rice,shock)
+      (-0.0017) vaeq(USA,a_Rice,shock)
+      (-0.01)   pxeq(USA,a_Rice,shock)
 
 axp(USA,a_Crops,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       axpeq(USA,a_Crops,shock)
-       (0)      ndeq(USA,a_Crops,shock)
-       (0)      vaeq(USA,a_Crops,shock)
-       (0)      pxeq(USA,a_Crops,shock)
+      (-0.0116) ndeq(USA,a_Crops,shock)
+      (-0.0111) vaeq(USA,a_Crops,shock)
+      (-0.01)   pxeq(USA,a_Crops,shock)
 
 axp(USA,a_Livestock,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       axpeq(USA,a_Livestock,shock)
-       (0)      ndeq(USA,a_Livestock,shock)
-       (0)      vaeq(USA,a_Livestock,shock)
-       (0)      pxeq(USA,a_Livestock,shock)
+      (-0.0115) ndeq(USA,a_Livestock,shock)
+      (-0.0058) vaeq(USA,a_Livestock,shock)
+      (-0.01)   pxeq(USA,a_Livestock,shock)
 
 REMAINING 67 ENTRIES SKIPPED
 
@@ -25963,20 +25625,20 @@ REMAINING 67 ENTRIES SKIPPED
 lambdand(USA,a_Rice,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdandeq(USA,a_Rice,shock)
-       (0)      ndeq(USA,a_Rice,shock)
-       (0)      pxeq(USA,a_Rice,shock)
+      (-0.0088) ndeq(USA,a_Rice,shock)
+      (-0.0084) pxeq(USA,a_Rice,shock)
 
 lambdand(USA,a_Crops,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdandeq(USA,a_Crops,shock)
-       (0)      ndeq(USA,a_Crops,shock)
-       (0)      pxeq(USA,a_Crops,shock)
+      (-0.0116) ndeq(USA,a_Crops,shock)
+      (-0.0051) pxeq(USA,a_Crops,shock)
 
 lambdand(USA,a_Livestock,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdandeq(USA,a_Livestock,shock)
-       (0)      ndeq(USA,a_Livestock,shock)
-       (0)      pxeq(USA,a_Livestock,shock)
+      (-0.0115) ndeq(USA,a_Livestock,shock)
+      (-0.0066) pxeq(USA,a_Livestock,shock)
 
 REMAINING 67 ENTRIES SKIPPED
 
@@ -25985,20 +25647,20 @@ REMAINING 67 ENTRIES SKIPPED
 lambdava(USA,a_Rice,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdavaeq(USA,a_Rice,shock)
-       (0)      vaeq(USA,a_Rice,shock)
-       (0)      pxeq(USA,a_Rice,shock)
+      (-0.0017) vaeq(USA,a_Rice,shock)
+      (-0.0016) pxeq(USA,a_Rice,shock)
 
 lambdava(USA,a_Crops,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdavaeq(USA,a_Crops,shock)
-       (0)      vaeq(USA,a_Crops,shock)
-       (0)      pxeq(USA,a_Crops,shock)
+      (-0.0111) vaeq(USA,a_Crops,shock)
+      (-0.0049) pxeq(USA,a_Crops,shock)
 
 lambdava(USA,a_Livestock,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdavaeq(USA,a_Livestock,shock)
-       (0)      vaeq(USA,a_Livestock,shock)
-       (0)      pxeq(USA,a_Livestock,shock)
+      (-0.0058) vaeq(USA,a_Livestock,shock)
+      (-0.0034) pxeq(USA,a_Livestock,shock)
 
 REMAINING 67 ENTRIES SKIPPED
 
@@ -26079,26 +25741,26 @@ REMAINING 67 ENTRIES SKIPPED
 ---- px  Unit cost of production
 
 px(USA,a_Rice,shock)
-                (.LO, .L, .UP, .M = 0.000999999999601453, 1, +INF, 0)
-      (-0.8829) ndeq(USA,a_Rice,shock)
-      (-0.1725) vaeq(USA,a_Rice,shock)
-       (0)      pxeq(USA,a_Rice,shock)
+                (.LO, .L, .UP, .M = 0.00100000142610284, 1, +INF, 0)
+      (-0.8917) ndeq(USA,a_Rice,shock)
+      (-0.1742) vaeq(USA,a_Rice,shock)
+      (-0.01)   pxeq(USA,a_Rice,shock)
       (-0.0532) xeq(USA,a_Rice,c_Rice,shock)
       (-6)      xpeq(USA,a_Rice,shock)
 
 px(USA,a_Crops,shock)
-                (.LO, .L, .UP, .M = 0.00100000000537529, 1, +INF, 0)
-      (-1.1594) ndeq(USA,a_Crops,shock)
-      (-1.1106) vaeq(USA,a_Crops,shock)
-       (0)      pxeq(USA,a_Crops,shock)
+                (.LO, .L, .UP, .M = 0.00100000028964048, 1, +INF, 0)
+      (-1.171)  ndeq(USA,a_Crops,shock)
+      (-1.1217) vaeq(USA,a_Crops,shock)
+      (-0.01)   pxeq(USA,a_Crops,shock)
       (-1.1348) xeq(USA,a_Crops,c_Crops,shock)
       (-6)      xpeq(USA,a_Crops,shock)
 
 px(USA,a_Livestock,shock)
-                (.LO, .L, .UP, .M = 0.00100000000331781, 1, +INF, 0)
-      (-1.1516) ndeq(USA,a_Livestock,shock)
-      (-0.5808) vaeq(USA,a_Livestock,shock)
-       (0)      pxeq(USA,a_Livestock,shock)
+                (.LO, .L, .UP, .M = 0.00100000018469058, 1, +INF, 0)
+      (-1.1631) ndeq(USA,a_Livestock,shock)
+      (-0.5866) vaeq(USA,a_Livestock,shock)
+      (-0.01)   pxeq(USA,a_Livestock,shock)
       (-0.8662) xeq(USA,a_Livestock,c_Livestock,shock)
       (-6)      xpeq(USA,a_Livestock,shock)
 
@@ -26109,72 +25771,72 @@ REMAINING 67 ENTRIES SKIPPED
 lambdaio(USA,c_Rice,a_Rice,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdaioeq(USA,c_Rice,a_Rice,shock)
-       (0)      pndeq(USA,a_Rice,shock)
-       (0)      xapeq(USA,c_Rice,a_Rice,shock)
+      (-0.0022) pndeq(USA,a_Rice,shock)
+      (-0.002)  xapeq(USA,c_Rice,a_Rice,shock)
 
 lambdaio(USA,c_Rice,a_Crops,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdaioeq(USA,c_Rice,a_Crops,shock)
-       (0)      pndeq(USA,a_Crops,shock)
-       (0)      xapeq(USA,c_Rice,a_Crops,shock)
+ (-3.848024E-7) pndeq(USA,a_Crops,shock)
+ (-4.461549E-7) xapeq(USA,c_Rice,a_Crops,shock)
 
 lambdaio(USA,c_Rice,a_Livestock,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdaioeq(USA,c_Rice,a_Livestock,shock)
-       (0)      pndeq(USA,a_Livestock,shock)
-       (0)      xapeq(USA,c_Rice,a_Livestock,shock)
+ (-1.193093E-6) pndeq(USA,a_Livestock,shock)
+ (-1.373948E-6) xapeq(USA,c_Rice,a_Livestock,shock)
 
 REMAINING 697 ENTRIES SKIPPED
 
 ---- pnd  Price of ND bundle
 
 pnd(USA,a_Rice,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0.8829) ndeq(USA,a_Rice,shock)
-       (0)      pxeq(USA,a_Rice,shock)
-       (0)      pndeq(USA,a_Rice,shock)
-      (-0.1971) xapeq(USA,c_Rice,a_Rice,shock)
+                (.LO, .L, .UP, .M = 0.00100000162638609, 1, +INF, 0)
+       (0.8917) ndeq(USA,a_Rice,shock)
+       (0.0084) pxeq(USA,a_Rice,shock)
+      (-0.01)   pndeq(USA,a_Rice,shock)
+      (-0.1991) xapeq(USA,c_Rice,a_Rice,shock)
       (-0.0023) xapeq(USA,c_Crops,a_Rice,shock)
-      (-0.0136) xapeq(USA,c_Livestock,a_Rice,shock)
-      (-0.3682) xapeq(USA,c_FoodProc,a_Rice,shock)
-      (-0.0138) xapeq(USA,c_Energy,a_Rice,shock)
-      (-0.0033) xapeq(USA,c_Textiles,a_Rice,shock)
-      (-0.0434) xapeq(USA,c_Chem,a_Rice,shock)
-      (-0.0385) xapeq(USA,c_Manuf,a_Rice,shock)
-      (-0.0172) xapeq(USA,c_ForestFish,a_Rice,shock)
-      (-0.1855) xapeq(USA,c_Svces,a_Rice,shock)
+      (-0.0137) xapeq(USA,c_Livestock,a_Rice,shock)
+      (-0.3719) xapeq(USA,c_FoodProc,a_Rice,shock)
+      (-0.0139) xapeq(USA,c_Energy,a_Rice,shock)
+      (-0.0034) xapeq(USA,c_Textiles,a_Rice,shock)
+      (-0.0438) xapeq(USA,c_Chem,a_Rice,shock)
+      (-0.0389) xapeq(USA,c_Manuf,a_Rice,shock)
+      (-0.0173) xapeq(USA,c_ForestFish,a_Rice,shock)
+      (-0.1874) xapeq(USA,c_Svces,a_Rice,shock)
 
 pnd(USA,a_Crops,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (1.1594) ndeq(USA,a_Crops,shock)
-       (0)      pxeq(USA,a_Crops,shock)
-       (0)      pndeq(USA,a_Crops,shock)
- (-4.461549E-5) xapeq(USA,c_Rice,a_Crops,shock)
-      (-0.09)   xapeq(USA,c_Crops,a_Crops,shock)
+                (.LO, .L, .UP, .M = 0.00100000042536931, 1, +INF, 0)
+       (1.171)  ndeq(USA,a_Crops,shock)
+       (0.0051) pxeq(USA,a_Crops,shock)
+      (-0.01)   pndeq(USA,a_Crops,shock)
+ (-4.506164E-5) xapeq(USA,c_Rice,a_Crops,shock)
+      (-0.0909) xapeq(USA,c_Crops,a_Crops,shock)
       (-0.0028) xapeq(USA,c_Livestock,a_Crops,shock)
       (-0.0002) xapeq(USA,c_FoodProc,a_Crops,shock)
-      (-0.0643) xapeq(USA,c_Energy,a_Crops,shock)
-      (-0.002)  xapeq(USA,c_Textiles,a_Crops,shock)
-      (-0.2378) xapeq(USA,c_Chem,a_Crops,shock)
-      (-0.0579) xapeq(USA,c_Manuf,a_Crops,shock)
-      (-0.1947) xapeq(USA,c_ForestFish,a_Crops,shock)
-      (-0.5096) xapeq(USA,c_Svces,a_Crops,shock)
+      (-0.065)  xapeq(USA,c_Energy,a_Crops,shock)
+      (-0.0021) xapeq(USA,c_Textiles,a_Crops,shock)
+      (-0.2402) xapeq(USA,c_Chem,a_Crops,shock)
+      (-0.0585) xapeq(USA,c_Manuf,a_Crops,shock)
+      (-0.1966) xapeq(USA,c_ForestFish,a_Crops,shock)
+      (-0.5147) xapeq(USA,c_Svces,a_Crops,shock)
 
 pnd(USA,a_Livestock,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (1.1516) ndeq(USA,a_Livestock,shock)
-       (0)      pxeq(USA,a_Livestock,shock)
-       (0)      pndeq(USA,a_Livestock,shock)
+                (.LO, .L, .UP, .M = 0.00100000027103024, 1, +INF, 0)
+       (1.1631) ndeq(USA,a_Livestock,shock)
+       (0.0066) pxeq(USA,a_Livestock,shock)
+      (-0.01)   pndeq(USA,a_Livestock,shock)
       (-0.0001) xapeq(USA,c_Rice,a_Livestock,shock)
-      (-0.0783) xapeq(USA,c_Crops,a_Livestock,shock)
-      (-0.1859) xapeq(USA,c_Livestock,a_Livestock,shock)
-      (-0.3469) xapeq(USA,c_FoodProc,a_Livestock,shock)
-      (-0.0464) xapeq(USA,c_Energy,a_Livestock,shock)
+      (-0.0791) xapeq(USA,c_Crops,a_Livestock,shock)
+      (-0.1878) xapeq(USA,c_Livestock,a_Livestock,shock)
+      (-0.3503) xapeq(USA,c_FoodProc,a_Livestock,shock)
+      (-0.0469) xapeq(USA,c_Energy,a_Livestock,shock)
       (-0.0004) xapeq(USA,c_Textiles,a_Livestock,shock)
-      (-0.0231) xapeq(USA,c_Chem,a_Livestock,shock)
-      (-0.0341) xapeq(USA,c_Manuf,a_Livestock,shock)
-      (-0.0304) xapeq(USA,c_ForestFish,a_Livestock,shock)
-      (-0.4059) xapeq(USA,c_Svces,a_Livestock,shock)
+      (-0.0233) xapeq(USA,c_Chem,a_Livestock,shock)
+      (-0.0345) xapeq(USA,c_Manuf,a_Livestock,shock)
+      (-0.0307) xapeq(USA,c_ForestFish,a_Livestock,shock)
+      (-0.41)   xapeq(USA,c_Svces,a_Livestock,shock)
 
 REMAINING 67 ENTRIES SKIPPED
 
@@ -26183,20 +25845,20 @@ REMAINING 67 ENTRIES SKIPPED
 lambdaf(USA,Land,a_Rice,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdafeq(USA,Land,a_Rice,shock)
-       (0)      xfeq(USA,Land,a_Rice,shock)
-       (0)      pvaeq(USA,a_Rice,shock)
+      (-0.0002) xfeq(USA,Land,a_Rice,shock)
+      (-0.001)  pvaeq(USA,a_Rice,shock)
 
 lambdaf(USA,Land,a_Crops,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdafeq(USA,Land,a_Crops,shock)
-       (0)      xfeq(USA,Land,a_Crops,shock)
-       (0)      pvaeq(USA,a_Crops,shock)
+      (-0.0028) xfeq(USA,Land,a_Crops,shock)
+      (-0.002)  pvaeq(USA,a_Crops,shock)
 
 lambdaf(USA,Land,a_Livestock,shock)
                 (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
         1       lambdafeq(USA,Land,a_Livestock,shock)
-       (0)      xfeq(USA,Land,a_Livestock,shock)
-       (0)      pvaeq(USA,a_Livestock,shock)
+      (-0.0011) xfeq(USA,Land,a_Livestock,shock)
+      (-0.002)  pvaeq(USA,a_Livestock,shock)
 
 REMAINING 249 ENTRIES SKIPPED
 
@@ -26237,34 +25899,34 @@ REMAINING 249 ENTRIES SKIPPED
 ---- pva  Price of value added
 
 pva(USA,a_Rice,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0.1725) vaeq(USA,a_Rice,shock)
-       (0)      pxeq(USA,a_Rice,shock)
-      (-0.0228) xfeq(USA,Land,a_Rice,shock)
-      (-0.0247) xfeq(USA,UnSkLab,a_Rice,shock)
-      (-0.0145) xfeq(USA,SkLab,a_Rice,shock)
-      (-0.0899) xfeq(USA,Capital,a_Rice,shock)
-       (0)      pvaeq(USA,a_Rice,shock)
+                (.LO, .L, .UP, .M = 0.00100000040068725, 1, +INF, 0)
+       (0.1742) vaeq(USA,a_Rice,shock)
+       (0.0016) pxeq(USA,a_Rice,shock)
+      (-0.0231) xfeq(USA,Land,a_Rice,shock)
+      (-0.025)  xfeq(USA,UnSkLab,a_Rice,shock)
+      (-0.0146) xfeq(USA,SkLab,a_Rice,shock)
+      (-0.0908) xfeq(USA,Capital,a_Rice,shock)
+      (-0.01)   pvaeq(USA,a_Rice,shock)
 
 pva(USA,a_Crops,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (1.1106) vaeq(USA,a_Crops,shock)
-       (0)      pxeq(USA,a_Crops,shock)
-      (-0.2848) xfeq(USA,Land,a_Crops,shock)
-      (-0.1185) xfeq(USA,UnSkLab,a_Crops,shock)
-      (-0.1157) xfeq(USA,SkLab,a_Crops,shock)
-      (-0.5223) xfeq(USA,Capital,a_Crops,shock)
-       (0)      pvaeq(USA,a_Crops,shock)
+                (.LO, .L, .UP, .M = 0.00100000014794372, 1, +INF, 0)
+       (1.1217) vaeq(USA,a_Crops,shock)
+       (0.0049) pxeq(USA,a_Crops,shock)
+      (-0.2877) xfeq(USA,Land,a_Crops,shock)
+      (-0.1196) xfeq(USA,UnSkLab,a_Crops,shock)
+      (-0.1169) xfeq(USA,SkLab,a_Crops,shock)
+      (-0.5276) xfeq(USA,Capital,a_Crops,shock)
+      (-0.01)   pvaeq(USA,a_Crops,shock)
 
 pva(USA,a_Livestock,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
-       (0.5808) vaeq(USA,a_Livestock,shock)
-       (0)      pxeq(USA,a_Livestock,shock)
-      (-0.1096) xfeq(USA,Land,a_Livestock,shock)
-      (-0.0603) xfeq(USA,UnSkLab,a_Livestock,shock)
-      (-0.0589) xfeq(USA,SkLab,a_Livestock,shock)
-      (-0.2678) xfeq(USA,Capital,a_Livestock,shock)
-       (0)      pvaeq(USA,a_Livestock,shock)
+                (.LO, .L, .UP, .M = 0.0010000000134981, 1, +INF, 0)
+       (0.5866) vaeq(USA,a_Livestock,shock)
+       (0.0034) pxeq(USA,a_Livestock,shock)
+      (-0.1107) xfeq(USA,Land,a_Livestock,shock)
+      (-0.0609) xfeq(USA,UnSkLab,a_Livestock,shock)
+      (-0.0595) xfeq(USA,SkLab,a_Livestock,shock)
+      (-0.2704) xfeq(USA,Capital,a_Livestock,shock)
+      (-0.01)   pvaeq(USA,a_Livestock,shock)
 
 REMAINING 67 ENTRIES SKIPPED
 
@@ -26572,7 +26234,7 @@ REMAINING 4 ENTRIES SKIPPED
 ---- uh  Private utility per capita
 
 uh(USA,hhd,shock)
-                (.LO, .L, .UP, .M = 0.000999999910129201, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999696018387, 1, +INF, 0)
       (-0.7548) ueq(USA,shock)
  (-3.10148E-11) zconseq(USA,c_Rice,hhd,shock)
  (-1.862342E-5) zconseq(USA,c_Crops,hhd,shock)
@@ -26587,7 +26249,7 @@ uh(USA,hhd,shock)
        (0.092)  eveq(USA,hhd,shock)
 
 uh(EU_28,hhd,shock)
-                (.LO, .L, .UP, .M = 0.000999999582164653, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999412570085, 1, +INF, 0)
       (-0.6322) ueq(EU_28,shock)
  (-2.078997E-7) zconseq(EU_28,c_Rice,hhd,shock)
  (-1.908290E-5) zconseq(EU_28,c_Crops,hhd,shock)
@@ -26602,7 +26264,7 @@ uh(EU_28,hhd,shock)
        (0.2267) eveq(EU_28,hhd,shock)
 
 uh(CHN,hhd,shock)
-                (.LO, .L, .UP, .M = 0.00100000000970258, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00099999967170854, 1, +INF, 0)
       (-0.4504) ueq(CHN,shock)
       (-0.0006) zconseq(CHN,c_Rice,hhd,shock)
       (-0.0022) zconseq(CHN,c_Crops,hhd,shock)
@@ -26621,17 +26283,17 @@ REMAINING 4 ENTRIES SKIPPED
 ---- ug  Utility per capita from public expenditure
 
 ug(USA,shock)
-                (.LO, .L, .UP, .M = 0.000999999982714401, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.0009999997923371, 1, +INF, 0)
         1       ugeq(USA,shock)
       (-0.1557) ueq(USA,shock)
 
 ug(EU_28,shock)
-                (.LO, .L, .UP, .M = 0.000999999635459915, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999582011613, 1, +INF, 0)
         1       ugeq(EU_28,shock)
       (-0.2318) ueq(EU_28,shock)
 
 ug(CHN,shock)
-                (.LO, .L, .UP, .M = 0.00100000002045074, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00099999973584058, 1, +INF, 0)
         1       ugeq(CHN,shock)
       (-0.1908) ueq(CHN,shock)
 
@@ -26640,17 +26302,17 @@ REMAINING 4 ENTRIES SKIPPED
 ---- us  Utility per capita from savings
 
 us(USA,shock)
-                (.LO, .L, .UP, .M = 0.000999999956815282, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999695642244, 1, +INF, 0)
         1       useq(USA,shock)
       (-0.0895) ueq(USA,shock)
 
 us(EU_28,shock)
-                (.LO, .L, .UP, .M = 0.000999999449254937, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999229347259, 1, +INF, 0)
         1       useq(EU_28,shock)
       (-0.1359) ueq(EU_28,shock)
 
 us(CHN,shock)
-                (.LO, .L, .UP, .M = 0.000999999869565585, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999472373436, 1, +INF, 0)
         1       useq(CHN,shock)
       (-0.3588) ueq(CHN,shock)
 
@@ -26659,15 +26321,15 @@ REMAINING 4 ENTRIES SKIPPED
 ---- u  Total per capita utility
 
 u(USA,shock)
-                (.LO, .L, .UP, .M = 0.000999999925608033, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999710980344, 1, +INF, 0)
        (1)      ueq(USA,shock)
 
 u(EU_28,shock)
-                (.LO, .L, .UP, .M = 0.000999999576458501, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999426954653, 1, +INF, 0)
        (1)      ueq(EU_28,shock)
 
 u(CHN,shock)
-                (.LO, .L, .UP, .M = 0.000999999961471543, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999612421454, 1, +INF, 0)
        (1)      ueq(CHN,shock)
 
 REMAINING 4 ENTRIES SKIPPED
@@ -26749,15 +26411,15 @@ REMAINING 67 ENTRIES SKIPPED
 ---- pcons  Consumer expenditure deflator
 
 pcons(USA,shock)
-                (.LO, .L, .UP, .M = 0.00100000004664577, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000026482584, 1, +INF, 0)
         1       pconseq(USA,shock)
 
 pcons(EU_28,shock)
-                (.LO, .L, .UP, .M = 0.00100000022286283, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000031944873, 1, +INF, 0)
         1       pconseq(EU_28,shock)
 
 pcons(CHN,shock)
-                (.LO, .L, .UP, .M = 0.0010000000254892, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000035274119, 1, +INF, 0)
         1       pconseq(CHN,shock)
 
 REMAINING 4 ENTRIES SKIPPED
@@ -26765,7 +26427,7 @@ REMAINING 4 ENTRIES SKIPPED
 ---- pg  Public expenditure price deflator
 
 pg(USA,shock)
-                (.LO, .L, .UP, .M = 0.00100000002869137, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000021958434, 1, +INF, 0)
  (-1.369166E-7) xageq(USA,c_Rice,gov,shock)
       (-0.0004) xageq(USA,c_Crops,gov,shock)
       (-0.0002) xageq(USA,c_Livestock,gov,shock)
@@ -26779,7 +26441,7 @@ pg(USA,shock)
        (2.75)   xgeq(USA,shock)
 
 pg(EU_28,shock)
-                (.LO, .L, .UP, .M = 0.00100000004901443, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000001223513, 1, +INF, 0)
  (-5.426922E-6) xageq(EU_28,c_Rice,gov,shock)
       (-0.002)  xageq(EU_28,c_Crops,gov,shock)
       (-0.001)  xageq(EU_28,c_Livestock,gov,shock)
@@ -26793,7 +26455,7 @@ pg(EU_28,shock)
        (3.6405) xgeq(EU_28,shock)
 
 pg(CHN,shock)
-                (.LO, .L, .UP, .M = 0.000999999959378044, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000020601556, 1, +INF, 0)
  (-3.415850E-7) xageq(CHN,c_Rice,gov,shock)
       (-0.0009) xageq(CHN,c_Crops,gov,shock)
       (-0.0002) xageq(CHN,c_Livestock,gov,shock)
@@ -26857,7 +26519,7 @@ REMAINING 4 ENTRIES SKIPPED
 ---- pi  Investment expenditure price deflator
 
 pi(USA,shock)
-                (.LO, .L, .UP, .M = 0.0010000000597161, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000032285472, 1, +INF, 0)
        (1.8163) factYeq(USA,shock)
  (-5.017008E-7) xaieq(USA,c_Rice,inv,shock)
       (-0.0004) xaieq(USA,c_Crops,inv,shock)
@@ -26878,7 +26540,7 @@ pi(USA,shock)
       (-2.2323) pigbleq(shock)
 
 pi(EU_28,shock)
-                (.LO, .L, .UP, .M = 0.00100000024034502, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000037147501, 1, +INF, 0)
        (1.8098) factYeq(EU_28,shock)
  (-7.929103E-6) xaieq(EU_28,c_Rice,inv,shock)
       (-0.0036) xaieq(EU_28,c_Crops,inv,shock)
@@ -26899,7 +26561,7 @@ pi(EU_28,shock)
       (-1.8414) pigbleq(shock)
 
 pi(CHN,shock)
-                (.LO, .L, .UP, .M = 0.00100000011538885, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000047605824, 1, +INF, 0)
        (1.6077) factYeq(CHN,shock)
  (-1.178821E-6) xaieq(CHN,c_Rice,inv,shock)
       (-0.0013) xaieq(CHN,c_Crops,inv,shock)
@@ -27061,24 +26723,24 @@ REMAINING 893 ENTRIES SKIPPED
 ---- pa  Agents price of Armington good
 
 pa(USA,c_Rice,a_Rice,shock)
-                (.LO, .L, .UP, .M = 0.000999999966910789, 1, +INF, 0)
-       (0)      pndeq(USA,a_Rice,shock)
-       (0.1971) xapeq(USA,c_Rice,a_Rice,shock)
+                (.LO, .L, .UP, .M = 0.00100000135595072, 1, +INF, 0)
+       (0.0022) pndeq(USA,a_Rice,shock)
+       (0.1991) xapeq(USA,c_Rice,a_Rice,shock)
        (0.05)   paeq(USA,c_Rice,a_Rice,shock)
       (-0.1809) xdeq(USA,c_Rice,a_Rice,shock)
       (-0.0057) xmeq(USA,c_Rice,a_Rice,shock)
 
 pa(USA,c_Rice,a_Crops,shock)
-                (.LO, .L, .UP, .M = 0.000999999968271134, 1, +INF, 0)
-       (0)      pndeq(USA,a_Crops,shock)
- (4.4615488E-5) xapeq(USA,c_Rice,a_Crops,shock)
+                (.LO, .L, .UP, .M = 0.00100000135852084, 1, +INF, 0)
+ (3.8480238E-7) pndeq(USA,a_Crops,shock)
+ (4.5061643E-5) xapeq(USA,c_Rice,a_Crops,shock)
        (0.05)   paeq(USA,c_Rice,a_Crops,shock)
  (-4.111175E-5) xdeq(USA,c_Rice,a_Crops,shock)
  (-1.272967E-6) xmeq(USA,c_Rice,a_Crops,shock)
 
 pa(USA,c_Rice,a_Livestock,shock)
-                (.LO, .L, .UP, .M = 0.00100000000298713, 1, +INF, 0)
-       (0)      pndeq(USA,a_Livestock,shock)
+                (.LO, .L, .UP, .M = 0.00100000142411028, 1, +INF, 0)
+ (1.1930935E-6) pndeq(USA,a_Livestock,shock)
        (0.0001) xapeq(USA,c_Rice,a_Livestock,shock)
        (0.05)   paeq(USA,c_Rice,a_Livestock,shock)
       (-0.0001) xdeq(USA,c_Rice,a_Livestock,shock)
@@ -27163,7 +26825,7 @@ REMAINING 487 ENTRIES SKIPPED
 ---- pmt  Price of aggregate imports
 
 pmt(USA,c_Rice,shock)
-                (.LO, .L, .UP, .M = 0.000999998651759521, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999998871225804, 1, +INF, 0)
  (-8.679532E-6) ytaxeq(USA,fc,shock)
  (9.2831610E-8) ytaxeq(USA,pc,shock)
       (-0.0016) paeq(USA,c_Rice,a_Rice,shock)
@@ -27202,7 +26864,7 @@ pmt(USA,c_Rice,shock)
        (0.05)   pmteq(USA,c_Rice,shock)
 
 pmt(USA,c_Crops,shock)
-                (.LO, .L, .UP, .M = 0.000999998912071861, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.000999999271098358, 1, +INF, 0)
        (0.0001) ytaxeq(USA,fc,shock)
  (4.3535160E-5) ytaxeq(USA,pc,shock)
       (-0.0321) paeq(USA,c_Crops,a_Rice,shock)
@@ -27241,7 +26903,7 @@ pmt(USA,c_Crops,shock)
        (0.05)   pmteq(USA,c_Crops,shock)
 
 pmt(USA,c_Livestock,shock)
-                (.LO, .L, .UP, .M = 0.00100000057558388, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000095471352, 1, +INF, 0)
  (1.9658700E-5) ytaxeq(USA,fc,shock)
  (1.9894409E-6) ytaxeq(USA,pc,shock)
       (-0.0004) paeq(USA,c_Livestock,a_Rice,shock)
@@ -27363,19 +27025,19 @@ REMAINING 67 ENTRIES SKIPPED
 ---- ps  Price of domestic supply
 
 ps(USA,c_Rice,shock)
-                (.LO, .L, .UP, .M = 0.00100000000903492, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000143553639, 1, +INF, 0)
         1       peq(USA,a_Rice,c_Rice,shock)
         1       xdseq(USA,c_Rice,shock)
         1       xeteq(USA,c_Rice,shock)
 
 ps(USA,c_Crops,shock)
-                (.LO, .L, .UP, .M = 0.00100000000180096, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000028606615, 1, +INF, 0)
         1       peq(USA,a_Crops,c_Crops,shock)
         1       xdseq(USA,c_Crops,shock)
         1       xeteq(USA,c_Crops,shock)
 
 ps(USA,c_Livestock,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000018137276, 1, +INF, 0)
         1       peq(USA,a_Livestock,c_Livestock,shock)
         1       xdseq(USA,c_Livestock,shock)
         1       xeteq(USA,c_Livestock,shock)
@@ -27407,7 +27069,7 @@ REMAINING 67 ENTRIES SKIPPED
 ---- p  Pre-tax price of X
 
 p(USA,a_Rice,c_Rice,shock)
-                (.LO, .L, .UP, .M = 0.000991804457193823, 0.991804448232947, 
+                (.LO, .L, .UP, .M = 0.000991805872004324, 0.991804448232947, 
 +INF, 0)
        (0.0536) xeq(USA,a_Rice,c_Rice,shock)
        (6.0496) xpeq(USA,a_Rice,shock)
@@ -27415,7 +27077,7 @@ p(USA,a_Rice,c_Rice,shock)
       (-0.0001) ytaxeq(USA,pt,shock)
 
 p(USA,a_Crops,c_Crops,shock)
-                (.LO, .L, .UP, .M = 0.00100017348659235, 1.00017348479108, +INF
+                (.LO, .L, .UP, .M = 0.00100017377090686, 1.00017348479108, +INF
 , 0)
        (1.1346) xeq(USA,a_Crops,c_Crops,shock)
        (5.999)  xpeq(USA,a_Crops,shock)
@@ -27423,7 +27085,7 @@ p(USA,a_Crops,c_Crops,shock)
  (3.9368170E-5) ytaxeq(USA,pt,shock)
 
 p(USA,a_Livestock,c_Livestock,shock)
-                (.LO, .L, .UP, .M = 0.00100001289804686, 1.00001289804686, +INF
+                (.LO, .L, .UP, .M = 0.00100001307942196, 1.00001289804686, +INF
 , 0)
        (0.8662) xeq(USA,a_Livestock,c_Livestock,shock)
        (5.9999) xpeq(USA,a_Livestock,shock)
@@ -27435,7 +27097,7 @@ REMAINING 67 ENTRIES SKIPPED
 ---- pe  Bilateral export supply
 
 pe(USA,c_Rice,USA,shock)
-                (.LO, .L, .UP, .M = 0.00100000000903492, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000143553639, 1, +INF, 0)
  (1.900000E-12) xweq(USA,c_Rice,USA,shock)
  (-1.27729E-10) pmteq(USA,c_Rice,shock)
        -1       peeq(USA,c_Rice,USA,shock)
@@ -27443,7 +27105,7 @@ pe(USA,c_Rice,USA,shock)
  (-9.76987E-14) pmuveq(shock)
 
 pe(USA,c_Rice,EU_28,shock)
-                (.LO, .L, .UP, .M = 0.00100000000903492, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000143553639, 1, +INF, 0)
  (-3.314970E-9) ytaxeq(USA,et,shock)
  (-9.834095E-6) ytaxeq(EU_28,mt,shock)
  (3.8556262E-5) xweq(USA,c_Rice,EU_28,shock)
@@ -27456,7 +27118,7 @@ pe(USA,c_Rice,EU_28,shock)
  (-2.197092E-6) pmuveq(shock)
 
 pe(USA,c_Rice,CHN,shock)
-                (.LO, .L, .UP, .M = 0.00100000000903492, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000143553639, 1, +INF, 0)
  (-4.64900E-12) ytaxeq(USA,et,shock)
  (-1.388602E-8) ytaxeq(CHN,mt,shock)
  (1.1348471E-6) xweq(USA,c_Rice,CHN,shock)
@@ -27473,7 +27135,7 @@ REMAINING 487 ENTRIES SKIPPED
 ---- pet  Price of aggregate exports
 
 pet(USA,c_Rice,shock)
-                (.LO, .L, .UP, .M = 0.00100000000903492, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000143553639, 1, +INF, 0)
        -1       xeteq(USA,c_Rice,shock)
         1       peeq(USA,c_Rice,USA,shock)
         1       peeq(USA,c_Rice,EU_28,shock)
@@ -27484,7 +27146,7 @@ pet(USA,c_Rice,shock)
         1       peeq(USA,c_Rice,ROW,shock)
 
 pet(USA,c_Crops,shock)
-                (.LO, .L, .UP, .M = 0.00100000000180096, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000028606615, 1, +INF, 0)
        -1       xeteq(USA,c_Crops,shock)
         1       peeq(USA,c_Crops,USA,shock)
         1       peeq(USA,c_Crops,EU_28,shock)
@@ -27495,7 +27157,7 @@ pet(USA,c_Crops,shock)
         1       peeq(USA,c_Crops,ROW,shock)
 
 pet(USA,c_Livestock,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000018137276, 1, +INF, 0)
        -1       xeteq(USA,c_Livestock,shock)
         1       peeq(USA,c_Livestock,USA,shock)
         1       peeq(USA,c_Livestock,EU_28,shock)
@@ -27524,7 +27186,7 @@ xtmg(c_Svces,shock)
 ---- ptmg  Global price index of TT services by mode
 
 ptmg(c_Svces,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000010115921, 1, +INF, 0)
       (-0.0014) ytaxeq(USA,mt,shock)
       (-0.0015) ytaxeq(EU_28,mt,shock)
       (-0.0028) ytaxeq(CHN,mt,shock)
@@ -28024,7 +27686,7 @@ ptmg(c_Svces,shock)
 ---- pd  Supply of domestically produced goods
 
 pd(USA,c_Rice,shock)
-                (.LO, .L, .UP, .M = 0.00100000000903492, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000143553639, 1, +INF, 0)
  (-1.654490E-5) ytaxeq(USA,fc,shock)
        (0.0001) ytaxeq(USA,pc,shock)
       (-0.0484) paeq(USA,c_Rice,a_Rice,shock)
@@ -28056,7 +27718,7 @@ pd(USA,c_Rice,shock)
        -1       xdseq(USA,c_Rice,shock)
 
 pd(USA,c_Crops,shock)
-                (.LO, .L, .UP, .M = 0.00100000000180095, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000028606615, 1, +INF, 0)
  (-1.236794E-5) ytaxeq(USA,fc,shock)
        (0.0001) ytaxeq(USA,pc,shock)
       (-0.0179) paeq(USA,c_Crops,a_Rice,shock)
@@ -28088,7 +27750,7 @@ pd(USA,c_Crops,shock)
        -1       xdseq(USA,c_Crops,shock)
 
 pd(USA,c_Livestock,shock)
-                (.LO, .L, .UP, .M = 0.001, 1, +INF, 0)
+                (.LO, .L, .UP, .M = 0.00100000018137276, 1, +INF, 0)
        (0.0003) ytaxeq(USA,fc,shock)
  (1.1458010E-5) ytaxeq(USA,pc,shock)
       (-0.0496) paeq(USA,c_Livestock,a_Rice,shock)
@@ -28163,10 +27825,10 @@ REMAINING 32 ENTRIES SKIPPED
 ---- pf  Factor price tax exclusive
 
 pf(USA,Land,a_Rice,shock)
-                (.LO, .L, .UP, .M = 0.00104239999997885, 1.04240008058798, +INF
+                (.LO, .L, .UP, .M = 0.00104240047826071, 1.04240008058798, +INF
 , 0)
-       (0.0219) xfeq(USA,Land,a_Rice,shock)
-       (0)      pvaeq(USA,a_Rice,shock)
+       (0.0221) xfeq(USA,Land,a_Rice,shock)
+       (0.001)  pvaeq(USA,a_Rice,shock)
  (-9.285962E-6) ytaxeq(USA,dt,shock)
        (0.0001) ytaxeq(USA,ft,shock)
       (-0.0002) factYeq(USA,shock)
@@ -28176,10 +27838,10 @@ pf(USA,Land,a_Rice,shock)
  (-3.419993E-6) pwfacteq(shock)
 
 pf(USA,Land,a_Crops,shock)
-                (.LO, .L, .UP, .M = 0.00104240008867453, 1.04240006225549, +INF
+                (.LO, .L, .UP, .M = 0.00104240019845304, 1.04240006225549, +INF
 , 0)
-       (0.2732) xfeq(USA,Land,a_Crops,shock)
-       (0)      pvaeq(USA,a_Crops,shock)
+       (0.276)  xfeq(USA,Land,a_Crops,shock)
+       (0.0019) pvaeq(USA,a_Crops,shock)
       (-0.0012) ytaxeq(USA,dt,shock)
        (0.0072) ytaxeq(USA,ft,shock)
       (-0.0285) factYeq(USA,shock)
@@ -28189,10 +27851,10 @@ pf(USA,Land,a_Crops,shock)
       (-0.0004) pwfacteq(shock)
 
 pf(USA,Land,a_Livestock,shock)
-                (.LO, .L, .UP, .M = 0.00104240001825545, 1.04240009295496, +INF
+                (.LO, .L, .UP, .M = 0.00104240008900639, 1.04240009295496, +INF
 , 0)
-       (0.1051) xfeq(USA,Land,a_Livestock,shock)
-       (0)      pvaeq(USA,a_Livestock,shock)
+       (0.1062) xfeq(USA,Land,a_Livestock,shock)
+       (0.0019) pvaeq(USA,a_Livestock,shock)
       (-0.0004) ytaxeq(USA,dt,shock)
       (-0.0002) ytaxeq(USA,ft,shock)
       (-0.011)  factYeq(USA,shock)
@@ -28491,7 +28153,7 @@ pwfact(shock)
 ---- walras  Walras check
 
 walras
-                (.LO, .L, .UP, .M = -INF, -3.55540121814037E-11, +INF, 0)
+                (.LO, .L, .UP, .M = -INF, -6.24961512899478E-12, +INF, 0)
         1       walraseq
 
 
@@ -28639,9 +28301,9 @@ cv(CHN,hhd,shock)
       (-0.1064) cveq(CHN,hhd,shock)
 
 REMAINING 4 ENTRIES SKIPPED
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 15
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 15
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Range Statistics    SOLVE gtap Using MCP From line 10733
+Range Statistics    SOLVE gtap Using MCP From line 10741
 
 
 RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
@@ -28650,9 +28312,9 @@ RHS       [min, max] : [ 4.000E-02, 1.000E+00] - Zero values observed as well
 Bound     [min, max] : [ 8.899E-04, 1.540E-03]
 Matrix    [min, max] : [ 3.730E-15, 1.319E+02] - Zero values observed as well
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 16
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 16
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Model Statistics    SOLVE gtap Using MCP From line 10733
+Model Statistics    SOLVE gtap Using MCP From line 10741
 
 
 LOOPS                                 tsim   shock
@@ -28663,27 +28325,27 @@ MODEL STATISTICS
 BLOCKS OF EQUATIONS          97     SINGLE EQUATIONS        7,968
 BLOCKS OF VARIABLES         135     SINGLE VARIABLES        7,968
 NON ZERO ELEMENTS        43,776     NON LINEAR N-Z         33,309
-CODE LENGTH             117,247     CONSTANT POOL          14,090
+CODE LENGTH             117,247     CONSTANT POOL          14,091
 
 
-GENERATION TIME      =        0.133 SECONDS     19 MB  53.5.1 f2e5fac3 LEX-LEG
+GENERATION TIME      =        0.159 SECONDS     19 MB  53.5.1 f2e5fac3 LEX-LEG
                L O O P S               tsim shock
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 17
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 17
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Solution Report     SOLVE gtap Using MCP From line 10733
+Solution Report     SOLVE gtap Using MCP From line 10741
 
 
                S O L V E      S U M M A R Y
 
      MODEL   gtap                
      TYPE    MCP                 
-     SOLVER  PATH                FROM LINE  10733
+     SOLVER  PATH                FROM LINE  10741
 
 **** SOLVER STATUS     1 Normal Completion
 **** MODEL STATUS      1 Optimal
 
- RESOURCE USAGE, LIMIT          0.215 10000000000.000
+ RESOURCE USAGE, LIMIT          0.203 10000000000.000
  ITERATION COUNT, LIMIT         1          1000
  EVALUATION ERRORS              0             0
 7968 row/cols, 43776 non-zeros, 0.07% dense.
@@ -28692,239 +28354,6 @@ Path 5.2.01 (Wed May 20 07:48:22 2026)
 Written by Todd Munson, Steven Dirkse, Youngdae Kim, and Michael Ferris
 
 INITIAL POINT STATISTICS
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_ForestFish,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Livestock,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_ForestFish,shock
-                                                                             ))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_ForestFish,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_ForestFish,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_ForestFish,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_ForestFish,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_ForestFish,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Livestock,shock
-                                                                             ))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_FoodProc,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Textiles,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_ForestFish,shoc
-                                                                            k))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Livestock,shock
-                                                                             ))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_FoodProc,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Textiles,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_ForestFish,shoc
-                                                                            k))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Svces,shock))
-Total zero rows . . . . . . . .  210
 Maximum of X. . . . . . . . . .  5.6623e+01 var: (kstock(ROW,shock))
 Maximum of F. . . . . . . . . .  1.8299e-02 eqn: (ytaxeq(ROW,mt,shock))
 Maximum of Grad F . . . . . . .  1.3189e+02 eqn: (xeq(USA,a_Svces,c_Svces,shock
@@ -28934,255 +28363,23 @@ Maximum of Grad F . . . . . . .  1.3189e+02 eqn: (xeq(USA,a_Svces,c_Svces,shock
 INITIAL JACOBIAN NORM STATISTICS
 Maximum Row Norm. . . . . . . .  2.6996e+02 eqn: (xeq(USA,a_Svces,c_Svces,shock
                                                                              ))
-Minimum Row Norm. . . . . . . .  2.0000e-02 eqn: (pgeq(USA,shock))
+Minimum Row Norm. . . . . . . .  1.7937e-02 eqn: (pvaeq(USA,a_Textiles,shock))
 Maximum Column Norm . . . . . .  1.4022e+02 var: (p(USA,a_Svces,c_Svces,shock))
-Minimum Column Norm . . . . . .  9.7463e-04 var: (pf(IND,SkLab,a_Rice,shock))
+Minimum Column Norm . . . . . .  9.8812e-04 var: (pf(IND,SkLab,a_Rice,shock))
 
 FINAL STATISTICS
-Inf-Norm of Complementarity . .  1.1400e-07 eqn: (pmteq(JPN,c_Rice,shock))
-Inf-Norm of Normal Map. . . . .  1.1400e-07 eqn: (pmteq(JPN,c_Rice,shock))
-Inf-Norm of Minimum Map . . . .  1.1400e-07 eqn: (pmteq(JPN,c_Rice,shock))
-Inf-Norm of Fischer Function. .  1.1400e-07 eqn: (pmteq(JPN,c_Rice,shock))
-Inf-Norm of Grad Fischer Fcn. .  1.7245e-07 eqn: (xfteq(JPN,NatRes,shock))
-Two-Norm of Grad Fischer Fcn. .  2.6131e-07
+Inf-Norm of Complementarity . .  9.2156e-08 eqn: (pmteq(JPN,c_Rice,shock))
+Inf-Norm of Normal Map. . . . .  9.2156e-08 eqn: (pmteq(JPN,c_Rice,shock))
+Inf-Norm of Minimum Map . . . .  9.2156e-08 eqn: (pmteq(JPN,c_Rice,shock))
+Inf-Norm of Fischer Function. .  9.2156e-08 eqn: (pmteq(JPN,c_Rice,shock))
+Inf-Norm of Grad Fischer Fcn. .  8.8684e-09 eqn: (xmeq(JPN,c_Rice,a_FoodProc,sh
+                                                                          ock))
+Two-Norm of Grad Fischer Fcn. .  1.1805e-08
 
 FINAL POINT STATISTICS
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_ForestFish,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(USA,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Livestock,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_ForestFish,shock
-                                                                             ))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(EU_28,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_ForestFish,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(CHN,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_ForestFish,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(JPN,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_ForestFish,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(IND,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_ForestFish,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(SSA,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_ForestFish,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pxeq(ROW,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(USA,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Livestock,shock
-                                                                             ))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_FoodProc,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Textiles,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_ForestFish,shoc
-                                                                            k))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(EU_28,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(CHN,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(JPN,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(IND,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(SSA,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pndeq(ROW,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(USA,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Livestock,shock
-                                                                             ))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_FoodProc,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Textiles,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_ForestFish,shoc
-                                                                            k))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(EU_28,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(CHN,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(JPN,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(IND,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(SSA,a_Svces,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Rice,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Crops,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Livestock,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_FoodProc,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Energy,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Textiles,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Chem,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Manuf,shock))
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_ForestFish,shock)
-                                                                              )
-Zero row of order . . . . . . .  0.0000e+00 eqn: (pvaeq(ROW,a_Svces,shock))
-Total zero rows . . . . . . . .  210
 Maximum of X. . . . . . . . . .  5.6623e+01 var: (kstock(ROW,shock))
-Maximum of F. . . . . . . . . .  1.1400e-07 eqn: (pmteq(JPN,c_Rice,shock))
-Maximum of Grad F . . . . . . .  1.3191e+02 eqn: (xeq(USA,a_Svces,c_Svces,shock
+Maximum of F. . . . . . . . . .  9.2156e-08 eqn: (pmteq(JPN,c_Rice,shock))
+Maximum of Grad F . . . . . . .  1.3186e+02 eqn: (xeq(USA,a_Svces,c_Svces,shock
                                                                              ))
                                             var: (p(USA,a_Svces,c_Svces,shock))
 
@@ -29193,20 +28390,20 @@ Maximum of Grad F . . . . . . .  1.3191e+02 eqn: (xeq(USA,a_Svces,c_Svces,shock
                              0  UNBOUNDED
                              0  REDEFINED
                              0     ERRORS
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:12:50 Page 18
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:23:54 Page 18
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
-----  10758 VARIABLE walras.L              =  2.614116E-8  Walras check
+----  10766 VARIABLE walras.L              =  1.523379E-8  Walras check
 
 **** REPORT FILE SUMMARY
 
-csv /var/lib/condor/execute/dir_1240924/gamsexec/COMP.csv
-screen /var/lib/condor/execute/dir_1240924/gamsexec/con
+csv /var/lib/condor/execute/dir_2851141/gamsexec/COMP.csv
+screen /var/lib/condor/execute/dir_2851141/gamsexec/con
 
 
-EXECUTION TIME       =        1.061 SECONDS     21 MB  53.5.1 f2e5fac3 LEX-LEG
+EXECUTION TIME       =        1.346 SECONDS     21 MB  53.5.1 f2e5fac3 LEX-LEG
 
 
 USER: NEOS Server License - Production               G250831+0003Ac-GEN
@@ -29216,5 +28413,5 @@ USER: NEOS Server License - Production               G250831+0003Ac-GEN
 
 **** FILE SUMMARY
 
-Input      /var/lib/condor/execute/dir_1240924/gamsexec/MODEL.gms
-Output     /var/lib/condor/execute/dir_1240924/gamsexec/solve.lst
+Input      /var/lib/condor/execute/dir_2851141/gamsexec/MODEL.gms
+Output     /var/lib/condor/execute/dir_2851141/gamsexec/solve.lst

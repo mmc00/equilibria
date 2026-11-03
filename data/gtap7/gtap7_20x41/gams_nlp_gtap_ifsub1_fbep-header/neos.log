@@ -1,23 +1,23 @@
 Executed on prod-exec-6.neos-server.org
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 1
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 1
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 Include File Summary
 
 
    SEQ   GLOBAL TYPE      PARENT   LOCAL  INCLVL  FILENAME
 
-     1        1 INPUT          0       0       0  /var/lib/condor/execute/dir_6
-                                                  15165/gamsexec/MODEL.gms
+     1        1 INPUT          0       0       0  /var/lib/condor/execute/dir_1
+                                                  340008/gamsexec/MODEL.gms
      2   246797 IF EXIST       1  246799       0  ../data/9x10Emiss.gdx
 
 
-COMPILATION TIME     =        0.472 SECONDS     28 MB  53.5.1 f2e5fac3 LEX-LEG
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 2
+COMPILATION TIME     =        0.421 SECONDS     28 MB  53.5.1 f2e5fac3 LEX-LEG
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 2
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
----- 257337 VARIABLE eh.L  CDE expansion parameters
+---- 257345 VARIABLE eh.L  CDE expansion parameters
 
                                 base       check       shock
 
@@ -843,7 +843,7 @@ ROW        .c_ElMaEq           0.979       0.979       0.979
 ROW        .c_Services         1.181       1.181       1.181
 
 
----- 257337 VARIABLE bh.L  CDE substitution parameters
+---- 257345 VARIABLE bh.L  CDE substitution parameters
 
                                 base       check       shock
 
@@ -1669,7 +1669,7 @@ ROW        .c_ElMaEq           0.545       0.545       0.545
 ROW        .c_Services         0.503       0.503       0.503
 
 
----- 257337 PARAMETER eh0  CDE expansion parameter
+---- 257345 PARAMETER eh0  CDE expansion parameter
 
                  c_Rice  c_Restofa~  c_VegFrui~   c_CropsNe      c_Milk
 
@@ -1848,7 +1848,7 @@ CentralAsia       1.012       1.041       1.025       0.972       1.282
 ROW               1.028       1.019       1.010       0.979       1.181
 
 
----- 257337 PARAMETER bh0  CDE substitution parameter
+---- 257345 PARAMETER bh0  CDE substitution parameter
 
                  c_Rice  c_Restofa~  c_VegFrui~   c_CropsNe      c_Milk
 
@@ -2027,7 +2027,7 @@ CentralAsia       0.576       0.584       0.544       0.580       0.528
 ROW               0.533       0.544       0.566       0.545       0.503
 
 
----- 257337 VARIABLE phiP.L  Elasticity of private exp. wrt to private utility
+---- 257345 VARIABLE phiP.L  Elasticity of private exp. wrt to private utility
 
                    base       check       shock
 
@@ -2074,7 +2074,7 @@ CentralAsia       1.000       1.000       1.000
 ROW               1.000       1.000       1.000
 
 
----- 257337 VARIABLE xcshr.L  Household budget shares
+---- 257345 VARIABLE xcshr.L  Household budget shares
 
 INDEX 1 = USA
 
@@ -3102,7 +3102,7 @@ c_ElMaEq    .hhd       0.007       0.007       0.007
 c_Services  .hhd       0.669       0.669       0.669
 
 
----- 257339 PARAMETER kron  Kronecker delta
+---- 257347 PARAMETER kron  Kronecker delta
 
                   a_Rice  a_Restofa~  a_VegFrui~   a_CropsNe      a_Milk
 
@@ -3269,9 +3269,9 @@ ctax                                                               1.000
 bop                1.000
 tot                            1.000
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 3
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 3
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Range Statistics    SOLVE betaCal Using MCP From line 257377
+Range Statistics    SOLVE betaCal Using MCP From line 257385
 
 
 RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
@@ -3280,9 +3280,9 @@ RHS       [min, max] : [ 4.062E-04, 1.333E+01]
 Bound     [min, max] : [        NA,        NA]
 Matrix    [min, max] : [ 4.062E-04, 1.766E+01]
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 4
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 4
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Model Statistics    SOLVE betaCal Using MCP From line 257377
+Model Statistics    SOLVE betaCal Using MCP From line 257385
 
 
 LOOPS                           *            base
@@ -3299,21 +3299,21 @@ CODE LENGTH               1,149     CONSTANT POOL              98
 GENERATION TIME      =        0.003 SECONDS    345 MB  53.5.1 f2e5fac3 LEX-LEG
                L O O P S         *          base
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 5
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 5
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Solution Report     SOLVE betaCal Using MCP From line 257377
+Solution Report     SOLVE betaCal Using MCP From line 257385
 
 
                S O L V E      S U M M A R Y
 
      MODEL   betaCal             
      TYPE    MCP                 
-     SOLVER  PATH                FROM LINE  257377
+     SOLVER  PATH                FROM LINE  257385
 
 **** SOLVER STATUS     1 Normal Completion
 **** MODEL STATUS      1 Optimal
 
- RESOURCE USAGE, LIMIT          0.033 10000000000.000
+ RESOURCE USAGE, LIMIT          0.030 10000000000.000
  ITERATION COUNT, LIMIT         0    2147483647
  EVALUATION ERRORS              0             0
 164 row/cols, 410 non-zeros, 1.52% dense.
@@ -3722,12 +3722,12 @@ ROW        .base     -INF      0.144     +INF  -1.56E-14
                              0  UNBOUNDED
                              0  REDEFINED
                              0     ERRORS
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 6
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 6
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
----- 257570 PARAMETER xdFlag  XD flags
+---- 257578 PARAMETER xdFlag  XD flags
 
                  c_Rice  c_Restofa~  c_VegFrui~   c_CropsNe      c_Milk
 
@@ -3906,7 +3906,7 @@ CentralAsia       1.000       1.000       1.000       1.000       1.000
 ROW               1.000       1.000       1.000       1.000       1.000
 
 
----- 257570 PARAMETER xetFlag  XET flags
+---- 257578 PARAMETER xetFlag  XET flags
 
                  c_Rice  c_Restofa~  c_VegFrui~   c_CropsNe      c_Milk
 
@@ -4085,7 +4085,7 @@ CentralAsia       1.000       1.000       1.000       1.000       1.000
 ROW               1.000       1.000       1.000       1.000       1.000
 
 
----- 257570 PARAMETER xsFlag  XS flags
+---- 257578 PARAMETER xsFlag  XS flags
 
                  c_Rice  c_Restofa~  c_VegFrui~   c_CropsNe      c_Milk
 
@@ -4264,7 +4264,7 @@ CentralAsia       1.000       1.000       1.000       1.000       1.000
 ROW               1.000       1.000       1.000       1.000       1.000
 
 
----- 257570 VARIABLE xs.L  Domestic supply
+---- 257578 VARIABLE xs.L  Domestic supply
 
                                 base       check       shock
 
@@ -5090,10 +5090,10 @@ ROW        .c_ElMaEq           0.005       0.005       0.005
 ROW        .c_Services         0.575       0.575       0.575
 
 
----- 258050 VARIABLE walras.L              =        0.000  Walras check
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 7
+---- 258058 VARIABLE walras.L              =        0.000  Walras check
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 7
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Equation Listing    SOLVE gtap Using NLP From line 258027
+Equation Listing    SOLVE gtap Using NLP From line 258035
 
 
 ---- axpeq  =E=  Production frontier shifter
@@ -224442,9 +224442,9 @@ walraseq..  rsav(ROW,check) + (0.04550407812)*pi(ROW,check) - yi(ROW,check)
       + savf(ROW,check) + walras + (0.0399999983474009)*kstock(ROW,check) =E= 0
       ; (LHS = 0)
      
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 8
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 8
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Column Listing      SOLVE gtap Using NLP From line 258027
+Column Listing      SOLVE gtap Using NLP From line 258035
 
 
 ---- axp  Production frontier shifter
@@ -254594,9 +254594,9 @@ cv(MEX,hhd,check)
       (-0.6814) cveq(MEX,hhd,check)
 
 REMAINING 38 ENTRIES SKIPPED
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 9
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 9
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Range Statistics    SOLVE gtap Using NLP From line 258027
+Range Statistics    SOLVE gtap Using NLP From line 258035
 
 
 RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
@@ -254605,9 +254605,9 @@ RHS       [min, max] : [ 4.000E-02, 1.000E+00] - Zero values observed as well
 Bound     [min, max] : [ 6.801E-04, 2.583E-03]
 Matrix    [min, max] : [ 1.004E-20, 2.462E+03] - Zero values observed as well
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 10
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 10
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Model Statistics    SOLVE gtap Using NLP From line 258027
+Model Statistics    SOLVE gtap Using NLP From line 258035
 
 
 LOOPS                                 tsim   check
@@ -254621,30 +254621,30 @@ NON ZERO ELEMENTS     1,290,847     NON LINEAR N-Z        984,057
 CODE LENGTH           3,208,532     CONSTANT POOL         448,403
 
 
-GENERATION TIME      =       10.864 SECONDS    710 MB  53.5.1 f2e5fac3 LEX-LEG
+GENERATION TIME      =       10.272 SECONDS    710 MB  53.5.1 f2e5fac3 LEX-LEG
                L O O P S               tsim check
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 11
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 11
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Solution Report     SOLVE gtap Using NLP From line 258027
+Solution Report     SOLVE gtap Using NLP From line 258035
 
 
                S O L V E      S U M M A R Y
 
      MODEL   gtap                OBJECTIVE  walras
      TYPE    NLP                 DIRECTION  MAXIMIZE
-     SOLVER  CONOPT              FROM LINE  258027
+     SOLVER  CONOPT              FROM LINE  258035
 
 **** SOLVER STATUS     1 Normal Completion
 **** MODEL STATUS      2 Locally Optimal
 **** OBJECTIVE VALUE                0.0000
 
- RESOURCE USAGE, LIMIT          6.424 10000000000.000
+ RESOURCE USAGE, LIMIT          5.849 10000000000.000
  ITERATION COUNT, LIMIT         2         50000
  EVALUATION ERRORS              0             0
 
-*** Error Cannot open parameter file "/var/lib/condor/execute/dir_615165/gamsex
-                                                                 ec/conopt.opt"
+*** Error Cannot open parameter file "/var/lib/condor/execute/dir_1340008/gamse
+                                                                xec/conopt.opt"
 *** Error Error code = 2; No such file or directory
 
  
@@ -254666,9 +254666,9 @@ Solution Report     SOLVE gtap Using NLP From line 258027
  ** Optimal solution. There are no superbasic variables.
  
  
- CONOPT time Total                            6.615 seconds
-   of which: Function evaluations             0.475 =  7.2%
-             1st Derivative evaluations       0.643 =  9.7%
+ CONOPT time Total                            6.031 seconds
+   of which: Function evaluations             0.452 =  7.5%
+             1st Derivative evaluations       0.603 = 10.0%
              Interval derivative evals        0.000 =  0.0%
  
 
@@ -254677,15 +254677,15 @@ Solution Report     SOLVE gtap Using NLP From line 258027
                              0 INFEASIBLE
                              0  UNBOUNDED
                              0     ERRORS
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 12
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 12
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
----- 258050 VARIABLE walras.L              =  4.11722E-11  Walras check
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 13
+---- 258058 VARIABLE walras.L              =  4.11722E-11  Walras check
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 13
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Equation Listing    SOLVE gtap Using NLP From line 258027
+Equation Listing    SOLVE gtap Using NLP From line 258035
 
 
 ---- axpeq  =E=  Production frontier shifter
@@ -474036,9 +474036,9 @@ walraseq..  rsav(ROW,shock) + (0.04550407812)*pi(ROW,shock) - yi(ROW,shock)
       + savf(ROW,shock) + walras + (0.0399999983474009)*kstock(ROW,shock) =E= 0
       ; (LHS = 4.11722322901653E-11)
      
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 14
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 14
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Column Listing      SOLVE gtap Using NLP From line 258027
+Column Listing      SOLVE gtap Using NLP From line 258035
 
 
 ---- axp  Production frontier shifter
@@ -504194,9 +504194,9 @@ cv(MEX,hhd,shock)
       (-0.6814) cveq(MEX,hhd,shock)
 
 REMAINING 38 ENTRIES SKIPPED
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 15
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 15
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Range Statistics    SOLVE gtap Using NLP From line 258027
+Range Statistics    SOLVE gtap Using NLP From line 258035
 
 
 RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
@@ -504205,9 +504205,9 @@ RHS       [min, max] : [ 4.000E-02, 1.000E+00] - Zero values observed as well
 Bound     [min, max] : [ 6.801E-04, 2.583E-03]
 Matrix    [min, max] : [ 1.059E-20, 2.462E+03] - Zero values observed as well
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 16
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 16
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Model Statistics    SOLVE gtap Using NLP From line 258027
+Model Statistics    SOLVE gtap Using NLP From line 258035
 
 
 LOOPS                                 tsim   shock
@@ -504221,30 +504221,30 @@ NON ZERO ELEMENTS     1,314,055     NON LINEAR N-Z      1,007,265
 CODE LENGTH           3,279,283     CONSTANT POOL         463,866
 
 
-GENERATION TIME      =       11.136 SECONDS    775 MB  53.5.1 f2e5fac3 LEX-LEG
+GENERATION TIME      =       10.318 SECONDS    775 MB  53.5.1 f2e5fac3 LEX-LEG
                L O O P S               tsim shock
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 17
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 17
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Solution Report     SOLVE gtap Using NLP From line 258027
+Solution Report     SOLVE gtap Using NLP From line 258035
 
 
                S O L V E      S U M M A R Y
 
      MODEL   gtap                OBJECTIVE  walras
      TYPE    NLP                 DIRECTION  MAXIMIZE
-     SOLVER  CONOPT              FROM LINE  258027
+     SOLVER  CONOPT              FROM LINE  258035
 
 **** SOLVER STATUS     1 Normal Completion
 **** MODEL STATUS      2 Locally Optimal
 **** OBJECTIVE VALUE                0.0000
 
- RESOURCE USAGE, LIMIT        143.008 10000000000.000
+ RESOURCE USAGE, LIMIT        122.501 10000000000.000
  ITERATION COUNT, LIMIT        14         50000
  EVALUATION ERRORS              0             0
 
-*** Error Cannot open parameter file "/var/lib/condor/execute/dir_615165/gamsex
-                                                                 ec/conopt.opt"
+*** Error Cannot open parameter file "/var/lib/condor/execute/dir_1340008/gamse
+                                                                xec/conopt.opt"
 *** Error Error code = 2; No such file or directory
 
  
@@ -504266,9 +504266,9 @@ Solution Report     SOLVE gtap Using NLP From line 258027
  ** Optimal solution. There are no superbasic variables.
  
  
- CONOPT time Total                          143.242 seconds
-   of which: Function evaluations            10.842 =  7.6%
-             1st Derivative evaluations       3.147 =  2.2%
+ CONOPT time Total                          122.689 seconds
+   of which: Function evaluations             8.792 =  7.2%
+             1st Derivative evaluations       2.550 =  2.1%
              Interval derivative evals        0.000 =  0.0%
  
 
@@ -504277,20 +504277,20 @@ Solution Report     SOLVE gtap Using NLP From line 258027
                              0 INFEASIBLE
                              0  UNBOUNDED
                              0     ERRORS
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:18:00 Page 18
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:26:00 Page 18
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
----- 258050 VARIABLE walras.L              =  2.29552E-13  Walras check
+---- 258058 VARIABLE walras.L              =  2.29552E-13  Walras check
 
 **** REPORT FILE SUMMARY
 
-csv /var/lib/condor/execute/dir_615165/gamsexec/COMP.csv
-screen /var/lib/condor/execute/dir_615165/gamsexec/con
+csv /var/lib/condor/execute/dir_1340008/gamsexec/COMP.csv
+screen /var/lib/condor/execute/dir_1340008/gamsexec/con
 
 
-EXECUTION TIME       =      191.432 SECONDS    780 MB  53.5.1 f2e5fac3 LEX-LEG
+EXECUTION TIME       =      166.269 SECONDS    780 MB  53.5.1 f2e5fac3 LEX-LEG
 
 
 USER: NEOS Server License - Production               G250831+0003Ac-GEN
@@ -504300,5 +504300,5 @@ USER: NEOS Server License - Production               G250831+0003Ac-GEN
 
 **** FILE SUMMARY
 
-Input      /var/lib/condor/execute/dir_615165/gamsexec/MODEL.gms
-Output     /var/lib/condor/execute/dir_615165/gamsexec/solve.lst
+Input      /var/lib/condor/execute/dir_1340008/gamsexec/MODEL.gms
+Output     /var/lib/condor/execute/dir_1340008/gamsexec/solve.lst
