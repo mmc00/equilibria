@@ -120,21 +120,36 @@ _WRITTEN_FORM_EQUIVALENT = frozenset({"eq_pf", "eq_pft"})
 
 # Real model gaps, pinned EXACTLY: {dataset: {family: n_diff}}, the same in
 # every phase.  The gate fails if a family appears, disappears or changes its
-# count, so fixing one of them fails it too: delete its entry then.  Both were
+# count, so fixing one of them fails it too: delete its entry then.  It was
 # hidden while the gate compared against ifSUB=1 references (#23).
 #
-# eq_pfa — #187.  The .nl reference uses the official getData.gms (fbep=0, net
-#   wedge EVFP/EVFB); Python uses -FBEP/EVFB like the MCP references, which
-#   inject the FBEP header.  One diff per subsidised factor cell.
 # eq_pwmg / eq_xmgm — #188.  amgm = VTWR/sum(VTWR) in Python, VTWR/(VCIF-VFOB)
 #   in GAMS.  One diff per route where the two differ by more than 1e-4.
+#
+# eq_pfa (#187): one diff per subsidised factor cell, while Python booked the
+# subsidy as -FBEP/EVFB against the .nl reference's official net wedge EVFP/EVFB.
+# The blocks (test_blocks_nl_parity) close it: their default "gams" basis is that
+# net wedge (#191, #193).  The deprecated monolith this gate builds through
+# nl_compare keeps the old sign (R-MONOLITH retires it), so the gap stays here.
 _KNOWN_GAPS: dict[str, dict[str, int]] = {
-    "gtap7_3x3": {"eq_pfa": 12},
-    "gtap7_3x4": {"eq_pfa": 12},
-    "gtap7_5x5": {"eq_pfa": 20},
-    "gtap7_10x7": {"eq_pfa": 78, "eq_pwmg": 1, "eq_xmgm": 1},
-    "gtap7_15x10": {"eq_pfa": 177, "eq_pwmg": 15, "eq_xmgm": 15},
+    "gtap7_10x7": {"eq_pwmg": 1, "eq_xmgm": 1},
+    "gtap7_15x10": {"eq_pwmg": 15, "eq_xmgm": 15},
 }
+_MONOLITH_EQ_PFA = {
+    "gtap7_3x3": 12,
+    "gtap7_3x4": 12,
+    "gtap7_5x5": 20,
+    "gtap7_10x7": 78,
+    "gtap7_15x10": 177,
+}
+
+
+def _monolith_gaps(dataset: str) -> dict[str, int]:
+    """The gaps this gate pins: the blocks' plus the monolith's eq_pfa."""
+    gaps = dict(_KNOWN_GAPS.get(dataset, {}))
+    if dataset in _MONOLITH_EQ_PFA:
+        gaps["eq_pfa"] = _MONOLITH_EQ_PFA[dataset]
+    return gaps
 
 
 def gap_counts(family_stats: dict) -> dict[str, int]:
@@ -205,9 +220,9 @@ def test_gtap7_nl_parity(dataset: str, tmp_path: Path) -> None:
             f"significa 'la algebra cuadra'; significa que no se comparo nada."
         )
 
-        assert gap_counts(result["family_stats"]) == _KNOWN_GAPS.get(dataset, {}), (
+        assert gap_counts(result["family_stats"]) == _monolith_gaps(dataset), (
             f"[{dataset}/{phase}] Coefficient diffs vs GAMS fixture differ from "
-            f"the pinned known gaps {_KNOWN_GAPS.get(dataset, {})}:\n"
+            f"the pinned known gaps {_monolith_gaps(dataset)}:\n"
             + "\n".join(
                 f"  {fam}: {st['n_diff']} diffs (max_rel={st['max_rel']:.2e})"
                 for fam, st in result["family_stats"].items()

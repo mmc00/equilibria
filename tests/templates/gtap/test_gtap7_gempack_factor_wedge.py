@@ -70,39 +70,36 @@ def test_cuna_gempack_reproduce_evfp():
     assert celdas > 0
 
 
-def test_cuna_gams_sin_cambios():
-    """El cierre por defecto sigue con el signo de GAMS: fctts = -FBEP/EVFB."""
+def test_gams_basis_is_the_official_net_wedge():
+    """The default basis is the official getData.gms (#191): one net tax
+    fcttx = (EVFP - EVFB)/EVFB that holds the subsidy, and fctts = 0."""
     from equilibria.blocks.gtap.factor_wedge import factor_wedge_rates
 
     bm = _params().benchmark
-    subsidiadas = [k for k, v in bm.fbep.items() if float(v or 0.0) != 0.0]
-    assert subsidiadas, "3x3 trae FBEP distinto de cero"
-    for r, f, a in subsidiadas:
+    subsidised = [k for k, v in bm.fbep.items() if float(v or 0.0) != 0.0]
+    assert subsidised, "3x3 has nonzero FBEP"
+    for r, f, a in subsidised:
         evfb = float(bm.evfb[(r, f, a)])
         fcttx, fctts = factor_wedge_rates(bm, r, f, a, "gams")
-        assert fcttx == pytest.approx(float(bm.ftrv.get((r, f, a), 0.0)) / evfb)
-        assert fctts == pytest.approx(-float(bm.fbep[(r, f, a)]) / evfb)
+        assert fcttx == pytest.approx((float(bm.vfm[(r, f, a)]) - evfb) / evfb)
+        assert fctts == 0.0
 
 
-def test_cuna_gams_identica_bit_a_bit_a_las_formulas_viejas():
-    """El cierre por defecto hace las mismas cuentas de punto flotante que antes."""
+def test_va_valued_at_evfp_in_every_cell():
+    """The default basis values VA at the data's EVFP in every factor cell, so
+    va_wedge = EVFP - EVFB and the rate is its share of EVFB."""
     from equilibria.blocks.gtap._derived_params import _va_wedge
-    from equilibria.blocks.gtap.factor_wedge import (
-        factor_wedge_rate,
-        factor_wedge_rates,
-    )
+    from equilibria.blocks.gtap.factor_wedge import factor_wedge_rate
 
     p = _params()
     bm = p.benchmark
     for r, f, a in bm.evfb:
         evfb = float(bm.evfb.get((r, f, a), 0.0) or 0.0)
-        ftrv = float(bm.ftrv.get((r, f, a), 0.0) or 0.0)
-        fbep = float(bm.fbep.get((r, f, a), 0.0) or 0.0)
-        assert _va_wedge(p, bm, r, f, a) == ftrv - fbep
+        wedge = float(bm.vfm.get((r, f, a), 0.0) or 0.0) - evfb
+        assert _va_wedge(p, bm, r, f, a) == pytest.approx(wedge, abs=1e-12)
         if evfb <= 0.0:
             continue
-        assert factor_wedge_rates(bm, r, f, a) == (ftrv / evfb, -fbep / evfb)
-        assert factor_wedge_rate(bm, r, f, a) == (ftrv - fbep) / evfb
+        assert factor_wedge_rate(bm, r, f, a) == pytest.approx(wedge / evfb)
 
 
 def test_signo_desconocido_falla():

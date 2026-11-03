@@ -25,6 +25,11 @@ cambian 2 filas, eq_chisave[base] y eq_chisave[shock]; el residuo queda a la mit
 (el ajuste en log es la mitad del de antes).
 Regenerado 2026-10-24 (2) (chiSave del check/shock como Tornqvist contra base):
 cambian 2 filas, eq_chisave[check] y eq_chisave[shock].
+Regenerated 2026-11-02 (the default "gams" subsidy basis is the official net wedge
+EVFP - EVFB, #191/#193; main 9a7e9c09 reproduces the previous fixture exactly): 430
+of 3390 rows change, all on the factor, VA and income side: eq_xfeq 108, eq_pfaeq
+102, eq_nd/eq_po/eq_pvaeq/eq_va/eq_x 27 each, eq_pxeq 22, eq_ytax 18, and
+eq_phi/eq_rsav/eq_u/eq_yc/eq_yg 9 each.
 
 Regenerar SOLO si se cambia el modelo a proposito:
     python tests/templates/gtap/test_no_shock_identical_to_main.py <repo_root> <out>

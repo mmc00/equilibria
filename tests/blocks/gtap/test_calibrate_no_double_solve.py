@@ -67,7 +67,15 @@ BASELINE_COUNT = 20194
 # Recapturado 2026-10-24 (2): chiSave del check/shock como indice de Tornqvist contra
 # base (pesos NETINV/SAVE de los dos periodos). Mismas 20194 claves, 21 celdas >1e-9,
 # TODAS psave/us/u (peor 2,76e-08: en el check el reparto casi no se mueve).
-BASELINE_SIG = "bd8f2dd3d3c0f57e"
+#
+# Recaptured 2026-11-02: the default "gams" subsidy basis is the official net wedge
+# EVFP - EVFB (#191, #193). main 9a7e9c09 reproduces the old fixture exactly (0
+# cells > 1e-9). Against it: same 20194 keys, 10297 cells move. ytax/ytaxshr(fs)
+# go to 0 (this basis books no separate subsidy). The settled prices go back to the
+# benchmark: on main all 70 pva/px/pnd cells left 1 (worst 0.167, pva EU_28 Crops
+# 0.834); now all 70 sit at 1 within 2.2e-7. The quantities follow (EU_28 Crops xf
+# x13, a rescaled sector).
+BASELINE_SIG = "0f84139e67b50cd2"
 
 
 def _load_params():

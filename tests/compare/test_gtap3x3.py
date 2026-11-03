@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from equilibria.compare import Mapping, compare, from_dict, from_gdx
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, reference
 from tests.compare import _oracle as O
 
 pytestmark = pytest.mark.skipif(
@@ -39,6 +39,12 @@ MAPA = O.ROOT / "tests" / "compare" / "fixtures" / "gtap3x3_minimo.yaml"
 def test_gams_contra_el_modelo_de_equilibria_resuelto():
     """El oraculo es el GDX de GAMS: xp y pft de equilibria (bloques, PATH) caen
     dentro de 0,1% en todas las celdas de base, check y shock que GAMS define.
+
+    The oracle is the result RECORDED in data/ with fbep=zero (official getData),
+    the variant the default "gams" basis reproduces (#191, #193). Not the
+    data/gdx_tests specimen: that is a format sample for the reader, not a
+    current result, and its check leaves the base (pft[EU_28,Land] 0.845, against
+    1.0 in all four current records).
 
     GAMS define pft solo para los factores moviles: pft(r, NatRes) no existe en su
     modelo ni en el GDX. El mapeo lo declara como exclusion por celda (con su why);
@@ -77,14 +83,18 @@ def test_gams_contra_el_modelo_de_equilibria_resuelto():
         if_sub=False,
         numeraire="pnum",
     )
+    gdx = (
+        reference("gtap7_3x3", "gams", form="mcp", mode="gtap", ifsub=0, fbep="zero")
+        / "out.gdx"
+    )
     m, mp = build_block_model(p, p.sets, gc, "ROW")
-    mp.seed_all_periods(m, O.GTAP3X3_GDX)
-    res = solve_block_model(m, p, gc, ref_gdx=O.GTAP3X3_GDX, mode="gtap")
+    mp.seed_all_periods(m, gdx)
+    res = solve_block_model(m, p, gc, ref_gdx=gdx, mode="gtap")
     for t in ("base", "check", "shock"):
         assert res[t]["code"] == 1, (t, res[t])
 
     r = compare(
-        from_gdx(O.GTAP3X3_GDX, period_dim=-1, variables=["xp", "pft"]),
+        from_gdx(gdx, period_dim=-1, variables=["xp", "pft"]),
         from_pyomo(m, period_dim=-1, variables=["xp", "pft"]),
         Mapping.from_yaml(MAPA),
         reference="a",
