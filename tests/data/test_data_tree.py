@@ -37,3 +37,28 @@ def test_record_outputs_are_not_gitignored() -> None:
         input="\n".join(outputs), capture_output=True, text=True, cwd=repo,
     ).stdout.split()  # fmt: skip
     assert ignored == []
+
+
+def test_git_keeps_the_bytes_of_every_hashed_file() -> None:
+    # a source.yaml hashes the exact bytes. With core.autocrlf, git stored the
+    # Windows GEMPACK consoles with LF while their record had hashed CRLF, so all
+    # 66 records failed on any other machine: git must not touch data/'s bytes
+    repo = DATA_ROOT.parent
+    git = shutil.which("git")
+    if git is None or not (repo / ".git").exists():
+        pytest.skip("not a git checkout")
+    hashed = [
+        str((rec.path / rel).relative_to(repo))
+        for rec in iter_sources()
+        for rel in (rec.raw.get("outputs") or {})
+    ]
+    hashed += [
+        str(p.relative_to(repo)) for p in (DATA_ROOT / "gtap7" / "gams").glob("*.gms")
+    ]
+    attrs = subprocess.run(
+        [str(git), "check-attr", "text", "--stdin"],
+        input="\n".join(hashed), capture_output=True, text=True, cwd=repo,
+    ).stdout.splitlines()  # fmt: skip
+    converted = [line for line in attrs if not line.endswith(": text: unset")]
+    assert len(attrs) == len(hashed)
+    assert converted == [], converted[:3]

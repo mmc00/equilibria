@@ -279,7 +279,8 @@ def has_dataset(dataset: str, *, root: Path = DATA_ROOT) -> bool:
     return bool(matches)
 
 
-_EXEMPT = frozenset({SOURCE_FILE, "README.md"})
+# data/.gitattributes keeps git from converting the line endings of hashed files
+_EXEMPT = frozenset({SOURCE_FILE, "README.md", ".gitattributes"})
 
 
 def own_files(folder: Path) -> list[Path]:

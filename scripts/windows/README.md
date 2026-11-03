@@ -100,3 +100,32 @@ job. A failed job prints the end
 of the GEMPACK console and leaves no folder; the final summary lists it. If
 `gtap7_20x41` fails in every configuration, say so: its old fixtures came from
 an older setup and phase 3b has to explain the difference.
+
+### Repair: commit the results with their real line endings
+
+The first push (016bec41) went through `core.autocrlf`: git stored
+`run.cmf`, the two `*_console.txt` and the tools with LF, while every
+`source.yaml` had hashed the CRLF bytes on disk. All 66 records fail
+`check_tree()` on any other machine. `data/.gitattributes` (`* -text`) now keeps
+git away from those bytes. Nothing is rerun: the files on the Windows disk are
+still the ones that were hashed.
+
+Re-add only the GEMPACK folders: other files under `data/` may sit converted on
+this disk, and committing them would break their records everywhere else.
+
+```powershell
+cd C:\Documentos\proyectos\equilibria
+git switch data/phase-3-gempack
+git pull                      # brings data/.gitattributes; do not run GEMPACK again
+
+# re-add the GEMPACK results and tools as they are on disk, CRLF included
+git add --renormalize data/gtap7/gempack/tools (Get-ChildItem -Directory data\gtap7\*\gempack_*).FullName
+git diff --cached --stat      # expect 66 x 3 text outputs and the tools; nothing else
+
+# must print [] before committing
+uv run python -c "from equilibria.sources import check_tree; print([e for e in check_tree() if 'gempack' in e])"
+
+git commit -m "data(gempack): keep the Windows line endings the records hashed"
+git push
+git restore data              # the rest of data/ back to the exact repository bytes
+```

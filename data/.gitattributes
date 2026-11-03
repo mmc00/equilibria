@@ -1,0 +1,3 @@
+# source.yaml files hash exact bytes (ADR-0010): git must never convert line
+# endings here, or a record written on Windows fails everywhere else.
+* -text
