@@ -1,0 +1,17 @@
+!   gtapv7.sti
+!   ==========
+!
+!   TABLO sti file for GTAPv7 model
+!
+bat         ! Run in batch.
+
+gtapuv7_levels ! name of TABLO input file
+gtapuv7_levels ! name of information file
+a           ! Proceed to automatic code generation.
+pgs ! Prepare output for GEMSIM
+
+gtapuv7_levels ! name of GEMSIM Auxiliary files
+!
+!
+!   end of stored input
+!   -------------------

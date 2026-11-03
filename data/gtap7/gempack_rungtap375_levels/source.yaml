@@ -1,0 +1,41 @@
+kind: model
+model: gtap7
+source: 'tools/make_levels_tab.py on data/gtap7/gempack_rungtap375: gtapv7_levels
+  (condensed, as gtapv7.sti) and gtapuv7_levels (uncondensed, GTAPUV7), both writing
+  GEMSIM files'
+derived_from: gtap7/gempack_rungtap375
+changes:
+- file: gtapuv7_levels.sti
+  change: added
+  what: gtapv7.sti pointed at gtapuv7_levels, writing GEMSIM files (pgs) instead of
+    a Fortran program (wfp), without the condensation block (GTAPUV7)
+  why: GEMSIM needs no Fortran compiler; Burfisher's .exp fix and shock variables
+    the condensation omits
+  commit: 08687bcf
+- file: gtapuv7_levels.tab
+  change: added
+  what: gtapv7.tab with orig_level on y, qinv, rore, pinv, pva, pe and the RORELEV
+    coefficient (make_levels_tab.py)
+  why: GEMPACK stores pre-/post-simulation levels (LEVB/LEVA) only for orig_level
+    variables; the paper compares these six
+  commit: 08687bcf
+- file: gtapv7_levels.sti
+  change: added
+  what: gtapv7.sti pointed at gtapv7_levels, writing GEMSIM files (pgs) instead of
+    a Fortran program (wfp)
+  why: GEMSIM needs no Fortran compiler
+  commit: 08687bcf
+- file: gtapv7_levels.tab
+  change: added
+  what: gtapv7.tab with orig_level on y, qinv, rore, pinv, pva, pe and the RORELEV
+    coefficient (make_levels_tab.py)
+  why: GEMPACK stores pre-/post-simulation levels (LEVB/LEVA) only for orig_level
+    variables; the paper compares these six
+  commit: 08687bcf
+outputs:
+  gtapuv7_levels.sti: 8ea02ab975a0b7ba7ba64d5cc88147f7f4175f12e54a587018fe24049cc4bbf0
+  gtapuv7_levels.tab: f409cf084f4fec5fbc191d6bfa5cd4d739101a8b715dbff97ef870a332112730
+  gtapv7_levels.sti: d4a41444d0cfcf5e0a2d5d18b6b0762e6a08f527df584158e5b6a09c25cfd603
+  gtapv7_levels.tab: f409cf084f4fec5fbc191d6bfa5cd4d739101a8b715dbff97ef870a332112730
+status: verified
+notes: 'licence: that of gtap7/gempack_rungtap375 (not stated by the source; to confirm)'
