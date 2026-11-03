@@ -144,7 +144,11 @@ def test_recargar_los_datos_conserva_el_signo():
 
 
 def test_altertax_con_gempack_reparte_el_va_como_evfp():
-    """altertax recalcula af = pfa*xf/va; con gempack pfa*xf = EVFP."""
+    """altertax recalcula af = (xf/va)*pfa**sigmav; con gempack pfa*xf = EVFP.
+
+    pf = EVFB/EVOS, so pfa = EVFP/EVOS. sigmav is 1.01 after the #192 guard, which
+    leaves af off the plain EVFP share by the factor pfa**(sigmav - 1).
+    """
     from equilibria.templates.gtap.altertax.parameter_overrides import (
         apply_altertax_elasticities,
     )
@@ -153,6 +157,7 @@ def test_altertax_con_gempack_reparte_el_va_como_evfp():
     p.set_va_subsidy_basis("gempack")
     alt = apply_altertax_elasticities(p, in_place=False)
     evfp = _har("EVFP")
+    evos = _har("EVOS")
     celdas = 0
     for r in p.sets.r:
         for a in p.sets.a:
@@ -164,9 +169,12 @@ def test_altertax_con_gempack_reparte_el_va_como_evfp():
             total = sum(datos.values())
             if total <= 0.0:
                 continue
+            sigmav = alt.elasticities.sigmav[(r, a)]
+            assert sigmav == 1.01
             for f, v in datos.items():
+                pfa = v / evos[(r, f, a)]
                 assert alt.calibrated.af_param[(r, f, a)] == pytest.approx(
-                    v / total, rel=1e-6
+                    v / total * pfa ** (sigmav - 1.0), rel=1e-6
                 ), (r, f, a)
                 celdas += 1
     assert celdas > 0
