@@ -4864,6 +4864,8 @@ class GTAPModelEquations:
         # PRICE EQUATIONS - CES COST FUNCTIONS (GAMS style)
         # ========================================================================
 
+        _el = self.params.elasticities
+
         # Unit cost definition (GAMS pxeq)
         # px**(1-sigmap) = (axp**(sigmap-1)) * [and*(pnd/lambdand)**(1-sigmap) + ava*(pva/lambdava)**(1-sigmap)]
         def eq_pxeq_rule(model, r, a):
@@ -4886,19 +4888,8 @@ class GTAPModelEquations:
                 return Constraint.Skip
 
             sigmap = self._get_sigmap(r, a)
+            _el.require_non_unit_production_sigma("sigmap", r, a, sigmap)
             expo = 1.0 - sigmap
-            if abs(expo) < 1e-8:
-                nd_term = (
-                    (model.pnd[r, a] / max(self._lambdand(r, a), 1e-8)) ** and_val
-                    if and_val > 0.0
-                    else 1.0
-                )
-                va_term = (
-                    (model.pva[r, a] / max(self._lambdava(r, a), 1e-8)) ** ava_val
-                    if ava_val > 0.0
-                    else 1.0
-                )
-                return model.px[r, a] == nd_term * va_term
 
             shift = self._axp_shift(r, a) ** (sigmap - 1.0)
             lambdand = max(self._lambdand(r, a), 1e-8)
@@ -4918,27 +4909,8 @@ class GTAPModelEquations:
         # pnd**(1-sigmand) = sum(i, io(r,i,a)*[pa(r,i)/lambdaio(r,i,a)]**(1-sigmand))
         def eq_pndeq_rule(model, r, a):
             sigmand = self._get_sigmand(r, a)
+            _el.require_non_unit_production_sigma("sigmand", r, a, sigmand)
             expo = 1.0 - sigmand
-            if abs(expo) < 1e-8:
-                terms = []
-                for i in model.i:
-                    io_val = (
-                        value(model.io_param[r, i, a])
-                        if hasattr(model, "io_param")
-                        else value(model.p_io[r, i, a])
-                    )
-                    if not self.params.shifts.lambdaio:
-                        io_val = value(model.p_io[r, i, a])
-                    if io_val <= 0.0:
-                        continue
-                    lambdaio = max(value(model.lambdaio[r, i, a]), 1e-8)
-                    terms.append((model.pa[r, i, a] / lambdaio) ** io_val)
-                if not terms:
-                    return Constraint.Skip
-                prod = 1.0
-                for term in terms:
-                    prod *= term
-                return model.pnd[r, a] == prod
 
             terms = []
             for i in model.i:
@@ -4969,17 +4941,8 @@ class GTAPModelEquations:
         # pva**(1-sigmav) = sum(f, af(r,f,a)*[pfa(r,f,a)/lambdaf(r,f,a)]**(1-sigmav))
         def eq_pvaeq_rule(model, r, a):
             sigmav = self._get_sigmav(r, a)
+            _el.require_non_unit_production_sigma("sigmav", r, a, sigmav)
             expo = 1.0 - sigmav
-            if abs(expo) < 1e-8:
-                # CD case (sigmav=1): standard CES formula degenerates to 1=sum(af)=1
-                # (tautology — pva not in expression). Mirroring GAMS, the constraint
-                # is vacuous: use exp(log(pva)) == pva which is always satisfied and
-                # has zero Jacobian for pva. PATH then determines pva from the
-                # cross-Jacobian entries of pxeq (px = pnd^and * pva^ava) and
-                # eq_va (va = ava*xp*(px/pva)), exactly as GAMS PATH does. In the
-                # multi-period driver this row is deactivated and pva is holdfixed
-                # per period (_holdfix_cd_nest), so the form here is inert there.
-                return exp(log(model.pva[r, a])) == model.pva[r, a]
 
             terms = []
             for f in model.f:

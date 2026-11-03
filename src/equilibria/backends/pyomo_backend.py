@@ -335,7 +335,7 @@ class PyomoBackend(Backend):
                             "Could not build constraint %s%s: %s", eq_name, indices, e
                         )
                         raise BridgeTranslationError(
-                            f"equation {eq_name}{indices} failed to build"
+                            f"equation {eq_name}{indices} failed to build: {e}"
                         ) from e
 
                 if constraint_dict:

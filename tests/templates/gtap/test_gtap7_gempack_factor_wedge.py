@@ -215,7 +215,6 @@ def test_check_gempack_reproduce_el_peso_de_los_factores():
         skip_base_solve=True,
         mute_welfare=True,
         seed_from_prior=False,
-        holdfix_cd=True,
         mode="gtap",
         solve_check=True,
     )

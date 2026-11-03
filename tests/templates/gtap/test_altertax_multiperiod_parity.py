@@ -159,7 +159,6 @@ def _solve_and_match(dataset: str, if_sub: bool):
         skip_base_solve=True,
         mute_welfare=True,
         seed_from_prior=False,
-        holdfix_cd=True,
     )
     codes = {k: res[k]["code"] for k in res}
 

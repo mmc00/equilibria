@@ -132,7 +132,6 @@ def _solve_shock(
             skip_base_solve=True,
             mute_welfare=True,
             seed_from_prior=False,
-            holdfix_cd=True,
             mode="gtap",
             # Solve the CHECK period so %-changes can be measured shock/check —
             # the denominator RunGTAP/GEMPACK uses.  base_calibrated's base is the

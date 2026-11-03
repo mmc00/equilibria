@@ -199,7 +199,6 @@ def _solve_and_measure(
         skip_base_solve=True,
         mute_welfare=True,
         seed_from_prior=altertax,
-        holdfix_cd=not altertax,
         mode=solve_mode,
     )
     codes = {k: res[k]["code"] for k in res}

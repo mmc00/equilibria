@@ -175,8 +175,7 @@ def _solve_and_match(dataset: str, if_sub: bool, period: str = "shock"):
     mp.seed_all_periods(m, ref)
 
     # gtap-mode: skip_base_solve=True keeps the calibrated base anchor (pva=ps=pd=1)
-    # instead of letting PATH slide the USA price level; holdfix_cd=False (the
-    # gtap-mode driver path does not run the altertax CD-nest holdfix).
+    # instead of letting PATH slide the USA price level.
     res = solve_multiperiod(
         m,
         p,
@@ -185,7 +184,6 @@ def _solve_and_match(dataset: str, if_sub: bool, period: str = "shock"):
         skip_base_solve=True,
         mute_welfare=True,
         seed_from_prior=False,
-        holdfix_cd=False,
         mode="gtap",
     )
     codes = {k: res[k]["code"] for k in res}
