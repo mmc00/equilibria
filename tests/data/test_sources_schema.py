@@ -51,3 +51,29 @@ def test_sha256_file(tmp_path: Path) -> None:
     assert sha256_file(f) == (
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     )
+
+
+def test_valid_external_loads(tmp_path: Path) -> None:
+    external = {
+        "gtapv7.exe": {"path": "C:/runGTAP375/gtapv7.exe", "sha256": "a" * 64,
+                       "release": "12.1.003"},
+        "gtapv7_levels.gss": {"path": "C:/work/gtapv7_levels.gss", "sha256": "b" * 64},
+    }  # fmt: skip
+    rec = load_source(write_record(tmp_path / "r", result_record(external=external)))
+    assert rec.raw["external"]["gtapv7.exe"]["release"] == "12.1.003"
+
+
+@pytest.mark.parametrize(
+    "external",
+    [
+        ["gtapv7.exe"],
+        {"gtapv7.exe": "C:/runGTAP375/gtapv7.exe"},
+        {"gtapv7.exe": {"path": "C:/runGTAP375/gtapv7.exe"}},
+        {"gtapv7.exe": {"path": "C:/x.exe", "sha256": "abc"}},
+        {"gtapv7.exe": {"path": "C:/x.exe", "sha256": "a" * 64, "host": "pc"}},
+    ],
+)
+def test_schema_rejects_bad_external(tmp_path: Path, external: object) -> None:
+    folder = write_record(tmp_path / "r", result_record(external=external))
+    with pytest.raises(SourceError, match="external"):
+        load_source(folder)

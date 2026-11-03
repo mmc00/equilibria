@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from equilibria.sources import check_tree, load_source
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -436,3 +438,104 @@ def test_no_options_file_records_no_options(tmp_path: Path) -> None:
     ]
     assert _module().main(argv) == 0
     assert load_source(folder).raw["solver"] == {"name": "PATH"}
+
+
+def _upstream(root: Path) -> Path:
+    """A file of another result, the input a chained result cross-checks against."""
+    dump = root / "gtap7" / "gtap7_3x3" / "gempack_tm10" / "sl4dump.har"
+    dump.parent.mkdir(parents=True)
+    dump.write_bytes(b"dump")
+    return dump
+
+
+def test_input_chains_a_result(tmp_path: Path) -> None:
+    """--input NAME=PATH hashes another result's file; editing it makes this one stale."""
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "sltoht_tm10"
+    cmd = [sys.executable, "-c", "open('out.txt','w').write('x')"]
+    argv = _argv(tmp_path, folder, cmd)
+    dump = _upstream(tmp_path)
+    argv[argv.index("--") : argv.index("--")] = ["--input", f"sl4dump={dump}"]
+    assert _module().main(argv) == 0
+    chained = load_source(folder).raw["generated_from"]["sl4dump"]
+    assert chained["path"] == "gtap7/gtap7_3x3/gempack_tm10/sl4dump.har"
+    assert len(chained["sha256"]) == 64
+    dump.write_bytes(b"edited")
+    assert any(
+        "sltoht_tm10: input sl4dump" in m and "changed after" in m
+        for m in check_tree(tmp_path)
+    )
+
+
+def test_input_folder_hashes_every_file(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "sltoht_tm10"
+    cmd = [sys.executable, "-c", "open('out.txt','w').write('x')"]
+    argv = _argv(tmp_path, folder, cmd)
+    dump = _upstream(tmp_path)
+    argv[argv.index("--") : argv.index("--")] = ["--input", f"solution={dump.parent}"]
+    assert _module().main(argv) == 0
+    chained = load_source(folder).raw["generated_from"]["solution"]
+    assert chained["path"] == "gtap7/gtap7_3x3/gempack_tm10"
+    assert set(chained["sha256"]) == {"sl4dump.har"}
+
+
+def test_input_outside_root_refused(tmp_path: Path) -> None:
+    root = tmp_path / "data"
+    folder = root / "gtap7" / "gtap7_3x3" / "sltoht_tm10"
+    outside = tmp_path / "elsewhere.har"
+    outside.write_bytes(b"x")
+    argv = _argv(root, folder, [sys.executable, "-c", "open('ran.txt','w').write('x')"])
+    argv[argv.index("--") : argv.index("--")] = ["--input", f"sl4dump={outside}"]
+    with pytest.raises(SystemExit):
+        _module().main(argv)
+    assert not (folder / "ran.txt").exists()
+
+
+def test_input_cannot_reuse_model_or_data(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "sltoht_tm10"
+    argv = _argv(tmp_path, folder, [sys.executable, "-c", "pass"])
+    dump = _upstream(tmp_path)
+    argv[argv.index("--") : argv.index("--")] = ["--input", f"model={dump}"]
+    with pytest.raises(SystemExit):
+        _module().main(argv)
+
+
+def test_external_is_recorded_not_checked(tmp_path: Path) -> None:
+    """--external hashes a file kept out of the repository; check_tree never reads it."""
+    root = tmp_path / "data"
+    folder = root / "gtap7" / "gtap7_3x3" / "gemsim_levels6"
+    exe = tmp_path / "runGTAP375" / "gtapv7.exe"
+    exe.parent.mkdir()
+    exe.write_bytes(b"MZ")
+    gss = tmp_path / "work" / "gtapv7_levels.gss"
+    gss.parent.mkdir()
+    gss.write_bytes(b"gss")
+    argv = _argv(root, folder, [sys.executable, "-c", "open('out.txt','w').write('x')"])
+    argv[argv.index("--") : argv.index("--")] = [
+        "--external",
+        f"gtapv7.exe={exe}@12.1.003",
+        "--external",
+        f"gtapv7_levels.gss={gss}",
+    ]
+    assert _module().main(argv) == 0
+    external = load_source(folder).raw["external"]
+    assert external["gtapv7.exe"]["path"] == str(exe)
+    assert external["gtapv7.exe"]["release"] == "12.1.003"
+    assert len(external["gtapv7.exe"]["sha256"]) == 64
+    assert "release" not in external["gtapv7_levels.gss"]
+    exe.unlink()
+    gss.unlink()
+    assert not any("gemsim_levels6" in m for m in check_tree(root))
+
+
+def test_missing_external_fails_before_running(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gemsim_levels6"
+    argv = _argv(
+        tmp_path, folder, [sys.executable, "-c", "open('ran.txt','w').write('x')"]
+    )
+    argv[argv.index("--") : argv.index("--")] = [
+        "--external",
+        f"gtapv7.exe={tmp_path / 'nope.exe'}",
+    ]
+    with pytest.raises(SystemExit):
+        _module().main(argv)
+    assert not (folder / "ran.txt").exists()
