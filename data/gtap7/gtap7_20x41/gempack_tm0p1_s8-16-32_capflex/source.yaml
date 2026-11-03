@@ -1,0 +1,51 @@
+kind: result
+model: gtap7
+dataset: gtap7_20x41
+tool: gempack
+tool_version: 12.1.003
+variant:
+  shock: 0.1
+  steps: 8-16-32
+  closure: capFlex
+phases:
+- shock
+generated_from:
+  model:
+    path: gtap7/gempack
+    sha256:
+      tools/regenerate_gempack.py: ecb1099c39fb686315c0b5a2e7935d6a7481578475688980aa84f6345d5b94a6
+      tools/run_gempack_matrix.py: dad828823ecafc5b55022454e35d83e0a0d5e200ee6e5e5d4ca1acc16af0ff6d
+  data:
+    path: gtap7/gtap7_20x41
+    sha256:
+      basedata.har: b3fde39c79155ba7c2c89cc2a277298e9c36b68257e3fda544d7dc881e512f1d
+      baserate.har: 6f172e398edf06b94d1a6e289ee54fb77a848c77c241324e8a546b867620d082
+      default.prm: 751a81f7ec77c6a230606734151d45d55c42f8e2e669810f915e2a927833159b
+      sets.har: 488823c4aace83c5407d53163c94a9639edc19c02179a18ad9000c9ce498dea8
+      v7_consolidated.gdx: 95056566164f938dc61a0eaf9b0450cec0f80d9854ae712acb083af4d0ef0c0c
+solver:
+  name: gtapv7
+command: '''C:\Documentos\proyectos\equilibria\.venv\Scripts\python.exe'' ''C:\Documentos\proyectos\equilibria\data\gtap7\gempack\tools\run_gempack_matrix.py''
+  --datasets gtap7_20x41 --shock-pct 0.1 --steps ''8 16 32'' --rordelta 1 --out ''C:\Documentos\proyectos\equilibria\data\gtap7\gtap7_20x41\gempack_tm0p1_s8-16-32_capflex''
+  --gtapv7 ''C:\runGTAP375\gtapv7.exe'' --sltoht ''C:\GP\sltoht.exe'' --expect-release
+  12.1.003'
+equilibria_commit: 134b8602
+exit:
+  code: 0
+outputs:
+  decomp.har: d0992829269cdb331e93b395d5db32bf764a86b81cc382c57ba6be2ad72788c6
+  run.cmf: 9fd0c7a9d90fefbe959b5bf9b2926f460c7e70639a893875c21aa4fdb5313e7a
+  sl4dump.har: bcfd5db3f0479f0493c5f7a6286937b6a684fc31f0a11ffba9e4736cda6a79dc
+  sltoht_console.txt: 1768f5b25b9675eade064dd7ab5d94a3950dbc3431416bb292b09a65d506fbc3
+  solve_console.txt: be7f31dab425359b28dd5c3ffbeb4930c926b1079c2552ce95279342f38efc6c
+  updated.har: 1310578f5f2890128c0d2482fc5533a6ab12c4975ad29dfc373712d4b28e2d8f
+run:
+  date: '2026-10-30T13:02:57-06:00'
+  duration_s: 528.195
+  machine:
+    os: Windows 11 (10.0.26200)
+    cpu: 13th Gen Intel(R) Core(TM) i7-1365U
+    cores: 10
+    ram_gb: 31.4
+status: verified
+notes: ''

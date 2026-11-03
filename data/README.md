@@ -23,11 +23,13 @@ data/
   gtap7/
     gams_jgea/                the official JGEA supplementary files, untouched
     gams/                     the GAMS GTAP v7 model that runs (derived_from gams_jgea)
+    gempack/tools/            the scripts that drive GEMPACK (gtapv7.exe); every GEMPACK result hashes gempack/
     gtap7_3x3/
       basedata.har sets.har default.prm ...   + source.yaml (kind: data)
       gams_nl_altertax_ifsub0_fbep-zero/     .nl per phase + source.yaml (kind: result)
       gams_nlp_gtap_ifsub1_fbep-header/      GDX
       gams_mcp_gtap_ifsub1_fbep-header/      GDX
+      gempack_tm10_s8-16-32_capflex/         updated.har, sl4dump.har, run.cmf
     gtap7_10x7/ ...
     nus333/ ...
   gtap6/ ...

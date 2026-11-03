@@ -238,7 +238,7 @@ if ($okTab) {
             if ($rdlt -ge 0) {
                 $prm = Join-Path $dest "default_$tag.prm"
                 Copy-Item "data\gtap7\$ds\default.prm" $prm -Force
-                & uv run python -c "import sys; sys.path.insert(0, 'scripts/gtap'); from pathlib import Path; from run_gempack_matrix import _force_rdlt; _force_rdlt(Path(sys.argv[1]), int(sys.argv[2]))" $prm $rdlt *> (Join-Path $dest "force_rdlt_console.txt")
+                & uv run python -c "import sys; sys.path.insert(0, 'data/gtap7/gempack/tools'); from pathlib import Path; from run_gempack_matrix import _force_rdlt; _force_rdlt(Path(sys.argv[1]), int(sys.argv[2]))" $prm $rdlt *> (Join-Path $dest "force_rdlt_console.txt")
                 if ($LASTEXITCODE -ne 0) { Result $step $false "fallo _force_rdlt (ver force_rdlt_console.txt)"; continue }
             }
             $cmf = Join-Path $dest "$tag.cmf"

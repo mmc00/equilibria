@@ -27,6 +27,9 @@ DATA_ROOT = Path(
     os.environ.get("EQUILIBRIA_DATA_DIR")
     or Path(__file__).resolve().parents[2] / "data"
 )
+# The scripts that drive GEMPACK (gtapv7.exe) live in its tools/: every
+# GEMPACK result hashes this folder whole, so editing one makes it stale.
+GEMPACK_MODEL_DIR = DATA_ROOT / "gtap7" / "gempack"
 
 # The GAMS GTAP v7 model (comp.gms and its includes) that generates the results.
 GAMS_MODEL_DIR = DATA_ROOT / "gtap7" / "gams"
@@ -276,7 +279,8 @@ def has_dataset(dataset: str, *, root: Path = DATA_ROOT) -> bool:
     return bool(matches)
 
 
-_EXEMPT = frozenset({SOURCE_FILE, "README.md"})
+# data/.gitattributes keeps git from converting the line endings of hashed files
+_EXEMPT = frozenset({SOURCE_FILE, "README.md", ".gitattributes"})
 
 
 def own_files(folder: Path) -> list[Path]:

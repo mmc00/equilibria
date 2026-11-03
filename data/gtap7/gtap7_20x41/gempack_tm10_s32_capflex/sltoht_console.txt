@@ -1,0 +1,414 @@
+  
+  (Processing command line options.)
+  
+  
+  (Opening Stored-input file 'sl4dump_tm10_s32_capflex.sti')
+ (Opened, as text, existing file 'sl4dump_tm10_s32_capflex.sti'.)
+ Taking inputs from a Stored-input file
+  
+  
+ <SLTOHT   Version 5.53  July 2013>
+   This program accesses some of the routines in the GEMPACK software release
+ <GEMPACK Release 11.3.004   January 2015>
+  
+     -------------------------------------------------------
+    !            GEMPACK Software System Licence            !
+    !  Source Code Licence for the GEMPACK Software System  !
+    !                 Licence No.  GFM-1415                 !
+    !          Licence for Release 11.0 of GEMPACK          !
+    !               Ministry of Foreign Trade               !
+    !             PO Box 297-1007 Centro Colon,             !
+    !                      Costa Rica                       !
+     -------------------------------------------------------
+  
+  
+     << COPYRIGHT 1985-2013: CoPS/Impact and KPSOFT >>
+  
+  Current directory is:
+ <work>
+  
+  
+  Full path name of running EXE is: C:\GP\sltoht.exe
+  Fortran compiler = GF64  4.8.1 (rev3, built by mingw-builds project):
+  Operating system is Windows 8
+  
+  
+  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  
+  
+                    SLTOHT OPTIONS
+               ( --> indicates those in effect )
+  
+       BAT Run in batch          --> STI Take inputs from a Stored-input file
+       BPR Brief prompts             SIF Store inputs on a file
+       LOG Output to log file        ASI Add to incomplete Stored-input file
+                                     DES Write description file
+       LV  Which levels results      VAI Variable arguments ignored (har output)
+       SHL Show levels results       SIR Solutions in rows (text output)
+                                     SIC Solutions in columns (text output)
+       SSS Short SS output           SS  Spreadsheet (Sols in cols - text)
+       SHK Shock CMF output          SSE Spreadsheet with element labels
+       SES Short SSE output          NEL No element labels for SIR,SIC,SS,SSS
+                                     SEP Show solutions separately
+                                     HSS HA and SSS output in one run
+                                     PCL %-change for change var in lev results
+  
+  Select an option   :  <opt>      Deselect an option      : -<opt>
+  Help for an option : ?<opt>      Help on all options     : ??
+  Redisplay options  : /           Finish option selection : Carriage return
+  
+ Your selection >
+  
+  
+  
+  
+  SOLUTION FILE TO CONVERT
+  ------------------------
+  
+  Input the full name (excluding suffix) of this file.
+   (The suffix '.sl4' will be appended automatically to your input.)
+  
+  
+ tm10_s32_capflex
+ (Opened, as binary, existing file 'tm10_s32_capflex.sl4'.)
+  
+  !  This file was created at 13:20:17 on 30-OCT-2026 by the program
+  !    <gtapv7.for 09-SEP-2020> [gtapv7.tab]
+  !  which accesses some of the routines in the GEMPACK software release
+  !    <GEMPACK Release 12.1.003   January 2020>
+  !  [The program which created this file was compiled with GF64.]
+  
+  
+  THE UNDERLYING MODEL IS ' '.
+   VERSION NUMBER IS 1
+    IDENTIFIER IS ' '
+  
+  What follows is a verbal description of the old experiment.
+  
+  
+ gtap7_20x41 uniform 10pct shock to import tariff power (tm), standard GTAP
+ closure, capflex (RORDELTA=1)
+ [Solution method is gragg. Steps = 32.]
+ [CMF file: tm10_s32_capflex.cmf]
+  
+  
+  
+  The value of U used in MA28A was 0.10000000.
+  
+  
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   Contents of Solution File :
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  
+  Only cumulative solutions (i.e. TOTALS and SUBTOTALS) are available.
+  
+  
+  There are also Levels results on this Solution file.
+  Select option SHL at the start of SLTOHT to see them.
+  
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  Which solutions from this Solution file do you want :
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  The single column consisting of the Cumulative totals . . . .[C] (the default)
+  EXIT program now  . . . . . . . . . . . . . . . . . . . . . .[e]
+  
+  
+  
+ c
+  
+  Only cumulative solutions (i.e. TOTALS and SUBTOTALS) are available
+    in this SOLUTION file.
+  
+  
+  All cumulatively-retained endogenous variables kept.
+   (Real matrix with 695122 rows and 1 columns read. Header 'CUMS')
+  
+  Do you want to use an existing HEADER MAPPING file
+  for mapping variables to headers ? [Y/n]
+  
+  
+ n
+  
+  NEW HEADER MAPPING TO BE CREATED
+ --------------------------------
+  
+  Input the full name (INCLUDING suffix) of this file.
+  
+  
+ har
+ (Opened new text file 'har'.)
+  
+  Header Array File to Hold Solutions
+  -----------------------------------
+  
+  Input the full name (INCLUDING suffix) of this file.
+    Enter a CARRIAGE-RETURN to use the name    'tm10_s32_capflex.sol'.
+  
+  
+ sl4dump_tm10_s32_capflex.har
+ (Opened new header file 'sl4dump_tm10_s32_capflex.har'.)
+ (Writing ONLY CUMULATIVE TOTALS solution to file
+   'sl4dump_tm10_s32_capflex.har'.)
+  
+  ------------------------------------------------------------
+     Variable      ! Header !     Array  Size      ! Undefined
+       Name        !        !                      !  values
+  ------------------------------------------------------------
+   pds             !  0001  ! 20x41                !      0
+   qfd             !  0002  ! 20x20x41             !      0
+   pms             !  0003  ! 20x41                !      0
+   qfm             !  0004  ! 20x20x41             !      0
+   pfd             !  0005  ! 20x20x41             !      0
+   pfm             !  0006  ! 20x20x41             !      0
+   pes             !  0007  ! 5x20x41              !      0
+   qes             !  0008  ! 5x20x41              !      0
+   peb             !  0009  ! 5x20x41              !      0
+   qfe             !  0010  ! 5x20x41              !      0
+   pfe             !  0011  ! 5x20x41              !      0
+   ps              !  0012  ! 20x20x41             !      0
+   qca             !  0013  ! 20x20x41             !      0
+   pca             !  0014  ! 20x20x41             !      0
+   qgd             !  0015  ! 20x41                !      0
+   qgm             !  0016  ! 20x41                !      0
+   pgd             !  0017  ! 20x41                !      0
+   pgm             !  0018  ! 20x41                !      0
+   qpd             !  0019  ! 20x41                !      0
+   qpm             !  0020  ! 20x41                !      0
+   ppd             !  0021  ! 20x41                !      0
+   ppm             !  0022  ! 20x41                !      0
+   qid             !  0023  ! 20x41                !      0
+   qim             !  0024  ! 20x41                !      0
+   pid             !  0025  ! 20x41                !      0
+   pim             !  0026  ! 20x41                !      0
+   psave           !  0027  ! 41                   !      0
+   qsave           !  0028  ! 41                   !      0
+   pinv            !  0029  ! 41                   !      0
+   kb              !  0030  ! 41                   !      0
+   qxs             !  0031  ! 20x41x41             !      0
+   pfob            !  0032  ! 20x41x41             !      0
+   pcif            !  0033  ! 20x41x41             !      0
+   pmds            !  0034  ! 20x41x41             !      0
+   qst             !  0035  ! 1x41                 !      0
+   y               !  0036  ! 41                   !      0
+   pop             !  0037  ! 41                   !      0
+   pgov            !  0038  ! 41                   !      0
+   yg              !  0039  ! 41                   !      0
+   ug              !  0040  ! 41                   !      0
+   ppriv           !  0041  ! 41                   !      0
+   yp              !  0042  ! 41                   !      0
+   uepriv          !  0043  ! 41                   !      0
+   up              !  0044  ! 41                   !      0
+   to              !  0045  ! 20x20x41             !      0
+   tinc            !  0046  ! 5x20x41              !      0
+   endwslack       !  0047  ! 5x41                 !      0
+   qms             !  0048  ! 20x41                !      0
+   globalcgds      !  0049  ! 1                    !      0
+   pcgdswld        !  0050  ! 1                    !      0
+   po              !  0051  ! 20x41                !      0
+   qo              !  0052  ! 20x41                !      0
+   ao              !  0053  ! 20x41                !      0
+   pint            !  0054  ! 20x41                !      0
+   qint            !  0055  ! 20x41                !      0
+   aint            !  0056  ! 20x41                !      0
+   pva             !  0057  ! 20x41                !      0
+   qva             !  0058  ! 20x41                !      0
+   ava             !  0059  ! 20x41                !      0
+   pfa             !  0060  ! 20x20x41             !      0
+   qfa             !  0061  ! 20x20x41             !      0
+   afa             !  0062  ! 20x20x41             !      0
+   afe             !  0063  ! 5x20x41              !      0
+   profitslack     !  0064  ! 20x41                !      0
+   aosec           !  0065  ! 20                   !      0
+   aoreg           !  0066  ! 41                   !      0
+   aoall           !  0067  ! 20x41                !      0
+   afcom           !  0068  ! 20                   !      0
+   afsec           !  0069  ! 20                   !      0
+   afreg           !  0070  ! 41                   !      0
+   afall           !  0071  ! 20x20x41             !      0
+   avasec          !  0072  ! 20                   !      0
+   avareg          !  0073  ! 41                   !      0
+   afecom          !  0074  ! 5                    !      0
+   afesec          !  0075  ! 20                   !      0
+   afereg          !  0076  ! 41                   !      0
+   afeall          !  0077  ! 5x20x41              !      0
+   aintsec         !  0078  ! 20                   !      0
+   aintreg         !  0079  ! 41                   !      0
+   aintall         !  0080  ! 20x41                !      0
+   pb              !  0081  ! 20x41                !      0
+   qc              !  0082  ! 20x41                !      0
+   fincome         !  0083  ! 41                   !      0
+   incomeslack     !  0084  ! 41                   !      0
+   del_indtaxr     !  0085  ! 41                   !      0
+   uelas           !  0086  ! 41                   !      0
+   dpsave          !  0087  ! 41                   !      0
+   dpgov           !  0088  ! 41                   !      0
+   dppriv          !  0089  ! 41                   !      0
+   dpav            !  0090  ! 41                   !      0
+   p               !  0091  ! 41                   !      0
+   au              !  0092  ! 41                   !      0
+   dpsum           !  0093  ! 41                   !      0
+   u               !  0094  ! 41                   !      0
+   ppa             !  0095  ! 20x41                !      0
+   qpa             !  0096  ! 20x41                !      0
+   pga             !  0097  ! 20x41                !      0
+   qga             !  0098  ! 20x41                !      0
+   pia             !  0099  ! 20x41                !      0
+   qia             !  0100  ! 20x41                !      0
+   qinv            !  0101  ! 41                   !      0
+   ams             !  0102  ! 20x41x41             !      0
+   ptrans          !  0103  ! 20x41x41             !      0
+   qtmfsd          !  0104  ! 1x20x41x41           !      0
+   pt              !  0105  ! 1                    !      0
+   qtm             !  0106  ! 1                    !      0
+   atmfsd          !  0107  ! 1x20x41x41           !      0
+   atm             !  0108  ! 20                   !      0
+   atf             !  0109  ! 20                   !      0
+   ats             !  0110  ! 41                   !      0
+   atd             !  0111  ! 41                   !      0
+   tx              !  0112  ! 20x41                !      0
+   txs             !  0113  ! 20x41x41             !      0
+   tm              !  0114  ! 20x41                !      0
+   tms             !  0115  ! 20x41x41             !      0
+   pr              !  0116  ! 20x41                !      0
+   qds             !  0117  ! 20x41                !      0
+   tradslack       !  0118  ! 20x41                !      0
+   tpd             !  0119  ! 20x41                !      0
+   tpm             !  0120  ! 20x41                !      0
+   tpreg           !  0121  ! 41                   !      0
+   pe              !  0122  ! 4x41                 !      0
+   qe              !  0123  ! 4x41                 !      0
+   qesf            !  0124  ! 1x20x41              !      0
+   ke              !  0125  ! 41                   !      0
+   rore            !  0126  ! 41                   !      0
+   rorc            !  0127  ! 41                   !      0
+   rental          !  0128  ! 41                   !      0
+   rorg            !  0129  ! 1                    !      0
+   cgdslack        !  0130  ! 41                   !      0
+   expand          !  0131  ! 1x41                 !      0
+   psaveslack      !  0132  ! 41                   !      0
+   del_taxrout     !  0133  ! 41                   !      0
+   del_taxrfu      !  0134  ! 41                   !      0
+   del_taxriu      !  0135  ! 41                   !      0
+   del_taxrpc      !  0136  ! 41                   !      0
+   del_taxrgc      !  0137  ! 41                   !      0
+   del_taxric      !  0138  ! 41                   !      0
+   del_taxrexp     !  0139  ! 41                   !      0
+   del_taxrimp     !  0140  ! 41                   !      0
+   del_taxrinc     !  0141  ! 41                   !      0
+   del_ttaxr       !  0142  ! 41                   !      0
+   pfactor         !  0143  ! 41                   !      0
+   pfactwld        !  0144  ! 1                    !      0
+   walras_sup      !  0145  ! 1                    !      0
+   walras_dem      !  0146  ! 1                    !      0
+   walraslack      !  0147  ! 1                    !      0
+   vxwfob          !  0148  ! 20x41                !      0
+   vmwcif          !  0149  ! 20x41                !      0
+   vxwreg          !  0150  ! 41                   !      0
+   vmwreg          !  0151  ! 41                   !      0
+   pfactreal       !  0152  ! 5x20x41              !      0
+   pebfactreal     !  0153  ! 4x41                 !      0
+   pefactreal      !  0154  ! 4x41                 !      0
+   psw             !  0155  ! 41                   !      0
+   pdw             !  0156  ! 41                   !      0
+   tot             !  0157  ! 41                   !      0
+   vgdp            !  0158  ! 41                   !      0
+   pgdp            !  0159  ! 41                   !      0
+   qgdp            !  0160  ! 41                   !      0
+   compvalad       !  0161  ! 20x41                !      0
+   pxw             !  0162  ! 20x41                !      0
+   vxwcom          !  0163  ! 20                   !      0
+   vxwwld          !  0164  ! 1                    !      0
+   vmwcom          !  0165  ! 20                   !      0
+   valuew          !  0166  ! 20                   !      0
+   valuewu         !  0167  ! 20                   !      0
+   pxwreg          !  0168  ! 41                   !      0
+   pxwcom          !  0169  ! 20                   !      0
+   pxwwld          !  0170  ! 1                    !      0
+   pmw             !  0171  ! 20x41                !      0
+   pmwreg          !  0172  ! 41                   !      0
+   pmwcom          !  0173  ! 20                   !      0
+   pw              !  0174  ! 20                   !      0
+   pwu             !  0175  ! 20                   !      0
+   qxw             !  0176  ! 20x41                !      0
+   qxwreg          !  0177  ! 41                   !      0
+   qxwcom          !  0178  ! 20                   !      0
+   qxwwld          !  0179  ! 1                    !      0
+   qmw             !  0180  ! 20x41                !      0
+   qmwreg          !  0181  ! 41                   !      0
+   qmwcom          !  0182  ! 20                   !      0
+   qow             !  0183  ! 20                   !      0
+   qowu            !  0184  ! 20                   !      0
+   del_tbalc       !  0185  ! 20x41                !      0
+   del_tbal        !  0186  ! 41                   !      0
+   ywld            !  0187  ! 1                    !      0
+   del_tbalry      !  0188  ! 41                   !      0
+   pm_cr           !  0189  ! 20x41                !      0
+   c1_cr           !  0190  ! 20x41                !      0
+   c2_cr           !  0191  ! 20x41                !      0
+   c3_cr           !  0192  ! 20x41                !      0
+   c1_r            !  0193  ! 41                   !      0
+   c2_r            !  0194  ! 41                   !      0
+   c3_r            !  0195  ! 41                   !      0
+   tot2            !  0196  ! 41                   !      0
+   uelasev         !  0197  ! 41                   !      0
+   ueprivev        !  0198  ! 41                   !      0
+   ugev            !  0199  ! 41                   !      0
+   upev            !  0200  ! 41                   !      0
+   qsaveev         !  0201  ! 41                   !      0
+   yev             !  0202  ! 41                   !      0
+   ypev            !  0203  ! 41                   !      0
+   ygev            !  0204  ! 41                   !      0
+   qpev            !  0205  ! 20x41                !      0
+   ysaveev         !  0206  ! 41                   !      0
+   dpavev          !  0207  ! 41                   !      0
+   EV              !  0208  ! 41                   !      0
+   WEV             !  0209  ! 1                    !      0
+   EV_ALT          !  0210  ! 41                   !      0
+   WEV_ALT         !  0211  ! 1                    !      0
+   CNTdpar         !  0212  ! 41                   !      0
+   CNTpop          !  0213  ! 41                   !      0
+   CNTqor          !  0214  ! 41                   !      0
+   CNTqo           !  0215  ! 20x41                !      0
+   CNTqca          !  0216  ! 20x20x41             !      0
+   CNTqe           !  0217  ! 5x41                 !      0
+   CNTqea          !  0218  ! 5x20x41              !      0
+   CNTqfer         !  0219  ! 41                   !      0
+   CNTqfeer        !  0220  ! 5x41                 !      0
+   CNTqfe          !  0221  ! 5x20x41              !      0
+   CNTqfr          !  0222  ! 41x2                 !      0
+   CNTqfm          !  0223  ! 20x20x41             !      0
+   CNTqfd          !  0224  ! 20x20x41             !      0
+   CNTqpm          !  0225  ! 20x41                !      0
+   CNTqpd          !  0226  ! 20x41                !      0
+   CNTqpr          !  0227  ! 41x2                 !      0
+   CNTqia          !  0228  ! 41x2                 !      0
+   CNTqim          !  0229  ! 20x41                !      0
+   CNTqid          !  0230  ! 20x41                !      0
+   CNTqgr          !  0231  ! 41x2                 !      0
+   CNTqgm          !  0232  ! 20x41                !      0
+   CNTqgd          !  0233  ! 20x41                !      0
+   CNTqxsr         !  0234  ! 41                   !      0
+   CNTqxs          !  0235  ! 20x41x41             !      0
+   CNTqmsr         !  0236  ! 41                   !      0
+   CNTqms          !  0237  ! 20x41x41             !      0
+   CNTalleffr      !  0238  ! 41x9                 !      0
+   CNTalleffcr     !  0239  ! 20x41                !      0
+   CNTtotr         !  0240  ! 41                   !      0
+   CNTpinv         !  0241  ! 41                   !      0
+   CNTendwr        !  0242  ! 41                   !      0
+   CNTendw         !  0243  ! 5x41                 !      0
+   CNTtechr        !  0244  ! 7x41                 !      0
+   CNTtech_ao      !  0245  ! 20x41                !      0
+   CNTtech_afe     !  0246  ! 5x20x41              !      0
+   CNTtech_ava     !  0247  ! 20x41                !      0
+   CNTtech_aint    !  0248  ! 20x41                !      0
+   CNTtech_af      !  0249  ! 20x20x41             !      0
+   CNTtech_atmfsd  !  0250  ! 1x20x41x41           !      0
+   CNTtech_ams     !  0251  ! 20x41x41             !      0
+   CNTkb           !  0252  ! 41                   !      0
+ (New Header Array file is 'sl4dump_tm10_s32_capflex.har'.)
+ (New Mapping file is 'har'.)
+  
+  (The program has completed without error.)
+  Total elapsed time is: less than one second.
+  
