@@ -88,12 +88,14 @@ def _has_solver() -> bool:
     return importlib.util.find_spec("path_capi_python") is not None
 
 
-def _fixture_gdx(dataset: str, ifsub: int, mode: str = "altertax") -> Path | None:
+def _fixture_gdx(
+    dataset: str, ifsub: int, mode: str = "altertax", fbep: str = "header"
+) -> Path | None:
     # fbep=header: the GAMS MCP reference with FBEP split out as Python does it;
     # Python is built with the data's subsidy sign to match (#191)
     folder = find_reference(
         dataset, "gams", form="mcp", mode="gtap" if mode == "pure" else "altertax",
-        ifsub=ifsub, fbep="header",
+        ifsub=ifsub, fbep=fbep,
     )  # fmt: skip
     return None if folder is None else folder / "out.gdx"
 
@@ -104,7 +106,9 @@ def _strip(s):
     return s
 
 
-def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
+def _solve_and_measure(
+    dataset: str, ifsub: int, mode: str, gdx: Path, basis: str = "gempack"
+):
     """Build + seed + solve base→check→shock via PATH (MCP); return
     {period: {"match": float, "code": int, "total": int}}."""
     from _diff_core import gams_levels, list_populated_vars, split_t
@@ -142,7 +146,7 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
     )
     # the data's FBEP sign, as the fbep=header reference has it; the default
     # "gams" basis keeps the old sign (#191)
-    p.set_va_subsidy_basis("gempack")
+    p.set_va_subsidy_basis(basis)
     rr = list(p.sets.r)[-1]
 
     if mode == "altertax":
@@ -283,3 +287,30 @@ def test_gtap7_mcp_parity(dataset, ifsub, mode, floors, ci_status, code2_ok):
             f"[{tag}/{stage}] MCP match {mm['match']:.2f}% < floor {floor}% "
             f"(over {mm['total']} cells) — regression"
         )
+
+
+# Each Python basis reproduces its own GAMS reference to the cell (#191, #193):
+# "gams" is the official getData.gms (fbep=zero), "gempack" the HAR's headers
+# (fbep=header). gtap7_10x7 has the cells the data subsidise with no factor tax.
+_BASIS_CASES = [
+    ("gtap7_3x3", 1, "gams", "zero"),
+    ("gtap7_10x7", 0, "gams", "zero"),
+    ("gtap7_10x7", 0, "gempack", "header"),
+]
+
+
+@pytest.mark.parametrize(
+    "dataset,ifsub,basis,fbep", _BASIS_CASES,
+    ids=[f"{d}-ifsub{k}-{b}-vs-{v}" for d, k, b, v in _BASIS_CASES],
+)  # fmt: skip
+def test_basis_reproduces_its_gams_variant(dataset, ifsub, basis, fbep):
+    if not _has_solver():
+        pytest.skip("PATH solver (path_capi_python) not available")
+    gdx = _fixture_gdx(dataset, ifsub, "pure", fbep)
+    if gdx is None or not has_dataset(dataset):
+        pytest.skip(f"no {dataset} fbep={fbep} reference or data")
+    per = _solve_and_measure(dataset, ifsub, "pure", gdx, basis)
+    assert {k: v["code"] for k, v in per.items()} == dict.fromkeys(per, 1)
+    assert {k: round(v["match"], 2) for k, v in per.items()} == dict.fromkeys(
+        per, 100.0
+    )

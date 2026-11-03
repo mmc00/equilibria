@@ -58,7 +58,13 @@ BASELINE_COUNT = 37638
 # Bumped 2026-10-24 from 43e3e111227ccd37: eq_chisave[check|shock] is a Tornqvist
 # index against base (build_equations_fisher), weights NETINV/SAVE of both periods.
 # Same 37638 rows; diffed row by row: only eq_chisave[check] and [shock] move.
-BASELINE_HASH = "7ee7e4da8f99de13"
+#
+# Bumped 2026-11-02 from 7ee7e4da8f99de13: the default "gams" subsidy basis is the
+# official net wedge EVFP - EVFB (#191, #193), so VA is valued at EVFP. Same 37638
+# rows; diffed row by row against main 9a7e9c09: 1400 move, all of them factor-side
+# shares or valuations: eq_xfeq 756, eq_pvaeq/eq_x/eq_po 210 each, and 14 Fisher
+# factor-price aggregates (eq_mq_factr_*/eq_mq_factw_*).
+BASELINE_HASH = "133e0275bf993a1d"
 
 
 def _load_params():

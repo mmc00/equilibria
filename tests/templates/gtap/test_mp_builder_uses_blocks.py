@@ -170,6 +170,15 @@ def test_blocks_and_monolith_build_the_same_system():
     exentas = [k for k in mono if k.startswith(instrumento)]
     assert exentas, "la exencion de instrumentos no encontro filas: revisar nombres"
 
+    # Rows whose coefficients come from the base income split, which holds the
+    # factor tax revenue. The blocks book it on the subsidy basis of #191 (the
+    # official net wedge EVFP - EVFB); the deprecated monolith keeps the old
+    # -FBEP/EVFB sign (R-MONOLITH retires it). Their skeleton must still match;
+    # only the coefficients may differ.
+    income_split = tuple(
+        f"{e}[" for e in ("eq_phi", "eq_u", "eq_yc", "eq_yg", "eq_rsav")
+    )
+
     distintas = []
     for k in mono:
         if k.startswith(instrumento):
@@ -178,6 +187,8 @@ def test_blocks_and_monolith_build_the_same_system():
         sb, nb = split(blk[k])
         if sa != sb or len(na) != len(nb):
             distintas.append((k, "estructura"))
+            continue
+        if k.startswith(income_split):
             continue
         for x, y in zip(na, nb, strict=True):
             if abs(x - y) > 1e-12 * max(1.0, abs(x), abs(y)):

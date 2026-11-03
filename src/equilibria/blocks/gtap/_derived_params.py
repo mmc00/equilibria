@@ -51,18 +51,10 @@ def _f(x: Any) -> float:
 def _va_wedge(params: Any, bm: Any, r: str, f: str, a: str) -> float:
     """Factor tax/subsidy wedge added to evfb in the VA valuation.
 
-    GAMS/default basis (``va_subsidy_basis="gams"``): ``ftrv - fbep`` — the
-    factor subsidy (FBEP, stored native-negative) RAISES the firm factor price
-    pfa, so va = evfb + ftrv - fbep. This is faithful to the GAMS reference
-    solve (va.l/xp.l), validated to 6 figures.
-
-    GEMPACK basis (``va_subsidy_basis="gempack"``): ``ftrv + fbep`` — GEMPACK's
-    EVFP header ("primary factor purchases at purchasers' prices") treats the
-    subsidy as LOWERING purchaser cost, so the VA-vs-intermediate weight ava
-    matches GEMPACK's STC total-cost share (0.571 vs GAMS's 0.679 on subsidised
-    agriculture). Re-anchors VA valuation from GAMS to GEMPACK on the ~177
-    subsidised ag cells; closes ~half the qxs gap vs GEMPACK. Selected by the
-    ``gtap7_gempack`` closure. See project_gtap_qxs_bilateral_trade_residual.
+    Tax plus subsidy of the basis (factor_wedge_values): EVFP - EVFB under both,
+    "gams" as one net tax (the official getData.gms), "gempack" as the FTRV
+    header plus FBEP (the HAR's headers). So va = EVFP at the benchmark, the
+    data's purchaser value of the factors (#191).
     """
     return sum(factor_wedge_values(bm, r, f, a, va_subsidy_basis(params)))
 
@@ -478,10 +470,11 @@ def etaf_data(
 
 
 def fcttx_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
-    """fcttx(r,f,a) = ftrv/evfb (0 if evfb<=0) — monolith 5065-5069."""
+    """fcttx(r,f,a): the basis's tax over evfb (0 if evfb<=0); see factor_wedge_rates."""
     bm = params.benchmark
+    basis = va_subsidy_basis(params)
     return {
-        (r, f, a): factor_wedge_rates(bm, r, f, a)[0]
+        (r, f, a): factor_wedge_rates(bm, r, f, a, basis)[0]
         for r in sets.r
         for f in sets.f
         for a in sets.a
@@ -489,9 +482,10 @@ def fcttx_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
 
 
 def fctts_data(params: Any, sets: Any) -> dict[tuple[str, str, str], float]:
-    """fctts(r,f,a) = -fbep/evfb (0 if evfb<=0) — monolith 5071-5075.
+    """fctts(r,f,a): the basis's subsidy over evfb (0 if evfb<=0).
 
-    Bajo el cierre gtap7_gempack, +fbep/evfb (ver factor_wedge_rates).
+    0 under "gams" (the official getData nets it into fcttx), +fbep/evfb under
+    "gempack"; see factor_wedge_rates.
     """
     bm = params.benchmark
     basis = va_subsidy_basis(params)
@@ -929,9 +923,11 @@ def ytax_stream_bench(
         return total
 
     if gy == "ft":
-        # Al benchmark pf*xf/xscale == evfb, asi que ft = Σ fcttx*evfb = Σ ftrv.
+        # At the benchmark pf*xf/xscale == evfb, so ft = sum fcttx*evfb = the tax
+        # value of the basis (factor_wedge_values), as fcttx itself is built.
+        basis = va_subsidy_basis(params)
         for rr, f, a in [(r_, f_, a_) for (r_, f_, a_) in bm.evfb if r_ == region]:
-            total += _f(bm.ftrv.get((region, f, a), 0.0))
+            total += factor_wedge_values(bm, region, f, a, basis)[0]
         return total
 
     if gy == "fs":

@@ -1,17 +1,17 @@
-"""Cuna de impuestos/subsidios a los factores (r, f, a): la unica fuente.
+"""The factor tax/subsidy wedge (r, f, a): the one source.
 
-pfa = pf*(1 + fcttx + fctts), con fcttx = FTRV/EVFB (impuesto) y fctts segun el
-signo del subsidio (``va_subsidy_basis``):
+pfa = pf*(1 + fcttx + fctts). The data satisfy EVFP = EVFB + FTRV + FBEP, with
+the subsidy FBEP <= 0. Each ``va_subsidy_basis`` reproduces one GAMS reference
+(#187, #191, #193):
 
-- "gams" (default): fctts = -FBEP/EVFB, como cal.gms. FBEP es <= 0, asi que el
-  subsidio SUBE pfa.
-- "gempack": fctts = +FBEP/EVFB, la identidad de los datos EVFP = EVFB + FTRV +
-  FBEP (cierra a 3e-8 en gtap7_15x10; la de GAMS falla en 0,46%): 1 + fcttx +
-  fctts = EVFP/EVFB, la cuna neta de GTAPv7.jl y GEMPACK.
+- "gams" (default): the official getData.gms (``fbep=zero``): fbep = 0 and
+  ftrv = EVFP - EVFB, one net tax that holds the subsidy; fctts = 0.
+- "gempack": the HAR's headers (``fbep=header``): fcttx = FTRV/EVFB, with the
+  FTRV header (0 where the data subsidise with no tax), and fctts = +FBEP/EVFB.
 
-Bajo "gams" las cuentas son las mismas operaciones de punto flotante que antes
-(-1.0*fbep == -fbep y ftrv + (-fbep) == ftrv - fbep), asi que el cierre por
-defecto queda identico bit a bit.
+Both give the data's wedge, 1 + fcttx + fctts = EVFP/EVFB. Before #191, "gams"
+took fctts = -FBEP/EVFB (cal.gms's sign on the HAR's negative FBEP), which
+booked the subsidy as a tax.
 """
 
 from __future__ import annotations
@@ -35,14 +35,24 @@ def check_basis(basis: str) -> VaSubsidyBasis:
     return basis  # type: ignore[return-value]
 
 
+def _get(table: Any, key: tuple[str, str, str]) -> float:
+    return float((table or {}).get(key, 0.0) or 0.0)
+
+
 def factor_wedge_values(
     benchmark: Any, r: str, f: str, a: str, basis: VaSubsidyBasis = "gams"
 ) -> tuple[float, float]:
-    """(impuesto, subsidio) en valor: (FTRV, -FBEP) con gams, (FTRV, +FBEP) con gempack."""
-    sign = 1.0 if check_basis(basis) == "gempack" else -1.0
-    ftrv = float(benchmark.ftrv.get((r, f, a), 0.0) or 0.0)
-    fbep = float(benchmark.fbep.get((r, f, a), 0.0) or 0.0)
-    return ftrv, sign * fbep
+    """(tax, subsidy) in value: (EVFP - EVFB, 0) with gams, (FTRV, FBEP) with gempack."""
+    key = (r, f, a)
+    evfp, evfb = _get(benchmark.vfm, key), _get(benchmark.evfb, key)
+    fbep = _get(benchmark.fbep, key)
+    if check_basis(basis) == "gams":
+        return evfp - evfb, 0.0
+    # the FTRV header where the data have one; else the identity, which is 0
+    # where the cell is only subsidised (the loader's EVFP - EVFB holds FBEP)
+    har = getattr(benchmark, "ftrv_har", None) or {}
+    ftrv = _get(har, key) if key in har else evfp - evfb - fbep
+    return ftrv, fbep
 
 
 def factor_wedge_rates(
