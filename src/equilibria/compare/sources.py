@@ -256,7 +256,7 @@ def from_pyomo(
 
 _CONVERSION_HINT = (
     "Pasa el .sl4 de la solucion directo, o conviertela a un .har de NIVELES "
-    "(LEVB/LEVA) con scripts/gtap/export_sl4_levels.py (usa `sltoht -SHL -SIC`)."
+    "(LEVB/LEVA) con data/gtap7/gempack/tools/export_sl4_levels.py (usa `sltoht -SHL -SIC`)."
 )
 
 
@@ -268,7 +268,7 @@ def from_har(
     """Niveles de una solucion GEMPACK desde su ``.sl4`` o su ``.har`` de NIVELES.
 
     El ``.sl4`` se lee directo (:func:`equilibria.babel.har.sl4_levels.read_sl4_levels`).
-    El ``.har`` es la salida de ``scripts/gtap/export_sl4_levels.py``; la convencion
+    El ``.har`` es la salida de ``data/gtap7/gempack/tools/export_sl4_levels.py``; la convencion
     vive en :mod:`equilibria.babel.har.sl4_levels`. Periodos: ``pre`` (LEVB) y
     ``post`` (LEVA); un ``.har`` solo con LEVA trae solo ``post``.
 

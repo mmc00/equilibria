@@ -31,7 +31,7 @@ import pytest
 from equilibria.babel.har.reader import read_har
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts" / "gtap" / "export_sl4_levels.py"
+SCRIPT = ROOT / "data" / "gtap7" / "gempack" / "tools" / "export_sl4_levels.py"
 FIXTURES = ROOT / "tests" / "fixtures" / "gtap7_gempack"
 SAMPLE = FIXTURES / "sl4levels_sample_sic.txt"
 SL4DUMP_3X3 = FIXTURES / "sl4dump_gtap7_3x3_tm10.har"

@@ -124,7 +124,7 @@ function Export-Levels([string]$step, [string]$sl4, [string]$sl4dump, [string]$d
     $har = Join-Path $dest "sl4levels_$stem.har"
     $console = Join-Path $dest "export_console.txt"
     $t0 = Get-Date
-    & uv run python scripts\gtap\export_sl4_levels.py $copy --sl4dump $sl4dump --sltoht $Sltoht --out $har *> $console
+    & uv run python data\gtap7\gempack\tools\export_sl4_levels.py $copy --sl4dump $sl4dump --sltoht $Sltoht --out $har *> $console
     $rc = $LASTEXITCODE
     $secs = [math]::Round(((Get-Date) - $t0).TotalSeconds, 1)
     $text = Join-Path $dest "${stem}_levels.txt"
@@ -193,7 +193,7 @@ if ($Pasos -contains 4) {
 $Lv = Join-Path $Out "4_niveles"
 $Tab = Join-Path $Lv "tab"
 New-Item -ItemType Directory -Force -Path $Tab | Out-Null
-& uv run python scripts\gtap\make_levels_tab.py (Join-Path $GtapDir "gtapv7.tab") --sti (Join-Path $GtapDir "gtapv7.sti") --out-dir $Tab *> (Join-Path $Tab "make_levels_tab_console.txt")
+& uv run python data\gtap7\gempack\tools\make_levels_tab.py (Join-Path $GtapDir "gtapv7.tab") --sti (Join-Path $GtapDir "gtapv7.sti") --out-dir $Tab *> (Join-Path $Tab "make_levels_tab_console.txt")
 $okTab = ($LASTEXITCODE -eq 0) -and (Test-Path (Join-Path $Tab "gtapv7_levels.tab"))
 Result "4 make_levels_tab" $okTab "rc=$LASTEXITCODE ($Tab)"
 if ($okTab) {
@@ -272,7 +272,7 @@ if ($Pasos -contains 5) {
 $Bf = Join-Path $Out "5_burfisher"
 $Tab5 = Join-Path $Bf "tab"
 New-Item -ItemType Directory -Force -Path $Tab5 | Out-Null
-& uv run python scripts\gtap\make_levels_tab.py (Join-Path $GtapDir "gtapv7.tab") --sti (Join-Path $GtapDir "gtapv7.sti") --out-dir $Tab5 --uncondensed *> (Join-Path $Tab5 "make_levels_tab_console.txt")
+& uv run python data\gtap7\gempack\tools\make_levels_tab.py (Join-Path $GtapDir "gtapv7.tab") --sti (Join-Path $GtapDir "gtapv7.sti") --out-dir $Tab5 --uncondensed *> (Join-Path $Tab5 "make_levels_tab_console.txt")
 $okTab5 = ($LASTEXITCODE -eq 0) -and (Test-Path (Join-Path $Tab5 "gtapuv7_levels.tab"))
 Result "5 make_levels_tab --uncondensed" $okTab5 "rc=$LASTEXITCODE ($Tab5)"
 $okGss5 = $false

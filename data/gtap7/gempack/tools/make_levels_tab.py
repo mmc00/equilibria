@@ -30,9 +30,12 @@ condensation block (``c`` ... ``e``, omissions included). That is GTAPUV7, the
 model RunGTAP uses for Burfisher's experiments: their ``.EXP`` fix and shock
 variables (atall, tfd, tpdall...) that the condensation omits.
 
-Usage (any OS; compiling with tablo is Windows-only, see scripts/windows):
-    uv run python scripts/gtap/make_levels_tab.py C:/runGTAP375/gtapv7.tab ^
-        --sti C:/runGTAP375/gtapv7.sti --out-dir out/ [--uncondensed]
+Usage (any OS; compiling with tablo is Windows-only, see scripts/windows). The
+input is RunGTAP 3.75's gtapv7.tab 7.0, kept unchanged in data/gtap7/gempack_rungtap375:
+    uv run python data/gtap7/gempack/tools/make_levels_tab.py \
+        data/gtap7/gempack_rungtap375/gtapv7.tab \
+        --sti data/gtap7/gempack_rungtap375/gtapv7.sti --out-dir out/ \
+        [--uncondensed] [--changes-out changes.yaml]
 """
 
 from __future__ import annotations
@@ -167,6 +170,63 @@ def _write(path: Path, text: str, eol: str) -> None:
     path.write_bytes(text.replace("\n", eol).encode(ENCODING))
 
 
+def changes(name: str, uncondensed: bool, commit: str) -> list[dict[str, str]]:
+    """The ``changes`` entries (write_source --kind model) for the two files written."""
+    sti_what = (
+        f"gtapv7.sti pointed at {name}, writing GEMSIM files (pgs) instead of a "
+        "Fortran program (wfp)"
+        + (", without the condensation block (GTAPUV7)" if uncondensed else "")
+    )
+    sti_why = "GEMSIM needs no Fortran compiler" + (
+        "; Burfisher's .exp fix and shock variables the condensation omits"
+        if uncondensed
+        else ""
+    )
+    return [
+        {
+            "file": f"{name}.tab",
+            "change": "added",
+            "what": f"gtapv7.tab with orig_level on {', '.join(LEVELS)} and the "
+            "RORELEV coefficient (make_levels_tab.py)",
+            "why": "GEMPACK stores pre-/post-simulation levels (LEVB/LEVA) only for "
+            "orig_level variables; the paper compares these six",
+            "commit": commit,
+        },
+        {
+            "file": f"{name}.sti",
+            "change": "added",
+            "what": sti_what,
+            "why": sti_why,
+            "commit": commit,
+        },
+    ]
+
+
+def _write_changes(path: Path, entries: list[dict[str, str]]) -> None:
+    """Merge ``entries`` into the YAML list at ``path``, one entry per file."""
+    import yaml
+
+    old = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else []
+    files = {e["file"] for e in entries}
+    merged = [e for e in old or [] if e["file"] not in files] + entries
+    path.write_text(
+        yaml.safe_dump(sorted(merged, key=lambda e: e["file"]), sort_keys=False),
+        encoding="utf-8",
+    )
+
+
+def _git_commit() -> str:
+    import subprocess
+
+    try:
+        return subprocess.check_output(
+            ["git", "-C", str(Path(__file__).parent), "rev-parse", "--short", "HEAD"],
+            text=True,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return ""
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     ap.add_argument("tab", type=Path, help="gtapv7.tab to patch (left untouched)")
@@ -174,6 +234,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out-dir", type=Path, required=True)
     ap.add_argument(
         "--uncondensed", action="store_true", help=f"write {NAME_UNCONDENSED} (GTAPUV7)"
+    )
+    ap.add_argument(
+        "--changes-out",
+        type=Path,
+        help="YAML for write_source --kind model --changes: the two files written, "
+        "merged with the entries already in it",
     )
     args = ap.parse_args(argv)
     name = NAME_UNCONDENSED if args.uncondensed else NAME
@@ -187,6 +253,8 @@ def main(argv: list[str] | None = None) -> int:
         patch_sti(sti, name, condense=not args.uncondensed),
         sti_eol,
     )
+    if args.changes_out:
+        _write_changes(args.changes_out, changes(name, args.uncondensed, _git_commit()))
     print(
         f"wrote {args.out_dir / name}.tab and .sti (orig_level on {', '.join(LEVELS)})"
     )

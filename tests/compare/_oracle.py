@@ -726,7 +726,7 @@ EX16_NO_LEVEL_WHY = "sin nivel en GEMPACK"
 # datos, 7 enteros: registros que quedan, filas, columnas, fila inicial, fila
 # final, columna inicial, columna final.
 # Oraculo: sl4levels_gtap7_20x41_tm10_s8-16-32_capfix.har, escrito en Windows el
-# 2026-10-19 por scripts/gtap/export_sl4_levels.py desde el TEXTO de
+# 2026-10-19 por data/gtap7/gempack/tools/export_sl4_levels.py desde el TEXTO de
 # `sltoht -SHL -SIC` del mismo .sl4. No pasa por el lector nuevo. El exportador
 # reporto 44 variables con nivel, 208 sin nivel (NOLV) y 0 discrepancias
 # contra el sl4dump (windows/corridas-paper, windows_paper_out/2026-10-19_1356).

@@ -40,12 +40,12 @@ Output HAR layout (read by the compare source, #131):
 
 Usage (from repo root, Windows; default --out = sl4levels_<suffix of the sl4dump>.har
 next to the sl4dump):
-    uv run python scripts/gtap/export_sl4_levels.py ^
+    uv run python data/gtap7/gempack/tools/export_sl4_levels.py ^
         runs/gempack_matrix/gtap7_20x41/tm10_s8-16-32_capfix.sl4 ^
         --sl4dump tests/fixtures/gtap7_gempack/sl4dump_gtap7_20x41_tm10_s8-16-32_capfix.har ^
         --sltoht C:/GP/sltoht.exe
 Any OS, from a saved sltoht text:
-    uv run python scripts/gtap/export_sl4_levels.py levels.txt --from-text --sl4dump X.har
+    uv run python data/gtap7/gempack/tools/export_sl4_levels.py levels.txt --from-text --sl4dump X.har
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "src"))
 from equilibria.babel.har.reader import read_har  # noqa: E402
 
