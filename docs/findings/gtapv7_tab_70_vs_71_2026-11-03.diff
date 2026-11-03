@@ -1,5 +1,5 @@
 diff --git a/rungtap375/gtapv7.tab b/data/gtap7/gempack_purdue/gtapv7.tab
-index 9ce6987e..2854cd6a 100644
+index 2dfb787a..2854cd6a 100644
 --- a/rungtap375/gtapv7.tab
 +++ b/data/gtap7/gempack_purdue/gtapv7.tab
 @@ -2,8 +2,8 @@
@@ -1423,8 +1423,9 @@ index 9ce6987e..2854cd6a 100644
 -        + DITAX(c,r) * [qid(c,r) - pop(r)]
 -        + sum{s,REG, XTAXD(c,r,s) * [qxs(c,r,s) - pop(r)]}
 -        + sum{s,REG, MTAX(c,s,r) * [qxs(c,s,r) - pop(r)]} ] ;
--
--Variable (linear,change) (all,r,REG)
++                    * MTAX(c,s,d) * [qxs(c,s,d) - pop(d)];
+ 
+ Variable (linear,change) (all,r,REG)
 -    CNTtotr(r)
 -    # contribution to regional EV of changes in its terms of trade #;
 -Equation E_CNTtotr
@@ -1436,9 +1437,8 @@ index 9ce6987e..2854cd6a 100644
 -            + sum{m,MARG, VST(m,r) * [pds(m,r) - pxwwld]}
 -            - sum{c,COMM, sum{s,REG, VFOB(c,s,r) * [pfob(c,s,r) - pxwwld]}}
 -            - sum{m,MARG, VTMD(m,r) * [pt(m) - pxwwld]}];
-+                    * MTAX(c,s,d) * [qxs(c,s,d) - pop(d)];
- 
- Variable (linear,change) (all,r,REG)
+-
+-Variable (linear,change) (all,r,REG)
 -    CNTpinv(r) # contribution to regional EV of changes in investment price #;
 -Equation E_CNTpinv
 -# contribution to regional EV of changes in investment price index #
@@ -1610,7 +1610,7 @@ index 9ce6987e..2854cd6a 100644
 +    11-5.7 Summary of contributions (EV) 
 +    ------------------------------------
 +>!
- 
++
 +!< Allocative efficiency contributions >!
 +Variable (linear,change) (all,r,REG)(all,t,ALLTAX)
 +    CNTalleffr(r,t) # total contribution to regional EV of allocative effects #;
@@ -1628,7 +1628,7 @@ index 9ce6987e..2854cd6a 100644
 +        + IF[t="invtax",   sum{c,COMM, CNTqid(c,r) + CNTqim(c,r)}  ]
 +        + IF[t="xtax",     sum{c,COMM, sum{d,REG,  CNTqxs(c,r,d)}} ]
 +        + IF[t="mtax",     sum{c,COMM, sum{s,REG,  CNTqms(c,s,r)}} ];
-+
+ 
 +Variable (linear,change) (all,c,COMM)(all,r,REG)
 +    CNTalleffcr(c,r)
 +    # total contribution to regional EV of allocative effects #;
@@ -2034,7 +2034,7 @@ index 9ce6987e..2854cd6a 100644
      VDBCHK(c,r) # VCB(c,r) - MAKEBCOM(c,r) should be tiny #;
  Formula (all,c,COMM)(all,r,REG)
      VDBCHK(c,r) = VCB(c,r) - MAKEBCOM(c,r);
-@@ -5321,13 +5394,17 @@ Formula (all,c,COMM)(all,a,ACTS)(all,r,REG)
+@@ -5321,16 +5394,20 @@ Formula (all,c,COMM)(all,a,ACTS)(all,r,REG)
  Write 
      VOSCHK to file GTAPSUM header "VOCS" longname "VOSCHK as %"; 
  
@@ -2057,3 +2057,8 @@ index 9ce6987e..2854cd6a 100644
  postsim (end);
  !<
      =====================
+     END OF GTAP.TAB FILE
+     =====================
+->!
+\ No newline at end of file
++>!
