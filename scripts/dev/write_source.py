@@ -19,9 +19,11 @@ from __future__ import annotations
 import argparse
 import ctypes
 import datetime as dt
+import json
 import os
 import platform
 import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -33,6 +35,7 @@ import yaml
 from equilibria.sources import (
     DATA_ROOT,
     SOURCE_FILE,
+    check_derived,
     load_source,
     own_files,
     sha256_file,
@@ -152,6 +155,20 @@ def _inputs(args: argparse.Namespace, root: Path) -> dict[str, Any]:
     return generated_from
 
 
+def _solver(name: str, folder: Path, options_file: str | None) -> dict[str, Any]:
+    """The solver and, when the run left an options file, every option it set."""
+    solver: dict[str, Any] = {"name": name}
+    opt = folder / options_file if options_file else None
+    if opt is not None and opt.exists():
+        options = {}
+        for line in opt.read_text(encoding="utf-8").splitlines():
+            if line.strip() and not line.lstrip().startswith("*"):
+                key, _, value = line.strip().partition(" ")
+                options[key] = value.strip()
+        solver["options"] = options
+    return solver
+
+
 def _git_commit() -> str:
     try:
         return subprocess.check_output(
@@ -175,8 +192,26 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model-file", type=Path)
     ap.add_argument("--data-dir", type=Path)
     ap.add_argument("--solver")
+    ap.add_argument(
+        "--solver-options-file",
+        help="file the command leaves in the folder (path.opt): recorded as solver.options",
+    )
     ap.add_argument("--source", help="kind data/model: where it comes from")
     ap.add_argument("--license", help="kind data: redistribution terms")
+    ap.add_argument(
+        "--derived-from",
+        help="kind model: the folder it was derived from, relative to the data root",
+    )
+    ap.add_argument(
+        "--changes",
+        type=Path,
+        help="kind model: YAML list of {file, change, what, why, commit}",
+    )
+    ap.add_argument(
+        "--remote",
+        choices=["neos"],
+        help="the command solved remotely: neos reads <folder>/neos_job.json",
+    )
     ap.add_argument("--notes", default="")
     ap.add_argument("--no-run", action="store_true")
     ap.add_argument("command", nargs=argparse.REMAINDER)
@@ -186,6 +221,7 @@ def main(argv: list[str] | None = None) -> int:
         command = command[1:]
     root = args.data_root.resolve()
     folder = args.folder.resolve()
+    created = not folder.exists()
     folder.mkdir(parents=True, exist_ok=True)
 
     record: dict[str, Any] = {"kind": args.kind, "model": args.model}
@@ -208,7 +244,26 @@ def main(argv: list[str] | None = None) -> int:
         duration = time.perf_counter() - t0
         if proc.returncode != 0:
             print(f"command failed (exit {proc.returncode}); no source.yaml written")
+            if created:  # a failed job leaves nothing; the next run resumes from it
+                shutil.rmtree(folder)
             return proc.returncode
+        run_info: dict[str, Any] = {
+            "date": started.isoformat(timespec="seconds"),
+            "duration_s": round(duration, 3),
+            "machine": machine_info(),
+        }
+        if args.remote == "neos":
+            job = json.loads((folder / "neos_job.json").read_text(encoding="utf-8"))
+            if args.tool_version and args.tool_version != job["gams_version"]:
+                print(
+                    f"--tool-version {args.tool_version} but NEOS ran GAMS "
+                    f"{job['gams_version']}; no source.yaml written"
+                )
+                return 1
+            args.tool_version = job.pop("gams_version")
+            run_info["date"] = job["finished_utc"]
+            run_info["machine"] = {"os": "NEOS server", "cpu": "", "cores": None,
+                                   "ram_gb": None}  # fmt: skip
         record.update(
             {
                 "tool": args.tool,
@@ -216,22 +271,29 @@ def main(argv: list[str] | None = None) -> int:
                 "variant": _variant(args.variant),
                 **({"phases": args.phases} if args.phases else {}),
                 "generated_from": generated_from,
-                **({"solver": {"name": args.solver}} if args.solver else {}),
+                **(
+                    {"solver": _solver(args.solver, folder, args.solver_options_file)}
+                    if args.solver
+                    else {}
+                ),
                 "command": shlex.join(command),
                 "equilibria_commit": _git_commit(),
                 "exit": {"code": proc.returncode},
                 "outputs": _outputs(folder),
-                "run": {
-                    "date": started.isoformat(timespec="seconds"),
-                    "duration_s": round(duration, 3),
-                    "machine": machine_info(),
-                },
+                "run": run_info,
             }
         )
+        if args.remote == "neos":
+            record["neos"] = job
     else:
         record["source"] = args.source or ""
         if args.kind == "data":
             record["license"] = args.license or ""
+        if args.derived_from or args.changes:
+            if args.kind != "model" or not (args.derived_from and args.changes):
+                ap.error("--derived-from and --changes go together, for --kind model")
+            record["derived_from"] = args.derived_from
+            record["changes"] = yaml.safe_load(args.changes.read_text(encoding="utf-8"))
         record["outputs"] = _outputs(folder)
     record["status"] = "verified"
     record["notes"] = args.notes
@@ -240,6 +302,11 @@ def main(argv: list[str] | None = None) -> int:
         yaml.safe_dump(record, sort_keys=False, allow_unicode=True), encoding="utf-8"
     )
     load_source(folder)  # what was written must be a valid record
+    problems = check_derived(folder, root)
+    if problems:
+        (folder / SOURCE_FILE).unlink()
+        print("\n".join(problems) + "\nno source.yaml written")
+        return 1
     print(f"wrote {folder / SOURCE_FILE}")
     return 0
 

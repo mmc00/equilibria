@@ -60,7 +60,7 @@ Reference: `src/equilibria/templates/reference/gtap/output/COMP.gdx` (rate-scale
 
 ## GTAP Standard 7 — NUS333 (3 sectors × 3 regions × 3 factors)
 
-Reference: `output/nus333_neos/out.gdx` (NEOS job 18744693, power-scaled 10% imptx shock, residual region `ROW`).
+Reference: `data/gtap7/nus333/gams_mcp_gtap_ifsub0_fbep-zero/out.gdx` (GAMS 53.5 local, power-scaled 10% imptx shock, residual region `ROW`).
 
 *Generated `2026-05-12T00:09:18Z` from commit `e5b9385`.*
 

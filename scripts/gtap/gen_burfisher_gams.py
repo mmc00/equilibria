@@ -46,7 +46,7 @@ from run_burfisher import EXERCISES, me9  # noqa: E402
 
 from equilibria.templates.gtap.shocks import gempack_kind, shocked  # noqa: E402
 
-GAMS_SRC = ROOT / "src" / "equilibria" / "templates" / "reference" / "gtap" / "scripts"
+GAMS_SRC = ROOT / "data" / "gtap7" / "gams"
 COMP_SHOCK = Path(__file__).resolve().parent / "gams" / "comp_shock.gms"
 HAR_FILES = ("basedata.har", "sets.har", "baserate.har")
 
@@ -406,7 +406,11 @@ def run_exercise(exp: str, run: GamsRun) -> tuple[str, str]:
     (SOLVED | NOT_OPTIMAL | FAILED, linea para imprimir). NOT_OPTIMAL deja el GDX
     (ME4A/B terminan asi y el paper los reporta como N/A); FAILED no deja nada.
     """
-    from equilibria.babel.har_to_gdx import write_nus333_gdx_bundle
+    from equilibria.sources import GAMS_TOOLS_DIR
+
+    if str(GAMS_TOOLS_DIR) not in sys.path:
+        sys.path.insert(0, str(GAMS_TOOLS_DIR))
+    from nus333_bundle import write_nus333_gdx_bundle
 
     for f in ("lst", "log"):
         (run.out / f"{exp}.{f}").unlink(missing_ok=True)

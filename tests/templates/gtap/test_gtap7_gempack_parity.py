@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from equilibria.sources import dataset_dir, has_dataset
+from equilibria.sources import dataset_dir, find_reference, has_dataset
 
 pytestmark = pytest.mark.integration
 ROOT = Path(__file__).resolve().parents[3]
@@ -116,8 +116,13 @@ def _solve_shock(
         # twin-solve fallback recovers rore/rorg. Verified on 3x4: shock code=1 with
         # ref_gdx=None. So pass the GDX only if it exists; on small datasets the twin-solve
         # fallback is cheap enough.
-        _gdx = ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub{ifsub}.gdx"
-        gdx = _gdx if _gdx.exists() else None
+        # MCP where GAMS has one; gtap7_20x41 only has the NLP (CONOPT) reference
+        _ref = find_reference(
+            dataset, "gams", form="mcp", mode="gtap", ifsub=ifsub, fbep="header"
+        ) or find_reference(
+            dataset, "gams", form="nlp", mode="gtap", ifsub=ifsub, fbep="header"
+        )
+        gdx = None if _ref is None else _ref / "out.gdx"
         m, mp = build_block_model(p, p.sets, ac, rr, base_calibrated=True, ref_gdx=gdx)
         res = solve_multiperiod(
             m,

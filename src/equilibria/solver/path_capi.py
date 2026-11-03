@@ -37,13 +37,6 @@ PATH_CAPI_SRC_DEFAULT = Path(str(path_capi_src()))
 PATH_CAPI_LIB_DEFAULT = _PATH_CAPI_CACHE / "libpath50.silicon.dylib"
 PATH_CAPI_LUSOL_DEFAULT = _PATH_CAPI_CACHE / "liblusol.silicon.dylib"
 
-# Opt-in GAMS comparison snapshot. Excluded from the wheel (it is a parity
-# input, not library data), so this path may legitimately not exist.
-COMP_CSV_REFERENCE = (
-    Path(__file__).resolve().parents[2]
-    / "equilibria/templates/reference/gtap/comp/COMP_generated.csv"
-)
-
 
 @contextlib.contextmanager
 def _env_override(**overrides: str | None):
@@ -1008,10 +1001,16 @@ def _run_path_capi_nonlinear_full(
         "on",
     }:
         try:
-            warm_start_snapshot = GTAPVariableSnapshot.from_standard_gtap_csv(
-                COMP_CSV_REFERENCE,
-                params.sets,
-                solution_year=1,
+            from equilibria.templates.gtap.gtap_parity_pipeline import (
+                standard_gtap_reference_gdx,
+            )
+
+            # the recorded 9x10 GAMS reference (outside a checkout with data/: None)
+            reference_gdx = standard_gtap_reference_gdx()
+            if reference_gdx is None:
+                raise FileNotFoundError("no recorded 9x10 GAMS reference under data/")
+            warm_start_snapshot = GTAPVariableSnapshot.from_gdx(
+                reference_gdx, params.sets, period="base"
             )
             solver_helper.apply_solution_hint(warm_start_snapshot)
         except Exception as exc:

@@ -1,0 +1,11 @@
+{
+  "job": 24356749,
+  "submitted_utc": "2026-11-03T02:06:27+00:00",
+  "finished_utc": "2026-11-03T02:06:43+00:00",
+  "category": "cp",
+  "solver": "PATH",
+  "input_method": "GAMS",
+  "options": "",
+  "gams_version": "53.5.1",
+  "sent_sha256": "e1518d0458ee9e8f57d8c90617ed8a92915a9f3bd2b923fcf2878b503d1f97a5"
+}

@@ -1,0 +1,263 @@
+kind: model
+model: gtap7
+source: 'The GTAP v7 GAMS model equilibria runs: gtap7/gams_jgea plus the changes
+  listed below, each with what, why and the commit'
+derived_from: gtap7/gams_jgea
+changes:
+- file: comp.gms
+  change: modified
+  what: baseName/inDir/outDir become overridable defaults (9x10, ../data, ../output);
+    ifCSV/ifCSVAppend become globals; set labels c_ProcFood, c_TextWapp capitalized;
+    'shock' in single quotes; iterlim 1000 -> 50000 in the solve options
+  why: 'defaults: run with the bundled 9x10 data and let callers pass --inDir (4be9bcf).
+    iterlim: with 1000 the altertax check period stopped mid-iteration with status
+    2 (3e758c8); it only lets PATH iterate longer, a converged solution is the same.
+    ifCSV, label case and quotes came with the curated copy (cge_babel e63a738), reason
+    not recorded; the bundle builders now anchor on the single-quoted shock line'
+  commit: 4be9bcf, 3e758c8, cge_babel e63a738
+- file: getData.gms
+  change: modified
+  what: execute_load / execute_loaddc of Dat, Emiss and Prm become compile-time $gdxin
+    + $load / $loadDC
+  why: NEOS runs the model remotely without the local GDX files at execution time;
+    loading at compile time embeds the data. Same symbols, same values
+  commit: cge_babel e63a738
+- file: gft.gms
+  change: modified
+  what: baseName/inDir/outDir become overridable defaults (9x10, ../data, ../output);
+    'shock' in single quotes
+  why: same as comp.gms (4be9bcf); quotes came with the curated copy, reason not recorded
+  commit: 4be9bcf, cge_babel e63a738
+- file: gftCapFix.gms
+  change: modified
+  what: baseName/inDir/outDir become overridable defaults (9x10, ../data, ../output);
+    'shock' in single quotes
+  why: same as comp.gms (4be9bcf); quotes came with the curated copy, reason not recorded
+  commit: 4be9bcf, cge_babel e63a738
+- file: GFTCET.gms
+  change: modified
+  what: baseName/inDir/outDir become overridable defaults (9x10, ../data, ../output);
+    'shock' in single quotes
+  why: same as comp.gms (4be9bcf); quotes came with the curated copy, reason not recorded
+  commit: 4be9bcf, cge_babel e63a738
+- file: GFTFlxFF.gms
+  change: modified
+  what: baseName/inDir/outDir become overridable defaults (9x10, ../data, ../output);
+    'shock' in single quotes
+  why: same as comp.gms (4be9bcf); quotes came with the curated copy, reason not recorded
+  commit: 4be9bcf, cge_babel e63a738
+- file: GFTLnd.gms
+  change: modified
+  what: baseName/inDir/outDir become overridable defaults (9x10, ../data, ../output);
+    'shock' in single quotes
+  why: same as comp.gms (4be9bcf); quotes came with the curated copy, reason not recorded
+  commit: 4be9bcf, cge_babel e63a738
+- file: iterloop.gms
+  change: modified
+  what: pwmg.l = 0 on routes with no trade margin (not tmgFlag) before each solve
+  why: cal.gms leaves pwmg = 1 on those routes; the 9x10 reference GDX has 0 there.
+    Reported level of a variable with no equation; no equation changes
+  commit: cd51b48
+- file: cal.gms
+  change: modified
+  what: sigmap, sigmand and sigmav equal to 1 become 1.01 after the elasticities are
+    set, before the shares are calibrated (#192)
+  why: at exactly 1 the power-form pxeq, pndeq and pvaeq reduce to 1 = 1 and stop
+    pinning px, pnd and pva; altertax sets all three to 1, so its check had a continuum
+    of solutions (two IPOPT starts, EV 16 % apart) and the 5x5 ifSUB=0 check failed.
+    cal.gms already does this for sigmag, sigmai and sigmamg; the exact Cobb-Douglas
+    limit with a base scale differs from 1.01 by at most 3e-5 in the 10x7 shock
+  commit: this change
+- file: postsim.gms
+  change: modified
+  what: pdp = pd*(1+dintx) and pmp = pmt*(1+mintx) recomputed for every cell after
+    the solve
+  why: where alpha = 0 the pdp/pmp equations are off and iterloop leaves their cal.gms
+    value 1.0; the 9x10 reference GDX and the NEOS run of NUS333 both recompute them
+    for every cell, and the local run was the only one that did not (10 shock cells,
+    99.24 %). Reported levels only
+  commit: 131339b
+- file: comp_altertax.gms
+  change: added
+  what: comp.gms with the altertax elasticities (Cobb-Douglas value added and nests,
+    Armington 0.95, all factors mobile)
+  why: the altertax reference model of the bundle builders. It lived untracked in
+    ~/proyectos2/cge_babel/standard_gtap_7 and is committed here as found (2026-10-29)
+  commit: this change
+- file: altertax_config.gms
+  change: added
+  what: altertax configuration included by the altertax NEOS bundles
+  why: altertax reference regeneration (#18)
+  commit: 3e758c8
+- file: altertax_postmodel.gms
+  change: added
+  what: altertax post-model block included by the altertax NEOS bundles
+  why: altertax reference regeneration (#18)
+  commit: 3e758c8
+- file: comp_nus333.gms
+  change: added
+  what: comp.gms with the NUS333 sets (3 sectors x 2 regions, 3 mobile factors)
+  why: NUS333 comparison against NEOS
+  commit: 37f4f5b
+- file: comp_nus333_landshock.gms
+  change: added
+  what: comp_nus333.gms with a ROW land productivity shock
+  why: pin the NUS333 land-shock parity against NEOS
+  commit: 54fa5ba
+- file: tariff_sim.gms
+  change: added
+  what: comparative static run with a 10 % import tariff increase
+  why: tariff simulation used by the baseline mirror test
+  commit: 9ac8ce1
+- file: tariff_sim_fixed.gms
+  change: added
+  what: tariff_sim.gms variant that includes comp.gms from EQUILIBRIA_CGE_BABEL_DIR
+  why: tariff simulation against the external copy
+  commit: 9ac8ce1
+- file: report_fixed_run.inc
+  change: added
+  what: report of fixed/free variables per period
+  why: diagnostics included by cal_dump.gms
+  commit: 9ac8ce1
+- file: report_fixed_setup.inc
+  change: added
+  what: set-up of the fixed/free report
+  why: diagnostics included by cal_dump.gms
+  commit: 9ac8ce1
+- file: cal_dump.gms
+  change: added
+  what: runs calibration only and dumps every symbol to gams_cal_dump_<base>.gdx
+  why: calibration parity against Python
+  commit: 9ac8ce1
+- file: cal_dump_neos.gms
+  change: added
+  what: cal_dump.gms laid out for NEOS (GTAP include and data conventions)
+  why: calibration dump of models above the local license
+  commit: 9ac8ce1
+- file: tools/build_gtap7_altertax_neos_bundle.py
+  change: added
+  what: 'builds the altertax NEOS/local bundle (moved from scripts/gtap/); --fbep
+    header|zero (#187): header injects the HAR''s FTRV and -FBEP after getData''s
+    fbep = 0 (the HAR stores the subsidy negative, cal.gms takes fctts = -fbep/evfb;
+    3ba4f88), writes FTRV = 0 where a cell is subsidised with no factor tax (16679d7),
+    and keeps HAR labels that already carry the a_ prefix (5368acce); zero leaves
+    getData as published'
+  why: generates GAMS results from this model, so it lives with it and the model-folder
+    sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
+  commit: 56b170e, this change
+- file: tools/build_gtap7_pure_local_bundle.py
+  change: added
+  what: 'builds the pure GTAP local bundle (moved from scripts/gtap/); --fbep header|zero
+    (#187): header injects the HAR''s FTRV and -FBEP after getData''s fbep = 0 (the
+    HAR stores the subsidy negative, cal.gms takes fctts = -fbep/evfb; 3ba4f88), writes
+    FTRV = 0 where a cell is subsidised with no factor tax (16679d7), and keeps HAR
+    labels that already carry the a_ prefix (5368acce); zero leaves getData as published'
+  why: generates GAMS results from this model, so it lives with it and the model-folder
+    sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
+  commit: 5e0360b, this change
+- file: tools/gdx_to_gams_inline.py
+  change: added
+  what: inlines a GDX as GAMS data statements; finds the GAMS system directory (moved
+    from scripts/gtap/)
+  why: generates GAMS results from this model, so it lives with it and the model-folder
+    sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
+  commit: 3e758c8, this change
+- file: tools/nl_standalone.py
+  change: added
+  what: builds the standalone .gms with the data inlined and converts it to .nl with
+    CONVERT (extracted from scripts/gtap/nl_compare.py)
+  why: generates GAMS results from this model, so it lives with it and the model-folder
+    sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
+  commit: this change
+- file: tools/regen_gams_reference.py
+  change: added
+  what: solves one GAMS job into a result folder (moved from scripts/gtap/); --nlp-solver
+    conopt and --scale-zcons (zcons.scale = zconseq.scale = calibrated zcons.l, set
+    before loop(tsim,), used by the 20x41 rows on NEOS
+  why: generates GAMS results from this model, so it lives with it and the model-folder
+    sha256 every result records covers it (phase 2b, maintainer 2026-10-30). Scaling
+    - gtap7_20x41 has SUBPAR at the GTAP floor (1e-6) in 8 of CHE's 20 goods, so zcons(CHE)
+    is near 1e-10, below the solver tolerances; PATH stalls (even at a 1% shock) and
+    unscaled CONOPT stops at false points (u(CHE) -12.8% zero vs -0.9% header). The
+    original model sets scaleopt=1 but no .scale. Scaled, header and zero agree to
+    2e-7 (maintainer 2026-11-01; dev-tools notes/cge/2026-11-01)
+  commit: 69bef5b, d981ddd6, this change
+- file: tools/regenerate_gams.py
+  change: added
+  what: runs the matrix of local GAMS jobs under write_source (moved from scripts/gtap/)
+  why: generates GAMS results from this model, so it lives with it and the model-folder
+    sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
+  commit: 55c915a, this change
+- file: tools/neos_job.py
+  change: added
+  what: submits one self-contained GAMS MCP bundle to NEOS (cp/PATH/GAMS), polls,
+    and keeps out.gdx, model.lst, neos.log and neos_job.json (never the job password
+    or an e-mail)
+  why: the MCP references above the local PATH license (1000 rows) are solved on NEOS
+    and recorded as such (phase 2b, maintainer 2026-10-30)
+  commit: this change
+- file: tools/har_to_consolidated.py
+  change: added
+  what: writes a dataset's v7_consolidated.gdx (the schema the bundle builders inline)
+    from its basedata.har, sets.har and default.prm; on the datasets that ship one
+    it reproduces it record by record
+  why: 9x10 comes from the GAMS distribution without a v7_consolidated.gdx; its GAMS
+    reference is regenerated with the same builders as the other datasets (maintainer
+    2026-11-01, replacing the generator-less COMP_generated.csv)
+  commit: this change
+- file: tools/regen_nus333.py
+  change: added
+  what: solves the nus333 GAMS reference locally (its HARs to nus333Sets/Dat/Prm.gdx,
+    then comp_nus333.gms) and keeps COMP.gdx as out.gdx; the HAR-to-GDX mapping it
+    uses is tools/nus333_bundle.py
+  why: the bundle path of scripts/gtap/bench_nus333_dual.py made output/nus333_neos/out.gdx
+    (beec5a0) outside data/; it generates a GAMS result from this model, so it lives
+    with it (phase 2b Task 6; its output is byte-identical to beec5a0's, md5 2e4d348a)
+  commit: this change
+- file: tools/nus333_bundle.py
+  change: added
+  what: maps nus333's HARs to the nus333Sets/Dat/Prm.gdx files getData.gms reads (moved
+    from equilibria.babel.har_to_gdx.write_nus333_gdx_bundle; the HAR reader and GDX
+    writer stay in the library); its GDX files are byte-identical to the library version's
+  why: it decides the data the nus333 GAMS reference runs on; in src/ the model-folder
+    sha256 the nus333 record keeps did not cover it, so editing it left the record
+    verified (final review of phase 2b)
+  commit: this change
+outputs:
+  GFTCET.gms: 154e0e19b669c6ba1797938ed531a2d0b999ba6d7f5b2ecc6ad4a0bad969d53c
+  GFTFlxFF.gms: f1cf06373ce896b8748a95aaba3aa04ebb4557e2ef538565fbda60e34fdf29f5
+  GFTLnd.gms: f840b28b8ce0337fc9f959ebf7881d555f27bdd84bda817c4520989c19180912
+  altertax_config.gms: 98d7edcdb4985dce6fa310b7176d1b526a7f156f198dcf15c71cb6c2f430c4fb
+  altertax_postmodel.gms: ea7a0c2049b204b44cbd20c3b04939e7aef23fa682f761ea030451d18384f497
+  cal.gms: 27c3e32da7a9a7c3d0e27fabd97247d83f1e1dd22b97b980ded923e03d7ac5c5
+  cal_dump.gms: c1c7a51f4412ee668ca3ecc36940901c91552243a67d04c3cd2b6d7a6193d4ef
+  cal_dump_neos.gms: 97b4ac52a749eb5e4c92cea3eddf5c79361ba74eef3451a2cb14fef5efdf7a8a
+  comp.gms: 46a7d0375b7009f5aa3c53954363b263200c1940d477fc4be4fb7bf6e89a4801
+  comp_altertax.gms: df5ccfc6a34617aa1f84299e99c118946b6d69a34ac60534dd8e6e8c8c9ad1bb
+  comp_nus333.gms: d8c9dbb3bfa2d3c4fa680b2f5a17bf8c6780395602faaa271a39d4abec09554e
+  comp_nus333_landshock.gms: ac7c1662a662379113acfb8d56bef5aa1ff635a02f66753194f1ba00d6c2b8ab
+  getData.gms: bb99b5ddda2e90881d8efc48d788f014de9a4d9e86a1bd5261fcad64c0b09f1c
+  gft.gms: 9a6d3d9ca65f5e66dfb64651ecb8f10716f4223d1c19e58be96754a7d12af595
+  gftCapFix.gms: 9f702e89ab3c2d52b40219eb7c446de4024b9728aabb56ad4403cbc72b1744c5
+  iterloop.gms: 5f397508798794aec80c342b3dafeac95060a257d6c67c8c87d7413c3dd9b8ce
+  merge.gms: 0842064b8a4e264affbdeba5b685025055bd5e18e813ef0f368c316a786c65d6
+  model.gms: 5dbd6027b606ad54546dbfd2849941f2c3796ea8b1728ce54ebacb3cd416e0b8
+  mvar.gms: 67972a753657732c2e4140039e3edb07f7b36eb75886eec5d9f6606811914085
+  postsim.gms: 74129cd89786d6b4ed3a4b84da4d7a337197e85cd61aedcb18cd725c0c318bcf
+  report_fixed_run.inc: ac6e677b6e94f7bcada65897a1cbfe6ab12fb97b03b211a9937ff41d567286d0
+  report_fixed_setup.inc: daac4cd13f681595cc1cd65f6270d049c167088defc86512603cb138f14f1c21
+  solve.gms: 03d3a8e9488a24881febe86e53575403675d41d29b029338332002f9cf64e5d2
+  tariff_sim.gms: 67df15d47505614917bbe5ac2613807ed1829aac0dd57fa8d1b4e6c85613e507
+  tariff_sim_fixed.gms: e009d246ad5726e50db587db32cc2c642487ba2504b4ec0b2b77c9ceaf1cad5b
+  tools/build_gtap7_altertax_neos_bundle.py: ece34f7651f41d9dfc74d5183be4b9da0b879df6df9d14c3594e1f02a5841e84
+  tools/build_gtap7_pure_local_bundle.py: 3d4a7a13353db1322d697c2ed80a54bdd2994db2ba30c9d6a4f4f19a4d9cb86f
+  tools/gdx_to_gams_inline.py: 325d18b91f3eabddf050f8b2aaf77bf90f0a74d266f0e42bf665c6a514e24396
+  tools/har_to_consolidated.py: a22f203920e9e8d0dc747dfecd5a176c540dc48f709492181863fb7fe1a90dfc
+  tools/neos_job.py: 923744a65f0a2c51e831f133c2dcdb91b49f6a3a20aa7ea933300318d9cafe5e
+  tools/nl_standalone.py: 156594006f71822dbf4f6e3e3e5ca8d4cf9fcf35430d3813379669cdb3b63015
+  tools/nus333_bundle.py: cd215e1944853b2f9c50bdd63d1741cc152a10647f70874ec7430dbb92a2a2c6
+  tools/regen_gams_reference.py: f816612856449809cfd925110821fbbe2e717e66543f633a742a49a358a5b5ee
+  tools/regen_nus333.py: d55522291bf4fdd1a5503a663c690ec949292e4408e916bf58ee841e18450c21
+  tools/regenerate_gams.py: f08ebf23befbbc1003f143afcd714b9cb92f880cee334288b2b6984a5844e4e3
+status: verified
+notes: ''

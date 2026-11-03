@@ -33,8 +33,6 @@ INPUT_TREES = [
     "scripts/gtap",
     "tests/templates/gtap",
     "tests/templates/gtap_logvalue",
-    "tests/fixtures/gtap7",
-    "tests/fixtures/gtap7_altertax",
     "tests/fixtures/gtap_logvalue",
     "data/gtap6",
     "data/gtap7",

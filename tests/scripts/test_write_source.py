@@ -226,6 +226,115 @@ def test_windows_cpu_falls_back_without_the_key() -> None:
     )
 
 
+def test_model_derived_from_records_the_changes(tmp_path: Path) -> None:
+    root = tmp_path / "data"
+    base = root / "gtap7" / "base"
+    base.mkdir(parents=True)
+    (base / "a.gms").write_bytes(b"a\r\n")
+    assert (
+        _module().main(
+            [
+                "--data-root",
+                str(root),
+                "--folder",
+                str(base),
+                "--kind",
+                "model",
+                "--model",
+                "gtap7",
+                "--no-run",
+                "--source",
+                "upstream",
+            ]
+        )
+        == 0
+    )
+    derived = root / "gtap7" / "derived"
+    derived.mkdir()
+    (derived / "a.gms").write_bytes(b"A\n")
+    changes = tmp_path / "changes.yaml"
+    changes.write_text(
+        "- {file: a.gms, change: modified, what: upper case, why: test, commit: abc1234}\n"
+    )
+    assert (
+        _module().main(
+            [
+                "--data-root",
+                str(root),
+                "--folder",
+                str(derived),
+                "--kind",
+                "model",
+                "--model",
+                "gtap7",
+                "--no-run",
+                "--source",
+                "ours",
+                "--derived-from",
+                "gtap7/base",
+                "--changes",
+                str(changes),
+            ]
+        )
+        == 0
+    )
+    rec = load_source(derived)
+    assert rec.raw["derived_from"] == "gtap7/base"
+    assert rec.raw["changes"][0]["file"] == "a.gms"
+    assert check_tree(root) == []
+
+
+def test_unlisted_change_writes_no_record(tmp_path: Path) -> None:
+    # the writer refuses a derived folder whose changes do not cover its edits
+    root = tmp_path / "data"
+    base = root / "gtap7" / "base"
+    base.mkdir(parents=True)
+    (base / "a.gms").write_bytes(b"a")
+    _module().main(
+        [
+            "--data-root",
+            str(root),
+            "--folder",
+            str(base),
+            "--kind",
+            "model",
+            "--model",
+            "gtap7",
+            "--no-run",
+            "--source",
+            "upstream",
+        ]
+    )
+    derived = root / "gtap7" / "derived"
+    derived.mkdir()
+    (derived / "a.gms").write_bytes(b"A")
+    changes = tmp_path / "changes.yaml"
+    changes.write_text("[]\n")
+    assert (
+        _module().main(
+            [
+                "--data-root",
+                str(root),
+                "--folder",
+                str(derived),
+                "--kind",
+                "model",
+                "--model",
+                "gtap7",
+                "--no-run",
+                "--source",
+                "ours",
+                "--derived-from",
+                "gtap7/base",
+                "--changes",
+                str(changes),
+            ]
+        )
+        != 0
+    )
+    assert not (derived / "source.yaml").exists()
+
+
 def test_model_folder_input_hashes_every_file(tmp_path: Path) -> None:
     # an include edited after the run makes the result stale, not only comp.gms
     folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_ifsub0"
@@ -241,3 +350,89 @@ def test_model_folder_input_hashes_every_file(tmp_path: Path) -> None:
     assert set(hashes) == {"comp.gms", "model.gms"}
     (model.parent / "model.gms").write_text("edited")
     assert any("changed after" in m for m in check_tree(tmp_path))
+
+
+_NEOS_JOB = {
+    "job": 4242,
+    "submitted_utc": "2026-10-30T18:00:00+00:00",
+    "finished_utc": "2026-10-30T18:05:00+00:00",
+    "category": "cp",
+    "solver": "PATH",
+    "input_method": "GAMS",
+    "options": "convergence_tolerance 1e-9\n",
+    "gams_version": "52.5.0",
+    "sent_sha256": "0" * 64,
+}
+
+
+def _neos_cmd() -> list[str]:
+    body = f"import json; json.dump({_NEOS_JOB!r}, open('neos_job.json', 'w'))"
+    return [sys.executable, "-c", body]
+
+
+def test_write_source_remote_neos(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_mcp_gtap_ifsub1"
+    argv = _argv(tmp_path, folder, _neos_cmd())
+    argv[argv.index("--") : argv.index("--")] = ["--remote", "neos"]
+    assert _module().main(argv) == 0
+    raw = load_source(folder).raw
+    assert raw["run"]["machine"] == {"os": "NEOS server", "cpu": "", "cores": None,
+                                     "ram_gb": None}  # fmt: skip
+    assert raw["run"]["date"] == _NEOS_JOB["finished_utc"]
+    assert raw["tool_version"] == "52.5.0"
+    assert raw["neos"] == {k: v for k, v in _NEOS_JOB.items() if k != "gams_version"}
+    assert "neos_job.json" in raw["outputs"]
+
+
+def test_write_source_remote_neos_refuses_other_version(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_mcp_gtap_ifsub1"
+    argv = _argv(tmp_path, folder, _neos_cmd())
+    argv[argv.index("--") : argv.index("--")] = [
+        "--remote",
+        "neos",
+        "--tool-version",
+        "53.5.0",
+    ]
+    assert _module().main(argv) != 0
+    assert not (folder / "source.yaml").exists()
+
+
+def test_failed_command_leaves_no_new_folder(tmp_path: Path) -> None:
+    # a NEOS job that fails mid-matrix must leave nothing behind (phase 2b)
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_mcp_gtap_ifsub1"
+    cmd = [sys.executable, "-c", "raise SystemExit(3)"]
+    assert _module().main(_argv(tmp_path, folder, cmd)) == 3
+    assert not folder.exists()
+
+
+def test_solver_options_are_recorded(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_mcp_gtap_ifsub1"
+    body = "open('path.opt','w').write('* tight\\nconvergence_tolerance 1e-9\\ncrash_method pnewton\\n')"
+    argv = _argv(tmp_path, folder, [sys.executable, "-c", body])
+    argv[argv.index("--") : argv.index("--")] = [
+        "--solver",
+        "PATH",
+        "--solver-options-file",
+        "path.opt",
+    ]
+    assert _module().main(argv) == 0
+    solver = load_source(folder).raw["solver"]
+    assert solver == {
+        "name": "PATH",
+        "options": {"convergence_tolerance": "1e-9", "crash_method": "pnewton"},
+    }
+
+
+def test_no_options_file_records_no_options(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_mcp_gtap_ifsub1"
+    argv = _argv(
+        tmp_path, folder, [sys.executable, "-c", "open('out.txt','w').write('x')"]
+    )
+    argv[argv.index("--") : argv.index("--")] = [
+        "--solver",
+        "PATH",
+        "--solver-options-file",
+        "path.opt",
+    ]
+    assert _module().main(argv) == 0
+    assert load_source(folder).raw["solver"] == {"name": "PATH"}

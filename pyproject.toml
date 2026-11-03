@@ -118,14 +118,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/equilibria"]
-# GAMS/NEOS comparison artefacts are validation inputs for the parity gates, not
-# library data: they are consumed only by tests and by the opt-in
-# EQUILIBRIA_GTAP_REFERENCE_SNAPSHOT path (which returns None when absent).
-# Shipping them would put ~8 MB of comparison CSVs in every install.
-exclude = [
-    "/src/equilibria/templates/reference/gtap/comp/",
-    "/src/equilibria/templates/reference/gtap/comp_neos/",
-]
 
 # load_bundled reads these in an installed wheel; in a checkout it reads data/.
 [tool.hatch.build.targets.wheel.force-include]

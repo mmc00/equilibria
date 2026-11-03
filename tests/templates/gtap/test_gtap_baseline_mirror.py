@@ -1,4 +1,4 @@
-"""Parity test: GTAP Python baseline vs GAMS COMP_generated.csv.
+"""Parity test: GTAP Python baseline vs the recorded 9x10 GAMS reference (base period).
 
 This test enforces the mirror invariant: after solving the baseline with
 PATH, the Python solution must match the GAMS reference within tolerance.
@@ -12,7 +12,6 @@ Run manually:
 
 from __future__ import annotations
 
-import csv
 import os
 import sys
 from pathlib import Path
@@ -38,7 +37,6 @@ _CAL_DUMP = Path(
         "notes/tmp/18700775-gams_cal_dump_9x10.gdx",
     )
 )
-_COMP_CSV = Path("src/equilibria/templates/reference/gtap/comp/COMP_generated.csv")
 _PATH_LIB = ROOT / ".cache/path_capi/libpath50.silicon.dylib"
 _PATH_CAPI_SRC = path_capi_src()
 
@@ -50,8 +48,8 @@ def _skip_if_missing():
         pytest.skip(f"GDX file not found: {_GDX_FILE}")
     if not _CAL_DUMP.exists():
         pytest.skip(f"Cal dump not found: {_CAL_DUMP}")
-    if not _COMP_CSV.exists():
-        pytest.skip(f"COMP_generated.csv not found: {_COMP_CSV}")
+    if _reference_gdx() is None:
+        pytest.skip("no recorded 9x10 GAMS reference under data/")
     if not _PATH_LIB.exists():
         pytest.skip(f"PATH C-API library not found at {_PATH_LIB}")
     if not _PATH_CAPI_SRC.is_dir():
@@ -65,31 +63,12 @@ def _skip_if_missing():
 # ---------------------------------------------------------------------------
 
 
-def _load_gams_csv(csv_path: Path) -> dict[tuple, float]:
-    """Read COMP_generated.csv into a flat dict keyed by (variable, *indices)."""
-    data: dict[Any, float] = {}
-    with open(csv_path, newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            yr = (row.get("Year") or "").strip()
-            if yr not in {"1", "1.0"}:
-                continue
-            var = (row.get("Variable") or "").strip().lower()
-            reg = (row.get("Region") or "").strip()
-            sec = (row.get("Sector") or "").strip()
-            qual = (row.get("Qualifier") or "").strip()
-            try:
-                val = float((row.get("Value") or "0").strip())
-            except (ValueError, TypeError):
-                continue
-            if reg and sec and qual:
-                data[(var, reg, sec, qual)] = val
-            elif reg and sec:
-                data[(var, reg, sec)] = val
-            elif reg:
-                data[(var, reg)] = val
-            else:
-                data[(var,)] = val
-    return data
+def _reference_gdx() -> Path | None:
+    from equilibria.templates.gtap.gtap_parity_pipeline import (
+        standard_gtap_reference_gdx,
+    )
+
+    return standard_gtap_reference_gdx()
 
 
 def _run_baseline_solve():
@@ -210,27 +189,30 @@ class TestBaselineMirrorInvariants:
     # ------------------------------------------------------------------
 
     def _check_parity(self, model, *, tol: float, max_mm: int):
+        from equilibria.templates.gtap import GTAPSets
         from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
 
-        gams_flat = _load_gams_csv(_COMP_CSV)
+        gdx = _reference_gdx()
+        assert gdx is not None  # _skip_if_missing skipped otherwise
+        gams_snap = GTAPVariableSnapshot.from_gdx(gdx, GTAPSets(), period="base")
         py_snap = GTAPVariableSnapshot.from_python_model(model)
 
         mismatches = []
         n_compared = 0
 
-        # Build per-variable GAMS dicts
+        # Per-variable GAMS dicts; 1D keys stored with and without tuple wrapping
         gams_by_var: dict[str, dict] = {}
-        for key, val in gams_flat.items():
-            var = key[0]
-            rest = key[1:]
-            if var not in gams_by_var:
-                gams_by_var[var] = {}
-            # Store with and without tuple wrapping for 1D
-            if len(rest) == 1:
-                gams_by_var[var][rest[0]] = val
-                gams_by_var[var][rest] = val
-            else:
-                gams_by_var[var][rest] = val
+        for var in gams_snap.__dataclass_fields__:
+            values = getattr(gams_snap, var)
+            if not isinstance(values, dict):
+                continue
+            gams_by_var[var] = {}
+            for key, val in values.items():
+                gams_by_var[var][key] = val
+                if isinstance(key, str):
+                    gams_by_var[var][(key,)] = val
+                elif isinstance(key, tuple) and len(key) == 1:
+                    gams_by_var[var][key[0]] = val
 
         SKIP_ATTRS = {"pnum", "walras", "xd"}
 

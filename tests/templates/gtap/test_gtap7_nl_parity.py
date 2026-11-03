@@ -1,6 +1,6 @@
 """GTAP7 .nl structural parity gate.
 
-For each dataset in tests/fixtures/gtap7/, regenerates the Python .nl and
+For each gtap7_* dataset of the coverage matrix's .nl rows, regenerates the Python .nl and
 compares its coefficients family-by-family against the GAMS reference .nl
 fixture (generated once via NEOS and committed to the repo).
 
@@ -41,32 +41,42 @@ from pathlib import Path
 
 import pytest
 
-from equilibria.sources import dataset_dir, has_dataset
+from equilibria.sources import dataset_dir, iter_sources, load_source, reference
 
 ROOT = Path(__file__).resolve().parents[3]
-FIXTURES_DIR = ROOT / "tests/fixtures/gtap7"
+
+# The gate builds Python with ifSUB=0 (GTAPClosureConfig(if_sub=False)), so it
+# reads the GAMS .nl recorded with ifSUB=0 (#23: the old fixtures were ifSUB=1).
+NL_VARIANT = {"form": "nl", "mode": "altertax", "ifsub": 0, "fbep": "zero"}
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
 from coverage_matrix import nl_rows  # noqa: E402
 
 
-def _available_datasets() -> list[str]:
-    """Return dataset names that have both fixture NL files and HAR data.
+def nl_datasets() -> list[str]:
+    """Datasets with a recorded GAMS .nl in NL_VARIANT (data/, ADR-0010).
 
-    No longer feeds DATASETS — kept to document the on-disk contract and
-    allow manual inspection.  The authoritative CI list comes from the
-    coverage matrix (nl_rows()).
+    Does not feed DATASETS: the CI list comes from the coverage matrix
+    (nl_rows()); this one documents what is on disk.
     """
-    result = []
-    for d in sorted(FIXTURES_DIR.iterdir()):
-        if not d.is_dir():
-            continue
-        has_fixtures = (d / "gams_base.nl").exists() and (d / "gams_shock.nl").exists()
-        has_data = has_dataset(d.name)
-        if has_fixtures and has_data:
-            result.append(d.name)
-    return result
+    return sorted(
+        {
+            r.dataset
+            for r in iter_sources()
+            if r.kind == "result"
+            and r.tool == "gams"
+            and r.dataset
+            and all(r.variant.get(k) == v for k, v in NL_VARIANT.items())
+        }
+    )
+
+
+def test_nl_gate_asks_ifsub0() -> None:
+    assert nl_datasets(), "no GAMS .nl recorded in data/"
+    for ds in nl_datasets():
+        folder = reference(ds, "gams", **NL_VARIANT)
+        assert load_source(folder).variant["ifsub"] == 0
 
 
 # Datasets whose .nl gate runs in CI, per the coverage matrix.
@@ -108,6 +118,51 @@ DATASETS = [
 _WRITTEN_FORM_EQUIVALENT = frozenset({"eq_pf", "eq_pft"})
 
 
+# Real model gaps, pinned EXACTLY: {dataset: {family: n_diff}}, the same in
+# every phase.  The gate fails if a family appears, disappears or changes its
+# count, so fixing one of them fails it too: delete its entry then.  It was
+# hidden while the gate compared against ifSUB=1 references (#23).
+#
+# eq_pwmg / eq_xmgm — #188.  amgm = VTWR/sum(VTWR) in Python, VTWR/(VCIF-VFOB)
+#   in GAMS.  One diff per route where the two differ by more than 1e-4.
+#
+# eq_pfa (#187): one diff per subsidised factor cell, while Python booked the
+# subsidy as -FBEP/EVFB against the .nl reference's official net wedge EVFP/EVFB.
+# The blocks (test_blocks_nl_parity) close it: their default "gams" basis is that
+# net wedge (#191, #193).  The deprecated monolith this gate builds through
+# nl_compare keeps the old sign (R-MONOLITH retires it), so the gap stays here.
+_KNOWN_GAPS: dict[str, dict[str, int]] = {
+    "gtap7_10x7": {"eq_pwmg": 1, "eq_xmgm": 1},
+    "gtap7_15x10": {"eq_pwmg": 15, "eq_xmgm": 15},
+}
+_MONOLITH_EQ_PFA = {
+    "gtap7_3x3": 12,
+    "gtap7_3x4": 12,
+    "gtap7_5x5": 20,
+    "gtap7_10x7": 78,
+    "gtap7_15x10": 177,
+}
+
+
+def _monolith_gaps(dataset: str) -> dict[str, int]:
+    """The gaps this gate pins: the blocks' plus the monolith's eq_pfa."""
+    gaps = dict(_KNOWN_GAPS.get(dataset, {}))
+    if dataset in _MONOLITH_EQ_PFA:
+        gaps["eq_pfa"] = _MONOLITH_EQ_PFA[dataset]
+    return gaps
+
+
+def gap_counts(family_stats: dict) -> dict[str, int]:
+    """{family: n_diff} the gate checks against _KNOWN_GAPS."""
+    return {
+        fam: st["n_diff"]
+        for fam, st in family_stats.items()
+        if st.get("n_diff", 0) > 0
+        and not st.get("_structural_fp")
+        and fam not in _WRITTEN_FORM_EQUIVALENT
+    }
+
+
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_gtap7_nl_parity(dataset: str, tmp_path: Path) -> None:
     """Python .nl coefficients match GAMS fixture for base/check/shock phases.
@@ -125,9 +180,7 @@ def test_gtap7_nl_parity(dataset: str, tmp_path: Path) -> None:
     if ds is None:
         pytest.skip(f"Dataset {dataset!r} not in registry")
 
-    fixture_dir = FIXTURES_DIR / dataset
-    if not (fixture_dir / "gams_base.nl").exists():
-        pytest.skip(f"no .nl fixtures for {dataset}")
+    fixture_dir = reference(dataset, "gams", **NL_VARIANT)
     har_dir = dataset_dir(dataset)
     closure_config = GTAPClosureConfig(if_sub=False)
 
@@ -167,16 +220,14 @@ def test_gtap7_nl_parity(dataset: str, tmp_path: Path) -> None:
             f"significa 'la algebra cuadra'; significa que no se comparo nada."
         )
 
-        failures = [
-            f"{fam}: {st['n_diff']} diffs (max_rel={st['max_rel']:.2e})"
-            for fam, st in result["family_stats"].items()
-            if st.get("n_diff", 0) > 0
-            and not st.get("_structural_fp")
-            and fam not in _WRITTEN_FORM_EQUIVALENT
-        ]
-        assert not failures, (
-            f"[{dataset}/{phase}] Coefficient diffs vs GAMS fixture:\n"
-            + "\n".join(f"  {f}" for f in failures)
+        assert gap_counts(result["family_stats"]) == _monolith_gaps(dataset), (
+            f"[{dataset}/{phase}] Coefficient diffs vs GAMS fixture differ from "
+            f"the pinned known gaps {_monolith_gaps(dataset)}:\n"
+            + "\n".join(
+                f"  {fam}: {st['n_diff']} diffs (max_rel={st['max_rel']:.2e})"
+                for fam, st in result["family_stats"].items()
+                if fam in gap_counts(result["family_stats"])
+            )
         )
         assert len(b_diffs) == 0, (
             f"[{dataset}/{phase}] {len(b_diffs)} variables with different bounds"

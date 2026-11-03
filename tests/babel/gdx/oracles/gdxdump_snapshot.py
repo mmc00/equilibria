@@ -7,7 +7,7 @@ para Var/Equ: Level, Marginal, Lower, Upper, Scale), como texto: los especiales
 
 Uso (desde la raiz, con GAMS):
     uv run python tests/babel/gdx/oracles/gdxdump_snapshot.py \\
-        tests/fixtures/gtap7/gtap7_3x3/out_gtap_shock_ifsub0.gdx
+        data/gdx_tests/gtap7_3x3_out_gtap_shock_ifsub0.gdx
 escribe ``<gdx>.gdxdump.json.gz`` al lado, o en la ruta del segundo argumento.
 """
 

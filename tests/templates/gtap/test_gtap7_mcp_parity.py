@@ -1,7 +1,8 @@
 """GTAP7 MCP fidelity gate (per stage, altertax, both ifSUB).
 
-Python is solved via PATH (nonlinear-full MCP) against the cleanly-converged NEOS
-MCP reference (regenerated 2026-07-17, subsidy-aware, eq_pxeq clean). Same per-stage
+Python is solved via PATH (nonlinear-full MCP) against the GAMS MCP reference in
+data/ (fbep=header, regenerated 2026-11-01), Python with the data's subsidy sign
+(va_subsidy_basis="gempack"; the default keeps the old sign, #191). Same per-stage
 contract as the NLP gate: for every coverage-matrix `mcp` row this runs the real
 base→check→shock solve, MEASURES match%/code per stage, and asserts match >= floor
 AND code == 1 for EVERY stage. Nothing hardcoded — the match% is re-derived here.
@@ -27,15 +28,13 @@ from pathlib import Path
 
 import pytest
 
-from equilibria.sources import dataset_dir, has_dataset
+from equilibria.sources import dataset_dir, find_reference, has_dataset
 
 # needs_gdxdump: estos tests leen el GDX de referencia con gdxdump; sin el
 # binario fallaban con FileNotFoundError en vez de saltarse.
 pytestmark = [pytest.mark.integration, pytest.mark.needs_gdxdump]
 
 ROOT = Path(__file__).resolve().parents[3]
-ALTERTAX_FIXTURES = ROOT / "tests/fixtures/gtap7_altertax"
-PURE_FIXTURES = ROOT / "tests/fixtures/gtap7"
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
@@ -89,10 +88,16 @@ def _has_solver() -> bool:
     return importlib.util.find_spec("path_capi_python") is not None
 
 
-def _fixture_gdx(dataset: str, ifsub: int, mode: str = "altertax") -> Path:
-    if mode == "pure":
-        return PURE_FIXTURES / dataset / f"out_gtap_shock_ifsub{ifsub}.gdx"
-    return ALTERTAX_FIXTURES / dataset / f"out_altertax_ifsub{ifsub}.gdx"
+def _fixture_gdx(
+    dataset: str, ifsub: int, mode: str = "altertax", fbep: str = "header"
+) -> Path | None:
+    # fbep=header: the GAMS MCP reference with FBEP split out as Python does it;
+    # Python is built with the data's subsidy sign to match (#191)
+    folder = find_reference(
+        dataset, "gams", form="mcp", mode="gtap" if mode == "pure" else "altertax",
+        ifsub=ifsub, fbep=fbep,
+    )  # fmt: skip
+    return None if folder is None else folder / "out.gdx"
 
 
 def _strip(s):
@@ -101,7 +106,9 @@ def _strip(s):
     return s
 
 
-def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
+def _solve_and_measure(
+    dataset: str, ifsub: int, mode: str, gdx: Path, basis: str = "gempack"
+):
     """Build + seed + solve base→check→shock via PATH (MCP); return
     {period: {"match": float, "code": int, "total": int}}."""
     from _diff_core import gams_levels, list_populated_vars, split_t
@@ -137,6 +144,9 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
+    # the data's FBEP sign, as the fbep=header reference has it; the default
+    # "gams" basis keeps the old sign (#191)
+    p.set_va_subsidy_basis(basis)
     rr = list(p.sets.r)[-1]
 
     if mode == "altertax":
@@ -177,6 +187,10 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
     m._residual_region = rr
     mp.seed_all_periods(m, gdx)
 
+    # altertax: check and shock start from Python's own previous period and nothing
+    # is held at the reference, as in the NLP gate. Seeding them with the answer and
+    # holding pva/pnd there matched any reference, so the gate could not fail (#192).
+    altertax = mode == "altertax"
     res = solve_multiperiod(
         m,
         p,
@@ -184,8 +198,8 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
         ref_gdx=gdx,
         skip_base_solve=True,
         mute_welfare=True,
-        seed_from_prior=False,
-        holdfix_cd=True,
+        seed_from_prior=altertax,
+        holdfix_cd=not altertax,
         mode=solve_mode,
     )
     codes = {k: res[k]["code"] for k in res}
@@ -251,8 +265,10 @@ def test_gtap7_mcp_parity(dataset, ifsub, mode, floors, ci_status, code2_ok):
     if not _has_solver():
         pytest.skip("PATH solver (path_capi_python) not available")
     gdx = _fixture_gdx(dataset, ifsub, mode)
-    if not gdx.exists():
-        pytest.skip(f"fixture GDX missing: {gdx}")
+    if gdx is None:
+        pytest.skip(
+            f"no GAMS MCP fbep=header reference for {dataset} {mode} ifSUB={ifsub}"
+        )
     if not has_dataset(dataset):
         pytest.skip(f"dataset HAR missing: {dataset}")
 
@@ -275,3 +291,30 @@ def test_gtap7_mcp_parity(dataset, ifsub, mode, floors, ci_status, code2_ok):
             f"[{tag}/{stage}] MCP match {mm['match']:.2f}% < floor {floor}% "
             f"(over {mm['total']} cells) — regression"
         )
+
+
+# Each Python basis reproduces its own GAMS reference to the cell (#191, #193):
+# "gams" is the official getData.gms (fbep=zero), "gempack" the HAR's headers
+# (fbep=header). gtap7_10x7 has the cells the data subsidise with no factor tax.
+_BASIS_CASES = [
+    ("gtap7_3x3", 1, "gams", "zero"),
+    ("gtap7_10x7", 0, "gams", "zero"),
+    ("gtap7_10x7", 0, "gempack", "header"),
+]
+
+
+@pytest.mark.parametrize(
+    "dataset,ifsub,basis,fbep", _BASIS_CASES,
+    ids=[f"{d}-ifsub{k}-{b}-vs-{v}" for d, k, b, v in _BASIS_CASES],
+)  # fmt: skip
+def test_basis_reproduces_its_gams_variant(dataset, ifsub, basis, fbep):
+    if not _has_solver():
+        pytest.skip("PATH solver (path_capi_python) not available")
+    gdx = _fixture_gdx(dataset, ifsub, "pure", fbep)
+    if gdx is None or not has_dataset(dataset):
+        pytest.skip(f"no {dataset} fbep={fbep} reference or data")
+    per = _solve_and_measure(dataset, ifsub, "pure", gdx, basis)
+    assert {k: v["code"] for k, v in per.items()} == dict.fromkeys(per, 1)
+    assert {k: round(v["match"], 2) for k, v in per.items()} == dict.fromkeys(
+        per, 100.0
+    )

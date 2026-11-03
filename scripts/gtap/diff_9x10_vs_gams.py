@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-GDX = ROOT / "src/equilibria/templates/reference/gtap/data/basedata-9x10.gdx"
+GDX = ROOT / "data/gtap7/9x10/basedata-9x10.gdx"
 GAMS_COMP = ROOT / "src/equilibria/templates/reference/gtap/output/COMP.gdx"
 GDXDUMP = "/Library/Frameworks/GAMS.framework/Versions/48/Resources/gdxdump"
 

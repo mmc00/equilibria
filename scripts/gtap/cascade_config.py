@@ -6,12 +6,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 from equilibria._local_refs import refs_dir
+from equilibria.sources import find_reference
 
 ROOT = Path(__file__).resolve().parents[2]
 DURABLE_REFS = Path(str(refs_dir()))
 # Pure-gtap (real-CES, non-altertax) solved refs live committed under the .nl
 # fixture tree, one per ifSUB mode (distinct from the altertax out_altertax_*).
-GTAP_PURE_FIXTURES = ROOT / "tests" / "fixtures" / "gtap7"
 
 SCENARIO_BY_PERIOD: dict[str, dict[str, str]] = {
     "gtap7": {"check": "altertax_check", "shock": "altertax_shock"},
@@ -58,8 +58,8 @@ def resolve_ref_gdx(dataset: str, *, mode: str = "altertax", ifsub: int = 0,
     """Resolve the reference GDX for the cascade.
 
     explicit  : an exact GDX path the caller passes (--ref); wins if it exists.
-    mode=gtap : the pure-gtap (real-CES) solved ref under the committed fixture
-                tree, out_gtap_shock_ifsub{0,1}.gdx (one per ifSUB).
+    mode=gtap : the pure-gtap (real-CES) GAMS MCP reference recorded under
+                data/ (fbep=header, one per ifSUB).
     mode=altertax (default) : the durable altertax CD ref (ifsub0 only, the
                 cascade's original target) with the gitignored adapter fallback.
     """
@@ -70,14 +70,15 @@ def resolve_ref_gdx(dataset: str, *, mode: str = "altertax", ifsub: int = 0,
                              f"explicit ref does not exist/non-empty: {explicit}", False)
 
     if mode == "gtap":
-        suffix = "ifsub1" if ifsub else "ifsub0"
-        ref = GTAP_PURE_FIXTURES / dataset / f"out_gtap_shock_{suffix}.gdx"
-        if _ok(ref):
-            return GdxResolution(ref, "gtap_pure_fixture",
-                                 f"pure-gtap solved ref {ref}", True)
+        folder = find_reference(dataset, "gams", form="mcp", mode="gtap",
+                                ifsub=ifsub, fbep="header")
+        ref = None if folder is None else folder / "out.gdx"
+        if ref is not None and _ok(ref):
+            return GdxResolution(ref, "gams_reference",
+                                 f"pure-gtap GAMS MCP reference {ref}", True)
         return GdxResolution(None, "missing",
-                             f"NO usable pure-gtap ref GDX at {ref} (only gtap7_3x3 "
-                             f"has these fixtures today)", False)
+                             f"NO usable pure-gtap GAMS MCP reference for {dataset} "
+                             f"ifSUB={ifsub}", False)
 
     durable = DURABLE_REFS / f"{dataset}_altertax_cd" / f"out_altertax_ifsub{ifsub}.gdx"
     if _ok(durable):

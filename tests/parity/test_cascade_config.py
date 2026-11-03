@@ -59,3 +59,22 @@ def test_resolve_ref_gdx_missing_is_not_usable():
     assert res.source == "missing"
     assert res.path is None
     assert "NO usable ref" in res.note
+
+
+def test_resolve_ref_gdx_gtap_is_the_recorded_gams_reference():
+    from equilibria.sources import reference
+
+    res = resolve_ref_gdx("gtap7_3x3", mode="gtap", ifsub=1)
+    want = reference(
+        "gtap7_3x3", "gams", form="mcp", mode="gtap", ifsub=1, fbep="header"
+    )
+    assert res.usable is True
+    assert res.source == "gams_reference"
+    assert res.path == want / "out.gdx"
+
+
+def test_resolve_ref_gdx_gtap_missing_is_not_usable():
+    res = resolve_ref_gdx("gtap7_20x41", mode="gtap", ifsub=0)  # no GAMS MCP ref
+    assert res.usable is False
+    assert res.source == "missing"
+    assert res.path is None

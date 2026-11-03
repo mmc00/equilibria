@@ -1,8 +1,8 @@
 """Fresh status sweep for the PURE-GTAP (non-altertax) multi-period SOLVE gate.
 
 Mirrors test_gtap_multiperiod_parity._solve_and_match exactly (mode="gtap",
-holdfix_cd=False, skip_base_solve=True, same SKIP/RF/ALIAS sets, GAMS LOCAL
-out_gtap_shock_ifsub{0,1}.gdx reference) but:
+holdfix_cd=False, skip_base_solve=True, same SKIP/RF/ALIAS sets, the recorded
+GAMS MCP reference, fbep=header) but:
   - measures BOTH ifSUB modes,
   - reports CHECK and SHOCK match% at tol 0.1% / 0.5% / 1%,
   - reports the per-period PATH termination codes (does it CONVERGE?).
@@ -14,7 +14,7 @@ Usage:
 """
 from __future__ import annotations
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, find_reference
 import argparse
 import json
 import sys
@@ -27,8 +27,6 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 _PATH_CAPI = path_capi_src()
 if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI))
-
-FIXTURES_DIR = ROOT / "tests/fixtures/gtap7"
 
 SKIP = {"walras", "ev", "cv", "uh", "u", "ug", "us"}
 RF = {
@@ -48,9 +46,11 @@ def _strip(s):
     return s
 
 
-def _fixture_gdx(dataset: str, if_sub: bool) -> Path:
-    suffix = "ifsub1" if if_sub else "ifsub0"
-    return FIXTURES_DIR / dataset / f"out_gtap_shock_{suffix}.gdx"
+def _reference_gdx(dataset: str, if_sub: bool) -> Path | None:
+    folder = find_reference(
+        dataset, "gams", form="mcp", mode="gtap", ifsub=int(if_sub), fbep="header"
+    )
+    return None if folder is None else folder / "out.gdx"
 
 
 def solve_and_measure(dataset: str, if_sub: bool):
@@ -64,7 +64,7 @@ def solve_and_measure(dataset: str, if_sub: bool):
     from pyomo.environ import value as V
     from _diff_core import gams_levels, list_populated_vars, split_t
 
-    ref = _fixture_gdx(dataset, if_sub)
+    ref = _reference_gdx(dataset, if_sub)
     d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
@@ -73,6 +73,9 @@ def solve_and_measure(dataset: str, if_sub: bool):
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
+    # the data's FBEP sign, as the fbep=header reference has it; the default
+    # "gams" basis keeps the old sign (#191)
+    p.set_va_subsidy_basis("gempack")
     rr = list(p.sets.r)[-1]
     gc = GTAPClosureConfig(
         name="base", closure_type="MCP", capital_mobility="sluggish",

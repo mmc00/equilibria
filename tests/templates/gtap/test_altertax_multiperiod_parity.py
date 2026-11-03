@@ -33,14 +33,13 @@ from pathlib import Path
 
 import pytest
 
-from equilibria.sources import dataset_dir, has_dataset
+from equilibria.sources import dataset_dir, find_reference, has_dataset
 
 # needs_gdxdump: estos tests leen el GDX de referencia con gdxdump; sin el
 # binario fallaban con FileNotFoundError en vez de saltarse.
 pytestmark = pytest.mark.needs_gdxdump
 
 ROOT = Path(__file__).resolve().parents[3]
-FIXTURES_DIR = ROOT / "tests/fixtures/gtap7_altertax"
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 
@@ -100,9 +99,11 @@ def _strip(s):
     return s
 
 
-def _fixture_gdx(dataset: str, if_sub: bool) -> Path:
-    suffix = "ifsub1" if if_sub else "ifsub0"
-    return FIXTURES_DIR / dataset / f"out_altertax_{suffix}.gdx"
+def _reference_gdx(dataset: str, if_sub: bool) -> Path | None:
+    folder = find_reference(
+        dataset, "gams", form="mcp", mode="altertax", ifsub=int(if_sub), fbep="header"
+    )
+    return None if folder is None else folder / "out.gdx"
 
 
 def _solve_and_match(dataset: str, if_sub: bool):
@@ -117,7 +118,7 @@ def _solve_and_match(dataset: str, if_sub: bool):
     from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
-    ref = _fixture_gdx(dataset, if_sub)
+    ref = _reference_gdx(dataset, if_sub)
     d = dataset_dir(dataset)
     p = GTAPParameters()
     p.load_from_har(
@@ -126,6 +127,9 @@ def _solve_and_match(dataset: str, if_sub: bool):
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
+    # the data's FBEP sign, as the fbep=header reference has it; the default
+    # "gams" basis keeps the old sign (#191)
+    p.set_va_subsidy_basis("gempack")
     rr = list(p.sets.r)[-1]
     pa = apply_altertax_elasticities(p, in_place=False)
     ac = GTAPClosureConfig(
@@ -218,9 +222,9 @@ def test_altertax_multiperiod_parity(dataset, ifsub, gap_min, ci_status):
     if not _has_path_solver():
         pytest.skip("path_capi_python (PATH solver) not available")
     if_sub = bool(ifsub)
-    ref = _fixture_gdx(dataset, if_sub)
-    if not ref.exists():
-        pytest.skip(f"fixture GDX missing: {ref}")
+    ref = _reference_gdx(dataset, if_sub)
+    if ref is None:
+        pytest.skip(f"no GAMS MCP reference recorded for {dataset}")
     if not has_dataset(dataset):
         pytest.skip(f"dataset HAR missing for {dataset}")
 

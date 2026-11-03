@@ -1,0 +1,17 @@
+kind: data
+model: gtap7
+dataset: gdx_tests
+source: 'Format specimens for the GDX reader, each next to its gdxdump snapshot (.gdxdump.json.gz,
+  written by tests/babel/gdx/oracles/gdxdump_snapshot.py). Copied from tests/fixtures
+  at 30a381f: gtap7/gtap7_3x3/out_gtap_shock_ifsub{0,1}.gdx and gtap7_nlp/gtap7_3x3_pure_ifsub0.gdx.
+  A specimen need not be a current result; it is not regenerated'
+license: GAMS output of the gtap7_3x3 aggregation; as that dataset (to confirm)
+outputs:
+  gtap7_3x3_out_gtap_shock_ifsub0.gdx: 435ee2d314a803a0f7d2d02c68ffe62f9b0314ce1997b8d8c900c2779a246c90
+  gtap7_3x3_out_gtap_shock_ifsub0.gdx.gdxdump.json.gz: 2ce3176d9a052aa74d3fa1018562d408601368ecc5488fda2355ac40f2569452
+  gtap7_3x3_out_gtap_shock_ifsub1.gdx: ec22b51f84310a931f2fe06b54aef482c8745d0533102c4e723e0eb7caae762a
+  gtap7_3x3_out_gtap_shock_ifsub1.gdx.gdxdump.json.gz: 30e5bca4041570d32d70708ef464d89d71b23d8d74e885df854687278f3f4178
+  gtap7_3x3_pure_ifsub0.gdx: c5ffd26714fb2f6a146b53608e041045d4fbb3730c1fcef6432d2e999f1b92de
+  gtap7_3x3_pure_ifsub0.gdx.gdxdump.json.gz: 3d6ff2bed4e9bb150e17760ecc54a69c7c69d6a50db1f2e2b58fec55ffddc438
+status: verified
+notes: ''

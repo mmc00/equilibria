@@ -34,22 +34,20 @@ from equilibria.babel.gdx.reader import (
 )
 
 ROOT = Path(__file__).resolve().parents[3]
-GDX = ROOT / "tests" / "fixtures" / "gtap7" / "gtap7_3x3" / "out_gtap_shock_ifsub0.gdx"
+# Format specimens next to their gdxdump snapshots (data/gdx_tests, ADR-0010).
+SPECIMENS = ROOT / "data" / "gdx_tests"
+GDX = SPECIMENS / "gtap7_3x3_out_gtap_shock_ifsub0.gdx"
 SNAP_DIR = ROOT / "tests" / "fixtures" / "gdxdump"
 REF = ROOT / "src" / "equilibria" / "templates" / "reference"
 CASES = {
     "gtap7_3x3_ifsub0": (GDX, GDX.with_name(GDX.name + ".gdxdump.json.gz")),
     "gtap7_3x3_ifsub1": (
-        GDX.with_name("out_gtap_shock_ifsub1.gdx"),
-        GDX.with_name("out_gtap_shock_ifsub1.gdx.gdxdump.json.gz"),
+        SPECIMENS / "gtap7_3x3_out_gtap_shock_ifsub1.gdx",
+        SPECIMENS / "gtap7_3x3_out_gtap_shock_ifsub1.gdx.gdxdump.json.gz",
     ),
     "gtap7_nlp_eps": (
-        ROOT / "tests" / "fixtures" / "gtap7_nlp" / "gtap7_3x3_pure_ifsub0.gdx",
-        ROOT
-        / "tests"
-        / "fixtures"
-        / "gtap7_nlp"
-        / "gtap7_3x3_pure_ifsub0.gdx.gdxdump.json.gz",
+        SPECIMENS / "gtap7_3x3_pure_ifsub0.gdx",
+        SPECIMENS / "gtap7_3x3_pure_ifsub0.gdx.gdxdump.json.gz",
     ),
     "pep2_parameters": (
         REF / "pep2" / "scripts" / "Parameters.gdx",

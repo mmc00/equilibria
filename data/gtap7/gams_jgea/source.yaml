@@ -1,0 +1,28 @@
+kind: model
+model: gtap7
+source: The model files of the download "Supplementary files for 'The Standard GTAP
+  Model in GAMS, Version 7'", unchanged (CRLF kept). Its 9x10 data are data/gtap7/9x10
+  (basedata/sets byte-identical; default.prm differs, see notes); the 10x10 data are
+  not kept
+outputs:
+  GFTCET.gms: d843ba671cf9abbd7ac93584cc62a7e15dadf544cbcc64575bb74b83af5fff2d
+  GFTFlxFF.gms: 7812a6b52960d16f421cf18a3877bb21b9c73e1a5ac45da9eabf34c8100f2ef0
+  GFTLnd.gms: d3e7fdda5d9f32aaa79736c42a179bdfd97a3ba4d06707b0c0b745db4cf072c5
+  README.TXT: 3e4e1e3e759c3ad58dd71af589fac038f6cefc21484885a21ea2ca10e5b87f5f
+  cal.gms: b614ecc85da45f1c11bb19a0bcd0433681e6502ca6674d74db8f9392b02298e4
+  comp.gms: efc2c8f3b426e93d6eab92c16498e7c3951b4c6e1c42c692cf7fe71360e0e145
+  convert.cmd: 5d600849a0ff577270b05e4e2ecc2b8110a58e26ec0bb3e03527fa1c1f638261
+  getData.gms: b6a49f75e0f46cadd07c88d5d2b7956c64f4137db64fd4e73af382705225256a
+  gft.gms: e53201b7e43e9dee693fef83b066149cd309da2e8d427784f22b24944bf124ff
+  gftCapFix.gms: ac8e05f5db75222c1dd958c63fb58407ccce52597980ef881d5d270bdd0c7bef
+  iterloop.gms: 0fd78cbfdff054f53ef13418b4739421155a0eac2a51294b3eb610a94f6b57c5
+  merge.cmd: adc8cab9d4f17e5fc834a7e57f342e290be78a3386737f9c9d6747ef3105b6a9
+  merge.gms: 0842064b8a4e264affbdeba5b685025055bd5e18e813ef0f368c316a786c65d6
+  model.gms: 5dbd6027b606ad54546dbfd2849941f2c3796ea8b1728ce54ebacb3cd416e0b8
+  mvar.gms: 67972a753657732c2e4140039e3edb07f7b36eb75886eec5d9f6606811914085
+  postsim.gms: 7d59356ccd65f98f279b8f58b16f97101bc76b43110cd0bf6d7e37c5291ce99a
+  runall.cmd: 2dcef9c65c1361c4acf5c428c343e39ff05183a5414ef31a1b40c0fc93981b30
+  solve.gms: 03d3a8e9488a24881febe86e53575403675d41d29b029338332002f9cf64e5d2
+status: verified
+notes: default-9x10.prm of the download differs from data/gtap7/9x10/default.prm (found
+  2026-10-29, not yet explained)

@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from equilibria.sources import DATA_ROOT
 from equilibria.templates.gtap.gtap_benchmark_scaling import (
     ScalingContext as _ScalingContext,
 )
@@ -148,7 +149,7 @@ class GTAPModelEquations:
         This is intentionally opt-in so normal model construction is unchanged.
         Set `EQUILIBRIA_GTAP_REFERENCE_SNAPSHOT` to:
         - an explicit CSV/GDX path, or
-        - `auto` to look for `reference/gtap/comp/COMP_generated.csv`
+        - `auto` for the recorded 9x10 GAMS reference (its base period)
         - `off` / `none` / `false` / `0` to disable snapshot-based seeding
         """
         snapshot_hint = os.environ.get("EQUILIBRIA_GTAP_REFERENCE_SNAPSHOT", "").strip()
@@ -157,19 +158,40 @@ class GTAPModelEquations:
         if snapshot_hint.lower() in {"off", "none", "false", "0"}:
             return None
 
+        from equilibria.templates.gtap.gtap_parity_pipeline import (
+            GTAPVariableSnapshot,
+            standard_gtap_reference_gdx,
+        )
+
         if snapshot_hint.lower() == "auto":
-            candidate = (
-                Path(__file__).resolve().parents[1]
-                / "reference"
-                / "gtap"
-                / "comp"
-                / "COMP_generated.csv"
-            )
+            candidate = standard_gtap_reference_gdx()
+            if candidate is None:
+                return None
         else:
             candidate = Path(snapshot_hint).expanduser().resolve()
 
         if not candidate.exists():
             return None
+
+        if candidate.suffix.lower() == ".gdx":
+            try:
+                base = GTAPVariableSnapshot.from_gdx(
+                    candidate, self.sets, period="base"
+                )
+            except Exception:
+                return None
+            # the same blocks as the CSV branch below; margin prices only on
+            # routes with margin flows, as the COMP export wrote them
+            return _InlineReferenceSnapshot(
+                xp={}, xf={}, pf={}, xd={}, xaa={}, xds={},
+                xet=dict(base.xet),
+                xw=dict(base.xw),
+                pe=dict(base.pe),
+                pet=dict(base.pet),
+                pwmg={k: v for k, v in base.pwmg.items() if base.xwmg.get(k)},
+                yi=dict(base.yi),
+                yc={}, yg={},
+            )  # fmt: skip
 
         if candidate.suffix.lower() != ".csv":
             return None
@@ -257,13 +279,7 @@ class GTAPModelEquations:
             candidate = Path(env_hint).expanduser().resolve()
             return candidate if candidate.exists() else None
 
-        default_path = (
-            Path(__file__).resolve().parents[1]
-            / "reference"
-            / "gtap"
-            / "data"
-            / "gams_cal_dump_9x10.gdx"
-        )
+        default_path = DATA_ROOT / "gtap7" / "9x10" / "gams_cal_dump_9x10.gdx"
         if default_path.exists():
             return default_path
         return None
@@ -3971,7 +3987,7 @@ class GTAPModelEquations:
         model.facty = Var(
             model.r,
             # GAMS declares factY under `Variables` (FREE), not `Positive Variables`
-            # (reference/gtap/scripts/model.gms:53) — factor income NET of depreciation
+            # (data/gtap7/gams/model.gms:53) — factor income NET of depreciation
             # can be NEGATIVE for a small capital-heavy region in a period (13 regions in
             # gtap7_20x41: NZL/CHL/COL/PER/URY/PRY/CentralAmer/Caribbean/ARE/ISR/ZAF/EFTA/
             # EasternEur, facty ~ -0.004..-0.017). eq_facty and the seed both already allow

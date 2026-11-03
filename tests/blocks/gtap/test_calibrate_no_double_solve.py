@@ -57,7 +57,7 @@ BASELINE_COUNT = 20194
 # (_solve_welfare_tail); antes quedaban en la semilla. Medido contra el fixture
 # anterior: mismas 20194 claves, 35 celdas >1e-9 y TODAS de bienestar (5 vars x 7
 # regiones, hasta 1 % de cambio); el resto identico. Las 35 nuevas = check de GAMS
-# (gtap7_10x7/out_gtap_shock_ifsub0.gdx) a <=1,4e-5 relativo. Solo se cambiaron esas.
+# (el fixture gtap7_10x7/out_gtap_shock_ifsub0.gdx, ya borrado) a <=1,4e-5 relativo. Solo se cambiaron esas.
 #
 # Recapturado 2026-10-24: psave sigue a GTAP v7 (ajuste chiSave, no el chiSave**2 de
 # GAMS). Medido contra el seed del commit anterior (identico al fixture viejo): mismas
@@ -67,7 +67,15 @@ BASELINE_COUNT = 20194
 # Recapturado 2026-10-24 (2): chiSave del check/shock como indice de Tornqvist contra
 # base (pesos NETINV/SAVE de los dos periodos). Mismas 20194 claves, 21 celdas >1e-9,
 # TODAS psave/us/u (peor 2,76e-08: en el check el reparto casi no se mueve).
-BASELINE_SIG = "bd8f2dd3d3c0f57e"
+#
+# Recaptured 2026-11-02: the default "gams" subsidy basis is the official net wedge
+# EVFP - EVFB (#191, #193). main 9a7e9c09 reproduces the old fixture exactly (0
+# cells > 1e-9). Against it: same 20194 keys, 10297 cells move. ytax/ytaxshr(fs)
+# go to 0 (this basis books no separate subsidy). The settled prices go back to the
+# benchmark: on main all 70 pva/px/pnd cells left 1 (worst 0.167, pva EU_28 Crops
+# 0.834); now all 70 sit at 1 within 2.2e-7. The quantities follow (EU_28 Crops xf
+# x13, a rescaled sector).
+BASELINE_SIG = "0f84139e67b50cd2"
 
 
 def _load_params():

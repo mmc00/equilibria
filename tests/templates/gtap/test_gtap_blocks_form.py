@@ -192,7 +192,12 @@ _SHARE_DRIFT_RTOL = 1e-6
 # exemption deliberately does not tolerate, so they moved to _SPLIT_AUX_EQS with the
 # aggregates they were split into. Kept (rather than deleted) because the mechanism
 # is still the right one for a genuine coefficient-only composer carry.
-_STRUCT_CARRY_EQS: dict[tuple[str, str], str] = {}
+_STRUCT_CARRY_EQS: dict[tuple[str, str], str] = {
+    # The utility shares come from the base income split, which holds the factor
+    # tax revenue: the block books it on the #191 subsidy basis (net wedge
+    # EVFP - EVFB), the deprecated monolith on the old -FBEP/EVFB sign.
+    ("DemandUtilityBlock", "eq_u"): "income split on the #191 subsidy basis",
+}
 
 
 # Rows the block defines that the monolith has NO counterpart for, because the

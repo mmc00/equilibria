@@ -16,9 +16,11 @@ from typing import Any
 
 import pytest
 
+from equilibria.sources import GAMS_MODEL_DIR
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "gtap" / "gen_burfisher_gams.py"
-GAMS_SRC = ROOT / "src" / "equilibria" / "templates" / "reference" / "gtap" / "scripts"
+GAMS_SRC = GAMS_MODEL_DIR
 
 
 def _load_module() -> Any:

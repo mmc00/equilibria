@@ -32,6 +32,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 from equilibria._local_refs import nus333_dir, path_capi_src  # noqa: E402
+from equilibria.sources import reference  # noqa: E402
 
 sys.path.insert(0, str(path_capi_src()))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
@@ -46,9 +47,9 @@ from _diff_core import (
 from diff_nus333_full import _nus333_key_remap
 
 NUS333_HAR = Path(str(nus333_dir()))
-NEOS_GDX = ROOT / "output/nus333_neos/out.gdx"
+NEOS_GDX = reference("nus333", "gams", form="mcp", mode="gtap", ifsub=0, fbep="zero") / "out.gdx"
 GAMS = "/Library/Frameworks/GAMS.framework/Versions/53/Resources/gams"
-SCRIPTS_DIR = ROOT / "src/equilibria/templates/reference/gtap/scripts"
+SCRIPTS_DIR = ROOT / "data/gtap7/gams"
 LOCAL_BUNDLE = Path("/tmp/nus333_bench_local")
 
 
@@ -74,7 +75,11 @@ def _fmt_stats(label: str, s: dict[str, float]) -> str:
 
 
 def build_bundle_once() -> None:
-    from equilibria.babel.har_to_gdx import write_nus333_gdx_bundle
+    from equilibria.sources import GAMS_TOOLS_DIR
+
+    if str(GAMS_TOOLS_DIR) not in sys.path:
+        sys.path.insert(0, str(GAMS_TOOLS_DIR))
+    from nus333_bundle import write_nus333_gdx_bundle
     LOCAL_BUNDLE.mkdir(parents=True, exist_ok=True)
     for p in LOCAL_BUNDLE.glob("*"):
         p.unlink()

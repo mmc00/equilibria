@@ -152,14 +152,18 @@ allocative, terms-of-trade and other contributions is in
 ## Step 4 — Check the result against GAMS
 
 This step needs a checkout of the repository: it reads the 3×3 dataset in
-`data/gtap7/gtap7_3x3` and the GAMS solution of its default shock in
-`tests/fixtures/`. `equilibria.compare` lines the two solutions up cell by
-cell; the mapping file says which GAMS name matches which equilibria name.
+`data/gtap7/gtap7_3x3` and the GAMS solution of its default shock recorded
+next to it (`reference` finds the folder). `equilibria.compare` lines the two
+solutions up cell by cell; the mapping file says which GAMS name matches which
+equilibria name. The GAMS run keeps the data's sign for the factor subsidies
+(`fbep="header"`), so Python is built with the same sign
+(`va_subsidy_basis="gempack"` on the closure).
 
 ```python
 from pathlib import Path
 
 from equilibria.compare import Mapping, compare, from_gdx, from_pyomo
+from equilibria.sources import reference
 from equilibria.templates.gtap import GTAPParameters
 
 data = Path("data/gtap7/gtap7_3x3")
@@ -170,11 +174,16 @@ params3.load_from_har(
     default_path=data / "default.prm",
     baserate_path=data / "baserate.har",
 )
-m3, _ = build_block_model(params3, params3.sets, closure, "ROW")
-solve_multiperiod(m3, params3, closure, mode="gtap", skip_base_solve=True, solve_check=True)
+closure3 = closure.model_copy(update={"va_subsidy_basis": "gempack"})
+m3, _ = build_block_model(params3, params3.sets, closure3, "ROW")
+solve_multiperiod(m3, params3, closure3, mode="gtap", skip_base_solve=True, solve_check=True)
 
 report = compare(
-    from_gdx("tests/fixtures/gtap7/gtap7_3x3/out_gtap_shock_ifsub0.gdx", period_dim=-1),
+    from_gdx(
+        reference("gtap7_3x3", "gams", form="mcp", mode="gtap", ifsub=0, fbep="header")
+        / "out.gdx",
+        period_dim=-1,
+    ),
     from_pyomo(m3, period_dim=-1),
     Mapping.from_yaml("tests/compare/fixtures/gtap3x3_minimo.yaml"),
 )

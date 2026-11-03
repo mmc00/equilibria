@@ -43,7 +43,8 @@ def _shocks(text: str) -> list[str]:
 def generados(tmp_path_factory: pytest.TempPathFactory) -> Path:
     dest = tmp_path_factory.mktemp("pkg")
     for f in PKG.iterdir():
-        if not f.name.endswith("-dir.exp"):
+        # the package's files; recorded results sit in subfolders
+        if f.is_file() and not f.name.endswith("-dir.exp"):
             shutil.copy(f, dest / f.name)
     assert _load().main(str(dest)) == 0
     return dest

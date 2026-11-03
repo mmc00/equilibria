@@ -103,10 +103,26 @@ COMP_GDX_REFERENCE = (
     Path(__file__).resolve().parents[2]
     / "src/equilibria/templates/reference/gtap/output/COMP.gdx"
 )
-COMP_CSV_REFERENCE = (
-    Path(__file__).resolve().parents[2]
-    / "src/equilibria/templates/reference/gtap/comp/COMP_generated.csv"
-)
+
+
+def _gams_reference_levels(sets: Any) -> dict[str, dict]:
+    """Base-period levels of the recorded 9x10 GAMS reference, by snapshot field."""
+    import dataclasses
+
+    from equilibria.templates.gtap.gtap_parity_pipeline import (
+        GTAPVariableSnapshot,
+        standard_gtap_reference_gdx,
+    )
+
+    gdx = standard_gtap_reference_gdx()
+    if gdx is None:
+        return {}
+    snap = GTAPVariableSnapshot.from_gdx(gdx, sets, period="base")
+    return {
+        f.name: getattr(snap, f.name)
+        for f in dataclasses.fields(snap)
+        if isinstance(getattr(snap, f.name), dict)
+    }
 GTAP_IN_SCALE = 1e-6
 _COMP_DELTA_CACHE: Optional[dict[str, dict[str, float]]] = None
 
@@ -210,7 +226,9 @@ def _ensure_gtap_reference_snapshot_env() -> bool:
         return False
     if snapshot_hint:
         return False
-    if COMP_CSV_REFERENCE.exists():
+    from equilibria.templates.gtap.gtap_parity_pipeline import standard_gtap_reference_gdx
+
+    if standard_gtap_reference_gdx() is not None:
         os.environ["EQUILIBRIA_GTAP_REFERENCE_SNAPSHOT"] = "auto"
         return True
     return False
@@ -2131,7 +2149,7 @@ def info(ctx, gdx_file):
 @click.option(
     "--compare-gams/--no-compare-gams",
     default=False,
-    help="After solving, compare solution values against GAMS COMP_generated.csv reference",
+    help="After solving, compare solution values against the recorded 9x10 GAMS reference (base)",
 )
 @click.option(
     "--compare-gams-tol",
@@ -2145,7 +2163,7 @@ def info(ctx, gdx_file):
     default=False,
     help=(
         "Enforce mirror gates after solving: solver residual < 1e-4, "
-        "0 non-xd mismatches vs COMP_generated.csv (tol=5e-3). Exit code 2 on failure."
+        "0 non-xd mismatches vs the recorded 9x10 GAMS reference (tol=5e-3). Exit code 2 on failure."
     ),
 )
 @click.pass_context
@@ -2185,7 +2203,7 @@ def solve(
         if snapshot_enabled:
             logger.info(
                 "Enabled benchmark-aligned GTAP reference snapshot from %s",
-                COMP_CSV_REFERENCE,
+                "the recorded 9x10 GAMS reference",
             )
         if elasticity_gdx is not None:
             logger.info("Using custom elasticity GDX: %s", elasticity_gdx)
@@ -2365,44 +2383,16 @@ def solve(
 
             if compare_gams:
                 try:
-                    import csv as _csv_mod
                     from equilibria.templates.gtap.gtap_parity_pipeline import (
                         GTAPVariableSnapshot,
                     )
 
                     click.echo(
-                        "\nComparing solution against GAMS reference (COMP_generated.csv)..."
+                        "\nComparing solution against GAMS reference (recorded 9x10 GDX, base)..."
                     )
                     py_snapshot = GTAPVariableSnapshot.from_python_model(model)
 
-                    # Load CSV directly without any scale factor; COMP_generated.csv stores
-                    # values in the same normalized units as the Python model.
-                    gams_raw: dict[str, dict] = {}
-                    with open(
-                        COMP_CSV_REFERENCE, newline="", encoding="utf-8"
-                    ) as _csvf:
-                        for _row in _csv_mod.DictReader(_csvf):
-                            _yr = (_row.get("Year") or "").strip()
-                            if _yr not in {"1", "1.0"}:
-                                continue
-                            _var = (_row.get("Variable") or "").strip().lower()
-                            _reg = (_row.get("Region") or "").strip()
-                            _sec = (_row.get("Sector") or "").strip()
-                            _qual = (_row.get("Qualifier") or "").strip()
-                            try:
-                                _val = float((_row.get("Value") or "0").strip())
-                            except (ValueError, TypeError):
-                                continue
-                            if _var not in gams_raw:
-                                gams_raw[_var] = {}
-                            if _reg and _sec and _qual:
-                                gams_raw[_var][(_reg, _sec, _qual)] = _val
-                            elif _reg and _sec:
-                                gams_raw[_var][(_reg, _sec)] = _val
-                            elif _reg:
-                                gams_raw[_var][(_reg,)] = _val
-                            else:
-                                gams_raw[_var][()] = _val
+                    gams_raw = _gams_reference_levels(params.sets)
 
                     # Compare variable group by group (match on Python model's key format)
                     _all_mm: list[dict] = []
@@ -2412,7 +2402,7 @@ def solve(
                     for _attr in sorted(py_snapshot.__dataclass_fields__):
                         if _attr in {"pnum", "walras", "xd"}:
                             # xd (xda) is stored normalized by xscale in Python but in GAMS-level
-                            # units in COMP_generated.csv; skip to avoid spurious factor-10 gaps.
+                            # units in the GAMS reference; skip to avoid spurious factor-10 gaps.
                             continue
                         _py_dict = getattr(py_snapshot, _attr, {})
                         if not isinstance(_py_dict, dict):
@@ -2494,40 +2484,15 @@ def solve(
                         f"(status={path_capi_result.get('status')})"
                     )
 
-                # Gate 2: parity against COMP_generated.csv (0 mismatches at 5e-3)
-                if COMP_CSV_REFERENCE.exists():
+                # Gate 2: parity against the recorded 9x10 GAMS reference (0 mismatches at 5e-3)
+                _g_raw = _gams_reference_levels(params.sets)
+                if _g_raw:
                     try:
-                        import csv as _csv_m
                         from equilibria.templates.gtap.gtap_parity_pipeline import (
                             GTAPVariableSnapshot as _Snap,
                         )
 
                         _py_snap = _Snap.from_python_model(model)
-                        _g_raw: dict[str, dict] = {}
-                        with open(
-                            COMP_CSV_REFERENCE, newline="", encoding="utf-8"
-                        ) as _f:
-                            for _r2 in _csv_m.DictReader(_f):
-                                if (_r2.get("Year") or "").strip() not in {"1", "1.0"}:
-                                    continue
-                                _v2 = (_r2.get("Variable") or "").strip().lower()
-                                _rg = (_r2.get("Region") or "").strip()
-                                _sc = (_r2.get("Sector") or "").strip()
-                                _ql = (_r2.get("Qualifier") or "").strip()
-                                try:
-                                    _vl = float((_r2.get("Value") or "0").strip())
-                                except (ValueError, TypeError):
-                                    continue
-                                if _v2 not in _g_raw:
-                                    _g_raw[_v2] = {}
-                                if _rg and _sc and _ql:
-                                    _g_raw[_v2][(_rg, _sc, _ql)] = _vl
-                                elif _rg and _sc:
-                                    _g_raw[_v2][(_rg, _sc)] = _vl
-                                elif _rg:
-                                    _g_raw[_v2][(_rg,)] = _vl
-                                else:
-                                    _g_raw[_v2][()] = _vl
                         _mirror_mm = 0
                         for _at2 in sorted(_py_snap.__dataclass_fields__):
                             if _at2 in {"pnum", "walras", "xd"}:
@@ -2554,13 +2519,13 @@ def solve(
                         if _mirror_mm > 0:
                             _mirror_failures.append(
                                 f"{_mirror_mm} parity mismatches (tol={_STRICT_MIRROR_TOL:.1e}) "
-                                f"vs COMP_generated.csv"
+                                f"vs the recorded 9x10 GAMS reference"
                             )
                     except Exception as _me:
                         _mirror_failures.append(f"Mirror parity check error: {_me}")
                 else:
                     click.echo(
-                        "  [strict-mirror] COMP_generated.csv not found — skipping parity gate",
+                        "  [strict-mirror] no recorded 9x10 GAMS reference — skipping parity gate",
                         err=True,
                     )
 

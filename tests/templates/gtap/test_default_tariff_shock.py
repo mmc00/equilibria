@@ -1,7 +1,8 @@
 """El arancel +10% por defecto vive en el ShockBlock (cambio tariff-to-shock-block).
 
-Oraculo: la solucion de GAMS de cada fixture (gtap7_3x3, los cuatro casos gtap /
-altertax x ifSUB 0/1), leida con el lector GDX propio (sin GAMS instalado).
+Oraculo: la solucion de GAMS de cada referencia en data/ (gtap7_3x3, los cuatro
+casos gtap / altertax x ifSUB 0/1, fbep=header), leida con el lector GDX propio
+(sin GAMS instalado).
 
   * ``imptx[*,'shock']`` del modelo resuelto = el de GAMS. GAMS fija el arancel
     como instrumento (``tm.fx``): en gtap sobre la potencia, (1+t)*1,1-1, con la
@@ -23,7 +24,7 @@ from pathlib import Path
 import pytest
 
 from equilibria._local_refs import path_capi_src
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, find_reference
 
 pytestmark = pytest.mark.integration
 
@@ -36,12 +37,13 @@ DATASET = "gtap7_3x3"
 CASES = [("gtap", 0), ("gtap", 1), ("altertax", 0), ("altertax", 1)]
 
 
-def _fixture_gdx(mode: str, ifsub: int) -> Path:
-    if mode == "gtap":
-        return ROOT / f"tests/fixtures/gtap7/{DATASET}/out_gtap_shock_ifsub{ifsub}.gdx"
-    return (
-        ROOT / f"tests/fixtures/gtap7_altertax/{DATASET}/out_altertax_ifsub{ifsub}.gdx"
+def _fixture_gdx(mode: str, ifsub: int) -> Path | None:
+    # the GAMS MCP reference with FBEP split out; Python takes the data's subsidy
+    # sign to match it (the default "gams" basis keeps the old sign, #191)
+    folder = find_reference(
+        DATASET, "gams", form="mcp", mode=mode, ifsub=ifsub, fbep="header"
     )
+    return None if folder is None else folder / "out.gdx"
 
 
 def _gams(gdx: Path, name: str) -> dict[tuple, float]:
@@ -71,6 +73,7 @@ def _solve(mode: str, ifsub: int, gdx: Path):
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
+    p.set_va_subsidy_basis("gempack")
     if mode == "altertax":
         from equilibria.templates.gtap.altertax import apply_altertax_elasticities
 
@@ -124,8 +127,9 @@ def _solve(mode: str, ifsub: int, gdx: Path):
 def solved(request):
     mode, ifsub = request.param
     gdx = _fixture_gdx(mode, ifsub)
-    if not gdx.exists():
-        pytest.skip(f"fixture ausente: {gdx}")
+    if gdx is None:
+        pytest.skip(f"sin referencia GAMS para {DATASET} {mode} ifSUB={ifsub}")
+    assert gdx is not None  # pytest.skip raises; ty does not narrow through it
     if importlib.util.find_spec("path_capi_python") is None:
         pytest.skip("PATH (path_capi_python) ausente")
     m, res = _solve(mode, ifsub, gdx)

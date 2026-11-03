@@ -45,7 +45,7 @@ if not os.environ.get("PATH_LICENSE_STRING"):
 OUT_DIR = ROOT / "runs" / "9x10_compare" / "equilibria"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-GDX = ROOT / "src" / "equilibria" / "templates" / "reference" / "gtap" / "data" / "basedata-9x10.gdx"
+GDX = ROOT / "data" / "gtap7" / "9x10" / "basedata-9x10.gdx"
 RESIDUAL_REGION = "NAmerica"
 
 from equilibria.templates.gtap import GTAPParameters

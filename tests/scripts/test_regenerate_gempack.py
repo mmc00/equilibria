@@ -171,7 +171,11 @@ def test_end_to_end_with_fake_gempack(tmp_path: Path) -> None:
     )
 
     root = tmp_path / "data"
-    shutil.copytree(dataset_dir("gtap7_3x3"), root / "gtap7" / "gtap7_3x3")
+    # the data only: its gams_*/gempack_* results point at models not copied here
+    shutil.copytree(
+        dataset_dir("gtap7_3x3"), root / "gtap7" / "gtap7_3x3",
+        ignore=shutil.ignore_patterns("gams_*", "gempack_*"),
+    )  # fmt: skip
     shutil.copytree(
         GEMPACK_MODEL_DIR, root / "gtap7" / "gempack",
         ignore=shutil.ignore_patterns("__pycache__"),

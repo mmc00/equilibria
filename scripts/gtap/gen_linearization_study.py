@@ -15,7 +15,7 @@ Usage:
 """
 from __future__ import annotations
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, find_reference
 import sys
 from pathlib import Path
 from equilibria._local_refs import path_capi_src
@@ -66,6 +66,12 @@ def _var_list_rows() -> list[str]:
     return rows
 
 
+def _seed_gdx(dataset: str) -> Path | None:
+    """The GAMS MCP shock reference (ifSUB=1) that seeds the Python solve."""
+    folder = find_reference(dataset, "gams", form="mcp", mode="gtap", ifsub=1, fbep="header")
+    return None if folder is None else folder / "out.gdx"
+
+
 def _match_cell(fixtures_dir: Path, dataset: str, tag: str) -> str:
     """within-1pp match% for (dataset, tag), or '—' if the fixture is absent.
 
@@ -79,7 +85,7 @@ def _match_cell(fixtures_dir: Path, dataset: str, tag: str) -> str:
         return "—"
     # Python needs the shock GDX to seed the multiperiod solve; without it the
     # solve runs unseeded and returns a spurious number — report "—" instead.
-    if not (ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub1.gdx").exists():
+    if _seed_gdx(dataset) is None:
         return "— (no seed GDX)"
     # A fixture exists; measure Python (10% baseline) vs this GEMPACK solution.
     if not tag.startswith("tm10"):
@@ -147,13 +153,16 @@ def _solve_shock_10(dataset: str):
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
+    # the data's FBEP sign, as the fbep=header reference has it; the default
+    # "gams" basis keeps the old sign (#191)
+    p.set_va_subsidy_basis("gempack")
     rr = list(p.sets.r)[-1]
     ac = GTAPClosureConfig(
         name="base", closure_type="MCP", capital_mobility="sluggish",
         fix_endowments=False, fix_taxes=False, fix_technology=False,
         if_sub=True, numeraire="pnum",
     )
-    gdx = ROOT / f"tests/fixtures/gtap7/{dataset}/out_gtap_shock_ifsub1.gdx"
+    gdx = _seed_gdx(dataset)
     mp = GTAPMultiPeriodModel(p.sets, p, ac, residual_region=rr)
     m = mp.build_sets()
     mp.build_vars(m)

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from equilibria.sources import SourceError, iter_sources, reference
+from equilibria.sources import SourceError, find_reference, iter_sources, reference
 from tests.data._records import result_record, write_record
 
 
@@ -49,3 +49,31 @@ def test_no_match_lists_candidates(tmp_path: Path) -> None:
 def test_iter_sources_finds_nested_records(tmp_path: Path) -> None:
     _result(tmp_path / "gtap7" / "gtap7_3x3", "gams_ifsub0", ifsub=0)
     assert [r.path.name for r in iter_sources(tmp_path)] == ["gams_ifsub0"]
+
+
+def test_find_reference_none_when_nothing_recorded(tmp_path: Path) -> None:
+    _result(tmp_path, "gams_ifsub1", ifsub=1)
+    assert find_reference("gtap7_3x3", "gams", root=tmp_path, ifsub=0) is None
+
+
+def test_find_reference_returns_the_one_match(tmp_path: Path) -> None:
+    folder = _result(tmp_path, "gams_ifsub0", ifsub=0)
+    assert find_reference("gtap7_3x3", "gams", root=tmp_path, ifsub=0) == folder
+
+
+def test_find_reference_still_refuses_two_matches(tmp_path: Path) -> None:
+    # "absent" may be optional; "ambiguous" never is
+    _result(tmp_path, "gams_capfix", ifsub=0, closure="capFix")
+    _result(tmp_path, "gams_capflex", ifsub=0, closure="capFlex")
+    with pytest.raises(SourceError, match="gams_capfix"):
+        find_reference("gtap7_3x3", "gams", root=tmp_path, ifsub=0)
+
+
+def test_reference_needs_fbep_when_both_exist(tmp_path: Path) -> None:
+    # two variants of one GAMS result: a request without fbep must not pick one
+    kw = {"form": "mcp", "mode": "gtap", "ifsub": 1}
+    header = _result(tmp_path, "gams_mcp_gtap_ifsub1_fbep-header", **kw, fbep="header")
+    _result(tmp_path, "gams_mcp_gtap_ifsub1_fbep-zero", **kw, fbep="zero")
+    with pytest.raises(SourceError, match="2 folders match"):
+        reference("gtap7_3x3", "gams", root=tmp_path, **kw)
+    assert reference("gtap7_3x3", "gams", root=tmp_path, **kw, fbep="header") == header

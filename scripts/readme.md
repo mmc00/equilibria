@@ -51,12 +51,10 @@ cada script y quién lo nombra (CI, tests, docs u otro código). Un script con
 "—" no lo nombra nadie: es una medición puntual o está abandonado.
 
 <!-- MAPA:INICIO -->
-### raíz (4)
+### raíz (2)
 
 | Script | Qué hace | Lo nombra |
 |---|---|---|
-| `cal_dump.gms` | GTAP calibration dump (Python parity helper) | docs, código |
-| `cal_dump_neos.gms` | GTAP calibration dump for NEOS (self-contained GTAP script conventions) | — |
 | `dev/check_layout.py` | Closed root, lowercase English names, no loose scripts (ADR-0010). | CI, pre-commit |
 | `setup_ipopt.sh` | Setup script to install cyipopt with system IPOPT | — |
 
@@ -105,8 +103,6 @@ cada script y quién lo nombra (CI, tests, docs u otro código). Un script con
 | `blocks_diag.py` | Diagnostic tooling for the first B-block solve (F3). | tests, docs | monolito |
 | `build_9x10_altertax_neos_bundle.py` | Build a self-contained NEOS bundle for 9x10 altertax (fully inlined data). | código |  |
 | `build_altertax_neos_bundle.py` | Build a self-contained NEOS bundle for 9x10 altertax (fully inlined data). | código |  |
-| `build_gtap7_altertax_neos_bundle.py` | Build a self-contained NEOS altertax bundle from a v7_consolidated.gdx. | código |  |
-| `build_gtap7_pure_local_bundle.py` | Build a self-contained, LOCALLY-runnable PURE-gtap tariff-shock bundle. | docs, código |  |
 | `build_v7_processed_from_raw.py` | Build a PROCESSED v7_consolidated.gdx from a RAW GEMPACK GtapView GDX. | código |  |
 | `calibrate_and_align.py` | GTAP SAM Calibration and Parity Alignment | — |  |
 | `gtap_calibrated.gms` | GTAP Model - Calibrated from SAM | código |  |
@@ -153,7 +149,6 @@ cada script y quién lo nombra (CI, tests, docs u otro código). Un script con
 | `comp_shock.gms` | comp_shock.gms - comp_nus333.gms (base/check/shock, NUS333) with the | tests, código |  |
 | `gams_welfare_fixture.py` | Bienestar de GAMS en los ejercicios de Burfisher: el fixture del test de bienestar. | tests |  |
 | `gdx_full_diff.py` | Diff ALL symbols (variables AND params) between a Python-solution GDX and a | — |  |
-| `gdx_to_gams_inline.py` | Convert a GDX file to inline GAMS set/parameter declarations. | código |  |
 | `gempack_reference.py` | Read a RunGTAP updated.har (post-shock levels) and expose Var cells shaped | tests, docs, código |  |
 | `gen_burfisher_gams.py` | Burfisher 3e / nus333: genera el oraculo GAMS de cada ejercicio. | tests, código |  |
 | `gen_coverage_doc.py` | Generate docs/site/guide/gtap7_coverage_matrix.md from coverage_matrix.ROWS. | tests, docs, código |  |
@@ -177,7 +172,6 @@ cada script y quién lo nombra (CI, tests, docs u otro código). Un script con
 | `phase_times.py` | Reparto del tiempo de una corrida GTAP por fase, con cronometros y no con cProfile. | CI, docs, código |  |
 | `profile_20x41_full.py` | Instrument the FULL 20x41 end-to-end (build + calibrate + solve) to find where | — |  |
 | `reconstruct_9x10_eflg.py` | Reconstruct the 9x10 reference default.prm's missing EFLG (ENDOWFLAG) header. | código |  |
-| `regen_altertax_reference.py` | Regenerate a subsidy-aware altertax reference GDX by building the NEOS bundle, | código |  |
 | `run_burfisher.py` | Burfisher 3e / nus333: corre cada ejercicio con equilibria y lo compara contra GAMS. | tests, docs, código | bloques |
 | `run_full_gtap_comparison.py` | Full GTAP Model Execution and Parity Check | — |  |
 | `run_gtap.py` | GTAP CLI - Command-line interface for GTAP CGE model | tests, docs, código | monolito |

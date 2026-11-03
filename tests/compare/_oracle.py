@@ -161,17 +161,16 @@ EX3_PERIODS_ONLY_IN_A = ["base"]
 EX3_PERIODS_ONLY_IN_B: list[str] = []
 
 # ---------------------------------------------------------------------------
-# Ejemplo 4 — GTAP 3x3, GDX de GAMS (fixture existente).
+# Ejemplo 4 — GTAP 3x3, GDX de GAMS (el especimen de formato de data/gdx_tests,
+# byte a byte el fixture de donde se copiaron los literales).
 #
 # Literales copiados de:
-#   gdxdump tests/fixtures/gtap7/gtap7_3x3/out_gtap_shock_ifsub0.gdx Format=csv Symb=xp
+#   gdxdump data/gdx_tests/gtap7_3x3_out_gtap_shock_ifsub0.gdx Format=csv Symb=xp
 #   gdxdump ... Symb=pft
 # (GDXDUMP 53.5.0; 15 cifras significativas, comparar con rel <= 1e-13).
 # xp(r, a, t) y pft(r, fp, t): el periodo es la ultima dimension.
 # ---------------------------------------------------------------------------
-GTAP3X3_GDX = (
-    ROOT / "tests" / "fixtures" / "gtap7" / "gtap7_3x3" / "out_gtap_shock_ifsub0.gdx"
-)
+GTAP3X3_GDX = ROOT / "data" / "gdx_tests" / "gtap7_3x3_out_gtap_shock_ifsub0.gdx"
 GDXDUMP_XP = {
     ("USA", "a_Food", "base"): 1.6135371431333,
     ("USA", "a_Food", "check"): 1.56662414651903,

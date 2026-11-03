@@ -3,7 +3,8 @@ GAMS se declara una vez, y el diccionario esta COMPLETO contra los dos lados.
 
 Oraculo independiente del codigo que se prueba:
   - el lado GAMS sale de los bloques ``Variables`` y ``Equations`` de los ``.gms``
-    de las fixtures (tests/fixtures/gtap7/<ds>/comp_*_ifsub{0,1}.gms), leidos aqui
+    de las referencias GAMS grabadas (data/gtap7/<ds>/gams_mcp_gtap_ifsub{0,1}_fbep-header/
+    model.gms), leidos aqui
     con un parser propio. Las declaraciones no dependen de ifSUB: cubren las dos
     formulaciones, incluidas pdp/pmp/pm/pefob/... que la fixture ``.nl`` (ifSUB=1)
     no trae;
@@ -35,7 +36,7 @@ import pytest
 from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[2]
-FIXTURES = ROOT / "tests/fixtures/gtap7"
+DATA = ROOT / "data/gtap7"
 HAR_3X3 = dataset_dir("gtap7_3x3")
 
 
@@ -45,10 +46,10 @@ _ITEM = re.compile(r"^\s*([A-Za-z_]\w*)\s*(?:\(([^)]*)\))?")
 
 @cache
 def _gams_families() -> dict[str, dict[str, int]]:
-    """{'eq': {familia: n_indices}, 'var': {...}} declarados en los .gms de las fixtures."""
+    """{'eq': {familia: n_indices}, 'var': {...}} declarados en los model.gms grabados."""
     out: dict[str, dict[str, int]] = {"eq": {}, "var": {}}
-    files = sorted(FIXTURES.glob("*/comp_*.gms"))
-    assert files, f"no hay .gms en {FIXTURES}"
+    files = sorted(DATA.glob("*/gams_mcp_gtap_ifsub*_fbep-header/model.gms"))
+    assert files, f"no hay model.gms en {DATA}"
     for f in files:
         kind = None
         for line in f.read_text().splitlines():
@@ -114,7 +115,7 @@ def _equilibria_families() -> dict[str, dict[str, int]]:
 
 @pytest.fixture(scope="module")
 def names():
-    from equilibria.compare.names import load_names  # ty: ignore[unresolved-import]
+    from equilibria.compare.names import load_names
 
     return load_names("gtap7")
 

@@ -25,7 +25,7 @@ El enfoque propuesto **separa las dos fuentes** agregando una capa de comparaci�
 
 ## 3. Entregables
 
-### 3.1 `scripts/cal_dump.gms`
+### 3.1 `data/gtap7/gams/cal_dump.gms`
 
 Script GAMS que:
 
@@ -38,7 +38,7 @@ Script GAMS que:
    - Niveles benchmark `.l` de: `xf`, `xft`, `xc`, `xa`, `xaa`, `xda`, `xma`, `xd`, `xmt`, `xw`, `xe`, `xet`, `xp`, `va`, `nd`, `pf`, `pfa`, `pfy`, `pft`, `pa`, `pd`, `pm`, `pe`, `pet`, `px`, `pva`, `pnd`, `ps`, `pmcif`, `pefob`, `pwmg`, `ptmg`, `yi`, `yc`, `yg`, `regy`, `kstock`, `arent`, `facty`, `ytax`, `etax`, `mtax`, `dintx`, `mintx`.
    - Impuestos `rt*` y escudos sustituidos.
 
-3. Salida: `src/equilibria/templates/reference/gtap/data/gams_cal_dump_9x10.gdx`.
+3. Salida: `data/gtap7/9x10/gams_cal_dump_9x10.gdx`.
 
 Este script se ejecuta una vez (o cuando cambia el dataset). No se toca durante la iteración de modelo.
 
@@ -103,7 +103,7 @@ Independiente pero complementario: un utilitario que, dado un punto (benchmark P
 
 ## 4. Flujo de trabajo propuesto
 
-1. **Generar dump GAMS** (una vez): `gams scripts/cal_dump.gms` → `gams_cal_dump_9x10.gdx`.
+1. **Generar dump GAMS** (una vez): `gams data/gtap7/gams/cal_dump.gms` → `gams_cal_dump_9x10.gdx`.
 2. **Comparar calibraciones**: `python scripts/gtap/compare_calibration.py` → CSV + summary.json.
 3. **Corregir divergencias calibración** ordenadas por `max_rel_diff` hasta que el summary reporte 0 mismatches (módulo tolerancia).
 4. **Scan residual con calibración Python corregida**: si residuo ≈ 0 → paridad estructural + calibración alcanzada. Si residuo > 0 → son errores de ecuación puros.

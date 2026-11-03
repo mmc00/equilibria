@@ -34,14 +34,13 @@ from pathlib import Path
 
 import pytest
 
-from equilibria.sources import dataset_dir, has_dataset
+from equilibria.sources import dataset_dir, find_reference, has_dataset
 
 # needs_gdxdump: estos tests leen el GDX de referencia con gdxdump; sin el
 # binario fallaban con FileNotFoundError en vez de saltarse.
 pytestmark = [pytest.mark.integration, pytest.mark.needs_gdxdump]
 
 ROOT = Path(__file__).resolve().parents[3]
-FIXTURES_DIR = ROOT / "tests/fixtures/gtap7_nlp"
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
@@ -116,8 +115,16 @@ def _has_solver() -> bool:
     return importlib.util.find_spec("path_capi_python") is not None
 
 
-def _fixture_gdx(dataset: str, mode: str, ifsub: int) -> Path:
-    return FIXTURES_DIR / f"{dataset}_{mode}_ifsub{ifsub}.gdx"
+def _fixture_gdx(dataset: str, mode: str, ifsub: int) -> Path | None:
+    """The GAMS NLP reference recorded in data/ (ADR-0010); None if none is.
+
+    The matrix calls the pure model "pure"; data/ records it as mode "gtap".
+    """
+    model = "gtap" if mode == "pure" else mode
+    folder = find_reference(
+        dataset, "gams", form="nlp", mode=model, ifsub=ifsub, fbep="header"
+    )
+    return None if folder is None else folder / "out.gdx"
 
 
 def _strip(s):
@@ -153,6 +160,9 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
+    # the data's FBEP sign, as the fbep=header reference has it; the default
+    # "gams" basis keeps the old sign (#191)
+    p.set_va_subsidy_basis("gempack")
     rr = list(p.sets.r)[-1]
 
     if mode == "altertax":
@@ -193,6 +203,12 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
     m._residual_region = rr
     mp.seed_all_periods(m, gdx)
 
+    # altertax: check and shock start from Python's own previous period and nothing
+    # is held at the reference. Seeding them with the answer and holding pva/pnd
+    # there matched any reference, the old (sigma = 1, free pva/pnd/px) and the new
+    # (#192) alike, at 100 % @0.01 %: the gate could not fail. Measured this way the
+    # sigma = 1 Python scored 53-77 % on the check, the sigma = 1.01 one 100 %.
+    altertax = mode == "altertax"
     res = solve_multiperiod(
         m,
         p,
@@ -200,8 +216,8 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
         ref_gdx=gdx,
         skip_base_solve=True,
         mute_welfare=True,
-        seed_from_prior=False,
-        holdfix_cd=True,
+        seed_from_prior=altertax,
+        holdfix_cd=not altertax,
         mode=solve_mode,
     )
     codes = {k: res[k]["code"] for k in res}
@@ -267,8 +283,10 @@ def test_gtap7_nlp_parity(dataset, ifsub, mode, floors, ci_status):
     if not _has_solver():
         pytest.skip("NLP solve toolchain (path_capi_python) not available")
     gdx = _fixture_gdx(dataset, mode, ifsub)
-    if not gdx.exists():
-        pytest.skip(f"fixture GDX missing: {gdx}")
+    if gdx is None:
+        pytest.skip(
+            f"no GAMS NLP reference recorded for {dataset}/{mode}/ifSUB={ifsub}"
+        )
     if not has_dataset(dataset):
         pytest.skip(f"dataset HAR missing: {dataset}")
 

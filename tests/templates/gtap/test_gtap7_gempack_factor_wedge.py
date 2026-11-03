@@ -70,39 +70,36 @@ def test_cuna_gempack_reproduce_evfp():
     assert celdas > 0
 
 
-def test_cuna_gams_sin_cambios():
-    """El cierre por defecto sigue con el signo de GAMS: fctts = -FBEP/EVFB."""
+def test_gams_basis_is_the_official_net_wedge():
+    """The default basis is the official getData.gms (#191): one net tax
+    fcttx = (EVFP - EVFB)/EVFB that holds the subsidy, and fctts = 0."""
     from equilibria.blocks.gtap.factor_wedge import factor_wedge_rates
 
     bm = _params().benchmark
-    subsidiadas = [k for k, v in bm.fbep.items() if float(v or 0.0) != 0.0]
-    assert subsidiadas, "3x3 trae FBEP distinto de cero"
-    for r, f, a in subsidiadas:
+    subsidised = [k for k, v in bm.fbep.items() if float(v or 0.0) != 0.0]
+    assert subsidised, "3x3 has nonzero FBEP"
+    for r, f, a in subsidised:
         evfb = float(bm.evfb[(r, f, a)])
         fcttx, fctts = factor_wedge_rates(bm, r, f, a, "gams")
-        assert fcttx == pytest.approx(float(bm.ftrv.get((r, f, a), 0.0)) / evfb)
-        assert fctts == pytest.approx(-float(bm.fbep[(r, f, a)]) / evfb)
+        assert fcttx == pytest.approx((float(bm.vfm[(r, f, a)]) - evfb) / evfb)
+        assert fctts == 0.0
 
 
-def test_cuna_gams_identica_bit_a_bit_a_las_formulas_viejas():
-    """El cierre por defecto hace las mismas cuentas de punto flotante que antes."""
+def test_va_valued_at_evfp_in_every_cell():
+    """The default basis values VA at the data's EVFP in every factor cell, so
+    va_wedge = EVFP - EVFB and the rate is its share of EVFB."""
     from equilibria.blocks.gtap._derived_params import _va_wedge
-    from equilibria.blocks.gtap.factor_wedge import (
-        factor_wedge_rate,
-        factor_wedge_rates,
-    )
+    from equilibria.blocks.gtap.factor_wedge import factor_wedge_rate
 
     p = _params()
     bm = p.benchmark
     for r, f, a in bm.evfb:
         evfb = float(bm.evfb.get((r, f, a), 0.0) or 0.0)
-        ftrv = float(bm.ftrv.get((r, f, a), 0.0) or 0.0)
-        fbep = float(bm.fbep.get((r, f, a), 0.0) or 0.0)
-        assert _va_wedge(p, bm, r, f, a) == ftrv - fbep
+        wedge = float(bm.vfm.get((r, f, a), 0.0) or 0.0) - evfb
+        assert _va_wedge(p, bm, r, f, a) == pytest.approx(wedge, abs=1e-12)
         if evfb <= 0.0:
             continue
-        assert factor_wedge_rates(bm, r, f, a) == (ftrv / evfb, -fbep / evfb)
-        assert factor_wedge_rate(bm, r, f, a) == (ftrv - fbep) / evfb
+        assert factor_wedge_rate(bm, r, f, a) == pytest.approx(wedge / evfb)
 
 
 def test_signo_desconocido_falla():
@@ -147,7 +144,11 @@ def test_recargar_los_datos_conserva_el_signo():
 
 
 def test_altertax_con_gempack_reparte_el_va_como_evfp():
-    """altertax recalcula af = pfa*xf/va; con gempack pfa*xf = EVFP."""
+    """altertax recalcula af = (xf/va)*pfa**sigmav; con gempack pfa*xf = EVFP.
+
+    pf = EVFB/EVOS, so pfa = EVFP/EVOS. sigmav is 1.01 after the #192 guard, which
+    leaves af off the plain EVFP share by the factor pfa**(sigmav - 1).
+    """
     from equilibria.templates.gtap.altertax.parameter_overrides import (
         apply_altertax_elasticities,
     )
@@ -156,6 +157,7 @@ def test_altertax_con_gempack_reparte_el_va_como_evfp():
     p.set_va_subsidy_basis("gempack")
     alt = apply_altertax_elasticities(p, in_place=False)
     evfp = _har("EVFP")
+    evos = _har("EVOS")
     celdas = 0
     for r in p.sets.r:
         for a in p.sets.a:
@@ -167,9 +169,12 @@ def test_altertax_con_gempack_reparte_el_va_como_evfp():
             total = sum(datos.values())
             if total <= 0.0:
                 continue
+            sigmav = alt.elasticities.sigmav[(r, a)]
+            assert sigmav == 1.01
             for f, v in datos.items():
+                pfa = v / evos[(r, f, a)]
                 assert alt.calibrated.af_param[(r, f, a)] == pytest.approx(
-                    v / total, rel=1e-6
+                    v / total * pfa ** (sigmav - 1.0), rel=1e-6
                 ), (r, f, a)
                 celdas += 1
     assert celdas > 0

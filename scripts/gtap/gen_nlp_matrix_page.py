@@ -40,7 +40,7 @@ def _doc_path(gate):
     return ROOT / f"docs/site/_static/gtap7_{gate}_matrix.html"
 
 
-# NLP refs live in tests/fixtures/gtap7_nlp/<ds>_<mode>_ifsub<N>.gdx; MCP refs are the
+# NLP refs live in data/gtap7/<ds>/gams_nlp_<mode>_ifsub<N>/out.gdx; MCP refs are the
 # clean NEOS altertax fixtures. Each gate imports its own solve+measure from its test.
 def _gate_config(gate):
     if gate == "mcp":
@@ -79,7 +79,7 @@ def _measure_all(cfg):
     for r in cfg["rows"]:
         key = (r.dataset, r.mode, r.ifsub)
         gdx = cfg["gdx"](r)
-        if not gdx.exists() or not has_dataset(r.dataset):
+        if gdx is None or not gdx.exists() or not has_dataset(r.dataset):
             results[key] = None
             continue
         try:
@@ -257,7 +257,7 @@ _PURE_NOTE_NLP = ("<b>The 5×5 shock was the fix.</b> It read 59.56% / code 2 "
 
 _PURE_NOTE_MCP = ("<b>Pure MCP is 100% with clean refs.</b> Every pure dataset "
     "(3×3/5×5/10×7/15×10, both ifSUB) matches 100% across all three stages against the "
-    "NEOS-regenerated subsidy-aware <code>out_gtap_shock_ifsub{N}.gdx</code>. The earlier "
+    "GAMS MCP references recorded under <code>data/gtap7/</code> (NEOS, <code>fbep=header</code>). The earlier "
     "~63% was a subsidy-blind reference (<code>ytax[ft]=0</code>), not the model. The one "
     "✕ (15×10 ifSUB=1 shock) is a PATH code=2 near-miss on the tight threshold — the point "
     "is still 100% correct cell-by-cell.")
@@ -269,7 +269,7 @@ _ALT_NOTE_NLP = ("<b>The check/shock ceiling is the reference, not the model.</b
     "rest is MCP references (NEOS), not a code change.")
 
 _ALT_NOTE_MCP = ("<b>Clean MCP refs land 99%+.</b> Base/check are exact and shock is "
-    "≥99.3 against the NEOS-regenerated subsidy-aware <code>out_altertax_ifsub{N}.gdx</code> "
+    "≥99.3 against the GAMS MCP references recorded under <code>data/gtap7/</code> "
     "— this is the daily fidelity gate. 15×10 shock ~95% is the known eq_paa Armington "
     "micro-cell family; the ~89–97 the NLP gate reads was its mis-converged NLP ref.")
 
