@@ -185,8 +185,9 @@ the lowercase rule and its exceptions):
    CITATION.cff Makefile pyproject.toml uv.lock`. Any other tracked entry at
    the root is red, with a message that says where things go (`data/README.md`).
    Changing the list is a reviewed edit of the script, never a side effect.
-2. **File and folder names in English.** Only names (paths), not contents:
-   comments, docstrings and docs keep their language. A name is red when a
+2. **File and folder names in English.** The check reads names (paths), not
+   contents; contents follow the English rule by review (phase 6 translates the
+   docs). A name is red when a
    token of it (split on `_ - .`) is in a list of Spanish words kept in the
    script, or when it has an accent or `ñ`. The list cannot catch every
    Spanish word, so review still applies; it catches the common ones. Measured
@@ -218,6 +219,9 @@ the lowercase rule and its exceptions):
    `tests/fixtures/` disappears.
 5. PEP (with Ricardo).
 6. Root leftovers and `docs/`; doc pointers; `CLAUDE.md`.
+   Docs contents are translated to English too (maintainer, 2026-11-03,
+   extending the 2026-10-28 rule that code, comments and commits are in
+   English), except the `pep_*.md` guides, which stay with Ricardo's R-PEP.
 7. #23: finish the dictionary pairing of the `.nl` gate (branch
    `fix/23-nl-gate-vacuo`, commit `212a873`) on the fixtures phase 2
    regenerated, until every row of every family the dictionary pairs is
