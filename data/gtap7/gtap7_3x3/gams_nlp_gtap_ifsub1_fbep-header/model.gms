@@ -3251,6 +3251,14 @@ loop(t0,
    omegaf(r,fp)$(omegaf(r,fp) eq na) = -etrae(fp,r) ;
 ) ;
 
+*  At exactly 1 the power-form price equations pxeq, pndeq and pvaeq reduce to
+*  1 = 1 and stop pinning their price (altertax sets all three to 1, #192).
+*  Same treatment as sigmag, sigmai and sigmamg below.
+
+sigmap(r,a)$(sigmap(r,a) eq 1)   = 1.01 ;
+sigmand(r,a)$(sigmand(r,a) eq 1) = 1.01 ;
+sigmav(r,a)$(sigmav(r,a) eq 1)   = 1.01 ;
+
 $ontext
 *  DvdM--12-Dec-2016
 *  Aggregation is now done in aggregation facility

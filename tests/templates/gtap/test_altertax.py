@@ -95,9 +95,11 @@ def test_apply_altertax_elasticities_overrides_all_containers():
     assert all(v == o.esubd for v in p.elasticities.esubd.values())
     assert all(v == o.esubm for v in p.elasticities.esubm.values())
     assert all(v == o.omegaf for v in p.elasticities.omegaf.values())
-    assert all(v == o.sigmav for v in p.elasticities.sigmav.values())
-    assert all(v == o.sigmap for v in p.elasticities.sigmap.values())
-    assert all(v == o.sigmand for v in p.elasticities.sigmand.values())
+    # the production nests set to 1 come out at 1.01, as cal.gms guards them (#192)
+    assert o.sigmav == o.sigmap == o.sigmand == 1.0
+    assert all(v == 1.01 for v in p.elasticities.sigmav.values())
+    assert all(v == 1.01 for v in p.elasticities.sigmap.values())
+    assert all(v == 1.01 for v in p.elasticities.sigmand.values())
     assert all(v == o.etrae for v in p.elasticities.etrae.values())
 
 

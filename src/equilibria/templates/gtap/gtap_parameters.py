@@ -554,6 +554,18 @@ class GTAPElasticities:
 
         self.initialize_nested_elasticities(sets)
 
+    def guard_unit_production_elasticities(self) -> None:
+        """sigmap, sigmand and sigmav equal to 1 become 1.01 (cal.gms, #192).
+
+        At exactly 1 the power-form price equations pxeq, pndeq and pvaeq reduce to
+        1 = 1 and stop pinning px, pnd and pva. cal.gms treats sigmag, sigmai and
+        sigmamg the same way.
+        """
+        for nest in (self.sigmap, self.sigmand, self.sigmav):
+            for key, value in nest.items():
+                if value == 1.0:
+                    nest[key] = 1.01
+
     def initialize_nested_elasticities(self, sets: GTAPSets) -> None:
         """Ensure sigmap, sigmand and sigmav cover every (region, activity)."""
         default_value = 1.0
@@ -570,6 +582,7 @@ class GTAPElasticities:
                 self.sigmav[(r, a)] = self.sigmav.get(
                     (r, a), self.esubva.get((r, a), default_value)
                 )
+        self.guard_unit_production_elasticities()
 
         # Populate GTAP equation-level elasticities used in model.gms blocks.
         # If not explicitly present in GDX, map from available calibrated elasticities.

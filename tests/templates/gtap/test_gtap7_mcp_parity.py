@@ -187,6 +187,10 @@ def _solve_and_measure(
     m._residual_region = rr
     mp.seed_all_periods(m, gdx)
 
+    # altertax: check and shock start from Python's own previous period and nothing
+    # is held at the reference, as in the NLP gate. Seeding them with the answer and
+    # holding pva/pnd there matched any reference, so the gate could not fail (#192).
+    altertax = mode == "altertax"
     res = solve_multiperiod(
         m,
         p,
@@ -194,8 +198,8 @@ def _solve_and_measure(
         ref_gdx=gdx,
         skip_base_solve=True,
         mute_welfare=True,
-        seed_from_prior=False,
-        holdfix_cd=True,
+        seed_from_prior=altertax,
+        holdfix_cd=not altertax,
         mode=solve_mode,
     )
     codes = {k: res[k]["code"] for k in res}

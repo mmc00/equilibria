@@ -22,7 +22,7 @@ generated_from:
       GFTLnd.gms: f840b28b8ce0337fc9f959ebf7881d555f27bdd84bda817c4520989c19180912
       altertax_config.gms: 98d7edcdb4985dce6fa310b7176d1b526a7f156f198dcf15c71cb6c2f430c4fb
       altertax_postmodel.gms: ea7a0c2049b204b44cbd20c3b04939e7aef23fa682f761ea030451d18384f497
-      cal.gms: b614ecc85da45f1c11bb19a0bcd0433681e6502ca6674d74db8f9392b02298e4
+      cal.gms: 27c3e32da7a9a7c3d0e27fabd97247d83f1e1dd22b97b980ded923e03d7ac5c5
       cal_dump.gms: c1c7a51f4412ee668ca3ecc36940901c91552243a67d04c3cd2b6d7a6193d4ef
       cal_dump_neos.gms: 97b4ac52a749eb5e4c92cea3eddf5c79361ba74eef3451a2cb14fef5efdf7a8a
       comp.gms: 46a7d0375b7009f5aa3c53954363b263200c1940d477fc4be4fb7bf6e89a4801
@@ -65,29 +65,29 @@ solver:
 command: /Users/marmol/proyectos/equilibria-phase2b/.venv/bin/python /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gams/tools/nl_standalone.py
   --dataset gtap7_5x5 --phase base check shock altertax --ifsub 1 --out-dir /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gtap7_5x5/gams_nl_altertax_ifsub1_fbep-header
   --fbep header
-equilibria_commit: 276de253
+equilibria_commit: 7c3c9fa3
 exit:
   code: 0
 outputs:
   gams_altertax.col: 808212a6ec6ec2116986a176194a7d506a1b007fc70e1ed0cd062cb134c01353
-  gams_altertax.gms: 2b3b296624f93c3e72acecdd628e9dacc21e61bba35acd1e851abac985802812
+  gams_altertax.gms: 30c2972e7baff10c7860cea2070e81ae6b27e8e8311289e08d2465914268a001
   gams_altertax.nl: 9e315f77338384baadc85bf56c640a93ceb277409e7f6699b94f0d4155ed817a
   gams_altertax.row: 4f16d89faeb2bb91afbe17b9d70d19fd27d6458553d58c5960485a3ecdf25ed2
   gams_base.col: 987b77d70783f50626fb337009f2b34614da907eb3533edf698d39a593e24e17
-  gams_base.gms: 7ca42e6e9d7a8bf8881c2fef0acb1deb90399674910d225e3639d384957c5e77
+  gams_base.gms: a60537a1d475c7a103d73f71f0540f7e7feea19c937802e4c6f4166ddd238d1e
   gams_base.nl: 5fea8dc89c002e7d3c201cbe19888cbe81d7bf5d6f05f685b37312785eb081f2
   gams_base.row: 1c09552524c7d401dbb0f69ab4b961a7384d8d6eea1fae21ce86ab5c3fface51
   gams_check.col: 94427d667ff624e641bef829860cb84b62675aa14463bb4cefa1d9011e71023c
-  gams_check.gms: a3540556f2c89ee65f8d8f7215c0ef2049545119a91d17ddbbb0343d945b71ce
+  gams_check.gms: d96eb3b31df2808bd714c42f8f898a6e5c6662962f38365bfbad582b8c557a24
   gams_check.nl: 056e6be036b78d92718c12a67cb32c4a2a3c4040bb95180fdee5b36c22b3f5e8
   gams_check.row: 97cdfd9836a891ead907f4d80c8bbd492903873a86045a7f74490adc3557bfe5
   gams_shock.col: 5a93ceb243d221ba55e8affc534272d2e76b277f777d9ab4c173573872d9c50b
-  gams_shock.gms: 0a29179fea1fbccddf93f2989114fb99537746ca4b5212a238fbab637edf8f4b
+  gams_shock.gms: f7bfb45fd3c0024920ad2345cf340d1e5bc84df402725edbb8ad8bd780e70e7b
   gams_shock.nl: 4dee34f1f36b65dd0f10933cc3c048b7d0d5a351e358b405ac4d4b434c65c237
   gams_shock.row: dbf552fb65d77f45c4bb04f6d6f052de8cfb77bb139dc38860bc4b8227e6133c
 run:
-  date: '2026-11-02T10:48:23-06:00'
-  duration_s: 3.629
+  date: '2026-11-02T19:33:47-06:00'
+  duration_s: 4.027
   machine:
     os: macOS 26.2 (Darwin 25.2.0)
     cpu: Apple M3 Pro

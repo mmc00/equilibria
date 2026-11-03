@@ -21,7 +21,7 @@ generated_from:
       GFTLnd.gms: f840b28b8ce0337fc9f959ebf7881d555f27bdd84bda817c4520989c19180912
       altertax_config.gms: 98d7edcdb4985dce6fa310b7176d1b526a7f156f198dcf15c71cb6c2f430c4fb
       altertax_postmodel.gms: ea7a0c2049b204b44cbd20c3b04939e7aef23fa682f761ea030451d18384f497
-      cal.gms: b614ecc85da45f1c11bb19a0bcd0433681e6502ca6674d74db8f9392b02298e4
+      cal.gms: 27c3e32da7a9a7c3d0e27fabd97247d83f1e1dd22b97b980ded923e03d7ac5c5
       cal_dump.gms: c1c7a51f4412ee668ca3ecc36940901c91552243a67d04c3cd2b6d7a6193d4ef
       cal_dump_neos.gms: 97b4ac52a749eb5e4c92cea3eddf5c79361ba74eef3451a2cb14fef5efdf7a8a
       comp.gms: 46a7d0375b7009f5aa3c53954363b263200c1940d477fc4be4fb7bf6e89a4801
@@ -64,15 +64,15 @@ solver:
 command: /Users/marmol/proyectos/equilibria-phase2b/.venv/bin/python /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gams/tools/regen_gams_reference.py
   --dataset gtap7_3x4 --mode altertax --form nlp --ifsub 1 --out /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gtap7_3x4/gams_nlp_altertax_ifsub1_fbep-header
   --fbep header --where local
-equilibria_commit: 276de253
+equilibria_commit: 7c3c9fa3
 exit:
   code: 0
 outputs:
-  model.gms: 0d8575b234207dfa68cbef04104b25986416aa0a1c0ea327799db2e01a4abfc3
-  out.gdx: e45b7c09cc803833bac98d52fb76fcbbd9a68e67e5335909d3a1bfc01e11256e
+  model.gms: f806923214e6710b430f41f925e47b2c8b4ff5db2098c8a98265d0112a1890a5
+  out.gdx: 703a25fef08b792653da78082479367ca54742917f6025c51c942c032b3b7b1d
 run:
-  date: '2026-11-02T10:49:26-06:00'
-  duration_s: 1.867
+  date: '2026-11-02T19:34:54-06:00'
+  duration_s: 2.295
   machine:
     os: macOS 26.2 (Darwin 25.2.0)
     cpu: Apple M3 Pro

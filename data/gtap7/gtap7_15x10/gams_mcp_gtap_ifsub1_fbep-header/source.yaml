@@ -21,7 +21,7 @@ generated_from:
       GFTLnd.gms: f840b28b8ce0337fc9f959ebf7881d555f27bdd84bda817c4520989c19180912
       altertax_config.gms: 98d7edcdb4985dce6fa310b7176d1b526a7f156f198dcf15c71cb6c2f430c4fb
       altertax_postmodel.gms: ea7a0c2049b204b44cbd20c3b04939e7aef23fa682f761ea030451d18384f497
-      cal.gms: b614ecc85da45f1c11bb19a0bcd0433681e6502ca6674d74db8f9392b02298e4
+      cal.gms: 27c3e32da7a9a7c3d0e27fabd97247d83f1e1dd22b97b980ded923e03d7ac5c5
       cal_dump.gms: c1c7a51f4412ee668ca3ecc36940901c91552243a67d04c3cd2b6d7a6193d4ef
       cal_dump_neos.gms: 97b4ac52a749eb5e4c92cea3eddf5c79361ba74eef3451a2cb14fef5efdf7a8a
       comp.gms: 46a7d0375b7009f5aa3c53954363b263200c1940d477fc4be4fb7bf6e89a4801
@@ -77,32 +77,32 @@ solver:
 command: /Users/marmol/proyectos/equilibria-phase2b/.venv/bin/python /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gams/tools/regen_gams_reference.py
   --dataset gtap7_15x10 --mode gtap --form mcp --ifsub 1 --out /Users/marmol/proyectos/equilibria-phase2b/data/gtap7/gtap7_15x10/gams_mcp_gtap_ifsub1_fbep-header
   --fbep header --where neos
-equilibria_commit: 276de253
+equilibria_commit: e5686248
 exit:
   code: 0
 outputs:
-  model.gms: 540715ddd0e073dd8fe6a2e87e767b7b67bffcb0ab7874e86e5008bf546baeba
-  model.lst: 51d60cffdfcca25e6ae91266c9623e6c57431d4af3c25d812faaae6383e00586
-  neos.log: 614e51d0bf8c3dd7b6cbd77aaa517fe7f718e9a1e9151a3471099e1d6b733f1b
-  neos_job.json: 013f8a3ece812a9da84c7d59be58fce6aca61da3c323f4fa390956715282a7e8
+  model.gms: cabcbef038970d6e91dc77d3fdbdb9ac2b65b773e0ba43a2e855d273546403c2
+  model.lst: 9231b45c32a6dcb28e43fecc0e24349aa3137e869fdca3b4e925510d69b28f5e
+  neos.log: b09236cff6549bdc9963d80e110e18c380e7e3f869543ef9de93ce0f0b3a5125
+  neos_job.json: d0489d6d6d0ddd8e9735e276777684cf50b9cc087719a18168004c0b20c65948
   out.gdx: 77d6794266a9183c398da15b9aeaff04fdff503f3d33e036b9fd5121c3fb5a3b
   path.opt: 47ab97f3f1331ab6505c79903e7febdc2beb5a253083cbfb8175b746b3f33aaf
 run:
-  date: '2026-11-02T17:02:31+00:00'
-  duration_s: 281.713
+  date: '2026-11-03T02:14:16+00:00'
+  duration_s: 251.889
   machine:
     os: NEOS server
     cpu: ''
     cores: null
     ram_gb: null
 neos:
-  job: 24345463
-  submitted_utc: '2026-11-02T16:57:53+00:00'
-  finished_utc: '2026-11-02T17:02:31+00:00'
+  job: 24356882
+  submitted_utc: '2026-11-03T02:10:08+00:00'
+  finished_utc: '2026-11-03T02:14:16+00:00'
   category: cp
   solver: PATH
   input_method: GAMS
   options: ''
-  sent_sha256: 540715ddd0e073dd8fe6a2e87e767b7b67bffcb0ab7874e86e5008bf546baeba
+  sent_sha256: cabcbef038970d6e91dc77d3fdbdb9ac2b65b773e0ba43a2e855d273546403c2
 status: verified
 notes: ''

@@ -1,22 +1,22 @@
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 1
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 1
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 Include File Summary
 
 
    SEQ   GLOBAL TYPE      PARENT   LOCAL  INCLVL  FILENAME
 
-     1        1 INPUT          0       0       0  /var/lib/condor/execute/dir_2
-                                                  855804/gamsexec/MODEL.gms
+     1        1 INPUT          0       0       0  /var/lib/condor/execute/dir_1
+                                                  234926/gamsexec/MODEL.gms
      2    20290 IF EXIST       1   20292       0  ../data/9x10Emiss.gdx
 
 
-COMPILATION TIME     =        0.040 SECONDS      6 MB  53.5.1 f2e5fac3 LEX-LEG
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 2
+COMPILATION TIME     =        0.042 SECONDS      6 MB  53.5.1 f2e5fac3 LEX-LEG
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 2
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
-----  23624 VARIABLE eh.L  CDE expansion parameters
+----  23632 VARIABLE eh.L  CDE expansion parameters
 
                           base       check       shock
 
@@ -172,7 +172,7 @@ ROW  .Construction       1.076       1.076       1.076
 ROW  .Services           1.205       1.205       1.205
 
 
-----  23624 VARIABLE bh.L  CDE substitution parameters
+----  23632 VARIABLE bh.L  CDE substitution parameters
 
                           base       check       shock
 
@@ -328,7 +328,7 @@ ROW  .Construction       0.420       0.420       0.420
 ROW  .Services           0.377       0.377       0.377
 
 
-----  23624 PARAMETER eh0  CDE expansion parameter
+----  23632 PARAMETER eh0  CDE expansion parameter
 
              Rice      Grains    VegFruit  OtherCrops   Livestock  ForestFish
 
@@ -370,7 +370,7 @@ BRA         1.032       1.052       1.171
 ROW         1.007       1.076       1.205
 
 
-----  23624 PARAMETER bh0  CDE substitution parameter
+----  23632 PARAMETER bh0  CDE substitution parameter
 
              Rice      Grains    VegFruit  OtherCrops   Livestock  ForestFish
 
@@ -412,7 +412,7 @@ BRA         0.485       0.478       0.461
 ROW         0.409       0.420       0.377
 
 
-----  23624 VARIABLE phiP.L  Elasticity of private exp. wrt to private utility
+----  23632 VARIABLE phiP.L  Elasticity of private exp. wrt to private utility
 
              base       check       shock
 
@@ -428,7 +428,7 @@ BRA         1.000       1.000       1.000
 ROW         1.000       1.000       1.000
 
 
-----  23624 VARIABLE xcshr.L  Household budget shares
+----  23632 VARIABLE xcshr.L  Household budget shares
 
 INDEX 1 = USA
 
@@ -631,7 +631,7 @@ Construction.hhd       0.005       0.005       0.005
 Services    .hhd       0.596       0.596       0.596
 
 
-----  23626 PARAMETER kron  Kronecker delta
+----  23634 PARAMETER kron  Kronecker delta
 
                      USA         CAN         MEX       EU_28         GBR
 
@@ -709,9 +709,9 @@ bop                                                                1.000
 
 tot                1.000
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 3
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 3
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Range Statistics    SOLVE betaCal Using MCP From line 23664
+Range Statistics    SOLVE betaCal Using MCP From line 23672
 
 
 RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
@@ -720,9 +720,9 @@ RHS       [min, max] : [ 8.747E-02, 1.333E+01]
 Bound     [min, max] : [        NA,        NA]
 Matrix    [min, max] : [ 8.747E-02, 1.778E+01]
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 4
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 4
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Model Statistics    SOLVE betaCal Using MCP From line 23664
+Model Statistics    SOLVE betaCal Using MCP From line 23672
 
 
 LOOPS                           *            base
@@ -736,24 +736,24 @@ NON ZERO ELEMENTS           100     NON LINEAR N-Z            100
 CODE LENGTH                 281     CONSTANT POOL              36
 
 
-GENERATION TIME      =        0.003 SECONDS     27 MB  53.5.1 f2e5fac3 LEX-LEG
+GENERATION TIME      =        0.002 SECONDS     27 MB  53.5.1 f2e5fac3 LEX-LEG
                L O O P S         *          base
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 5
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 5
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Solution Report     SOLVE betaCal Using MCP From line 23664
+Solution Report     SOLVE betaCal Using MCP From line 23672
 
 
                S O L V E      S U M M A R Y
 
      MODEL   betaCal             
      TYPE    MCP                 
-     SOLVER  PATH                FROM LINE  23664
+     SOLVER  PATH                FROM LINE  23672
 
 **** SOLVER STATUS     1 Normal Completion
 **** MODEL STATUS      1 Optimal
 
- RESOURCE USAGE, LIMIT          0.025 10000000000.000
+ RESOURCE USAGE, LIMIT          0.031 10000000000.000
  ITERATION COUNT, LIMIT         0    2147483647
  EVALUATION ERRORS              0             0
 40 row/cols, 100 non-zeros, 6.25% dense.
@@ -914,12 +914,12 @@ ROW  .base     -INF      0.181     +INF  1.723E-13
                              0  UNBOUNDED
                              0  REDEFINED
                              0     ERRORS
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 6
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 6
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
-----  23857 PARAMETER xdFlag  XD flags
+----  23865 PARAMETER xdFlag  XD flags
 
              Rice      Grains    VegFruit  OtherCrops   Livestock  ForestFish
 
@@ -961,7 +961,7 @@ BRA         1.000       1.000       1.000
 ROW         1.000       1.000       1.000
 
 
-----  23857 PARAMETER xetFlag  XET flags
+----  23865 PARAMETER xetFlag  XET flags
 
              Rice      Grains    VegFruit  OtherCrops   Livestock  ForestFish
 
@@ -1003,7 +1003,7 @@ BRA         1.000       1.000       1.000
 ROW         1.000       1.000       1.000
 
 
-----  23857 PARAMETER xsFlag  XS flags
+----  23865 PARAMETER xsFlag  XS flags
 
              Rice      Grains    VegFruit  OtherCrops   Livestock  ForestFish
 
@@ -1045,7 +1045,7 @@ BRA         1.000       1.000       1.000
 ROW         1.000       1.000       1.000
 
 
-----  23857 VARIABLE xs.L  Domestic supply
+----  23865 VARIABLE xs.L  Domestic supply
 
                           base       check       shock
 
@@ -1201,10 +1201,10 @@ ROW  .Construction       3.190       3.190       3.190
 ROW  .Services          18.523      18.523      18.523
 
 
-----  24331 VARIABLE walras.L              =        0.000  Walras check
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 7
+----  24339 VARIABLE walras.L              =        0.000  Walras check
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 7
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Equation Listing    SOLVE gtap Using MCP From line 24306
+Equation Listing    SOLVE gtap Using MCP From line 24314
 
 
 ---- axpeq  =E=  Production frontier shifter
@@ -22525,9 +22525,9 @@ walraseq..  rsav(ROW,check) + (1.853552375)*pi(ROW,check) - yi(ROW,check)
       + savf(ROW,check) + walras + (0.0399999977340809)*kstock(ROW,check) =E= 0
       ; (LHS = 0)
      
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 8
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 8
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Column Listing      SOLVE gtap Using MCP From line 24306
+Column Listing      SOLVE gtap Using MCP From line 24314
 
 
 ---- axp  Production frontier shifter
@@ -26302,9 +26302,9 @@ cv(MEX,hhd,check)
       (-0.6828) cveq(MEX,hhd,check)
 
 REMAINING 7 ENTRIES SKIPPED
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 9
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 9
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Range Statistics    SOLVE gtap Using MCP From line 24306
+Range Statistics    SOLVE gtap Using MCP From line 24314
 
 
 RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
@@ -26313,9 +26313,9 @@ RHS       [min, max] : [ 4.000E-02, 1.000E+00] - Zero values observed as well
 Bound     [min, max] : [ 8.899E-04, 1.665E-03]
 Matrix    [min, max] : [ 1.160E-16, 1.241E+02] - Zero values observed as well
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 10
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 10
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Model Statistics    SOLVE gtap Using MCP From line 24306
+Model Statistics    SOLVE gtap Using MCP From line 24314
 
 
 LOOPS                                 tsim   check
@@ -26329,24 +26329,24 @@ NON ZERO ELEMENTS       117,958     NON LINEAR N-Z         88,404
 CODE LENGTH             308,882     CONSTANT POOL          35,711
 
 
-GENERATION TIME      =        0.361 SECONDS     49 MB  53.5.1 f2e5fac3 LEX-LEG
+GENERATION TIME      =        0.372 SECONDS     49 MB  53.5.1 f2e5fac3 LEX-LEG
                L O O P S               tsim check
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 11
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 11
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Solution Report     SOLVE gtap Using MCP From line 24306
+Solution Report     SOLVE gtap Using MCP From line 24314
 
 
                S O L V E      S U M M A R Y
 
      MODEL   gtap                
      TYPE    MCP                 
-     SOLVER  PATH                FROM LINE  24306
+     SOLVER  PATH                FROM LINE  24314
 
 **** SOLVER STATUS     1 Normal Completion
 **** MODEL STATUS      1 Optimal
 
- RESOURCE USAGE, LIMIT          0.540 10000000000.000
+ RESOURCE USAGE, LIMIT          0.530 10000000000.000
  ITERATION COUNT, LIMIT         1         50000
  EVALUATION ERRORS              0             0
 21369 row/cols, 117958 non-zeros, 0.03% dense.
@@ -26394,15 +26394,15 @@ Maximum of Grad F . . . . . . .  1.2413e+02 eqn: (xeq(USA,Services,Services,che
                              0  UNBOUNDED
                              0  REDEFINED
                              0     ERRORS
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 12
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 12
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
-----  24331 VARIABLE walras.L              =  7.85771E-12  Walras check
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 13
+----  24339 VARIABLE walras.L              =  7.85771E-12  Walras check
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 13
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Equation Listing    SOLVE gtap Using MCP From line 24306
+Equation Listing    SOLVE gtap Using MCP From line 24314
 
 
 ---- axpeq  =E=  Production frontier shifter
@@ -47725,9 +47725,9 @@ walraseq..  rsav(ROW,shock) + (1.853552375)*pi(ROW,shock) - yi(ROW,shock)
       + savf(ROW,shock) + walras + (0.0399999977340809)*kstock(ROW,shock) =E= 0
       ; (LHS = 7.85771447908701E-12)
      
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 14
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 14
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Column Listing      SOLVE gtap Using MCP From line 24306
+Column Listing      SOLVE gtap Using MCP From line 24314
 
 
 ---- axp  Production frontier shifter
@@ -51508,9 +51508,9 @@ cv(MEX,hhd,shock)
       (-0.6828) cveq(MEX,hhd,shock)
 
 REMAINING 7 ENTRIES SKIPPED
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 15
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 15
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Range Statistics    SOLVE gtap Using MCP From line 24306
+Range Statistics    SOLVE gtap Using MCP From line 24314
 
 
 RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
@@ -51519,9 +51519,9 @@ RHS       [min, max] : [ 4.000E-02, 1.000E+00] - Zero values observed as well
 Bound     [min, max] : [ 8.899E-04, 1.665E-03]
 Matrix    [min, max] : [ 1.160E-16, 1.241E+02] - Zero values observed as well
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 16
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 16
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Model Statistics    SOLVE gtap Using MCP From line 24306
+Model Statistics    SOLVE gtap Using MCP From line 24314
 
 
 LOOPS                                 tsim   shock
@@ -51535,24 +51535,24 @@ NON ZERO ELEMENTS       118,958     NON LINEAR N-Z         89,404
 CODE LENGTH             312,080     CONSTANT POOL          36,107
 
 
-GENERATION TIME      =        0.422 SECONDS     53 MB  53.5.1 f2e5fac3 LEX-LEG
+GENERATION TIME      =        0.444 SECONDS     53 MB  53.5.1 f2e5fac3 LEX-LEG
                L O O P S               tsim shock
 
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 17
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 17
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
-Solution Report     SOLVE gtap Using MCP From line 24306
+Solution Report     SOLVE gtap Using MCP From line 24314
 
 
                S O L V E      S U M M A R Y
 
      MODEL   gtap                
      TYPE    MCP                 
-     SOLVER  PATH                FROM LINE  24306
+     SOLVER  PATH                FROM LINE  24314
 
 **** SOLVER STATUS     1 Normal Completion
 **** MODEL STATUS      1 Optimal
 
- RESOURCE USAGE, LIMIT        216.994 10000000000.000
+ RESOURCE USAGE, LIMIT        217.146 10000000000.000
  ITERATION COUNT, LIMIT     20556         50000
  EVALUATION ERRORS              0             0
 21369 row/cols, 118958 non-zeros, 0.03% dense.
@@ -51601,13 +51601,13 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 
 
 **** ERRORS/WARNINGS IN EQUATION phieq(CAN,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION phieq(MEX,shock)
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION phieq(EU_28,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION phieq(GBR,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -51625,16 +51625,16 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION phieq(ROW,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION yceq(CAN,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION yceq(MEX,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION yceq(EU_28,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION yceq(GBR,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -51646,37 +51646,36 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION yceq(IND,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION yceq(BRA,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
+**** ERRORS/WARNINGS IN EQUATION yceq(BRA,shock)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
 **** ERRORS/WARNINGS IN EQUATION yceq(ROW,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
 
 **** ERRORS/WARNINGS IN EQUATION useq(USA,shock)
-     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION useq(CAN,shock)
-     7 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION useq(MEX,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION useq(EU_28,shock)
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     7 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION useq(GBR,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
+**** ERRORS/WARNINGS IN EQUATION useq(GBR,shock)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     8 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
 **** ERRORS/WARNINGS IN EQUATION useq(CHN,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION useq(JPN,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
@@ -51684,11 +51683,11 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 
 **** ERRORS/WARNINGS IN EQUATION useq(IND,shock)
      4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION useq(BRA,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION useq(ROW,shock)
      5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
@@ -51696,39 +51695,38 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(USA,Rice,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     6 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     7 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(USA,Grains,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     7 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(USA,VegFruit,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      6 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(USA,OtherCrops,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     7 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION zconseq(USA,Livestock,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      6 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
-**** ERRORS/WARNINGS IN EQUATION zconseq(USA,ForestFish,hhd,shock)
+**** ERRORS/WARNINGS IN EQUATION zconseq(USA,Livestock,hhd,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      7 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
-**** ERRORS/WARNINGS IN EQUATION zconseq(USA,Energy,hhd,shock)
+**** ERRORS/WARNINGS IN EQUATION zconseq(USA,ForestFish,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      6 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
+**** ERRORS/WARNINGS IN EQUATION zconseq(USA,Energy,hhd,shock)
+     5 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+
 **** ERRORS/WARNINGS IN EQUATION zconseq(USA,MeatDairy,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     9 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     5 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(USA,OtherFood,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     7 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     5 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(USA,Textiles,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
@@ -51739,47 +51737,46 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      5 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(USA,Metals,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     6 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(USA,MachEq,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     5 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(USA,Construction,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      5 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(USA,Services,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      6 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CAN,Rice,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION zconseq(CAN,Grains,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION zconseq(CAN,VegFruit,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION zconseq(CAN,OtherCrops,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION zconseq(CAN,Livestock,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION zconseq(CAN,ForestFish,hhd,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
-**** ERRORS/WARNINGS IN EQUATION zconseq(CAN,Energy,hhd,shock)
+**** ERRORS/WARNINGS IN EQUATION zconseq(CAN,Grains,hhd,shock)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION zconseq(CAN,VegFruit,hhd,shock)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION zconseq(CAN,OtherCrops,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION zconseq(CAN,Livestock,hhd,shock)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION zconseq(CAN,ForestFish,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION zconseq(CAN,Energy,hhd,shock)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CAN,MeatDairy,hhd,shock)
@@ -51788,15 +51785,15 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CAN,OtherFood,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CAN,Textiles,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CAN,Chemicals,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     4 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CAN,Metals,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
@@ -51804,50 +51801,51 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CAN,MachEq,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CAN,Construction,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CAN,Services,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(MEX,Rice,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(MEX,Grains,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION zconseq(MEX,VegFruit,hhd,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
+**** ERRORS/WARNINGS IN EQUATION zconseq(MEX,VegFruit,hhd,shock)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+
 **** ERRORS/WARNINGS IN EQUATION zconseq(MEX,OtherCrops,hhd,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(MEX,Livestock,hhd,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(MEX,ForestFish,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(MEX,Energy,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(MEX,MeatDairy,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(MEX,OtherFood,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(MEX,Textiles,hhd,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
@@ -51855,29 +51853,29 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(MEX,Chemicals,hhd,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(MEX,Metals,hhd,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(MEX,MachEq,hhd,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(MEX,Construction,hhd,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(MEX,Services,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(EU_28,Rice,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(EU_28,Grains,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(EU_28,VegFruit,hhd,shock)
@@ -51885,91 +51883,91 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(EU_28,OtherCrops,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(EU_28,Livestock,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(EU_28,ForestFish,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(EU_28,Energy,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(EU_28,MeatDairy,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(EU_28,OtherFood,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(EU_28,Textiles,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(EU_28,Chemicals,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(EU_28,Metals,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(EU_28,MachEq,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(EU_28,Construction,hhd,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(EU_28,Services,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(GBR,Rice,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(GBR,Grains,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(GBR,VegFruit,hhd,shock)
-     4 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(GBR,OtherCrops,hhd,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(GBR,Livestock,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(GBR,ForestFish,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(GBR,Energy,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(GBR,MeatDairy,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(GBR,OtherFood,hhd,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(GBR,Textiles,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(GBR,Chemicals,hhd,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(GBR,Metals,hhd,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(GBR,MachEq,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
@@ -51977,49 +51975,55 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(GBR,Construction,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(GBR,Services,hhd,shock)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CHN,Rice,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CHN,Grains,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CHN,VegFruit,hhd,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CHN,OtherCrops,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CHN,Livestock,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CHN,ForestFish,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CHN,Energy,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CHN,MeatDairy,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CHN,OtherFood,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CHN,Textiles,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CHN,Chemicals,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CHN,Metals,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
@@ -52027,19 +52031,22 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CHN,MachEq,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CHN,Construction,hhd,shock)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(CHN,Services,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(JPN,Rice,hhd,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(JPN,Grains,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(JPN,VegFruit,hhd,shock)
@@ -52047,31 +52054,35 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(JPN,OtherCrops,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(JPN,Livestock,hhd,shock)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION zconseq(JPN,ForestFish,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION zconseq(JPN,Energy,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
-**** ERRORS/WARNINGS IN EQUATION zconseq(JPN,ForestFish,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION zconseq(JPN,Energy,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-
 **** ERRORS/WARNINGS IN EQUATION zconseq(JPN,MeatDairy,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(JPN,OtherFood,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(JPN,Textiles,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(JPN,Chemicals,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(JPN,Metals,hhd,shock)
@@ -52079,18 +52090,20 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(JPN,MachEq,hhd,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(JPN,Construction,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(JPN,Services,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(IND,Rice,hhd,shock)
      3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(IND,Grains,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
@@ -52101,40 +52114,44 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(IND,OtherCrops,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(IND,Livestock,hhd,shock)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(IND,ForestFish,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(IND,Energy,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(IND,MeatDairy,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(IND,OtherFood,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(IND,Textiles,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(IND,Chemicals,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(IND,Metals,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(IND,MachEq,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(IND,Construction,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
@@ -52148,62 +52165,75 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(BRA,Grains,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(BRA,VegFruit,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(BRA,OtherCrops,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(BRA,Livestock,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION zconseq(BRA,ForestFish,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(BRA,Energy,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(BRA,MeatDairy,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION zconseq(BRA,OtherFood,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(BRA,Textiles,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(BRA,Chemicals,hhd,shock)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION zconseq(BRA,Metals,hhd,shock)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION zconseq(BRA,MachEq,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(BRA,Construction,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(BRA,Services,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(ROW,Rice,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION zconseq(ROW,Grains,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION zconseq(ROW,VegFruit,hhd,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION zconseq(ROW,OtherCrops,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
      3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
-**** ERRORS/WARNINGS IN EQUATION zconseq(ROW,Livestock,hhd,shock)
+**** ERRORS/WARNINGS IN EQUATION zconseq(ROW,Grains,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-     5 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
-**** ERRORS/WARNINGS IN EQUATION zconseq(ROW,ForestFish,hhd,shock)
+**** ERRORS/WARNINGS IN EQUATION zconseq(ROW,VegFruit,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION zconseq(ROW,OtherCrops,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
-**** ERRORS/WARNINGS IN EQUATION zconseq(ROW,Energy,hhd,shock)
+**** ERRORS/WARNINGS IN EQUATION zconseq(ROW,Livestock,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
      4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION zconseq(ROW,ForestFish,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION zconseq(ROW,Energy,hhd,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(ROW,MeatDairy,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
@@ -52211,19 +52241,19 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(ROW,OtherFood,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(ROW,Textiles,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     5 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(ROW,Chemicals,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(ROW,Metals,hhd,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(ROW,MachEq,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
@@ -52231,11 +52261,11 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(ROW,Construction,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION zconseq(ROW,Services,hhd,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x=0, c<0 (RETURNED 0)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(USA,Rice,hhd,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52247,28 +52277,28 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(USA,OtherCrops,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION xcshreq(USA,Livestock,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION xcshreq(USA,ForestFish,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION xcshreq(USA,Energy,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
-**** ERRORS/WARNINGS IN EQUATION xcshreq(USA,MeatDairy,hhd,shock)
+**** ERRORS/WARNINGS IN EQUATION xcshreq(USA,Livestock,hhd,shock)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
+**** ERRORS/WARNINGS IN EQUATION xcshreq(USA,ForestFish,hhd,shock)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
+**** ERRORS/WARNINGS IN EQUATION xcshreq(USA,Energy,hhd,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
+**** ERRORS/WARNINGS IN EQUATION xcshreq(USA,MeatDairy,hhd,shock)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(USA,OtherFood,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(USA,Textiles,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(USA,Chemicals,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(USA,Metals,hhd,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52283,7 +52313,7 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CAN,Rice,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CAN,Grains,hhd,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52292,28 +52322,28 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CAN,OtherCrops,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CAN,Livestock,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CAN,ForestFish,hhd,shock)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CAN,Energy,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CAN,MeatDairy,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CAN,OtherFood,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CAN,Textiles,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CAN,Chemicals,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CAN,Metals,hhd,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52325,7 +52355,7 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CAN,Services,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(MEX,Rice,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52373,40 +52403,40 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(EU_28,Rice,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(EU_28,Grains,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(EU_28,VegFruit,hhd,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(EU_28,OtherCrops,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(EU_28,Livestock,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(EU_28,ForestFish,hhd,shock)
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(EU_28,Energy,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(EU_28,MeatDairy,hhd,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(EU_28,OtherFood,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(EU_28,Textiles,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(EU_28,Chemicals,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(EU_28,Metals,hhd,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(EU_28,MachEq,hhd,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52415,10 +52445,10 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(EU_28,Services,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(GBR,Rice,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(GBR,Grains,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52430,7 +52460,7 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(GBR,Livestock,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(GBR,ForestFish,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52451,7 +52481,7 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(GBR,Metals,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(GBR,MachEq,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52460,28 +52490,28 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(GBR,Services,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CHN,Rice,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CHN,Grains,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CHN,VegFruit,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CHN,OtherCrops,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CHN,Livestock,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CHN,ForestFish,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CHN,Energy,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CHN,MeatDairy,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52490,7 +52520,7 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CHN,Textiles,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CHN,Chemicals,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52502,7 +52532,7 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CHN,Construction,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(CHN,Services,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52520,7 +52550,7 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(JPN,Livestock,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(JPN,ForestFish,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52529,58 +52559,58 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(JPN,MeatDairy,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(JPN,OtherFood,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(JPN,Textiles,hhd,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(JPN,Chemicals,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(JPN,Metals,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(JPN,MachEq,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(JPN,Construction,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(JPN,Services,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(IND,Rice,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(IND,Grains,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(IND,VegFruit,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(IND,OtherCrops,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(IND,Livestock,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(IND,ForestFish,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(IND,Energy,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(IND,MeatDairy,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(IND,OtherFood,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(IND,Textiles,hhd,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(IND,Chemicals,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52597,13 +52627,7 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 **** ERRORS/WARNINGS IN EQUATION xcshreq(IND,Services,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
-**** ERRORS/WARNINGS IN EQUATION xcshreq(BRA,OtherCrops,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION xcshreq(BRA,Chemicals,hhd,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION xcshreq(BRA,Construction,hhd,shock)
+**** ERRORS/WARNINGS IN EQUATION xcshreq(BRA,MeatDairy,hhd,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xcshreq(ROW,Rice,hhd,shock)
@@ -52652,43 +52676,43 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(USA,Land,shock)
-     7 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     8 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(USA,UnSkLab,shock)
      4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(USA,SkLab,shock)
      4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      6 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(USA,Capital,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     8 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(CAN,Land,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(CAN,UnSkLab,shock)
      3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(CAN,SkLab,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(CAN,Capital,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     10 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(MEX,Land,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
@@ -52701,73 +52725,73 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(MEX,SkLab,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     9 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     7 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(MEX,Capital,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(EU_28,Land,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(EU_28,UnSkLab,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(EU_28,SkLab,shock)
      3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(EU_28,Capital,shock)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     5 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(GBR,Land,shock)
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     8 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(GBR,UnSkLab,shock)
      3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(GBR,SkLab,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     7 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(GBR,Capital,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      7 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(CHN,Land,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(CHN,UnSkLab,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     7 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(CHN,SkLab,shock)
+     7 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION xfteq(CHN,Capital,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION xfteq(CHN,Capital,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(JPN,Land,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
@@ -52775,14 +52799,14 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(JPN,UnSkLab,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(JPN,SkLab,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     8 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(JPN,Capital,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
@@ -52790,39 +52814,39 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(IND,Land,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     9 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION xfteq(IND,UnSkLab,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
+**** ERRORS/WARNINGS IN EQUATION xfteq(IND,UnSkLab,shock)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(IND,SkLab,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(IND,Capital,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(BRA,Land,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(BRA,UnSkLab,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(BRA,SkLab,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(BRA,Capital,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
@@ -52830,30 +52854,31 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(ROW,Land,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     5 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(ROW,UnSkLab,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(ROW,SkLab,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION xfteq(ROW,Capital,shock)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(USA,Land,Rice,shock)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     9 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(USA,Land,Grains,shock)
-     11 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(USA,Land,VegFruit,shock)
@@ -52861,94 +52886,94 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(USA,Land,OtherCrops,shock)
-     8 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     10 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(USA,Land,Livestock,shock)
-     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(USA,NatRes,ForestFish,shock)
-     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     7 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(USA,NatRes,Energy,shock)
      8 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(USA,NatRes,OtherFood,shock)
-     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(CAN,Land,Rice,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(CAN,Land,Grains,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(CAN,Land,VegFruit,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(CAN,Land,OtherCrops,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(CAN,Land,Livestock,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(CAN,NatRes,ForestFish,shock)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(CAN,NatRes,Energy,shock)
-     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     9 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(CAN,NatRes,OtherFood,shock)
      6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(MEX,Land,Rice,shock)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
+**** ERRORS/WARNINGS IN EQUATION pfeq(MEX,Land,Grains,shock)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
-**** ERRORS/WARNINGS IN EQUATION pfeq(MEX,Land,Grains,shock)
+**** ERRORS/WARNINGS IN EQUATION pfeq(MEX,Land,VegFruit,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
-**** ERRORS/WARNINGS IN EQUATION pfeq(MEX,Land,VegFruit,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
 **** ERRORS/WARNINGS IN EQUATION pfeq(MEX,Land,OtherCrops,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(MEX,Land,Livestock,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(MEX,NatRes,ForestFish,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(MEX,NatRes,Energy,shock)
      6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(MEX,NatRes,OtherFood,shock)
-     7 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(EU_28,Land,Rice,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(EU_28,Land,Grains,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(EU_28,Land,VegFruit,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(EU_28,Land,OtherCrops,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(EU_28,Land,Livestock,shock)
@@ -52956,14 +52981,13 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(EU_28,NatRes,ForestFish,shock)
-     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION pfeq(EU_28,NatRes,Energy,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
+**** ERRORS/WARNINGS IN EQUATION pfeq(EU_28,NatRes,Energy,shock)
+     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
 **** ERRORS/WARNINGS IN EQUATION pfeq(EU_28,NatRes,OtherFood,shock)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(GBR,Land,Rice,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52971,11 +52995,11 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(GBR,Land,Grains,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     4 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(GBR,Land,VegFruit,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(GBR,Land,OtherCrops,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -52983,134 +53007,134 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(GBR,Land,Livestock,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(GBR,NatRes,ForestFish,shock)
      4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(GBR,NatRes,Energy,shock)
-     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(GBR,NatRes,OtherFood,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     7 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(CHN,Land,Rice,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(CHN,Land,Grains,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(CHN,Land,VegFruit,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(CHN,Land,OtherCrops,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(CHN,Land,Livestock,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(CHN,NatRes,ForestFish,shock)
-     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION pfeq(CHN,NatRes,Energy,shock)
-     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION pfeq(CHN,NatRes,OtherFood,shock)
      6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
+**** ERRORS/WARNINGS IN EQUATION pfeq(CHN,NatRes,Energy,shock)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
+**** ERRORS/WARNINGS IN EQUATION pfeq(CHN,NatRes,OtherFood,shock)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
 **** ERRORS/WARNINGS IN EQUATION pfeq(JPN,Land,Rice,shock)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION pfeq(JPN,Land,Grains,shock)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION pfeq(JPN,Land,VegFruit,shock)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION pfeq(JPN,Land,OtherCrops,shock)
      4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
-**** ERRORS/WARNINGS IN EQUATION pfeq(JPN,Land,Grains,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION pfeq(JPN,Land,VegFruit,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION pfeq(JPN,Land,OtherCrops,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
 **** ERRORS/WARNINGS IN EQUATION pfeq(JPN,Land,Livestock,shock)
-     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(JPN,NatRes,ForestFish,shock)
-     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION pfeq(JPN,NatRes,Energy,shock)
-     7 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION pfeq(JPN,NatRes,OtherFood,shock)
      4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
+**** ERRORS/WARNINGS IN EQUATION pfeq(JPN,NatRes,Energy,shock)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
+**** ERRORS/WARNINGS IN EQUATION pfeq(JPN,NatRes,OtherFood,shock)
+     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
 **** ERRORS/WARNINGS IN EQUATION pfeq(IND,Land,Rice,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(IND,Land,Grains,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION pfeq(IND,Land,VegFruit,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION pfeq(IND,Land,OtherCrops,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION pfeq(IND,Land,Livestock,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
-**** ERRORS/WARNINGS IN EQUATION pfeq(IND,NatRes,ForestFish,shock)
+**** ERRORS/WARNINGS IN EQUATION pfeq(IND,Land,VegFruit,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
+**** ERRORS/WARNINGS IN EQUATION pfeq(IND,Land,OtherCrops,shock)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
+**** ERRORS/WARNINGS IN EQUATION pfeq(IND,Land,Livestock,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
+**** ERRORS/WARNINGS IN EQUATION pfeq(IND,NatRes,ForestFish,shock)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
 **** ERRORS/WARNINGS IN EQUATION pfeq(IND,NatRes,Energy,shock)
-     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(IND,NatRes,OtherFood,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(BRA,Land,Rice,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(BRA,Land,Grains,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(BRA,Land,VegFruit,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(BRA,Land,OtherCrops,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(BRA,Land,Livestock,shock)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(BRA,NatRes,ForestFish,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     7 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(BRA,NatRes,Energy,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(BRA,NatRes,OtherFood,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(ROW,Land,Rice,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(ROW,Land,Grains,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(ROW,Land,VegFruit,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(ROW,Land,OtherCrops,shock)
@@ -53118,53 +53142,53 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(ROW,Land,Livestock,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(ROW,NatRes,ForestFish,shock)
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(ROW,NatRes,Energy,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfeq(ROW,NatRes,OtherFood,shock)
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfteq(USA,Land,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
-**** ERRORS/WARNINGS IN EQUATION pfteq(MEX,Land,shock)
+**** ERRORS/WARNINGS IN EQUATION pfteq(CAN,Land,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfteq(EU_28,Land,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfteq(GBR,Land,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfteq(JPN,Land,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
-**** ERRORS/WARNINGS IN EQUATION pfteq(IND,Land,shock)
+**** ERRORS/WARNINGS IN EQUATION pfteq(BRA,Land,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pfteq(ROW,Land,shock)
-     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION arenteq(USA,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION arenteq(CAN,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION arenteq(MEX,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION arenteq(EU_28,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION arenteq(GBR,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -53179,7 +53203,6 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
 
 **** ERRORS/WARNINGS IN EQUATION arenteq(BRA,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
 
 **** ERRORS/WARNINGS IN EQUATION arenteq(ROW,shock)
@@ -53188,70 +53211,71 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 **** ERRORS/WARNINGS IN EQUATION roreeq(CAN,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
-**** ERRORS/WARNINGS IN EQUATION roreeq(MEX,shock)
-     3 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+**** ERRORS/WARNINGS IN EQUATION roreeq(EU_28,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION roreeq(GBR,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION roreeq(CHN,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
-**** ERRORS/WARNINGS IN EQUATION roreeq(ROW,shock)
+**** ERRORS/WARNINGS IN EQUATION roreeq(JPN,shock)
+     1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION roreeq(IND,shock)
+     2 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION roreeq(BRA,shock)
      1 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION chiSaveeq(shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     6 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
-**** ERRORS/WARNINGS IN EQUATION ytaxshreq(USA,pt,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION ytaxshreq(USA,pc,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION ytaxshreq(USA,et,shock)
+**** ERRORS/WARNINGS IN EQUATION ytaxshreq(USA,ic,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CAN,pt,shock)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CAN,fc,shock)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CAN,pc,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CAN,gc,shock)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CAN,ic,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CAN,dt,shock)
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CAN,mt,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CAN,et,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CAN,ft,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CAN,fs,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION ytaxshreq(MEX,pt,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
+**** ERRORS/WARNINGS IN EQUATION ytaxshreq(MEX,pt,shock)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(MEX,fc,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(MEX,pc,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(MEX,gc,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(MEX,ic,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -53260,16 +53284,16 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(MEX,mt,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION ytaxshreq(MEX,et,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
+**** ERRORS/WARNINGS IN EQUATION ytaxshreq(MEX,et,shock)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(MEX,ft,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(MEX,fs,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(EU_28,pt,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -53284,7 +53308,7 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(EU_28,ic,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(EU_28,dt,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -53293,7 +53317,8 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(EU_28,et,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(EU_28,ft,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -53302,10 +53327,10 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(GBR,pt,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(GBR,fc,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(GBR,pc,shock)
@@ -53316,26 +53341,26 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(GBR,ic,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(GBR,dt,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(GBR,mt,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(GBR,et,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(GBR,ft,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(GBR,fs,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CHN,pt,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CHN,fc,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -53344,36 +53369,34 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CHN,gc,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION ytaxshreq(CHN,ic,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
+**** ERRORS/WARNINGS IN EQUATION ytaxshreq(CHN,ic,shock)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CHN,dt,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CHN,mt,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CHN,et,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CHN,ft,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(CHN,fs,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(JPN,pt,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(JPN,fc,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(JPN,pc,shock)
-     3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(JPN,gc,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -53382,17 +53405,16 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(JPN,dt,shock)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(JPN,mt,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(JPN,et,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(JPN,ft,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(JPN,fs,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -53401,18 +53423,17 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(IND,fc,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(IND,pc,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(IND,gc,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(IND,ic,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(IND,dt,shock)
@@ -53431,28 +53452,30 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(IND,fs,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
-**** ERRORS/WARNINGS IN EQUATION ytaxshreq(BRA,dt,shock)
+**** ERRORS/WARNINGS IN EQUATION ytaxshreq(BRA,mt,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(ROW,pt,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(ROW,fc,shock)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(ROW,pc,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(ROW,gc,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(ROW,ic,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(ROW,dt,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(ROW,mt,shock)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED -1E299)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(ROW,et,shock)
@@ -53462,67 +53485,70 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION ytaxshreq(ROW,fs,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION rgdpmpeq(USA,shock)
-     4 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
+     2 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION rgdpmpeq(CAN,shock)
-     4 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
+     2 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION rgdpmpeq(MEX,shock)
-     5 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
+     3 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION rgdpmpeq(EU_28,shock)
-     6 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
+     4 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION rgdpmpeq(GBR,shock)
-     5 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
+     4 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION rgdpmpeq(CHN,shock)
-     2 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
+     3 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION rgdpmpeq(JPN,shock)
      4 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION rgdpmpeq(IND,shock)
-     5 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
+     4 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION rgdpmpeq(BRA,shock)
-     4 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
+     2 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION rgdpmpeq(ROW,shock)
-     4 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
+     5 error(s): sqrt: FUNC DOMAIN: x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION pabseq(USA,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pabseq(CAN,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pabseq(MEX,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pabseq(EU_28,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pabseq(GBR,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pabseq(CHN,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pabseq(JPN,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pabseq(IND,shock)
      3 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+
+**** ERRORS/WARNINGS IN EQUATION pabseq(BRA,shock)
+     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pabseq(ROW,shock)
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfacteq(CAN,shock)
-     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfacteq(MEX,shock)
      2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
@@ -53534,94 +53560,91 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
      1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfacteq(JPN,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfacteq(IND,shock)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     2 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION pfacteq(BRA,shock)
-     4 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-
-**** ERRORS/WARNINGS IN EQUATION pfacteq(ROW,shock)
-     1 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     5 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION eveq(USA,hhd,shock)
-     27 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+     30 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     60 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 **** ERRORS/WARNINGS IN EQUATION eveq(CAN,hhd,shock)
-     21 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION eveq(MEX,hhd,shock)
-     45 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     26 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION eveq(EU_28,hhd,shock)
-     71 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION eveq(GBR,hhd,shock)
-     45 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     30 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION eveq(CHN,hhd,shock)
-     102 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION eveq(JPN,hhd,shock)
-     72 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION eveq(IND,hhd,shock)
-     62 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION eveq(BRA,hhd,shock)
-     48 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION eveq(ROW,hhd,shock)
-     62 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION cveq(USA,hhd,shock)
-     58 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     30 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION cveq(CAN,hhd,shock)
-     46 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     30 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION cveq(MEX,hhd,shock)
-     75 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION cveq(EU_28,hhd,shock)
-     71 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION cveq(GBR,hhd,shock)
-     63 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION cveq(CHN,hhd,shock)
-     30 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION cveq(JPN,hhd,shock)
-     37 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
-     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
-
-**** ERRORS/WARNINGS IN EQUATION cveq(IND,hhd,shock)
      15 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
+**** ERRORS/WARNINGS IN EQUATION eveq(MEX,hhd,shock)
+     57 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     41 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION eveq(EU_28,hhd,shock)
+     57 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION eveq(GBR,hhd,shock)
+     75 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     60 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION eveq(CHN,hhd,shock)
+     75 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION eveq(JPN,hhd,shock)
+     90 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION eveq(IND,hhd,shock)
+     58 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION eveq(BRA,hhd,shock)
+     24 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION eveq(ROW,hhd,shock)
+     54 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION cveq(USA,hhd,shock)
+     60 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     30 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION cveq(CAN,hhd,shock)
+     51 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     30 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION cveq(MEX,hhd,shock)
+     59 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION cveq(EU_28,hhd,shock)
+     40 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION cveq(GBR,hhd,shock)
+     30 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION cveq(CHN,hhd,shock)
+     52 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION cveq(JPN,hhd,shock)
+     41 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
+**** ERRORS/WARNINGS IN EQUATION cveq(IND,hhd,shock)
+     60 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
+
 **** ERRORS/WARNINGS IN EQUATION cveq(BRA,hhd,shock)
-     105 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     45 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
 
 **** ERRORS/WARNINGS IN EQUATION cveq(ROW,hhd,shock)
-     30 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
+     51 error(s): div: FUNC SINGULAR: x/y, |y| <= 1e-150 (RETURNED 1E299)
      15 error(s): vcPower: FUNC DOMAIN: x**c, x < 0 (RETURNED 0)
 
 
@@ -53629,21 +53652,21 @@ Maximum of Grad F . . . . . . .  1.2035e+02 eqn: (xeq(USA,Services,Services,sho
                              0 INFEASIBLE
                              0  UNBOUNDED
                              0  REDEFINED
-                           854     ERRORS ( ****)
-GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 11:02:45 Page 18
+                           871     ERRORS ( ****)
+GAMS 53.5.1  f2e5fac3 May 20, 2026          LEX-LEG x86 64bit/Linux - 11/02/26 20:14:29 Page 18
 G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
 E x e c u t i o n
 
 
-----  24331 VARIABLE walras.L              =  -7.1054E-12  Walras check
+----  24339 VARIABLE walras.L              =  -7.1054E-12  Walras check
 
 **** REPORT FILE SUMMARY
 
-csv /var/lib/condor/execute/dir_2855804/gamsexec/COMP.csv
-screen /var/lib/condor/execute/dir_2855804/gamsexec/con
+csv /var/lib/condor/execute/dir_1234926/gamsexec/COMP.csv
+screen /var/lib/condor/execute/dir_1234926/gamsexec/con
 
 
-EXECUTION TIME       =      219.441 SECONDS     55 MB  53.5.1 f2e5fac3 LEX-LEG
+EXECUTION TIME       =      219.635 SECONDS     55 MB  53.5.1 f2e5fac3 LEX-LEG
 
 
 USER: NEOS Server License - Production               G250831+0003Ac-GEN
@@ -53653,5 +53676,5 @@ USER: NEOS Server License - Production               G250831+0003Ac-GEN
 
 **** FILE SUMMARY
 
-Input      /var/lib/condor/execute/dir_2855804/gamsexec/MODEL.gms
-Output     /var/lib/condor/execute/dir_2855804/gamsexec/solve.lst
+Input      /var/lib/condor/execute/dir_1234926/gamsexec/MODEL.gms
+Output     /var/lib/condor/execute/dir_1234926/gamsexec/solve.lst
