@@ -1,0 +1,15 @@
+kind: model
+model: gtap7
+source: 'gtapv7.tab and gtapv7.sti (its TABLO condensation input) of the public download
+  ''Model code'' of the Standard GTAP Model, Version 7 (https://www.gtap.agecon.purdue.edu/models/current.asp,
+  file /uploads/resources/download/12101.zip, no login; downloaded 2026-11-03), unchanged
+  (CRLF kept). The download also holds GTAPV7.exe and 10x10 sample data, not kept.
+  Cite: Corong, Hertel, McDougall, Tsigas and van der Mensbrugghe (2017), The Standard
+  GTAP Model, Version 7, JGEA 2(1):1-119, doi 10.21642/JGEA.020101AF'
+outputs:
+  gtapv7.sti: 9e4350511b2afb18f8d59ac5eaac8647915c0f1afd1ef62991a0f104ec85c1cf
+  gtapv7.tab: fd53abe30912df56567d385ab38a517abd0eff356e4c84929550848901e0c135
+status: verified
+notes: 'License: not stated by the source (page, zip and TAB header); to confirm.
+  Kept like data/gtap7/gams_jgea (maintainer, 2026-11-03). The GTAPv7.tab/.sti the
+  Windows runs used (RunGTAP 3.75) are not checked against these files yet.'
