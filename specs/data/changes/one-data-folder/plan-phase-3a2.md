@@ -6,14 +6,16 @@
 
 **Architecture:** New generators live in `data/gtap7/gempack/tools/` next to the two 3a-1 scripts, which they import but never edit. One new driver, `tools/regenerate_paper.py`, lists every job of this phase in groups. It runs each job through `write_source.py` with the same resume and cleanup rules as `regenerate_gempack.py`. `write_source.py` gains two flags:
 - `--input NAME=PATH` chains a result to another result under `data/`, for example a levels export to the 3a-1 `sl4dump.har` it cross-checks against.
-- `--external NAME=PATH` records the sha256 (and, for an executable, the release it prints) of a file that is never put in the repository: `gtapv7.exe`, `gtapuv7.exe`, `gtapv7.tab`, the patched TABs and their compiled GEMSIM files.
+- `--external NAME=PATH` records the sha256 (and, for an executable, the release it prints) of a file that is never put in the repository: `gtapv7.exe`, `gtapuv7.exe`, the `C:\GP` programs, and the `.gss`/`.gst`/`.gsc` that `tablo` compiles.
+
+The model source of steps 4–7 is in the repository: RunGTAP 3.75's `gtapv7.tab` and `gtapv7.sti`, unchanged, in `data/gtap7/gempack_rungtap375/` (`kind: model`). Their patched versions (`make_levels_tab.py`) are in `data/gtap7/gempack_rungtap375_levels/` (`kind: model`, `derived_from: gtap7/gempack_rungtap375`).
 
 Nothing old is deleted or rewired here.
 
 **Tech Stack:** Python ≥3.10, pytest, `uv run` on Windows.
 - RunGTAP 3.75 (`C:\runGTAP375`): `gtapv7.exe`, `gtapuv7.exe` — GEMPACK Release 12.1.003.
 - GEMPACK in `C:\GP`: `tablo` 6.4, `gemsim` 4.3, `sltoht` 5.53 — GEMPACK Release 11.3.004, read from the consoles of the 2026-10 runs.
-- GAMS 53.1.0 in `C:\GAMS\53`. Its licence expired; see Task 6.
+- No GAMS on Windows: Horridge's GAMS results run on the Mac (Task 6, decision D4).
 
 **Spec:** `specs/data/changes/one-data-folder/design.md` (layout: `nus333/gempack_burfisher/<experiment>/`, `horridge_simple/`; "`source.yaml`"; "When a regenerated file differs from the old one"); `plan-phase-3a1.md`.
 
@@ -40,36 +42,37 @@ Nothing old is deleted or rewired here.
   | `gempack` | `gtapv7.exe` / `gtapuv7.exe` (RunGTAP) | 12.1.003 | `--gempack-release` |
   | `gemsim` | `C:\GP\gemsim` (+ `tablo` of the same release, compiling a TAB) | 11.3.004 | `--gp-release` |
   | `sltoht` | `C:\GP\sltoht` (+ `export_sl4_levels.py`) | 11.3.004 | `--gp-release` |
-  | `gams` | `C:\GAMS\53\gams.exe` | read from the `.lst` | — |
+  | `gams` | GAMS 53.5 on the Mac (Task 6 only) | read from the `.lst` | — |
 
   Any other executable a record uses goes in `external` with its sha256 and release. For example, an `sltoht` levels record re-solves with `gtapv7.exe`, so `external` holds `gtapv7.exe: {path, sha256, release: 12.1.003}`.
 - **`reference()` stays unique.** No new record shares (`dataset`, `tool`) with a 3a-1 record while carrying a superset of its variant. `reference(ds, "gempack", shock=…, steps=…, closure=…)` must still return exactly one folder for each of the 66 (Review Focus 1). That is why the levels exports are `tool: sltoht` / `tool: gemsim` and not more `gempack_*` folders.
-- **Not redistributed.** None of these goes into the repository:
-  - `C:\runGTAP375\gtapv7.tab`, `gtapv7.sti`
-  - the patched `gtapv7_levels.tab` / `gtapuv7_levels.tab` and their `.sti`
-  - the `.gss`/`.gst`/`.gsc` that `tablo` compiles from them
-  - any `.exe`
-
-  They are built in a scratch work folder outside `data/` and recorded only by `external` sha256 (Task 0). The licence of `GTAPv7.tab` is pending the maintainer's decision; see "Depends on the GTAPv7.tab licence".
+- **The GTAP model source (maintainer, 2026-11-03).** Steps 4–7 use RunGTAP 3.75's `gtapv7.tab` 7.0, the source of the `gtapv7.exe` that made the 66 matrix records. They do not use the official 7.1: `docs/findings/gtapv7_tab_70_vs_71_2026-11-03.md`. The 7.1 left `data/` in commit 8e9420fb (PR #186) and is tracked in issue #198.
+  - **`data/gtap7/gempack_rungtap375/`** (`kind: model`, recorded like `data/gtap7/gams_jgea`): `gtapv7.tab` and `gtapv7.sti` copied byte for byte from `C:\runGTAP375`.
+    - Expected sha256: tab `67cb2c6793fc40b3e14d8ce997ab1d66920b03800d0d0f3897c7a1bf0d5d2836`, sti `a3279021f72413ed3519031dd5ffbe2a893f7c770c0d8267a174415d8abc7a87`.
+    - `notes`: licence "not stated by the source; to confirm".
+  - **`data/gtap7/gempack_rungtap375_levels/`** (`kind: model`, `derived_from: gtap7/gempack_rungtap375`, `changes` listing each edit): `gtapv7_levels.tab`/`.sti` and `gtapuv7_levels.tab`/`.sti`, written by `tools/make_levels_tab.py` from the folder above. The uncondensed `gtapuv7_levels` needs nothing beyond `gtapv7.tab` and `gtapv7.sti`: `--uncondensed` derives it from the same two files.
+  - **Never in the repository:** the `.gss`/`.gst`/`.gsc` that `tablo` compiles, and any `.exe`/`.dll`. Tasks 7 and 8 compile into a scratch work folder outside `data/`. The compiled files and every executable are recorded only by sha256 in `external` (Task 0).
+  - `data/gtap7/gempack_purdue/` (the 7.1) disappears from this branch when `main` is merged in after #186 lands. Nothing here reads it.
 - **Variant keys.** Each task lists them. Shared spellings:
   - `shock`: number, percent
   - `steps`: string, `"8-16-32"`
   - `closure`: `capFlex` | `capFix` | `dpsaveSwap`. `dpsaveSwap` is the retired `swap dpsave(r) = del_tbalry(r)` of the May/July `.cmf`, which is not equilibria's capFix (`docs/findings/gempack_fixture_closure_mislabeled_2026-08-02.md`).
   - `experiment`: the lower-case `.exp` stem
   - `method`: `book` (as the `.exp` says) | `gragg` (Johansen 1-step rewritten to Gragg 2-4-6)
-- **Solutions are stored raw.** `.sl4` files are kept uncompressed, as GEMPACK wrote them: about 42.5 MB for both Burfisher sets against 11 MB as `.gz`. The `.gz` bytes would depend on zlib and on the mtime header. `data/` is already excluded from `check-added-large-files`. See Decision D3.
+- **Solutions are stored raw** (D3). `.sl4` files are kept uncompressed, as GEMPACK wrote them: about 42.5 MB for both Burfisher sets. `data/` is already excluded from `check-added-large-files`.
 
 ## Review Focus
 
 1. 3a-1 references stay unique after every 3a-2 record exists → Task 2 `test_matrix_references_stay_unique` (all 66 `reference(...)` calls, on a tmp copy of `data/` with one fake record per new folder kind).
 2. The two 3a-1 tools are byte-frozen → Task 1 `test_matrix_tools_are_frozen` (their sha256 equal what every `gempack_<tag>/source.yaml` lists).
 3. A tool whose banner release differs from the driver's argument exits 2 before solving → Task 1 `test_release_mismatch_refuses`.
-4. No RunGTAP or GEMPACK file is ever written under `data/` (`.tab`, `.sti`, `.gss`, `.gst`, `.gsc`, `.exe`, `.dll`) → Task 2 `test_no_rungtap_files_in_data` and Task 7 `test_patched_tab_never_in_data`.
+4. No compiled GEMPACK file and no executable is ever written under `data/` (`.gss`, `.gst`, `.gsc`, `.exe`, `.dll`). `.tab`/`.sti` are allowed only in `gempack_rungtap375/` and `gempack_rungtap375_levels/` → Task 2 `test_no_compiled_gempack_files_in_data` and Task 7 `test_compiled_tab_never_in_data`.
 5. `gemsim` writes a `.sl4` even when it fails (ME4A/B: "Accuracy too low"). OK requires rc 0 and "completed without error" in the log → Task 7 `test_gemsim_needs_normal_end`.
 6. The Johansen → Gragg rewrite leaves exactly one `Method` line and one `Steps` line → Task 8 `test_johansen_becomes_gragg_once`.
 7. The 20x41 `dpsaveSwap` job is a recorded *failure*. Its tool exits 0 only when GEMPACK aborts with the known signature (assert-arith dump written, "LOGE of negative" in `E_u`). Any other outcome exits 1 and records nothing → Task 11 `test_expected_abort_only_on_signature`.
 8. A failed nested job (`nus333/gempack_burfisher/<exp>/`) is removed before the next job hashes `data/gtap7/nus333`; otherwise the dataset record breaks → Task 2 `test_failed_nested_job_is_removed`.
 9. `--external` never reads outside the paths it is given, and `check_tree()` does not try to verify externals off Windows → Task 0 `test_external_is_recorded_not_checked`.
+10. `gempack_rungtap375/` holds RunGTAP's two files unchanged (the expected sha256 above), and the patched TABs are exactly what `make_levels_tab.py` writes from them, with every edit listed in `changes` → Task 1 `test_rungtap375_is_unchanged`, `test_levels_tabs_are_derived`.
 
 ---
 
@@ -91,20 +94,30 @@ Nothing old is deleted or rewired here.
 - [ ] **Step 2:** `uv run pytest tests/scripts/test_write_source.py tests/data/test_sources_schema.py -q` → FAIL. **Step 3:** implement. **Step 4:** → PASS.
 - [ ] **Step 5:** Commit `feat(dev): write_source records chained inputs and external files`.
 
-### Task 1: the tools folder and the release check
+### Task 1: the tools folder, the release check and the GTAP model source
 
 **Files:**
 - Move: `scripts/gtap/make_levels_tab.py`, `scripts/gtap/export_sl4_levels.py` → `data/gtap7/gempack/tools/`. Update the importers that `git grep -lE 'make_levels_tab|export_sl4_levels'` lists among code (`scripts/gtap/gempack_reference.py`, `scripts/gtap/compare_burfisher_gempack.py`, `src/equilibria/compare/sources.py` if it imports, `tests/scripts/test_export_sl4_levels.py`, `tests/scripts/test_make_levels_tab.py`, `tests/compare/test_levels_six_vars.py`, `tests/compare/oracles/levb_six_vars.py`), plus `scripts/readme.md`. Only import paths change.
+- Modify: `tools/make_levels_tab.py` gains `--changes-out FILE`. It writes the `changes` YAML (`{file, change, what, why, commit}` per edit) that `write_source.py --kind model --changes` records.
 - Create: `data/gtap7/gempack/tools/gempack_release.py`, with `release(console_text: str) -> str` (parses `<GEMPACK Release 11.3.004 …>`) and `require(console_text, expected) -> None` (raises `ReleaseMismatch`).
-- Test: `tests/data/test_gempack_tools.py` (extend), `tests/data/test_gempack_release.py`
+- Create (data, recorded by `write_source.py --kind model --no-run`):
+  - `data/gtap7/gempack_rungtap375/` with `gtapv7.tab` and `gtapv7.sti`, copied byte for byte from `C:\runGTAP375`. `--source` "RunGTAP 3.75 (C:\runGTAP375), the GTAPv7.tab 7.0 its gtapv7.exe was compiled from; unchanged (CRLF kept)"; `--notes` "licence: not stated by the source; to confirm".
+  - `data/gtap7/gempack_rungtap375_levels/`: `make_levels_tab.py` on that folder, run once condensed and once `--uncondensed`. `--derived-from gtap7/gempack_rungtap375`, `--changes` from `--changes-out`.
+- Test: `tests/data/test_gempack_tools.py` (extend), `tests/data/test_gempack_release.py`, `tests/data/test_gempack_rungtap375.py`
 
 - [ ] **Step 1: failing tests:**
   - `test_matrix_tools_are_frozen` (Review Focus 2)
   - `test_levels_tools_live_with_their_model` (the two files exist under `tools/` and not under `scripts/gtap/`)
   - `test_release_parses_both_banners` (fixtures: the first lines of a 3a-1 `solve_console.txt` and `sltoht_console.txt`)
   - `test_release_mismatch_refuses`
-- [ ] **Step 2:** run → FAIL. **Step 3:** `git mv`, fix imports, write `gempack_release.py`, then re-record `data/gtap7/gempack/source.yaml` with `write_source.py --kind model`. **Step 4:** `uv run pytest tests/data tests/scripts tests/compare -q` → PASS, and `check_tree()` prints `[]`.
-- [ ] **Step 5:** Commit `refactor(gempack): the levels generators live in data/gtap7/gempack/tools`.
+  - `test_rungtap375_is_unchanged` (Review Focus 10: the two expected sha256, and `kind: model`)
+  - `test_levels_tabs_are_derived` (a tmp rerun of `make_levels_tab.py` on `gempack_rungtap375/` reproduces the four files byte for byte; `changes` names every edited file)
+- [ ] **Step 2:** run → FAIL. **Step 3:**
+  - `git mv`, fix imports, write `gempack_release.py` and `--changes-out`.
+  - Copy the two RunGTAP files, check their sha256 against the expected ones, and stop if they differ.
+  - Record both model folders, then re-record `data/gtap7/gempack/source.yaml` with `write_source.py --kind model`.
+- [ ] **Step 4:** `uv run pytest tests/data tests/scripts tests/compare -q` → PASS, and `check_tree()` prints `[]`.
+- [ ] **Step 5:** Commit `refactor(gempack): the levels generators live in data/gtap7/gempack/tools`, then `data(gempack): RunGTAP 3.75's gtapv7.tab 7.0 and its patched levels TABs`.
 
 ### Task 2: the driver `tools/regenerate_paper.py`
 
@@ -116,18 +129,19 @@ Nothing old is deleted or rewired here.
 - `jobs(groups: list[str]) -> list[Job]`, with `Job(group, dataset, folder, variant: dict, tool, command: list[str], inputs: dict, externals: dict)`.
 - `main(argv) -> int`, with flags:
   - required: `--gempack-release`, `--gp-release`
-  - optional: `--gams-version`, `--group G` (repeatable; one of `book`, `book-sltoht`, `levels`, `horridge`, `levels6`, `gragg`, `gragg-sltoht`, `swap`, `swap-sltoht`, `validation`), `--only NAME` (folder name), `--dry-run`, `--work DIR` (scratch for the patched TABs; default `%TEMP%\equilibria_gempack_work`), `--gtapdir` (default `C:\runGTAP375`), `--gp` (default `C:\GP`)
-- Same resume, cleanup and exit codes as `regenerate_gempack.py`. A group whose prerequisite group is not recorded is refused by name: `book-sltoht` needs `book`; `gragg-sltoht` needs `gragg`; `levels6` and `gragg` need their compiled TAB in `--work`, built by the driver on first use.
+  - optional: `--group G` (repeatable; one of `book`, `book-sltoht`, `levels`, `horridge`, `levels6`, `gragg`, `gragg-sltoht`, `swap`, `swap-sltoht`, `validation`), `--only NAME` (folder name), `--dry-run`, `--work DIR` (scratch for the compiled TABs; default `%TEMP%\equilibria_gempack_work`), `--gtapdir` (default `C:\runGTAP375`, only for the `.exe`), `--gp` (default `C:\GP`)
+- Same resume, cleanup and exit codes as `regenerate_gempack.py`. A group whose prerequisite group is not recorded is refused by name: `book-sltoht` needs `book`; `gragg-sltoht` needs `gragg`.
+- `levels6` and `gragg` compile `data/gtap7/gempack_rungtap375_levels/` with `tablo` into `--work` on first use. They refuse to compile when that folder's record does not verify.
 
 - [ ] **Step 1: failing tests:**
-  - `test_job_counts` (book 39, book-sltoht 39, levels 6, horridge 3 gemsim + 5 gams, levels6 12, gragg 43, gragg-sltoht 43, swap 11, swap-sltoht 2, validation 1)
+  - `test_job_counts` (book 39, book-sltoht 39, levels 6, horridge 3, levels6 12, gragg 43, gragg-sltoht 43, swap 11, swap-sltoht 2, validation 1)
   - `test_matrix_references_stay_unique` (Review Focus 1)
-  - `test_no_rungtap_files_in_data` (Review Focus 4)
+  - `test_no_compiled_gempack_files_in_data` (Review Focus 4)
   - `test_failed_nested_job_is_removed` (Review Focus 8)
   - `test_prerequisite_group_refused`
   - `test_command_paths_are_absolute`
   - `test_resume_skips_recorded_folders`
-- [ ] **Step 2:** `uv run pytest tests/scripts/test_regenerate_paper.py -q` → FAIL. **Step 3:** implement with fake runners (as in 3a-1). **Step 4:** → PASS; `--dry-run` lists 204 jobs.
+- [ ] **Step 2:** `uv run pytest tests/scripts/test_regenerate_paper.py -q` → FAIL. **Step 3:** implement with fake runners (as in 3a-1). **Step 4:** → PASS; `--dry-run` lists 199 jobs.
 - [ ] **Step 5:** Commit `feat(gempack): regenerate_paper.py lists the corridas_paper and runs/ jobs`.
 
 > The tasks below each add their job module's real behaviour (tests with fake `gtapv7`/`gemsim`/`sltoht` scripts, as in 3a-1 Task 1), then a smoke run and the full group on Windows. Each group is committed on its own (`data(gempack): <group> on Windows`). Every push after the plan's is asked for first.
@@ -206,27 +220,23 @@ The 3a-1 folders do not keep the `.sl4`, and the frozen `collect_job` drops it. 
   - Folders `data/horridge_simple/gemsim_<fixcap|mobcap|tariff10>/`, variant `{experiment}`.
   - Files `solution.sl4`, `updated.har`, `sl4dump.har` (sltoht, same release), `tablo_console.txt`, `gemsim_console.txt`, `sltoht_console.txt`.
   - Step 3 never ran sltoht or `tariff10`, so the comparator (`compare_gams_vs_gempack.py`) could not be fed. Both are added here: they are what `readme_equilibria.md` reports.
-- **GAMS side**
-  - Group `horridge`. Tool `gams`, version from the `.lst`.
-  - Folders `data/horridge_simple/gams_<nlp|mcp|mpsge>_<fixcap|tariff10>/`: 5 jobs (`mpsge` has no tariff variant). Variant `{form, experiment}`.
-  - Files `results.gdx`, `<name>.lst`, `<name>.log`.
-  - **Blocked:** the Windows GAMS licence expired (rc 7 on 2026-10-19; `gamslice.txt` dated 2026-02-16). The 5 GAMS jobs run only after it is renewed, or on the Mac with GAMS 53.5 (Decision D4).
+- **GAMS side: Mac, not Windows (D4).**
+  - The 5 GAMS results (`data/horridge_simple/gams_<nlp|mcp|mpsge>_<fixcap|tariff10>/`, variant `{form, experiment}`; `mpsge` has no tariff variant) are run on the Mac with GAMS 53.5. The `tool_version` is read from the `.lst`.
+  - They are not part of this Windows plan or of `regenerate_paper.py`. They are listed here so that 3b knows where they go.
 - **Replaces** nothing committed: every SIMPLE result under `runs/` is git-ignored. The copies on branch `windows/corridas-paper` are stale July files.
 
 - [ ] **Step 1: failing tests** (`tests/scripts/test_gemsim_job.py`, part 1):
   - `test_simple_model_record_lists_inputs`
   - `test_tariff10_runs` (job list)
-  - `test_gams_jobs_need_a_licence` (driver refuses the GAMS jobs, naming the licence, when `gams` exits 7)
+  - `test_no_gams_job_on_windows` (the `horridge` group has exactly the 3 `gemsim` jobs)
 - [ ] **Steps 2–5:** FAIL → implement → PASS → commit `feat(gempack): Horridge SIMPLE into data/horridge_simple`.
-- [ ] **Step 6 (smoke):** `--group horridge --only gemsim_fixcap`. **Step 7 (full):** `--group horridge` (GAMS jobs refused until licensed), then `check_tree()` → `[]`, then commit `data(gempack): Horridge SIMPLE on Windows`.
+- [ ] **Step 6 (smoke):** `--group horridge --only gemsim_fixcap`. **Step 7 (full):** `--group horridge`, then `check_tree()` → `[]`, then commit `data(gempack): Horridge SIMPLE on Windows`.
 
 ### Task 7: step 4 — levels of y, qinv, rore, pinv, pva, pe (patched condensed TAB)
 
-- **Scratch build, never in `data/`.** The driver builds this once in `--work`:
-  1. `tools/make_levels_tab.py C:\runGTAP375\gtapv7.tab --sti …\gtapv7.sti --out-dir <work>\levels6`
-  2. `tablo -sti gtapv7_levels.sti`, which writes `gtapv7_levels.gss/.gst`
-
-  Each record lists `external`: `gtapv7.tab`, `gtapv7.sti`, `gtapv7_levels.tab`, `gtapv7_levels.sti`, `gtapv7_levels.gss`, `gtapv7_levels.gst`, `gtapv7.exe` (whose sl4dump is the cross-check).
+- **The model** is `data/gtap7/gempack_rungtap375_levels/gtapv7_levels.{tab,sti}` (Task 1), derived from RunGTAP's 7.0 in `data/gtap7/gempack_rungtap375/`. The driver copies the two files into `--work` and runs `tablo -sti gtapv7_levels.sti` there once, which writes `gtapv7_levels.gss/.gst`.
+  - The records chain the model with `--input levels_model=gtap7/gempack_rungtap375_levels`.
+  - `external` lists only the compiled `gtapv7_levels.gss`/`.gst` (and `.gsc` if written), `gtapv7.exe` (its sl4dump is the cross-check) and the `C:\GP` programs.
 - **Group** `levels6`. **Tool** `gemsim`, `--gp-release`.
 - **Folder** `data/gtap7/<ds>/gemsim_levels6_tm10_s8-16-32_<capflex|capfix>/`, 12 jobs (6 datasets × 2 closures).
 - **Variant** `{shock: 10, steps: "8-16-32", closure, tab: gtapv7_levels}`. `--data-dir data/gtap7/<ds>`; `--input sl4dump=gtap7/<ds>/gempack_tm10_s8-16-32_<closure>/sl4dump.har` (the unpatched solution, as step 4 used).
@@ -236,12 +246,12 @@ The 3a-1 folders do not keep the `.sl4`, and the frozen `collect_job` drops it. 
   - `…_tm10_s8-16-32_capfix.har` (capFix)
   - `sl4levels6_gtap7_3x3_tm10.har` (the same 3x3 capFlex job, saved twice)
   - `default_gtap7_20x41_rdlt0_windows.prm`, replaced by `gtap7_20x41/gemsim_levels6_tm10_s8-16-32_capfix/default_rdlt0.prm`
-- **Depends on the `GTAPv7.tab` licence** (see below).
 
 - [ ] **Step 1: failing tests** (`tests/scripts/test_gemsim_job.py`, part 2):
   - `test_aux_line_rewritten_once`
   - `test_capfix_prm_is_force_rdlt` (byte-equal to `_force_rdlt` on a tmp copy)
-  - `test_patched_tab_never_in_data` (Review Focus 4)
+  - `test_compiled_tab_never_in_data` (Review Focus 4)
+  - `test_model_read_from_data` (the TAB compiled is `gempack_rungtap375_levels/gtapv7_levels.tab`, never `C:\runGTAP375`)
   - `test_externals_listed`
   - `test_gemsim_needs_normal_end` (Review Focus 5)
 - [ ] **Steps 2–5:** FAIL → implement → PASS → commit `feat(gempack): six-variable levels with the patched TAB (step 4)`.
@@ -249,7 +259,9 @@ The 3a-1 folders do not keep the `.sl4`, and the frozen `collect_job` drops it. 
 
 ### Task 8: step 5 — Burfisher with Gragg (patched uncondensed TAB)
 
-- **Scratch build.** `make_levels_tab.py --uncondensed`, then `tablo -sti gtapuv7_levels.sti`. Records list `external`: `gtapv7.tab`, `gtapv7.sti`, `gtapuv7_levels.{tab,sti,gss,gst}`.
+- **The model** is `data/gtap7/gempack_rungtap375_levels/gtapuv7_levels.{tab,sti}` (Task 1). The uncondensed model needs no file beyond RunGTAP's `gtapv7.tab` and `gtapv7.sti`. It is compiled with `tablo -sti gtapuv7_levels.sti` in `--work`.
+  - The records chain the model with `--input levels_model=gtap7/gempack_rungtap375_levels`.
+  - `external` lists only `gtapuv7_levels.gss`/`.gst` (and `.gsc`) and the `C:\GP` programs.
 - **Group** `gragg`. **Tool** `gemsim`, `--gp-release`.
 - **Folder** `data/gtap7/nus333/gemsim_burfisher_gragg/<exp>/`, for the 43 experiments committed today in `burfisher_gragg/`.
   - Skips `tbl53` (`target%` is GUI-only) and `gtapv7` (closure of the condensed model).
@@ -259,7 +271,6 @@ The 3a-1 folders do not keep the `.sl4`, and the frozen `collect_job` drops it. 
 - **Files** `run.cmf`, `solution.sl4`, `updated.har`, `summary.har`, `decomp.har`, `volume.har`, `gemsim_console.txt`.
 - **ME4A and ME4B fail** ("Accuracy too low"), so no folder is written for them. Their old files came from a failed run and are not replaced (see "Not regenerated").
 - **Replaces** `burfisher_gragg/<exp>.sl4.gz`, `<exp>.upd`, `<exp>.log.gz` for 41 experiments.
-- **Depends on the `GTAPv7.tab` licence.**
 
 - [ ] **Step 1: failing tests** (`tests/scripts/test_gemsim_job.py`, part 3):
   - `test_johansen_becomes_gragg_once` (Review Focus 6)
@@ -278,7 +289,6 @@ The 3a-1 folders do not keep the `.sl4`, and the frozen `collect_job` drops it. 
   - `levels.txt`, `sl4levels.har` and `export_console.txt` (step 7, cross-checked against this folder's own `sl4dump.har`)
   - `sltoht_console.txt`
 - **Replaces** `burfisher_gragg/sl4levels_<exp>.har` (41 of 43). The step-6b dumps were never committed.
-- **Depends on the `GTAPv7.tab` licence**, through Task 8.
 - This task also retires the `-gt 6` bug of `corridas_paper.ps1` (step 7 rejected without the local patch): the driver has no step numbers.
 
 - [ ] **Steps 1–5:** `test_step7_reads_step6_dump_of_same_experiment` → FAIL → implement → PASS → commit `feat(gempack): sltoht dumps and levels of the Gragg solutions (steps 6b, 7)`.
@@ -328,20 +338,24 @@ The 3a-1 folders do not keep the `.sl4`, and the frozen `collect_job` drops it. 
 - Modify: `scripts/windows/README.md`. New section "Phase 3a-2: corridas_paper runs into data/". It covers:
   - pull the branch; `uv sync --frozen`
   - read the two releases: the `gtapv7.exe` banner, and the `C:\GP` banner in any `sltoht` console
-  - `--dry-run` (204 jobs)
+  - `--dry-run` (199 jobs)
   - the smoke and full command of each group, in dependency order: `book` → `book-sltoht` → `levels` → `horridge` → `levels6` → `gragg` → `gragg-sltoht` → `swap` → `swap-sltoht` → `validation`
   - `check_tree()` → `[]` before each commit
   - `git add` limited to the group's folders (as in the 3a-1 repair)
 
   It says `corridas_paper.ps1` is superseded but kept until 3b.
+- Modify: `data/README.md`, the D1 note on the 66 matrix records.
 
 - [ ] **Step 1:** write it. **Step 2:** `uv run pytest tests/scripts tests/data -q` → PASS; `python scripts/dev/check_layout.py` → 0; `prek run --all-files` → Passed. **Step 3:** commit `docs(windows): how to regenerate the corridas_paper runs into data/`. Push only with the maintainer's permission.
 
 ---
 
-## Depends on the GTAPv7.tab licence
+## The GTAPv7.tab licence
 
-- **Tasks 7, 8 and 9 (steps 4, 5, 6b and 7)** compile a patched `gtapv7.tab`. They run today with the TAB outside the repository and record only its sha256 (and the patched files' and compiled files' sha256) in `external`. If the licence allows redistribution, these could become checkable `kind: model` records instead: `data/gtap7/gempack/model/GTAPv7.tab`, its patched versions, and `generated_from.model` covering them. That would be rerecording, not rerunning the solves. If it does not, they stay as planned. In both cases only RunGTAP's owner can rerun them.
+- **Status:** `data/gtap7/gempack_rungtap375/` keeps RunGTAP 3.75's `gtapv7.tab` and `gtapv7.sti` unchanged, recorded like `data/gtap7/gams_jgea`, with the licence in `notes`: "not stated by the source; to confirm".
+- **What uses it:** Tasks 7, 8 and 9 (steps 4, 5, 6b and 7), through the derived `data/gtap7/gempack_rungtap375_levels/`.
+- **What stays outside the repository:** the files `tablo` compiles from those TABs, and every `.exe`. They appear only as sha256 in `external`.
+- **If the licence turns out not to allow redistribution:** the two model folders leave `data/`. The records of Tasks 7–9 then keep their sha256 in `generated_from`, but no longer verify off a machine that has RunGTAP. That would mean rerecording, not rerunning.
 - **Not dependent:**
   - Tasks 3, 4, 5, 10 and 11 use only the compiled `gtapv7.exe`/`gtapuv7.exe`, like 3a-1.
   - Task 6 uses Horridge's own `simple.tab`, already tracked.
@@ -357,7 +371,7 @@ The 3a-1 folders do not keep the `.sl4`, and the frozen `collect_job` drops it. 
 | `make_synthetic_updated_har.py`, `updated_synthetic.har` | Pure Python. Nothing reads the committed HAR. Phase 4. |
 | `runs/*/equilibria/*.json` | equilibria results (PATH C-API), not GEMPACK. Phase 4. |
 | `runs/nus333_compare/{trajectory.json, comparison.*}`, `runs/9x10_compare/comparison_9x10.md` | Analyses over the Task 10 folders plus equilibria's JSON. 3b, on the Mac. |
-| `runs/horridge_simple` GAMS results | Blocked by the expired Windows GAMS licence (Decision D4). |
+| `runs/horridge_simple` GAMS results | Run on the Mac with GAMS 53.5, not here (D4). |
 | The LEVA-only *layout* of `sl4levels_*_tm10.har` (5 gtap7, nus333, 9x10) | The current exporter writes LEVA+LEVB+NOLV. The values are regenerated (Tasks 5, 10), but `_oracle.py` EX16 and `test_export_sl4_levels.py`, which read the 1e10-sentinel layout, are a 3b finding. |
 
 ## Expected differences against the old files (for 3b's diff)
@@ -367,10 +381,12 @@ The 3a-1 folders do not keep the `.sl4`, and the frozen `collect_job` drops it. 
 - **`sl4levels6_gtap7_3x3_tm10.har` and `…_tm10_s8-16-32.har`** were not byte-identical before. Both are replaced by one folder, and 3b states which one it matched.
 - **`table1_levels_v061`'s test** (`test_default_tariff_shock.py`) compares against the 3x3 capFlex `sl4levels6`/`updated`. A red there is a finding about the old files (ADR-0008).
 
-## Decisions for the maintainer (defaults in bold)
+## Decisions (maintainer, 2026-11-03)
 
-- **D1.** The 66 matrix records carry `tool_version: 12.1.003`, but their `sl4dump.har` was made by `sltoht` 11.3.004 (their `sltoht_console.txt` says so). They are not edited here. **3b decides whether to re-record them with `external`** (no rerun needed: `write_source --no-run`), or to leave them and note it in `data/README.md`.
-- **D2.** `gtapv7.exe`'s sha256 is not recorded anywhere today. **Task 0's `external` starts recording it for 3a-2.** The 66 matrix records gain it only through D1.
-- **D3.** Store `.sl4` **raw** (≈ 42.5 MB for both Burfisher sets) or `.gz` (≈ 11 MB, what the readers read today).
-- **D4.** Horridge's 5 GAMS results: **renew the Windows GAMS licence and run them here**, or run them on the Mac with GAMS 53.5 (another `tool_version`, recorded as such).
-- **D5.** The nus333 trajectory (Task 10, shocks 1–9) is only used by docs and `trajectory.json`: **keep it** (cheap, nus333 is tiny), or drop it and let 3b retire `trajectory.json`.
+- **D1.** The 66 matrix records are **not** re-recorded. `data/README.md` gets a note: their `sl4dump.har` was made by `sltoht` 11.3.004, while `tool_version` (12.1.003) is the release of the program that made the primary output, `gtapv7.exe`. Task 12 adds the note.
+- **D2.** `external` records the sha256 of `gtapv7.exe` and `gtapuv7.exe` (and of every other executable a record uses) from 3a-2 on.
+- **D3.** `.sl4` files are stored raw, not `.gz`.
+- **D4.** The Windows GAMS licence is not renewed. Horridge's 5 GAMS results run on the Mac with GAMS 53.5 (Task 6, "Mac").
+- **D5.** The nus333 trajectory (Task 10, shocks 1–9) is kept.
+- **Model version.** RunGTAP 3.75's `gtapv7.tab` 7.0, not the official 7.1 (`docs/findings/gtapv7_tab_70_vs_71_2026-11-03.md`; the 7.1 is issue #198).
+- **Branch.** `main` is merged into `data/phase-3a2-gempack` once #186 lands, which drops `data/gtap7/gempack_purdue/`.
