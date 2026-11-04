@@ -20,7 +20,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import target_shocks
@@ -121,14 +120,19 @@ def run_gragg(args: argparse.Namespace) -> int:
     cmf = out / "run.cmf"
     cmf.write_bytes(_cmf(args.aux, out, exp).encode(target_shocks.ENCODING))
     console = out / "gemsim_console.txt"
-    # the .exp names its .prm and .shk without a path: run in a copy of the package
-    with tempfile.TemporaryDirectory(prefix="gragg_") as tmp:
-        pkg = Path(tmp)
-        for f in own_files(args.package):
-            target = pkg / f.relative_to(args.package)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(f, target)
+    # The .exp names its .prm and .shk without a path: run in a copy of the
+    # package. GEMSIM writes its current directory into the console and the .sl4,
+    # so the copy lives in the work folder (git-ignored, no user name), not %TEMP%.
+    pkg = args.aux.resolve().parent.parent / "package" / args.experiment
+    shutil.rmtree(pkg, ignore_errors=True)
+    for f in own_files(args.package):
+        target = pkg / f.relative_to(args.package)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(f, target)
+    try:
         rc = run([str(args.gemsim), "-cmf", str(cmf)], pkg, console)
+    finally:
+        shutil.rmtree(pkg, ignore_errors=True)
     for scratch in out.glob("*GPXXX*"):  # GEMSIM's work files (run-GPXXX7.ud8)
         scratch.unlink()
     text = console.read_text(encoding=target_shocks.ENCODING, errors="replace")

@@ -121,7 +121,7 @@ def _gragg(tmp_path: Path, exp: str = "me9c") -> list[str]:
     out = tmp_path / "out"
     out.mkdir()
     return ["gragg", "--experiment", exp, "--package", str(NUS333),
-            "--aux", str(tmp_path / "work" / "gtapuv7_levels"),
+            "--aux", str(tmp_path / "work" / "gtapuv7_levels" / "gtapuv7_levels"),  # as the driver
             "--gemsim", str(tmp_path / "gemsim.exe"),
             "--out", str(out), "--expect-release", "11.3.004"]  # fmt: skip
 
@@ -132,6 +132,10 @@ def test_runs_from_a_copy_of_the_package(tmp_path: Path, monkeypatch: pytest.Mon
     assert gemsim_job.main(_gragg(tmp_path)) == 0
     cwd = Path(str(seen["cwd"]))
     assert not cwd.resolve().is_relative_to(DATA_ROOT)  # never runs inside data/
+    # GEMSIM writes its current directory into the console and the .sl4: it is
+    # the work folder (no user name), not %TEMP%
+    assert cwd.resolve() == (tmp_path / "work" / "package" / "me9c").resolve()
+    assert not cwd.exists()  # removed after the run
     cmf = (tmp_path / "out" / "run.cmf").read_text(encoding="latin-1")
     assert 'auxiliary files = "' in cmf and "gtapuv7_levels" in cmf
     assert 'solution file = "' in cmf and "Steps = 6 8 10;" in cmf
