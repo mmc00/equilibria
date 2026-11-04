@@ -1,0 +1,12 @@
+kind: data
+model: gtap7
+dataset: gtap7_3x3_equilibria_period_prep
+source: 'equilibria snapshot of the model before each solve of the multiperiod driver
+  (gtap7_3x3), last regenerated at f5300c15. Moved byte for byte from tests/fixtures
+  at 4e91d12a. Regenerate with: EQUILIBRIA_UPDATE_PERIOD_SNAPSHOT=1 uv run pytest
+  tests/templates/gtap/test_period_prep_snapshot.py'
+license: equilibria output (MIT, as the package)
+outputs:
+  period_prep_snapshot.json: 978204d28b3068a7e0b00bec84ae19d603fe0606b8cd2abe3b5ddbec33113c94
+status: verified
+notes: ''

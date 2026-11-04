@@ -110,7 +110,7 @@ def _closure(p):
 # real del seed (el que cazo eacc53f movio celdas enteras, no decimales).
 SEED_TOL = 1e-9
 BASELINE_SEED = (
-    Path(__file__).resolve().parents[2] / "fixtures/gtap7_10x7_settled_seed.json.gz"
+    dataset_dir("gtap7_10x7_equilibria_settled_seed") / "settled_seed.json.gz"
 )
 
 

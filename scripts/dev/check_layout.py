@@ -126,8 +126,6 @@ SPANISH_LEGACY = frozenset(
         "scripts/windows/corridas_paper.ps1",
         "tests/babel/gdx/test_gdxdump_sin_rutas_fijas.py",
         "tests/blocks/test_sin_registro_de_bloques.py",
-        "tests/fixtures/gtap7_3x3_punto_sin_shock_3f3fe5f.json.gz",
-        "tests/fixtures/gtap7_3x3_residuos_sin_shock_3f3fe5f.json.gz",
         "tests/fixtures/nus333_bienestar_gams_levels.json.gz",
         "tests/fixtures/nus333_bienestar_gempack.json.gz",
         "tests/fixtures/nus333_desempleo_gams_levels.json.gz",
