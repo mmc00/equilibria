@@ -94,8 +94,8 @@ Balances ONE matrix **Z** (it may have negatives) using an exponential transform
 
 **Problem with classic RAS**:
 ```
-Si Z[i,j] = -10 y necesitas multiplicar por 1.5:
-Z[i,j] * 1.5 = -15  ← ¡El negativo se hace más negativo!
+If Z[i,j] = -10 and you need to multiply by 1.5:
+Z[i,j] * 1.5 = -15  ← The negative gets more negative!
 ```
 
 **GRAS solution**:
@@ -190,14 +190,14 @@ Balances **complete supply-use tables**, including:
 ### Identities enforced
 
 ```
-1. Supply = Use (por producto)
-   Producción + Importaciones = Uso intermedio + Demanda final
+1. Supply = Use (by product)
+   Output + Imports = Intermediate use + Final demand
 
-2. Inputs = Output (por sector)
-   Insumos intermedios + VA = Producción
+2. Inputs = Output (by sector)
+   Intermediate inputs + VA = Output
 
 3. PIB identity
-   Σ(VA) = Σ(Demanda final) - Σ(Importaciones)
+   Σ(VA) = Σ(Final demand) - Σ(Imports)
 ```
 
 ### Algorithm (simplified)
@@ -253,16 +253,16 @@ To balance a whole MIP you need a method that adjusts **ALL** the components:
 
 ```
 ┌─────────────────────────────────────────┐
-│  MATRIZ MIP COMPLETA (143 × 75)         │
+│  COMPLETE MIP MATRIX (143 × 75)         │
 ├─────────────────────────────────────────┤
-│  Z (70×70)     │  F (70×5)              │ ← Productos
-│  Intermedia    │  Demanda Final         │
+│  Z (70×70)     │  F (70×5)              │ ← Products
+│  Intermediate  │  Final demand          │
 ├────────────────┼────────────────────────┤
-│  M_Z (70×70)   │  M_F (70×5)            │ ← Importaciones
-│  Imp a sectors │  Imp a FD              │
+│  M_Z (70×70)   │  M_F (70×5)            │ ← Imports
+│  Imp to sectors│  Imp to FD             │
 ├────────────────┼────────────────────────┤
-│  VA (3×70)     │  (vacío)               │ ← Valor Agregado
-│  Rem/Exc/Imp   │                        │
+│  VA (3×70)     │  (empty)               │ ← Value added
+│  Comp/GOS/Tax  │                        │
 └─────────────────────────────────────────┘
 ```
 

@@ -147,8 +147,8 @@ the cross-period version declares. Same sum, same width (151 vars), same period.
 `gtap7_15x10` shock:
 
 ```
-mq_factr_ss[USA,shock] = 16.014072   residual 0        ← el agregado vivo, bien sembrado
-mfr_ss[USA,shock]      = 15.605181   residual 0.409    ← el duplicado, con el seed viejo
+mq_factr_ss[USA,shock] = 16.014072   residual 0        ← the live aggregate, well seeded
+mfr_ss[USA,shock]      = 15.605181   residual 0.409    ← the duplicate, with the old seed
 ```
 
 Blocks emitted **66** aggregate rows where the monolith emits **33**.
@@ -240,11 +240,11 @@ pre-Fisher `cbf060f` got the GDX reader fix (`8a501df`) backported, so that
 Fisher was the only variable:
 
 ```
-post-Fisher (main 2c53711)   10349 celdas, 107 fallos, 98.966%
-pre-Fisher  (cbf060f + gdx)  10349 celdas, 107 fallos, 98.966%
+post-Fisher (main 2c53711)   10349 cells, 107 failures, 98.966%
+pre-Fisher  (cbf060f + gdx)  10349 cells, 107 failures, 98.966%
 
-celdas idénticas 107/107 · solo-post 0 · solo-pre 0
-peor dif_rel del valor Python entre árboles: 6.1e-10
+identical cells 107/107 · post-only 0 · pre-only 0
+worst rel_diff of the Python value between trees: 6.1e-10
 ```
 
 The `99.3%` it was compared against **was not a live measurement**: it is the
@@ -268,9 +268,9 @@ The standard deviation within each pair is **0.03–0.23** against means of +1.1
 +6.4: it is one number repeated, not N independent errors.
 
 ```
-JPN,c_Rice   agentes(xm) +5.99 +6.22 +6.51 +6.55 +6.57
+JPN,c_Rice   agents(xm)  +5.99 +6.22 +6.51 +6.55 +6.57
              total (xmt)  +6.22
-             bilateral por DESTINO +6.21
+             bilateral by DESTINATION +6.21
 ```
 
 `xw` grouped by **destination** is tight; by **origin**, scattered → the error lives

@@ -17,21 +17,21 @@
 
 **Original MIP (unbalanced):**
 ```
-Componentes:
-  Z (flujos intermedios):      30,288.17
-  F (demanda final):           57,763.29
-  VA (valor agregado):         48,614.10
-  Importaciones:               13,958.34
+Components:
+  Z (intermediate flows):      30,288.17
+  F (final demand):            57,763.29
+  VA (value added):            48,614.10
+  Imports:                     13,958.34
 
-Problema identificado:
-  PIB (VA):                    48,614.10
-  PIB (gasto):                 51,440.67
-  Discrepancia:                 2,826.57 (5.81%)
+Problem found:
+  GDP (VA):                    48,614.10
+  GDP (expenditure):           51,440.67
+  Discrepancy:                  2,826.57 (5.81%)
 
-Causa:
-  - Demanda final sobreestimada
-  - Fuentes de datos diferentes (VA confiable, FD menos confiable)
-  - Matriz Z interna desbalanceada (max diff 2,698)
+Cause:
+  - Final demand overestimated
+  - Different data sources (VA reliable, FD less reliable)
+  - Internal Z matrix unbalanced (max diff 2,698)
 ```
 
 **Bolivia's advantage**: value added already split into:
@@ -65,34 +65,34 @@ Causa:
 
 **Why did the original overflow?**
 ```
-Problema:
-  1. Targets incompatibles (row_sum ≠ col_sum)
-  2. Multiplicadores r, s divergen exponencialmente
-  3. Matriz sparse con muchos ceros → división por números pequeños
+Problem:
+  1. Incompatible targets (row_sum ≠ col_sum)
+  2. Multipliers r, s diverge exponentially
+  3. Sparse matrix with many zeros → division by small numbers
 
-Solución:
-  1. Usar targets consistentes (arithmetic mean)
-  2. Aplicar damping: r_new = 0.3*r_old + 0.7*update
-  3. Clamping: clip(r, 1e-6, 1e6) para evitar overflow
+Fix:
+  1. Use consistent targets (arithmetic mean)
+  2. Apply damping: r_new = 0.3*r_old + 0.7*update
+  3. Clamping: clip(r, 1e-6, 1e6) to avoid overflow
 ```
 
 **GRAS Fixed algorithm:**
 ```text
 for outer_iter in range(max_iter):
-    # 1. Balance Z con GRAS (targets consistentes)
+    # 1. Balance Z with GRAS (consistent targets)
     z_targets = 0.5 * (z_row_sums + z_col_sums)
     Z_balanced = gras_with_damping(Z, z_targets, z_targets)
 
-    # 2. Ajustar F para cerrar PIB
+    # 2. Adjust F to close GDP
     required_F = PIB_target + imports_to_FD
     F_adjusted = F * (required_F / F.sum())
 
-    # 3. Ajustar importaciones proporcionalmente
+    # 3. Adjust imports proportionally
     for i in range(n_products):
         target_imp = total_use[i] * 0.12
         IMP[i] *= (target_imp / IMP[i].sum())
 
-    # 4. Verificar convergencia
+    # 4. Check convergence
     if PIB_error < 0.5% and Z_balance < 1.0:
         break
 ```
@@ -110,13 +110,13 @@ for outer_iter in range(max_iter):
 **Structure of the SAM built:**
 
 ```
-Cuentas:
+Accounts:
   • 70 Commodities (I)
   • 70 Activities/Sectors (J)
   • 2 Factors:
     - Labor (L): 19,093
     - Capital (K): 29,275
-  • Instituciones:
+  • Institutions:
     - 1 Household (AG.hh)
     - Government (AG.gov)
     - Firms (AG.firm)
@@ -125,18 +125,18 @@ Cuentas:
     - Investment (OTH.inv)
     - Exports (X)
 
-Flujos principales:
-  I → J:           30,283  (Uso intermedio)
-  I → AG.hh:       30,545  (Consumo hogares)
-  I → AG.gov:       8,055  (Consumo gobierno)
-  I → OTH.inv:      6,030  (Inversión)
-  I → X:            9,915  (Exportaciones)
-  AG.row → I:       8,978  (Importaciones)
-  L → J:           19,093  (Costos laborales)
-  K → J:           29,275  (Costos de capital)
-  L → AG.hh:       18,138  (Ingreso laboral a hogares)
-  K → AG.hh:       17,565  (Ingreso de capital a hogares)
-  K → AG.firm:     10,246  (Utilidades retenidas)
+Main flows:
+  I → J:           30,283  (Intermediate use)
+  I → AG.hh:       30,545  (Household consumption)
+  I → AG.gov:       8,055  (Government consumption)
+  I → OTH.inv:      6,030  (Investment)
+  I → X:            9,915  (Exports)
+  AG.row → I:       8,978  (Imports)
+  L → J:           19,093  (Labor costs)
+  K → J:           29,275  (Capital costs)
+  L → AG.hh:       18,138  (Labor income to households)
+  K → AG.hh:       17,565  (Capital income to households)
+  K → AG.firm:     10,246  (Retained earnings)
 ```
 
 **Distribution of factor income:**
@@ -153,10 +153,10 @@ Capital (29,275):
 
 **Macro balance:**
 ```
-PIB:                    48,614
+GDP:                    48,614
 Household income:       35,703
 Household consumption:  30,545
-Household savings:       5,158 (14.5% tasa de ahorro)
+Household savings:       5,158 (14.5% saving rate)
 
 Government revenue:      2,665
 Government expenditure:  8,055
@@ -178,35 +178,35 @@ Trade balance:             937
 **Balanced MIPs:**
 ```
 1. mip_bol_balanced.xlsx                    (RAS simple, 5.4% error)
-2. mip_bol_balanced_gras_fixed.xlsx         (GRAS, 0.38% error) ← USADO
+2. mip_bol_balanced_gras_fixed.xlsx         (GRAS, 0.38% error) ← USED
 3. mip_bol_balanced_gras.xlsx               (GRAS original, overflow)
-4. mip_bol_balanced_targets.xlsx            (Con targets, no conv.)
-5. mip_bol_balanced_hierarchical.xlsx       (Jerárquico, malo)
+4. mip_bol_balanced_targets.xlsx            (With targets, no conv.)
+5. mip_bol_balanced_hierarchical.xlsx       (Hierarchical, poor)
 ```
 
 **Final SAM:**
 ```
 sam_bolivia_pep.xlsx
-  ├─ SAM_Summary:        Matriz agregada 9×9
-  ├─ Z_Intermediate:     Flujos intermedios detallados
-  ├─ VA_Labor:           Valor agregado laboral por sector
-  ├─ VA_Capital:         Valor agregado capital por sector
-  └─ Metadata:           PIB, shares, errores
+  ├─ SAM_Summary:        Aggregated 9×9 matrix
+  ├─ Z_Intermediate:     Detailed intermediate flows
+  ├─ VA_Labor:           Labor value added by sector
+  ├─ VA_Capital:         Capital value added by sector
+  └─ Metadata:           GDP, shares, errors
 ```
 
 **Documentation:**
 ```
 docs/
-  ├─ technical/
+  ├─ notes/sam/
   │   ├─ ras_variants_comparison.md          (RAS vs GRAS vs Cross-Entropy)
-  │   └─ mip_balancing_methods.md            (Literatura completa)
-  ├─ analysis/
-  │   ├─ mip_bolivia_analysis.md             (Análisis inicial)
-  │   ├─ mip_bolivia_balancing_issue.md      (Problema targets)
-  │   ├─ mip_bolivia_balancing_final_summary.md
-  │   └─ bolivia_mip_to_sam_complete_guide.md (Este documento)
-  └─ guides/
-      └─ mip_to_sam_guide.md              (Guía general)
+  │   └─ mip_balancing_methods.md            (Full literature)
+  ├─ archive/analysis/archive/
+  │   ├─ mip_bolivia_analysis.md             (Initial analysis)
+  │   ├─ mip_bolivia_balancing_issue.md      (Targets problem)
+  │   └─ mip_bolivia_balancing_final_summary.md
+  └─ notes/guides/
+      ├─ bolivia_mip_to_sam_complete_guide.md (This document)
+      └─ mip_to_sam_guide.md                 (General guide)
 ```
 
 ---
@@ -217,11 +217,11 @@ docs/
 ```
 balance_bolivia_pragmatic.py         - RAS simple
 balance_bolivia_gras_true.py         - GRAS original (overflow)
-balance_bolivia_gras_fixed.py        - GRAS con fixes ← USADO
+balance_bolivia_gras_fixed.py        - GRAS with fixes ← USED
 balance_bolivia_optimization.py      - Scipy optimization
 balance_bolivia_crossentropy.py      - Cross-entropy
-balance_bolivia_with_targets.py      - Con targets .npy
-balance_bolivia_hierarchical.py      - Método jerárquico
+balance_bolivia_with_targets.py      - With .npy targets
+balance_bolivia_hierarchical.py      - Hierarchical method
 balance_bolivia_complete.py          - GRAS iterativo
 ```
 
@@ -247,9 +247,9 @@ convert_bolivia_mip_to_sam.py        - MIP → SAM ← USADO
 2. **SAM consistency:**
    ```
    ✓ Household income = factor income
-   ✓ Investment = savings (con gap documentado)
-   ✓ Trade balance calculado correctamente
-   ✓ Government balance calculado
+   ✓ Investment = savings (with a documented gap)
+   ✓ Trade balance computed correctly
+   ✓ Government balance computed
    ```
 
 3. **Economic checks:**
@@ -282,19 +282,19 @@ convert_bolivia_mip_to_sam.py        - MIP → SAM ← USADO
 
 1. **Split households**
    ```text
-   # Extender a múltiples tipos de hogares
+   # Extend to several household types
    households = ['rural_poor', 'rural_rich', 'urban_poor', 'urban_rich']
    ```
 
 2. **Use real distribution data**
    ```text
-   # En lugar de asumir 95% L→HH, usar:
+   # Instead of assuming 95% L→HH, use:
    factor_to_household_shares = load_from_household_survey()
    ```
 
 3. **Final SAM balancing**
    ```text
-   # Aplicar RAS a toda la SAM para cerrar gaps
+   # Apply RAS to the whole SAM to close gaps
    sam_balanced = balance_sam_ras(sam, max_iter=1000)
    ```
 

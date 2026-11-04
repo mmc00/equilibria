@@ -8,29 +8,29 @@ A balanced input-output matrix (MIP) must satisfy, at the same time:
 
 For each product `i`:
 ```
-Oferta Total = Demanda Total
+Total supply = Total demand
 
-Producción_doméstica[i] + Importaciones[i] =
-    Σ(Uso_intermedio[i,j]) + C[i] + G[i] + I[i] + ΔS[i] + X[i]
+Domestic_output[i] + Imports[i] =
+    Σ(Intermediate_use[i,j]) + C[i] + G[i] + I[i] + ΔS[i] + X[i]
 ```
 
 ### 1.2. Balance by sector (columns)
 
 For each sector `j`:
 ```
-Insumos Totales = Producción Total
+Total inputs = Total output
 
-Σ(Insumos_intermedios[i,j]) + VA[j] + Impuestos[j] = Producción[j]
+Σ(Intermediate_inputs[i,j]) + VA[j] + Taxes[j] = Output[j]
 ```
 
 ### 1.3. GDP identity
 
 ```
-PIB (producción) = Σ(VA[j] + Impuestos[j])
+GDP (production) = Σ(VA[j] + Taxes[j])
 
-PIB (gasto) = C + G + I + ΔS + (X - M)
+GDP (expenditure) = C + G + I + ΔS + (X - M)
 
-PIB (producción) = PIB (gasto)
+GDP (production) = GDP (expenditure)
 ```
 
 ## 2. Standard methods in the literature
@@ -57,10 +57,10 @@ PIB (producción) = PIB (gasto)
 ```
 min Σ Σ x[i,j] * log(x[i,j] / x₀[i,j])
 
-sujeto a:
-- Balance de filas (oferta = demanda)
-- Balance de columnas (insumos = producción)
-- Identidad PIB
+subject to:
+- Row balance (supply = demand)
+- Column balance (inputs = output)
+- GDP identity
 - x[i,j] ≥ 0
 ```
 

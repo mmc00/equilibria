@@ -1,8 +1,11 @@
 """A translated document keeps its code and its numbers.
 
 Phase 6 of ``specs/data/changes/one-data-folder`` translated the living Spanish
-documents to English. A translation may only change prose: every fenced code
-block must be byte-identical, and every number must keep its digits.
+documents to English. A translation may only change prose: every fenced block
+tagged with a language (``python``, ``bash``, ``yaml``...) must be
+byte-identical, and every number must keep its digits. Untagged and ``text``
+fences hold prose drawn as a block (formulas, flowcharts, folder trees), so they
+are translated; their numbers are still checked.
 
 Numbers are compared as the multiset of digit runs (``\\d+``). That ignores the
 separators (``0,099`` and ``0.099`` both give ``0`` and ``099``; ``1.058`` and
@@ -85,8 +88,13 @@ def _renames() -> list[tuple[str, str]]:
     return sorted(pairs, key=lambda p: -len(p[0]))
 
 
+_PROSE_FENCES = {"", "text"}
+
+
 def code_blocks(text: str) -> list[str]:
-    return [m.group(0) for m in _FENCE.finditer(text)]
+    """The fenced blocks tagged with a language: code, frozen by a translation."""
+    blocks = [m.group(0) for m in _FENCE.finditer(text)]
+    return [b for b in blocks if b.split("\n", 1)[0][3:].strip() not in _PROSE_FENCES]
 
 
 def digit_runs(text: str) -> Counter[str]:
@@ -130,3 +138,15 @@ def test_code_blocks_see_a_changed_line() -> None:
     b = "texto\n```python\nx = 2\n```\nmás\n"
     assert code_blocks(a) == ["```python\nx = 1\n```"]
     assert code_blocks(a) != code_blocks(b)
+
+
+def test_only_code_fences_are_frozen() -> None:
+    """Untagged and ``text`` fences hold prose (formulas, flowcharts, trees): translatable."""
+    spanish = (
+        "```\nOferta = Demanda\n```\n```text\nsí\n```\n```python\nx = 1  # uno\n```\n"
+    )
+    english = (
+        "```\nSupply = Demand\n```\n```text\nyes\n```\n```python\nx = 1  # uno\n```\n"
+    )
+    assert code_blocks(english) == code_blocks(spanish)
+    assert code_blocks(english) == ["```python\nx = 1  # uno\n```"]

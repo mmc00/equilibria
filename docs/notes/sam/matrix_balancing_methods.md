@@ -22,11 +22,11 @@ The most classic and simplest method. It adjusts rows and columns in turn with m
 ### Algorithm
 
 ```
-Inicializar: r = ones(n), s = ones(m)
+Initialize: r = ones(n), s = ones(m)
 
-Repetir hasta convergencia:
-  1. Ajuste filas:    r[i] = u[i] / (X₀[i,:] @ s).sum()
-  2. Ajuste columnas: s[j] = v[j] / (r @ X₀[:,j]).sum()
+Repeat until convergence:
+  1. Row step:       r[i] = u[i] / (X₀[i,:] @ s).sum()
+  2. Column step:    s[j] = v[j] / (r @ X₀[:,j]).sum()
 
   X = diag(r) @ X₀ @ diag(s)
 ```
@@ -106,14 +106,14 @@ An extension of RAS that handles **negative values** by splitting the matrix int
 X₀_pos = max(X₀, 0)
 X₀_neg = max(-X₀, 0)
 
-Inicializar: r = ones(n), s = ones(m)
+Initialize: r = ones(n), s = ones(m)
 
-Repetir:
-  1. Para cada fila i:
+Repeat:
+  1. For each row i:
      row_sum = (r[i] * X₀_pos[i,:] * s).sum() - (r[i] * X₀_neg[i,:] * s).sum()
      r[i] *= u[i] / row_sum
 
-  2. Para cada columna j:
+  2. For each column j:
      col_sum = (r * X₀_pos[:,j] * s[j]).sum() - (r * X₀_neg[:,j] * s[j]).sum()
      s[j] *= v[j] / col_sum
 
@@ -472,17 +472,17 @@ A modified RAS that allows **differentiated weights** per cell, giving more conf
 ### Algorithm
 
 ```
-Pesos W[i,j] ∈ [0, 1]:
-  - W[i,j] = 1.0 → celda confiable (cambiar poco)
-  - W[i,j] = 0.0 → celda no confiable (cambiar mucho)
+Weights W[i,j] ∈ [0, 1]:
+  - W[i,j] = 1.0 → reliable cell (change little)
+  - W[i,j] = 0.0 → unreliable cell (change a lot)
 
-RAS modificado:
+Modified RAS:
   X = r[:,None] * X₀^(1-W) * s * X₀^W
 
-Donde:
-  - Celdas con W=1 cambian solo por factores r,s
-  - Celdas con W=0 se ajustan completamente
-  - 0<W<1 es intermedio
+Where:
+  - Cells with W=1 change only through the factors r,s
+  - Cells with W=0 adjust fully
+  - 0<W<1 is in between
 ```
 
 ### Implementation
@@ -582,17 +582,17 @@ RAS with **spatial smoothing** using kernel functions. Useful for **regional** I
 ### Algorithm
 
 ```
-Definir kernel espacial K[r, s]:
+Define a spatial kernel K[r, s]:
   K[r, s] = exp(-d(r, s)² / σ²)
 
-Donde:
-  - d(r, s) = distancia entre regiones r y s
-  - σ = parámetro de suavizado
+Where:
+  - d(r, s) = distance between regions r and s
+  - σ = smoothing parameter
 
 KRAS:
-  En cada iteración de RAS:
-    1. Ajuste estándar: r', s'
-    2. Suavizado espacial:
+  In each RAS iteration:
+    1. Standard step: r', s'
+    2. Spatial smoothing:
        r[r] = Σₛ K[r,s] * r'[s] / Σₛ K[r,s]
        s[j] = Σᵢ K[i,j] * s'[i] / Σᵢ K[i,j]
 ```
@@ -725,15 +725,15 @@ X_balanced = kras(X0, u, v, D, sigma=500)  # sigma in km
 ### Decision flowchart
 
 ```
-¿Tu matriz tiene valores negativos?
-├─ NO  → ¿Necesitas velocidad?
-│        ├─ SÍ  → RAS
-│        └─ NO  → Cross-Entropy (si targets inconsistentes)
-│                 RAS (si targets consistentes)
+Does your matrix have negative values?
+├─ NO  → Do you need speed?
+│        ├─ YES → RAS
+│        └─ NO  → Cross-Entropy (if targets are inconsistent)
+│                 RAS (if targets are consistent)
 │
-└─ SÍ  → ¿Estructura de bloques clara (MIP)?
-         ├─ SÍ  → Hybrid (GRAS para Z + ajuste para F)
-         └─ NO  → GRAS con damping
+└─ YES → Clear block structure (MIP)?
+         ├─ YES → Hybrid (GRAS for Z + adjustment for F)
+         └─ NO  → GRAS with damping
 ```
 
 ### By type of matrix
