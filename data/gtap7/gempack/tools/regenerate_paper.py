@@ -176,7 +176,7 @@ def _book(p: Paths) -> list[Job]:
             folder=_nus333(p) / "gempack_burfisher" / exp, tool="gempack",
             script="burfisher_job.py",
             args=("--experiment", exp, "--package", str(_nus333(p)),
-                  "--exe", str(p.exe(exe))),
+                  "--exe", str(p.exe(exe)), "--work", str(p.work)),
             data_dir=_nus333(p), variant={"experiment": exp, "method": "book"},
             externals={exe: p.exe(exe)}, external_release={exe: "gempack"},
             solver=exe.removesuffix(".exe"),

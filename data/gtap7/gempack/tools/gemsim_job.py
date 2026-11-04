@@ -95,7 +95,8 @@ def exp_file(package: Path, experiment: str) -> Path:
     return package / (f"{experiment}-dir.exp" if experiment in DIR_EXP else f"{experiment}.exp")
 
 
-def _cmf(aux: Path, out: Path, exp: str) -> str:
+def cmf_text(aux: Path, out: Path, exp: str) -> str:
+    """The header of 01-run-all.bat and step 5 (aux files, data, outputs) + the .exp."""
     head = [
         f'auxiliary files = "{aux}";',
         "file GTAPSETS = sets.har;",
@@ -112,41 +113,60 @@ def _cmf(aux: Path, out: Path, exp: str) -> str:
     return "\r\n".join(head) + exp
 
 
+def run_in_package_copy(
+    exe: Path, cmf: Path, *, package: Path, work: Path, name: str, console: Path,
+    runner: object = None,
+) -> int:
+    """``exe -cmf cmf`` in a copy of ``package`` under ``work/package/<name>``.
+
+    The .exp names its .prm and .shk without a path. GEMPACK writes its current
+    directory into the console and the .sl4, so the copy lives in the work
+    folder (git-ignored, no user name), not %TEMP%; it is removed afterwards.
+    """
+    pkg = work.resolve() / "package" / name
+    shutil.rmtree(pkg, ignore_errors=True)
+    for f in own_files(package):
+        target = pkg / f.relative_to(package)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(f, target)
+    try:
+        return (runner or run)([str(exe), "-cmf", str(cmf)], pkg, console)
+    finally:
+        shutil.rmtree(pkg, ignore_errors=True)
+
+
+def finish(out: Path, console: Path, rc: int, *, expect_release: str, name: str) -> bool:
+    """Drop the work files, then whether the run counts: release, normal end, outputs."""
+    # GEMPACK's work files (run-GPXXX7.ud8) and the solution's .slc are not results:
+    # the .sl4 and the updated data are the record (maintainer, 2026-11-03)
+    for scratch in [*out.glob("*GPXXX*"), *out.glob("*.slc")]:
+        scratch.unlink()
+    text = console.read_text(encoding=target_shocks.ENCODING, errors="replace")
+    try:
+        require(console, expect_release)
+    except ReleaseMismatch as err:
+        print(f"FAILED {name}: {err}", file=sys.stderr)
+        return False
+    missing = [f for f in OUTPUTS if not (out / f).exists()]
+    if rc != 0 or NORMAL_END not in text or missing:
+        print(f"FAILED {name}: rc={rc}, normal end={NORMAL_END in text}, "
+              f"missing={missing} (see {console.name})", file=sys.stderr)  # fmt: skip
+        return False
+    return True
+
+
 def run_gragg(args: argparse.Namespace) -> int:
     out: Path = args.out.resolve()
     source = exp_file(args.package, args.experiment)
     exp, how = gragg_method(source.read_text(encoding=target_shocks.ENCODING))
     exp, targets = target_shocks.translate(exp, args.package)
     cmf = out / "run.cmf"
-    cmf.write_bytes(_cmf(args.aux, out, exp).encode(target_shocks.ENCODING))
+    cmf.write_bytes(cmf_text(args.aux, out, exp).encode(target_shocks.ENCODING))
     console = out / "gemsim_console.txt"
-    # The .exp names its .prm and .shk without a path: run in a copy of the
-    # package. GEMSIM writes its current directory into the console and the .sl4,
-    # so the copy lives in the work folder (git-ignored, no user name), not %TEMP%.
-    pkg = args.aux.resolve().parent.parent / "package" / args.experiment
-    shutil.rmtree(pkg, ignore_errors=True)
-    for f in own_files(args.package):
-        target = pkg / f.relative_to(args.package)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(f, target)
-    try:
-        rc = run([str(args.gemsim), "-cmf", str(cmf)], pkg, console)
-    finally:
-        shutil.rmtree(pkg, ignore_errors=True)
-    # GEMSIM's work files (run-GPXXX7.ud8) and the solution's .slc are not results:
-    # the .sl4 and the updated data are the record (maintainer, 2026-11-03)
-    for scratch in [*out.glob("*GPXXX*"), *out.glob("*.slc")]:
-        scratch.unlink()
-    text = console.read_text(encoding=target_shocks.ENCODING, errors="replace")
-    try:
-        require(console, args.expect_release)
-    except ReleaseMismatch as err:
-        print(f"FAILED {args.experiment}: {err}", file=sys.stderr)
-        return 1
-    missing = [f for f in OUTPUTS if not (out / f).exists()]
-    if rc != 0 or NORMAL_END not in text or missing:
-        print(f"FAILED {args.experiment}: rc={rc}, normal end={NORMAL_END in text}, "
-              f"missing={missing} (see {console.name})", file=sys.stderr)  # fmt: skip
+    rc = run_in_package_copy(args.gemsim, cmf, package=args.package,
+                             work=args.aux.resolve().parent.parent, name=args.experiment,
+                             console=console, runner=run)  # fmt: skip
+    if not finish(out, console, rc, expect_release=args.expect_release, name=args.experiment):
         return 1
     if targets:
         bad = target_shocks.check(out / "updated.har", targets)
