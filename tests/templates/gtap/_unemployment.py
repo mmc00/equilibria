@@ -7,7 +7,7 @@ Los dos hooks son los del notebook ``examples/notebooks/gtap7/burfisher/tbl65b.i
 from __future__ import annotations
 
 
-def register_desempleo_hooks() -> None:
+def register_unemployment_hooks() -> None:
     """``aft[USA,LABOR]`` endogeno + salario real ``pft = pft0 * Tornqvist``."""
     from pyomo.environ import value
 

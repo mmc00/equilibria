@@ -1,4 +1,4 @@
-# tests/babel/gdx/test_gdxdump_sin_rutas_fijas.py
+# tests/babel/gdx/test_gdxdump_no_fixed_paths.py
 #
 # El paquete PUBLICADO no puede llevar rutas absolutas del Mac del autor.
 # Tenia 20: `gdxdump_bin: str = "/Library/.../Versions/48/Resources/gdxdump"`

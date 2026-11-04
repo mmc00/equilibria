@@ -35,7 +35,6 @@ from __future__ import annotations
 from typing import Any, cast
 
 import pytest
-from tests.templates.gtap._desempleo import register_desempleo_hooks
 from tests.templates.gtap._nus333 import (
     closure,
     gams_levels,
@@ -43,6 +42,7 @@ from tests.templates.gtap._nus333 import (
     pct,
     run_burfisher,
 )
+from tests.templates.gtap._unemployment import register_unemployment_hooks
 
 from equilibria.sources import dataset_dir
 
@@ -89,7 +89,7 @@ def solved(request):
 
     p = nus333_params()
     ac = closure()
-    register_desempleo_hooks()
+    register_unemployment_hooks()
     try:
         m, _ = cast(
             Any,

@@ -1,4 +1,4 @@
-# tests/blocks/test_sin_registro_de_bloques.py
+# tests/blocks/test_no_block_registry.py
 #
 # Candado de la decision documentada en
 # docs/notes/architecture/no_block_registry.md: no hay registro de bloques.
@@ -78,7 +78,7 @@ def test_ningun_fichero_del_repo_menciona_el_registro():
 
     raiz = pathlib.Path(__file__).resolve().parents[2]
     # El unico fichero .py cuyo trabajo ES nombrar el registro borrado.
-    permitidos = {raiz / "tests" / "blocks" / "test_sin_registro_de_bloques.py"}
+    permitidos = {raiz / "tests" / "blocks" / "test_no_block_registry.py"}
     ignorados = {"node_modules", "site", "build", "dist"}
     # Como en `test_layering.py`: una excepcion que ya no apunta a nada es un
     # permiso fantasma que tapa regresiones. Si el test se renombra, salta aqui.

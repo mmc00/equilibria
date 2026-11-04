@@ -135,14 +135,7 @@ SPANISH_LEGACY = frozenset(
     {
         "runs/gempack_20x41_validation/RESULTADO.md",
         "scripts/windows/corridas_paper.ps1",
-        "tests/babel/gdx/test_gdxdump_sin_rutas_fijas.py",
-        "tests/blocks/test_sin_registro_de_bloques.py",
         "tests/fixtures/nus333_bienestar_gempack.json.gz",
-        "tests/templates/gtap/_desempleo.py",
-        "tests/templates/gtap/test_driver_default_es_bloques.py",
-        "tests/templates/gtap/test_nus333_bienestar.py",
-        "tests/templates/gtap/test_nus333_me9_pasos.py",
-        "tests/templates/gtap/test_nus333_tbl65b_desempleo.py",
     }
 )
 

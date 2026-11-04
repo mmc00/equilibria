@@ -74,18 +74,7 @@ LINK_ALLOWANCE: set[str] = set()
 
 # (file, family) pairs that hit when the test was written. Each task removes
 # the pairs it fixes; Task 6 deletes the dict.
-MENTION_ALLOWANCE: set[tuple[str, str]] = {
-    ("scripts/dev/check_layout.py", "renamed-test"),
-    ("scripts/gtap/run_burfisher.py", "renamed-test"),
-    ("scripts/paper/run_tables.py", "renamed-test"),
-    ("tests/babel/gdx/test_gdxdump_sin_rutas_fijas.py", "renamed-test"),
-    ("tests/blocks/gtap/test_overwrite.py", "renamed-test"),
-    ("tests/blocks/test_sin_registro_de_bloques.py", "renamed-test"),
-    ("tests/scripts/test_check_commit_msg.py", "renamed-test"),
-    ("tests/templates/gtap/_desempleo.py", "renamed-test"),
-    ("tests/templates/gtap/test_nus333_instrument_shocks.py", "renamed-test"),
-    ("tests/templates/gtap/test_nus333_tbl65b_desempleo.py", "renamed-test"),
-}
+MENTION_ALLOWANCE: set[tuple[str, str]] = set()
 
 
 def _tracked(pattern: str) -> list[str]:
