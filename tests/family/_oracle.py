@@ -54,6 +54,7 @@ class Oracle:
     con_names: list[str]
     var_names: list[str]
     x0: np.ndarray | None = None  # calibrated primals, captured before any set_primals
+    model: Any = None  # the composed equilibria Model (blocks), for the family backend
 
     def rows_of(self, families=FAMILIES) -> np.ndarray:
         return np.array(
@@ -61,9 +62,11 @@ class Oracle:
             dtype=np.int64,
         )
 
-    def state(self) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
+    def state(
+        self, var_domains: dict[str, tuple[str, ...]] | None = None
+    ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
         values, free = {}, {}
-        for v, doms in PHASE0_VARS.items():
+        for v, doms in (PHASE0_VARS if var_domains is None else var_domains).items():
             comp = getattr(self.pm, v)
             shape = tuple(len(self.sets[d]) for d in doms)
             vals = np.zeros(shape)
@@ -117,7 +120,10 @@ def build_oracle(dataset: str, prepare: Callable[[Any], None] | None = None) -> 
     from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP
     from pyomo.environ import Objective
 
-    from equilibria.templates.gtap.gtap_block_model import build_block_single_period
+    from equilibria.templates.gtap.gtap_block_model import (
+        build_block_single_period,
+        compose_block_sp,
+    )
 
     p = load_params(dataset)
     sets = _set_elems(p.sets)
@@ -137,6 +143,7 @@ def build_oracle(dataset: str, prepare: Callable[[Any], None] | None = None) -> 
         con_names=[c.name for c in nlp.get_pyomo_equality_constraints()],
         var_names=[v.name for v in nlp.get_pyomo_variables()],
         x0=np.asarray(nlp.get_primals(), float).copy(),
+        model=compose_block_sp(p, p.sets, comp_stat_closure(), rr)[0],
     )
 
 

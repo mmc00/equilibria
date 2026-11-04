@@ -443,19 +443,17 @@ def _fix_instruments(pm: Any) -> int:
     return n
 
 
-def build_block_single_period(
+def compose_block_sp(
     params: Any,
     sets: Any,
     closure: Any = None,
     residual_region: str | None = None,
-    apply_scaling: bool = True,
-) -> ConcreteModel:
-    """Compose the 7 blocks into a single-period Pyomo model.
+) -> tuple[Model, list[Any], Any, str | None]:
+    """Compose the 7 blocks into an equilibria ``Model`` (no backend yet).
 
-    Steps: build an ``equilibria.model.Model`` (sets before blocks), add each block
-    in dependency order, translate via ``PyomoBackend``, strip the ``_con`` suffix,
-    and (default) apply the monolith's benchmark scaling so the warm-start matches
-    GAMS. Returns the Pyomo ``ConcreteModel``.
+    Returns ``(model, units, targets, residual_region)``. Any backend can translate the
+    model: ``build_block_single_period`` hands it to ``PyomoBackend``; the family backend
+    records the same blocks.
     """
     if residual_region:
         residual_region = resolve_residual_region(
@@ -494,6 +492,29 @@ def build_block_single_period(
 
     targets = collect_targets(units)
     add_targets(model, targets)
+    return model, units, targets, residual_region
+
+
+def build_block_single_period(
+    params: Any,
+    sets: Any,
+    closure: Any = None,
+    residual_region: str | None = None,
+    apply_scaling: bool = True,
+) -> ConcreteModel:
+    """Compose the 7 blocks into a single-period Pyomo model.
+
+    Steps: build an ``equilibria.model.Model`` (sets before blocks), add each block
+    in dependency order, translate via ``PyomoBackend``, strip the ``_con`` suffix,
+    and (default) apply the monolith's benchmark scaling so the warm-start matches
+    GAMS. Returns the Pyomo ``ConcreteModel``.
+    """
+    from equilibria.blocks.gtap.overwrite import endogenous_cells, shock_rows
+
+    model, units, targets, residual_region = compose_block_sp(
+        params, sets, closure, residual_region
+    )
+    if_sub = bool(getattr(closure, "if_sub", False))
     backend = PyomoBackend()
     # Cada instancia de macro ifSUB (M_PM[e,c,imp], ...) se arma UNA vez y la
     # comparten todas las filas que la usan; la copia multiperiodo
