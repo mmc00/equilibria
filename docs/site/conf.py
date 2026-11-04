@@ -99,9 +99,9 @@ html_title = f"equilibria {version}"
 html_static_path = ["_static", "../assets"]
 html_css_files = ["matrix.css"]
 html_favicon = str(ROOT / "docs" / "assets" / "equilibria-favicon.svg")
-# The guide pages are top-level entries of the navbar, with no children: their
-# left sidebar would be an empty "Section Navigation".
-html_sidebars = {"index": [], "guide/*": [], "changelog": []}
+# The navbar holds one landing page per area (sections/); the area's pages show
+# in the left sidebar. The home page has no area, so no sidebar.
+html_sidebars = {"index": []}
 html_context = {
     "github_user": "mmc00",
     "github_repo": "equilibria",
@@ -128,7 +128,7 @@ html_theme_options = {
     ],
     "use_edit_page_button": True,
     "navbar_align": "left",
-    "header_links_before_dropdown": 4,
+    "header_links_before_dropdown": 6,
     "show_toc_level": 2,
     "footer_start": ["copyright"],
     "footer_end": ["theme-version"],
