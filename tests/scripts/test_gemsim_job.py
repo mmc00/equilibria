@@ -204,3 +204,13 @@ def test_compile_runs_tablo_in_work(tmp_path: Path, monkeypatch: pytest.MonkeyPa
                                       tablo=tmp_path / "tablo.exe", root=DATA_ROOT)  # fmt: skip
     assert calls == [work]
     assert (work / "gtapuv7_levels.tab").read_bytes() == (model / "gtapuv7_levels.tab").read_bytes()
+
+
+def test_gemsim_scratch_files_are_not_kept(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """GEMSIM leaves <cmf>-GPXXX<n>.ud<k> work files next to the solution: not results."""
+    files = ("solution.sl4", "updated.har", "run-GPXXX7.ud8", "run-GPXXX2.ud3")
+    run, _ = _fake_gemsim(BANNER + "completed without error\n", files)
+    monkeypatch.setattr(gemsim_job, "run", run)
+    assert gemsim_job.main(_gragg(tmp_path)) == 0
+    left = sorted(p.name for p in (tmp_path / "out").iterdir())
+    assert not any("GPXXX" in name for name in left), left

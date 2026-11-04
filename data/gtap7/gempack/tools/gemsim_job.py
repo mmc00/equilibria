@@ -129,6 +129,8 @@ def run_gragg(args: argparse.Namespace) -> int:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(f, target)
         rc = run([str(args.gemsim), "-cmf", str(cmf)], pkg, console)
+    for scratch in out.glob("*GPXXX*"):  # GEMSIM's work files (run-GPXXX7.ud8)
+        scratch.unlink()
     text = console.read_text(encoding=target_shocks.ENCODING, errors="replace")
     try:
         require(console, args.expect_release)
