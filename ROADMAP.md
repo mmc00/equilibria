@@ -1,7 +1,7 @@
 # Roadmap de equilibria
 
 Estado real, medido, del proyecto — no aspiracional. Cada cifra que aparece aquí sale de una
-corrida registrada en `docs/findings/`, de un gate de `scripts/gtap/run_parity_gates.py` o de
+corrida registrada en `docs/archive/findings/`, de un gate de `scripts/gtap/run_parity_gates.py` o de
 `scripts/paper/run_tables.py`.
 
 Última actualización: 2026-10-27.
@@ -60,7 +60,7 @@ Las 249.184 celdas quedan dentro de 0,5 %.
 
 El residuo que queda en `qxs` (comercio bilateral) **no es un bug**: equilibria coincide con
 GEMPACK (0,076 pp) mejor que GAMS en niveles (0,97 pp). Ver
-`docs/findings/` para la descomposición término a término.
+`docs/archive/findings/` para la descomposición término a término.
 
 ### Validación contra GAMS
 

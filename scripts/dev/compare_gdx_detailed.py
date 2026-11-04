@@ -7,7 +7,7 @@ Usage:
     python scripts/dev/compare_gdx_detailed.py
 
 Output:
-    reports/gdx_comparison_report.md - Detailed Markdown report
+    notes/tmp/gdx_comparison_report.md - Detailed Markdown report
 """
 
 import json

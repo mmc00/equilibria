@@ -44,7 +44,7 @@ ROOT_FILES = frozenset(
 )
 # Emptied by later phases of specs/data/changes/one-data-folder; each phase
 # removes its entry.
-ROOT_DIRS_TEMPORARY = frozenset({"output", "reports", "results", "runs"})
+ROOT_DIRS_TEMPORARY = frozenset({"results", "runs"})
 
 # The top level of docs/ (phase 6 of specs/data/changes/one-data-folder).
 DOCS_TOP = frozenset(
@@ -63,14 +63,10 @@ DOCS_TOP = frozenset(
 # What docs/ held before phase 6; each task of the phase removes what it moves.
 DOCS_TOP_TEMPORARY = frozenset(
     {
-        "analysis",
         "architecture",
-        "findings",
         "guides",
-        "plans",
         "reference",
         "technical",
-        "gtap_gams_mcp_parity_plan.md",
         "ieem_to_pep_transformations.md",
         "ieem_to_pep_transformations_en.md",
         "ieem_to_pep_transformations_es.md",

@@ -457,8 +457,8 @@ result = run_mip_to_sam(
 - Lofgren, H., Harris, R. L., & Robinson, S. (2002). "A Standard CGE Model in GAMS." IFPRI.
 
 ### Technical Documentation
-- `docs/analysis/bolivia_mip_technical_report.md`: Mathematical proof of constraint incompatibility
-- `docs/analysis/bolivia_mip_implementation_guide.md`: Bolivia-specific parameters
+- `docs/archive/analysis/bolivia_mip_technical_report.md`: Mathematical proof of constraint incompatibility
+- `docs/archive/analysis/bolivia_mip_implementation_guide.md`: Bolivia-specific parameters
 - `docs/technical/matrix_balancing_methods.md`: Algorithm details
 
 ---

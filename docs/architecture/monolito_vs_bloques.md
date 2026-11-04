@@ -227,7 +227,7 @@ solo: el monolito queda accesible como referencia, pero no debe generar ruido ni
 fuera código vivo.
 
 Ver también: `ROADMAP.md` (registro de deuda técnica) y
-`docs/findings/repo_cleanup_spec_2026-09-16.md` (la medición que originó este documento).
+`docs/archive/findings/repo_cleanup_spec_2026-09-16.md` (la medición que originó este documento).
 
 ## Corrección (2026-09-21): el fix Fisher NO bajó el match de altertax
 

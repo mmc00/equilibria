@@ -4,9 +4,9 @@
 Make the Python GTAP model in equilibria an exact mirror of the GAMS reference and validate baseline and tariff shock results against GAMS.
 
 ## Reference GAMS Model and Submission Path
-- GAMS reference model: [data/gtap7/gams/model.gms](../../data/gtap7/gams/model.gms)
+- GAMS reference model: [data/gtap7/gams/model.gms](../../../data/gtap7/gams/model.gms)
 - GAMS submission script (NEOS): [scripts/gtap/submit_gams_to_neos.py](../../scripts/gtap/submit_gams_to_neos.py)
-- Reference data (GTAP 9x10): [data/gtap7/9x10](../../data/gtap7/9x10)
+- Reference data (GTAP 9x10): [data/gtap7/9x10](../../../data/gtap7/9x10)
 
 ## Scope
 - Baseline: calibrate and solve Python and GAMS models on the same GTAP dataset.
