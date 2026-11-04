@@ -45,7 +45,7 @@ ROOT_FILES = frozenset(
 # Emptied by later phases of specs/data/changes/one-data-folder; each phase
 # removes its entry.
 ROOT_DIRS_TEMPORARY = frozenset(
-    {"notebooks", "output", "reports", "results", "runs"}
+    {"output", "reports", "results", "runs"}
 )
 
 SPANISH_WORDS = frozenset(
