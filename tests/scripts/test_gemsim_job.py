@@ -221,3 +221,78 @@ def test_gemsim_scratch_files_are_not_kept(tmp_path: Path, monkeypatch: pytest.M
     assert gemsim_job.main(_gragg(tmp_path)) == 0
     left = sorted(p.name for p in (tmp_path / "out").iterdir())
     assert not any("GPXXX" in name or name.endswith((".slc", ".aal")) for name in left), left
+
+
+# --- horridge and levels6 ------------------------------------------------------
+
+
+@pytest.fixture
+def fake(monkeypatch: pytest.MonkeyPatch):
+    sys.path.insert(0, str(Path(__file__).parent))
+    from _fake_gempack import FakeGempack
+
+    f = FakeGempack()
+    monkeypatch.setattr(gemsim_job, "run", f)
+    return f
+
+
+def _out(tmp_path: Path) -> Path:
+    out = tmp_path / "out"
+    out.mkdir()
+    return out
+
+
+def test_horridge_runs_tablo_gemsim_sltoht(tmp_path: Path, fake) -> None:
+    out = _out(tmp_path)
+    argv = ["horridge", "--experiment", "tariff10", "--model-dir", str(DATA_ROOT / "horridge_simple"),
+            "--tablo", "C:/GP/tablo.exe", "--gemsim", "C:/GP/gemsim.exe", "--sltoht", "C:/GP/sltoht.exe",
+            "--release", "sltoht.exe=11.3.004", "--work", str(tmp_path / "work"),
+            "--out", str(out), "--expect-release", "11.3.004"]  # fmt: skip
+    assert gemsim_job.main(argv) == 0
+    assert [p for p, _ in fake.calls] == ["tablo.exe", "gemsim.exe", "sltoht.exe"]
+    assert {p.name for p in out.iterdir()} == {
+        "run.cmf", "solution.sl4", "updated.har", "sl4dump.har", "tablo_console.txt",
+        "gemsim_console.txt", "sltoht_console.txt",
+    }  # fmt: skip
+
+
+def _levels6(tmp_path: Path, rordelta: str) -> list[str]:
+    closure = "capfix" if rordelta == "0" else "capflex"
+    dump = DATA_ROOT / "gtap7" / "gtap7_3x3" / f"gempack_tm10_s8-16-32_{closure}" / "sl4dump.har"
+    return ["levels6", "--dataset", "gtap7_3x3", "--rordelta", rordelta,
+            "--aux", str(tmp_path / "work" / "gtapv7_levels" / "gtapv7_levels"),
+            "--sl4dump", str(dump), "--gemsim", "C:/GP/gemsim.exe", "--sltoht", "C:/GP/sltoht.exe",
+            "--work", str(tmp_path / "work"), "--out", str(_out(tmp_path)),
+            "--expect-release", "11.3.004"]  # fmt: skip
+
+
+def test_levels6_runs_the_patched_tab(tmp_path: Path, fake) -> None:
+    assert gemsim_job.main(_levels6(tmp_path, "1")) == 0
+    out = tmp_path / "out"
+    assert {p.name for p in out.iterdir()} == {
+        "run.cmf", "solution.sl4", "gemsim_console.txt", "levels.txt", "sl4levels.har",
+        "export_console.txt",
+    }  # fmt: skip
+    aux = str(tmp_path / "work" / "gtapv7_levels" / "gtapv7_levels")
+    assert f"Auxiliary files = {aux} ;" in (out / "run.cmf").read_text()
+
+
+def test_levels6_capfix_keeps_its_prm(tmp_path: Path, fake) -> None:
+    """default_rdlt0.prm replaces tests/fixtures/.../default_gtap7_20x41_rdlt0_windows.prm."""
+    sys.path.insert(0, str(GEMPACK_MODEL_DIR / "tools"))
+    from run_gempack_matrix import _force_rdlt
+
+    assert gemsim_job.main(_levels6(tmp_path, "0")) == 0
+    prm = tmp_path / "out" / "default_rdlt0.prm"
+    expected = tmp_path / "expected.prm"
+    expected.write_bytes((DATA_ROOT / "gtap7" / "gtap7_3x3" / "default.prm").read_bytes())
+    _force_rdlt(expected, 0)
+    assert prm.read_bytes() == expected.read_bytes()
+
+
+def test_levels6_keeps_the_xcheck_drops(tmp_path: Path, fake) -> None:
+    """The patched TAB against the unpatched dump may drop variables (CNTendwr...):
+    they are named in export_console.txt and the run still counts."""
+    fake.mismatch = 2
+    assert gemsim_job.main(_levels6(tmp_path, "1")) == 0
+    assert "xcheck-mismatch=2" in (tmp_path / "out" / "export_console.txt").read_text()

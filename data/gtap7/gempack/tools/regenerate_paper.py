@@ -39,7 +39,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path, PurePath, PureWindowsPath
 
 from equilibria.sources import DATA_ROOT, SOURCE_FILE, SourceError, load_source
@@ -96,6 +96,7 @@ class Job:
     solver: str | None = None
     needs: tuple[Path, ...] = ()  # folders whose record must exist first
     compiled: str | None = None  # the levels TAB tablo must compile first
+    work: Path | None = None  # where the job's programs run (--work)
 
 
 @dataclass(frozen=True)
@@ -152,7 +153,7 @@ def jobs(
         "gragg-sltoht": _gragg_sltoht, "swap": _swap, "swap-sltoht": _swap_sltoht,
         "validation": _validation,
     }  # fmt: skip
-    return [j for g in GROUPS if g in groups for j in build[g](p)]
+    return [replace(j, work=p.work) for g in GROUPS if g in groups for j in build[g](p)]
 
 
 def _nus333(p: Paths) -> Path:
@@ -176,7 +177,7 @@ def _book(p: Paths) -> list[Job]:
             folder=_nus333(p) / "gempack_burfisher" / exp, tool="gempack",
             script="burfisher_job.py",
             args=("--experiment", exp, "--package", str(_nus333(p)),
-                  "--exe", str(p.exe(exe)), "--work", str(p.work)),
+                  "--exe", str(p.exe(exe))),
             data_dir=_nus333(p), variant={"experiment": exp, "method": "book"},
             externals={exe: p.exe(exe)}, external_release={exe: "gempack"},
             solver=exe.removesuffix(".exe"),
@@ -391,6 +392,11 @@ def job_command(
         "--",
         py, str(TOOLS / job.script), *job.args,
         "--out", str(job.folder), "--expect-release", tool_version,
+        *(("--work", str(job.work)) if job.work else ()),
+        # the release each program prints, the secondary ones included (gtapv7.exe
+        # 12.1.003 next to sltoht 11.3.004 in one job)
+        *(a for name, kind in job.external_release.items()
+          for a in ("--release", f"{name}={release[kind]}")),
     ]  # fmt: skip
 
 

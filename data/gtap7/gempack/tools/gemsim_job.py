@@ -1,15 +1,19 @@
-"""GEMSIM runs of a TAB that tablo compiled: Horridge's SIMPLE and the levels TABs.
+"""GEMSIM runs of a TAB that tablo compiled, and what every job module shares.
 
-``horridge``  tablo + gemsim + sltoht on data/horridge_simple (step 3; Task 6).
-``levels6``   gemsim on gtapv7_levels for a matrix job, levels cross-checked
-              against the recorded sl4dump.har (step 4; Task 7).
+``horridge``  tablo + gemsim + sltoht on Horridge's SIMPLE (step 3; Task 6).
+``levels6``   gemsim on gtapv7_levels for a matrix job; its levels exported
+              against the recorded (unpatched) sl4dump.har, drops named (step 4;
+              Task 7).
 ``gragg``     gemsim on gtapuv7_levels (gtapv7_levels for gtapv7.exp) for one
               Burfisher .exp (step 5; Task 8). Johansen 1-step becomes Gragg
-              2-4-6, TBL53's target% becomes plain shocks (target_shocks.py),
-              and the run counts only if GEMSIM ends normally.
+              2-4-6, TBL53's target% becomes plain shocks (target_shocks.py).
 
+Shared by every job module: ``run`` (the one place a program runs; tests
+replace it), ``run_retry`` (one retry when a program never starts, said in the
+record), ``finish``/``check_release`` (a run counts only with the expected
+release, a normal end and its outputs), ``sltoht_dump`` and ``export_levels``.
 ``compile_levels_tab`` compiles one TAB of data/gtap7/gempack_rungtap375_levels
-into a work folder outside data/, once per content (Tasks 7 and 8).
+into the work folder, once per content.
 """
 
 from __future__ import annotations
@@ -20,18 +24,22 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import target_shocks
-from _job_cli import common, not_yet
+from _job_cli import common, releases
 from release_check import ReleaseMismatch, release, require
+from run_gempack_matrix import prepare
 
 from equilibria.sources import check_tree, own_files
 
+TOOLS = Path(__file__).resolve().parent
 DIR_EXP = ("me8", "tbl813")  # run their -dir.exp (rate% translated)
 NORMAL_END = "completed without error"
-OUTPUTS = ("solution.sl4", "updated.har")  # a gragg run without both did not finish
+OUTPUTS = ("solution.sl4", "updated.har")  # a Burfisher run without both did not finish
 NOTE_FILE = "retry_note.txt"  # write_source --notes-from: appended to the record's notes
+_MISMATCH = re.compile(r"xcheck-mismatch=(\d+)")
 
 
 class JobError(RuntimeError):
@@ -39,10 +47,54 @@ class JobError(RuntimeError):
 
 
 def run(cmd: list[str], cwd: Path, console: Path) -> int:
-    """Run a GEMPACK program in ``cwd``, its stdout and stderr into ``console``."""
+    """Run a program in ``cwd``, its stdout and stderr into ``console``."""
     with console.open("wb") as fh:
         return subprocess.run(cmd, cwd=cwd, stdout=fh, stderr=subprocess.STDOUT,
                               check=False).returncode  # fmt: skip
+
+
+def _runner(runner: Callable[..., int] | None) -> Callable[..., int]:
+    return runner or sys.modules[__name__].run  # looked up now: tests replace it
+
+
+def run_retry(
+    cmd: list[str], cwd: Path, console: Path, *, note_dir: Path,
+    setup: Callable[[], None] | None = None, runner: Callable[..., int] | None = None,
+) -> int:
+    """``cmd`` in ``cwd``; once more if the program never started.
+
+    Now and then a GEMPACK program never starts (3a-1, me4b: no banner in the
+    console, rc 0xC0000142). It is retried once, and ``note_dir/NOTE_FILE`` says
+    so for the record (write_source --notes-from). A program that started and
+    failed is a result, not retried. ``setup`` rebuilds ``cwd`` before each attempt.
+    """
+    for attempt in (1, 2):
+        if setup is not None:
+            setup()
+        rc = _runner(runner)(cmd, cwd, console)
+        if attempt == 2 or release(console) is not None:
+            return rc
+        note = note_dir / NOTE_FILE
+        earlier = note.read_text(encoding="utf-8") + "; " if note.exists() else ""
+        note.write_text(
+            earlier + f"{Path(cmd[0]).name} did not start on the first attempt "
+            f"(no GEMPACK banner, rc={rc}); retried once",
+            encoding="utf-8",
+        )
+    raise AssertionError("unreachable")
+
+
+def check_release(console: Path, expected: str, name: str) -> bool:
+    try:
+        require(console, expected)
+    except ReleaseMismatch as err:
+        print(f"FAILED {name}: {err}", file=sys.stderr)
+        return False
+    return True
+
+
+def _normal_end(console: Path) -> bool:
+    return NORMAL_END in console.read_text(encoding=target_shocks.ENCODING, errors="replace")
 
 
 def _digest(*files: Path) -> str:
@@ -73,10 +125,47 @@ def compile_levels_tab(
     work.mkdir(parents=True, exist_ok=True)
     for f in sources:
         shutil.copy2(f, work / f.name)
-    rc = run([str(tablo), "-sti", f"{name}.sti"], work, work / "tablo_console.txt")
+    rc = run_retry([str(tablo), "-sti", f"{name}.sti"], work, work / "tablo_console.txt",
+                   note_dir=work)  # fmt: skip
     if rc != 0 or not all((work / f"{name}{e}").exists() for e in (".gss", ".gst")):
         raise JobError(f"tablo {name}: rc={rc}, see {work / 'tablo_console.txt'}")
     stamp.write_text(digest)
+
+
+def sltoht_dump(sl4: Path, sltoht: Path, out_name: str, *, console: Path, note_dir: Path) -> int:
+    """sltoht in batch on ``sl4``: its %-changes as the HAR ``out_name`` beside it.
+
+    The answers of corridas_paper.ps1's Dump-Changes and run_gempack_matrix's
+    convert_sl4: <solution> / c / n / har / <out> / e.
+    """
+    sti = sl4.parent / f"{Path(out_name).stem}.sti"
+    sti.write_text(f"\n{sl4.stem}\nc\nn\nhar\n{out_name}\ne\n", encoding="ascii")
+    return run_retry([str(sltoht), "-sti", sti.name], sl4.parent, console, note_dir=note_dir)
+
+
+def export_levels(
+    sl4: Path, sl4dump: Path, sltoht: Path, out_har: Path, *, console: Path, note_dir: Path
+) -> tuple[int, int | None]:
+    """export_sl4_levels.py on ``sl4`` against ``sl4dump``: (rc, xcheck mismatches).
+
+    It leaves ``<stem>_levels.txt`` (sltoht -SHL -SIC) beside ``sl4``.
+    """
+    cmd = [sys.executable, str(TOOLS / "export_sl4_levels.py"), str(sl4),
+           "--sl4dump", str(sl4dump), "--sltoht", str(sltoht), "--out", str(out_har)]  # fmt: skip
+    rc = _runner(None)(cmd, sl4.parent, console)
+    m = _MISMATCH.search(console.read_text(encoding="utf-8", errors="replace"))
+    return rc, (int(m.group(1)) if m else None)
+
+
+def _fresh(folder: Path) -> Path:
+    shutil.rmtree(folder, ignore_errors=True)
+    folder.mkdir(parents=True)
+    return folder
+
+
+def _collect(out: Path, pairs: list[tuple[Path, str]]) -> None:
+    for src, name in pairs:
+        shutil.copy2(src, out / name)
 
 
 def gragg_method(exp: str) -> tuple[str, str]:
@@ -116,7 +205,7 @@ def cmf_text(aux: Path, out: Path, exp: str) -> str:
 
 def run_in_package_copy(
     exe: Path, cmf: Path, *, package: Path, work: Path, name: str, console: Path,
-    runner: object = None,
+    runner: Callable[..., int] | None = None,
 ) -> int:
     """``exe -cmf cmf`` in a copy of ``package`` under ``work/package/<name>``.
 
@@ -125,49 +214,43 @@ def run_in_package_copy(
     folder (git-ignored, no user name), not %TEMP%; it is removed afterwards.
     """
     pkg = work.resolve() / "package" / name
-    cmd = [str(exe), "-cmf", str(cmf)]
-    for attempt in (1, 2):
-        shutil.rmtree(pkg, ignore_errors=True)
+
+    def setup() -> None:
+        _fresh(pkg)
         for f in own_files(package):
             target = pkg / f.relative_to(package)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(f, target)
-        try:
-            rc = (runner or run)(cmd, pkg, console)
-        finally:
-            shutil.rmtree(pkg, ignore_errors=True)
-        # Now and then a GEMPACK program never starts (3a-1, me4b: no banner in the
-        # console, rc 0xC0000142). One retry, said in the record (write_source
-        # --notes-from); a program that started and failed is a result, not retried.
-        if attempt == 2 or release(console) is not None:
-            return rc
-        (console.parent / NOTE_FILE).write_text(
-            f"{exe.name} did not start on the first attempt (no GEMPACK banner, "
-            f"rc={rc}); retried once",
-            encoding="utf-8",
-        )
-    raise AssertionError("unreachable")
+
+    try:
+        return run_retry([str(exe), "-cmf", str(cmf)], pkg, console,
+                         note_dir=console.parent, setup=setup, runner=runner)  # fmt: skip
+    finally:
+        shutil.rmtree(pkg, ignore_errors=True)
 
 
-def finish(out: Path, console: Path, rc: int, *, expect_release: str, name: str) -> bool:
+def finish(out: Path, console: Path, rc: int, *, expect_release: str, name: str,
+           outputs: tuple[str, ...] = OUTPUTS) -> bool:  # fmt: skip
     """Drop the work files, then whether the run counts: release, normal end, outputs."""
     # GEMPACK's work files (run-GPXXX7.ud8), the solution's .slc and the automatic
     # accuracy log .aal (times of day; the accuracy is in the console) are not
     # results: the .sl4 and the updated data are the record (maintainer, 2026-11-03)
     for scratch in [*out.glob("*GPXXX*"), *out.glob("*.slc"), *out.glob("*.aal")]:
         scratch.unlink()
-    text = console.read_text(encoding=target_shocks.ENCODING, errors="replace")
-    try:
-        require(console, expect_release)
-    except ReleaseMismatch as err:
-        print(f"FAILED {name}: {err}", file=sys.stderr)
+    if not check_release(console, expect_release, name):
         return False
-    missing = [f for f in OUTPUTS if not (out / f).exists()]
-    if rc != 0 or NORMAL_END not in text or missing:
-        print(f"FAILED {name}: rc={rc}, normal end={NORMAL_END in text}, "
+    missing = [f for f in outputs if not (out / f).exists()]
+    if rc != 0 or not _normal_end(console) or missing:
+        print(f"FAILED {name}: rc={rc}, normal end={_normal_end(console)}, "
               f"missing={missing} (see {console.name})", file=sys.stderr)  # fmt: skip
         return False
     return True
+
+
+def _work(args: argparse.Namespace) -> Path:
+    if args.work is None:
+        raise JobError("--work is required")
+    return args.work.resolve()
 
 
 def run_gragg(args: argparse.Namespace) -> int:
@@ -180,7 +263,7 @@ def run_gragg(args: argparse.Namespace) -> int:
     console = out / "gemsim_console.txt"
     rc = run_in_package_copy(args.gemsim, cmf, package=args.package,
                              work=args.aux.resolve().parent.parent, name=args.experiment,
-                             console=console, runner=run)  # fmt: skip
+                             console=console)  # fmt: skip
     if not finish(out, console, rc, expect_release=args.expect_release, name=args.experiment):
         return 1
     if targets:
@@ -191,6 +274,74 @@ def run_gragg(args: argparse.Namespace) -> int:
             return 1
     print(f"OK {args.experiment}: method {how}"
           + (f", {len(targets)} target% cells reached" if targets else ""))  # fmt: skip
+    return 0
+
+
+def run_horridge(args: argparse.Namespace) -> int:
+    """tablo -pgs simple, gemsim -cmf <exp>.cmf, sltoht: Horridge's SIMPLE (step 3)."""
+    out: Path = args.out.resolve()
+    exp = args.experiment
+    wd = _fresh(_work(args) / "horridge" / exp)
+    for f in ("simple.tab", "simdata.har", f"{exp}.cmf"):
+        shutil.copy2(args.model_dir / f, wd / f)
+    tablo_console = out / "tablo_console.txt"
+    rc = run_retry([str(args.tablo), "-pgs", "simple"], wd, tablo_console, note_dir=out)
+    if rc != 0 or not (wd / "simple.gss").exists():
+        print(f"FAILED {exp}: tablo rc={rc} (see {tablo_console.name})", file=sys.stderr)
+        return 1
+    console = out / "gemsim_console.txt"
+    rc = run_retry([str(args.gemsim), "-cmf", f"{exp}.cmf"], wd, console, note_dir=out)
+    sl4, upd = wd / f"{exp}.sl4", wd / f"{exp}.UPD"  # the .cmf writes <cmf>.UPD
+    if not check_release(console, args.expect_release, exp):
+        return 1
+    if rc != 0 or not _normal_end(console) or not (sl4.exists() and upd.exists()):
+        print(f"FAILED {exp}: gemsim rc={rc}, normal end={_normal_end(console)}",
+              file=sys.stderr)  # fmt: skip
+        return 1
+    dump_console = out / "sltoht_console.txt"
+    rc = sltoht_dump(sl4, args.sltoht, "sl4dump.har", console=dump_console, note_dir=out)
+    sltoht_rel = releases(args).get("sltoht.exe", args.expect_release)
+    if not check_release(dump_console, sltoht_rel, exp) or not (wd / "sl4dump.har").exists():
+        print(f"FAILED {exp}: sltoht rc={rc}", file=sys.stderr)
+        return 1
+    _collect(out, [(wd / f"{exp}.cmf", "run.cmf"), (sl4, "solution.sl4"),
+                   (upd, "updated.har"), (wd / "sl4dump.har", "sl4dump.har")])  # fmt: skip
+    shutil.rmtree(wd, ignore_errors=True)
+    print(f"OK horridge {exp}")
+    return 0
+
+
+def run_levels6(args: argparse.Namespace) -> int:
+    """gemsim on the patched condensed TAB for one matrix job (step 4)."""
+    out: Path = args.out.resolve()
+    name = f"{args.dataset} rordelta={args.rordelta}"
+    root = _fresh(_work(args) / "levels6" / f"{args.dataset}_rdlt{args.rordelta}")
+    run_dir, tag = prepare(args.dataset, 10.0, "8 16 32", args.rordelta, run_root=root,
+                           aux=str(args.aux))  # fmt: skip
+    console = out / "gemsim_console.txt"
+    rc = run_retry([str(args.gemsim), "-cmf", f"{tag}.cmf"], run_dir, console, note_dir=out)
+    sl4 = run_dir / f"{tag}.sl4"
+    if not check_release(console, args.expect_release, name):
+        return 1
+    if rc != 0 or not _normal_end(console) or not sl4.exists():
+        print(f"FAILED {name}: gemsim rc={rc}, normal end={_normal_end(console)}",
+              file=sys.stderr)  # fmt: skip
+        return 1
+    # against the UNPATCHED run's sl4dump, as step 4: a variable whose %-change
+    # differs is dropped and named (xcheck-mismatch=N [...]), and the run counts
+    rc, mismatch = export_levels(sl4, args.sl4dump, args.sltoht, run_dir / "sl4levels.har",
+                                 console=out / "export_console.txt", note_dir=out)  # fmt: skip
+    if rc != 0 or not (run_dir / f"{tag}_levels.txt").exists():
+        print(f"FAILED {name}: levels export rc={rc} (see export_console.txt)", file=sys.stderr)
+        return 1
+    pairs = [(run_dir / f"{tag}.cmf", "run.cmf"), (sl4, "solution.sl4"),
+             (run_dir / f"{tag}_levels.txt", "levels.txt"),
+             (run_dir / "sl4levels.har", "sl4levels.har")]  # fmt: skip
+    if args.rordelta == 0:  # the .prm GEMSIM read (RDLT 0), from _force_rdlt
+        pairs.append((run_dir / f"default_{tag}.prm", "default_rdlt0.prm"))
+    _collect(out, pairs)
+    shutil.rmtree(root, ignore_errors=True)
+    print(f"OK levels6 {name}: xcheck-mismatch={mismatch}")
     return 0
 
 
@@ -218,14 +369,12 @@ def main(argv: list[str] | None = None) -> int:
     gragg.add_argument("--gemsim", type=Path, required=True)
     common(gragg)
     args = ap.parse_args(argv)
-    if args.mode == "gragg":
-        try:
-            return run_gragg(args)
-        except (JobError, target_shocks.TargetError) as err:
-            print(f"FAILED {args.experiment}: {err}", file=sys.stderr)
-            return 1
-    task = {"horridge": "Task 6", "levels6": "Task 7"}[args.mode]
-    return not_yet(f"gemsim_job {args.mode}", task)
+    mode = {"horridge": run_horridge, "levels6": run_levels6, "gragg": run_gragg}[args.mode]
+    try:
+        return mode(args)
+    except (JobError, target_shocks.TargetError) as err:
+        print(f"FAILED {args.mode}: {err}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

@@ -29,10 +29,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--experiment", required=True)
     ap.add_argument("--package", type=Path, required=True, help="data/gtap7/nus333")
     ap.add_argument("--exe", type=Path, required=True, help="gtapuv7.exe or gtapv7.exe")
-    ap.add_argument("--work", type=Path, required=True,
-                    help="where the package copy runs (git-ignored, never under data/)")
     common(ap)
-    args = ap.parse_args(argv)  # fmt: skip
+    args = ap.parse_args(argv)
+    if args.work is None:
+        ap.error("--work is required: the package copy runs there (never data/ or %TEMP%)")
 
     out: Path = args.out.resolve()
     exp = exp_file(args.package, args.experiment).read_bytes().decode(target_shocks.ENCODING)
