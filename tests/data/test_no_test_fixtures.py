@@ -16,16 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_UNTIL_PHASE_3B_PREFIX = "tests/fixtures/gtap7_gempack/"
 ALLOWED_UNTIL_PHASE_3B = frozenset({"tests/fixtures/nus333_bienestar_gempack.json.gz"})
 
-ALLOWED_UNTIL_PHASE_4 = frozenset(
-    {
-        "tests/compare/fixtures/eq_burfisher_tbl45a_levels.json.gz",
-        "tests/compare/fixtures/eq_burfisher_tbl46a_levels.json.gz",
-        "tests/compare/fixtures/eq_gtap7_3x3_levels.json.gz",
-        "tests/compare/fixtures/gtap3x3_minimo.yaml",
-        "tests/compare/fixtures/make_eq_burfisher_levels.py",
-        "tests/compare/fixtures/make_eq_gtap7_levels.py",
-    }
-)
+ALLOWED_UNTIL_PHASE_4 = frozenset({})
 
 
 def _tracked_fixtures() -> set[str]:

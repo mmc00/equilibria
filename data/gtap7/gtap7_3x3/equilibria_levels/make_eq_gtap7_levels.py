@@ -5,7 +5,7 @@ PATH en CI. Es ``scripts/gtap/compare_gempack_levels.py`` (``solve`` +
 
 Uso (desde la raiz, con PATH)::
 
-    PYTHONPATH=. uv run python tests/compare/fixtures/make_eq_gtap7_levels.py gtap7_3x3
+    PYTHONPATH=. uv run python data/gtap7/gtap7_3x3/equilibria_levels/make_eq_gtap7_levels.py gtap7_3x3
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 SCRIPT = ROOT / "scripts" / "gtap" / "compare_gempack_levels.py"
 
 

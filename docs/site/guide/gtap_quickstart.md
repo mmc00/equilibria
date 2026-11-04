@@ -185,7 +185,7 @@ report = compare(
         period_dim=-1,
     ),
     from_pyomo(m3, period_dim=-1),
-    Mapping.from_yaml("tests/compare/fixtures/gtap3x3_minimo.yaml"),
+    Mapping.from_yaml("tests/compare/gtap3x3_minimal.yaml"),
 )
 for t in ("check", "shock"):
     cells = [c for c in report.cells if c.period == t]

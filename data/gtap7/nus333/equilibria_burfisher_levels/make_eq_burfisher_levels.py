@@ -8,7 +8,7 @@ No usa ``equilibria.compare``.
 
 Uso (desde la raiz, con PATH; el paquete del libro es ``data/gtap7/nus333``)::
 
-    PYTHONPATH=src:. python tests/compare/fixtures/make_eq_burfisher_levels.py TBL46A
+    PYTHONPATH=src:. python data/gtap7/nus333/equilibria_burfisher_levels/make_eq_burfisher_levels.py TBL46A
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "scripts" / "gtap")]
 
 

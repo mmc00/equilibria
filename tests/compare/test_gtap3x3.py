@@ -30,7 +30,7 @@ def test_gams_contra_dict_de_equilibria():
     assert r.excluded == {"pft": "ejemplo: excluida a proposito"}
 
 
-MAPA = O.ROOT / "tests" / "compare" / "fixtures" / "gtap3x3_minimo.yaml"
+MAPA = O.ROOT / "tests" / "compare" / "gtap3x3_minimal.yaml"
 
 
 @pytest.mark.integration

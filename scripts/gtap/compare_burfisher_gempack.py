@@ -17,9 +17,9 @@ Uso (desde la raiz, con PATH; el paquete del libro es ``data/gtap7/nus333``)::
     PYTHONPATH=src:. python scripts/gtap/compare_burfisher_gempack.py [--only TBL46A]
 
 o, sin resolver, con niveles ya guardados (``--save-eq-dir`` o
-``tests/compare/fixtures/make_eq_burfisher_levels.py``)::
+``data/gtap7/nus333/equilibria_burfisher_levels/make_eq_burfisher_levels.py``)::
 
-    uv run python scripts/gtap/compare_burfisher_gempack.py --eq-dir tests/compare/fixtures
+    uv run python scripts/gtap/compare_burfisher_gempack.py --eq-dir data/gtap7/nus333/equilibria_burfisher_levels
 """
 
 from __future__ import annotations
