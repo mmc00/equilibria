@@ -1,24 +1,24 @@
-# Comparación de Métodos RAS y Variantes
+# Comparison of RAS methods and variants
 
-## Resumen Ejecutivo
+## Executive summary
 
-| Método | ¿Qué balancea? | Valores negativos | Aplicación típica |
+| Method | What it balances | Negative values | Typical application |
 |--------|----------------|-------------------|-------------------|
-| **RAS** | Solo matriz cuadrada (Z) | ❌ No permite | Actualizar flujos intermedios |
-| **MRAS** | Matriz cuadrada con incertidumbre | ❌ No permite | Datos con error de medición |
-| **GRAS** | Matriz cuadrada con negativos | ✅ Sí permite | Inventarios, exportaciones netas |
-| **KRAS** | Sistema completo con conflictos | ✅ Sí permite | SUTs con datos inconsistentes |
+| **RAS** | Only the square matrix (Z) | ❌ Not allowed | Updating intermediate flows |
+| **MRAS** | Square matrix with uncertainty | ❌ Not allowed | Data with measurement error |
+| **GRAS** | Square matrix with negatives | ✅ Allowed | Inventories, net exports |
+| **KRAS** | Whole system with conflicts | ✅ Allowed | SUTs with inconsistent data |
 
-## 1. RAS Clásico (Stone, 1961)
+## 1. Classic RAS (Stone, 1961)
 
-### ¿Qué hace?
+### What it does
 
-Balancea UNA matriz cuadrada **Z** (n×n) para que:
+Balances ONE square matrix **Z** (n×n) so that:
 ```
 row_sums = col_sums = targets
 ```
 
-### Algoritmo
+### Algorithm
 
 ```python
 def ras_classic(Z, row_targets, col_targets, max_iter=1000):
@@ -48,23 +48,23 @@ def ras_classic(Z, row_targets, col_targets, max_iter=1000):
     return Z
 ```
 
-### ¿Qué NO hace?
+### What it does NOT do
 
-- ❌ NO balancea demanda final (F)
-- ❌ NO balancea valor agregado (VA)
-- ❌ NO balancea importaciones (M)
-- ❌ NO maneja valores negativos
-- ❌ NO garantiza identidad PIB
+- ❌ Does NOT balance final demand (F)
+- ❌ Does NOT balance value added (VA)
+- ❌ Does NOT balance imports (M)
+- ❌ Does NOT handle negative values
+- ❌ Does NOT guarantee the GDP identity
 
-**Resultado**: Solo la submatriz Z está balanceada, el resto del sistema puede quedar inconsistente.
+**Result**: only the Z submatrix is balanced; the rest of the system can stay inconsistent.
 
 ## 2. MRAS - Modified RAS (Lecomber, 1975)
 
-### ¿Qué hace?
+### What it does
 
-Igual que RAS pero incorpora **incertidumbre** en los datos.
+Like RAS, but it brings **uncertainty** in the data into account.
 
-### Diferencia clave
+### Key difference
 
 ```python
 # RAS clásico
@@ -74,31 +74,31 @@ Z_new = r * Z * s  # Ajuste directo
 Z_new = r * (Z + error_adjustment) * s  # Ajuste con corrección de error
 ```
 
-### Aplicación
+### Application
 
-Cuando los datos base tienen errores de medición conocidos.
+When the base data have known measurement errors.
 
-### Limitaciones
+### Limitations
 
-- ❌ Sigue siendo solo para matriz cuadrada
-- ❌ No maneja negativos
-- ❌ No balancea sistema completo
+- ❌ Still only for a square matrix
+- ❌ Does not handle negatives
+- ❌ Does not balance the whole system
 
 ## 3. GRAS - Generalized RAS (Junius & Oosterhaven, 2003)
 
-### ¿Qué hace?
+### What it does
 
-Balancea UNA matriz **Z** (puede tener negativos) usando transformación exponencial.
+Balances ONE matrix **Z** (it may have negatives) using an exponential transformation.
 
-### Innovación clave
+### Key innovation
 
-**Problema con RAS clásico**:
+**Problem with classic RAS**:
 ```
 Si Z[i,j] = -10 y necesitas multiplicar por 1.5:
 Z[i,j] * 1.5 = -15  ← ¡El negativo se hace más negativo!
 ```
 
-**Solución GRAS**:
+**GRAS solution**:
 ```python
 # En lugar de multiplicar directamente, usa exponenciales
 r_gras = exp(lambda_r)  # Multiplicadores de Lagrange
@@ -107,9 +107,9 @@ s_gras = exp(lambda_s)
 Z_new[i,j] = sign(Z[i,j]) * |Z[i,j]|^(r_gras[i] * s_gras[j])
 ```
 
-Esto **preserva el signo** de los valores originales.
+This **preserves the sign** of the original values.
 
-### Algoritmo
+### Algorithm
 
 ```python
 def gras(Z, row_targets, col_targets):
@@ -135,26 +135,26 @@ def gras(Z, row_targets, col_targets):
     return Z_balanced
 ```
 
-### ¿Qué NO hace?
+### What it does NOT do
 
-- ❌ Sigue siendo solo para matriz cuadrada Z
-- ❌ NO balancea demanda final
-- ❌ NO balancea VA
-- ❌ NO garantiza identidad PIB global
+- ❌ Still only for the square matrix Z
+- ❌ Does NOT balance final demand
+- ❌ Does NOT balance value added
+- ❌ Does NOT guarantee the overall GDP identity
 
-**Ventaja sobre RAS**: Puede manejar inventarios (ΔStock) y exportaciones netas (X-M) que pueden ser negativos.
+**Advantage over RAS**: it can handle inventories (ΔStock) and net exports (X-M), which can be negative.
 
 ## 4. KRAS - Konfliktfreies RAS (Lenzen et al., 2009)
 
-### ¿Qué hace?
+### What it does
 
-Balancea **sistema completo** con datos conflictivos.
+Balances the **whole system** with conflicting data.
 
-### Características
+### Features
 
-- Combina RAS + MRAS + GRAS
-- Maneja conflictos entre fuentes de datos
-- Asigna pesos de confiabilidad
+- Combines RAS + MRAS + GRAS
+- Handles conflicts between data sources
+- Assigns reliability weights
 
 ```python
 def kras(system, weights):
@@ -172,22 +172,22 @@ def kras(system, weights):
     # Datos con mayor peso se modifican menos
 ```
 
-### Ventaja
+### Advantage
 
-✅ Balancea TODO el sistema respetando jerarquía de confiabilidad
+✅ Balances the WHOLE system, respecting the reliability ranking
 
-## 5. Stone's Method (implícito en SNA)
+## 5. Stone's method (implicit in the SNA)
 
-### ¿Qué hace?
+### What it does
 
-Balancea **Supply-Use Tables completas** incluyendo:
-- Matriz de uso (Z)
-- Demanda final (F)
-- Valor agregado (VA)
-- Márgenes comerciales
-- Impuestos sobre productos
+Balances **complete supply-use tables**, including:
+- Use matrix (Z)
+- Final demand (F)
+- Value added (VA)
+- Trade margins
+- Taxes on products
 
-### Identidades enforced
+### Identities enforced
 
 ```
 1. Supply = Use (por producto)
@@ -200,7 +200,7 @@ Balancea **Supply-Use Tables completas** incluyendo:
    Σ(VA) = Σ(Demanda final) - Σ(Importaciones)
 ```
 
-### Algoritmo (simplificado)
+### Algorithm (simplified)
 
 ```python
 def balance_complete_sut(Z, F, VA, M):
@@ -234,22 +234,22 @@ def balance_complete_sut(Z, F, VA, M):
     return Z, F, VA, M
 ```
 
-## Respuesta a tu Pregunta: ¿Qué estaba aplicando?
+## Answer to your question: what was I applying?
 
-En `balance_bolivia_pragmatic.py` apliqué **RAS CLÁSICO** solamente:
+In `balance_bolivia_pragmatic.py` I applied **CLASSIC RAS** only:
 
 ```python
 Z_balanced = ras_square(Z)  # ← Solo esto
 ```
 
-**Resultado**:
-- ✅ Matriz Z balanceada (row sums = col sums)
-- ❌ F, VA, M sin balancear
-- ❌ Identidades globales NO satisfechas
+**Result**:
+- ✅ Matrix Z balanced (row sums = col sums)
+- ❌ F, VA, M unbalanced
+- ❌ Overall identities NOT satisfied
 
-## Lo Que Necesitas: Balanceo Completo
+## What you need: full balancing
 
-Para balancear una MIP completa necesitas un método que ajuste **TODOS** los componentes:
+To balance a whole MIP you need a method that adjusts **ALL** the components:
 
 ```
 ┌─────────────────────────────────────────┐
@@ -266,7 +266,7 @@ Para balancear una MIP completa necesitas un método que ajuste **TODOS** los co
 └─────────────────────────────────────────┘
 ```
 
-**Método recomendado**: Combinación Stone + GRAS
+**Recommended method**: Stone + GRAS combined
 
 ```python
 def balance_complete_mip(mip_matrix):
@@ -298,7 +298,7 @@ def balance_complete_mip(mip_matrix):
     return balanced_matrix
 ```
 
-## Fuentes
+## Sources
 
 - [RAS Technique - Open Risk Manual](https://www.openriskmanual.org/wiki/RAS_Technique)
 - [IMPLAN - The RAS Method](https://support.implan.com/hc/en-us/articles/11646312866075-The-RAS-Method)
@@ -307,12 +307,12 @@ def balance_complete_mip(mip_matrix):
 - [Junius & Oosterhaven (2003) - Semantic Scholar](https://www.semanticscholar.org/paper/The-Solution-of-Updating-or-Regionalizing-a-Matrix-Junius-Oosterhaven/e2ccf6bbe11abe7a0521c4a680ce53607262c749)
 - [Efficient updating of regional supply and use tables](https://journalofeconomicstructures.springeropen.com/articles/10.1186/s40008-022-00274-8)
 
-## Conclusión
+## Conclusion
 
-**Tu MIP necesita**: Método tipo "Stone + GRAS" que balancea **todo el sistema**, no solo Z.
+**Your MIP needs**: a "Stone + GRAS" kind of method that balances **the whole system**, not only Z.
 
-**Lo que implementé**: Solo RAS clásico en Z.
+**What I implemented**: only classic RAS on Z.
 
-**Por eso**: Solo 1 de 4 identidades está balanceada.
+**That is why**: only 1 of 4 identities is balanced.
 
-**Siguiente paso**: Implementar el algoritmo completo que ajuste Z, F, M simultáneamente mientras preserva VA.
+**Next step**: implement the complete algorithm that adjusts Z, F, M at once while preserving value added.

@@ -1,17 +1,17 @@
-# simulations api (modelo-agnostica)
+# Simulations API (model-agnostic)
 
-> Los ejemplos de PEP de esta guía corren sobre el motor PEP viejo, que se borra en
-> la etapa E1 del roadmap de PEP. El motor actual es `pep_pyomo`: ver
+> The PEP examples in this guide run on the old PEP engine, which is deleted in
+> stage E1 of the PEP roadmap. The current engine is `pep_pyomo`: see
 > `docs/site/guide/pep_quickstart.md`.
 
-La API `equilibria.simulations` permite correr escenarios en estilo scikit:
+The `equilibria.simulations` API runs scenarios in scikit style:
 
-1. crear simulador por modelo,
-2. calibrar una sola vez con `fit()`,
-3. listar choques disponibles,
-4. ejecutar escenarios con `run_scenarios(...)`.
+1. create a simulator per model,
+2. calibrate once with `fit()`,
+3. list the available shocks,
+4. run scenarios with `run_scenarios(...)`.
 
-## uso base
+## Basic use
 
 ```python
 from equilibria.simulations import Scenario, Shock, Simulator
@@ -27,9 +27,9 @@ sim = Simulator(
 print(sim.available_shocks())
 ```
 
-## uso ultra simple (pep)
+## Simplest use (pep)
 
-Si no quieres armar `Scenario(...)` manualmente:
+If you do not want to build `Scenario(...)` by hand:
 
 ```python
 from equilibria.simulations import PepSimulator
@@ -46,7 +46,7 @@ report_import_agr = sim.run_import_price(commodity="agr", multiplier=1.25)
 report_gov = sim.run_government_spending(multiplier=1.2)
 ```
 
-Tambien puedes construir shocks directos sin escribir `Scenario(...)` a mano:
+You can also build shocks directly without writing `Scenario(...)` by hand:
 
 ```python
 sim.available_shocks()
@@ -55,14 +55,14 @@ scenario = sim.shock(var="ttix", index="*", multiplier=0.75, name="export_tax")
 report = sim.run_shock(var="PWM", index="agr", multiplier=1.25)
 ```
 
-`available_presets()`, `make_preset()` y `run_preset()` siguen existiendo por compatibilidad, pero estan deprecados.
+`available_presets()`, `make_preset()` and `run_preset()` still exist for compatibility, but they are deprecated.
 
-Si quieres ver como estructurar un flujo de proyecto mas humano
-(`preprocesar SAM` -> `fit()` -> `shocks` -> `report`), revisa tambien:
+If you want to see how to structure a more human project flow
+(`preprocess SAM` -> `fit()` -> `shocks` -> `report`), see also:
 
 - `docs/notes/pep/pep_user_flow_examples.md`
 
-## escenario export tax (ttix)
+## Export tax scenario (ttix)
 
 ```python
 from equilibria.simulations import Scenario, Shock
@@ -78,9 +78,9 @@ report = sim.run_scenarios(
 )
 ```
 
-## escenario import price (PWM)
+## Import price scenario (PWM)
 
-Choque sectorial:
+Sector shock:
 
 ```python
 Scenario(
@@ -89,7 +89,7 @@ Scenario(
 )
 ```
 
-Choque para todos los bienes:
+Shock for every good:
 
 ```python
 Scenario(
@@ -98,7 +98,7 @@ Scenario(
 )
 ```
 
-## escenario government spending (G)
+## Government spending scenario (G)
 
 ```python
 Scenario(
@@ -107,10 +107,10 @@ Scenario(
 )
 ```
 
-## closure por escenario (pep)
+## Closure per scenario (pep)
 
-Si un escenario PEP necesita una closure distinta a la del simulador base,
-puedes pasarla como un bloque directo `closure={...}` en `Scenario(...)`.
+If a PEP scenario needs a closure different from the base simulator's,
+you can pass it as a direct `closure={...}` block in `Scenario(...)`.
 
 ```python
 from equilibria.simulations import PepSimulator, Scenario, Shock
@@ -140,23 +140,23 @@ report = sim.run_scenarios(
 )
 ```
 
-Notas:
+Notes:
 
-- `closure` es opcional.
-- Si no lo pasas, el escenario usa el contrato base del simulador.
-- `closure` se mergea sobre el contrato base, no reemplaza todo el contrato.
-- El reporte devuelve la `closure` pedida y la `effective_contract` realmente usada por el solver.
+- `closure` is optional.
+- If you do not pass it, the scenario uses the simulator's base contract.
+- `closure` is merged over the base contract; it does not replace the whole contract.
+- The report returns the requested `closure` and the `effective_contract` the solver actually used.
 
-Importante:
+Important:
 
-- `closure` si forma parte de la API publica por escenario.
-- `equations` y `bounds` no forman parte de la API publica por escenario.
-- Si necesitas cambiar `equations`, `bounds` o la `config` del solver, eso se hace al nivel de `PepSimulator(...)`, no dentro de `Scenario(...)`.
-- La guia detallada de esta separacion esta en `docs/notes/pep/pep_contract_api.md`.
+- `closure` is part of the public per-scenario API.
+- `equations` and `bounds` are not part of the public per-scenario API.
+- If you need to change `equations`, `bounds` or the solver `config`, that is done at the level of `PepSimulator(...)`, not inside `Scenario(...)`.
+- The detailed guide to this separation is in `docs/notes/pep/pep_contract_api.md`.
 
-### simbolos de closure soportados hoy en pep
+### Closure symbols supported today in pep
 
-Los nombres que hoy entiende el solver son estos:
+The names the solver understands today are these:
 
 - `G`
 - `CAB`
@@ -175,32 +175,32 @@ Los nombres que hoy entiende el solver son estos:
 - `TR_AGD_ROW`
 - `TR_ROW_AGNG`
 - `KS`
-- el `numeraire` que declares, por ejemplo `e`
+- the `numeraire` you declare, for example `e`
 
-Interpretacion rapida:
+Quick reading:
 
-- `SH`, `SF`, `EXD`, `PWM`, `VSTK` y `CMIN` son familias indexadas; en la closure se escriben por nombre agregado.
-- `TR_SELF` corresponde a `TR(gvt,gvt)` y `TR(row,row)`.
-- `TR_AGD_ROW` corresponde a transferencias `row -> AGD`.
-- `TR_ROW_AGNG` corresponde a transferencias `AGNG -> row`.
-- `LS` controla la oferta laboral cuando la quieras fijar o liberar explicitamente.
-- `KS` controla la oferta de capital. Si `capital_mobility='mobile'`, fija/libera `KS[k]`; si `capital_mobility='sector_specific'`, aplica ese cierre sobre `KD[k,j]`.
+- `SH`, `SF`, `EXD`, `PWM`, `VSTK` and `CMIN` are indexed families; in the closure they are written by their aggregate name.
+- `TR_SELF` stands for `TR(gvt,gvt)` and `TR(row,row)`.
+- `TR_AGD_ROW` stands for transfers `row -> AGD`.
+- `TR_ROW_AGNG` stands for transfers `AGNG -> row`.
+- `LS` controls labor supply when you want to fix or free it explicitly.
+- `KS` controls capital supply. If `capital_mobility='mobile'`, it fixes/frees `KS[k]`; if `capital_mobility='sector_specific'`, it applies that closure to `KD[k,j]`.
 
-Si pasas un simbolo no soportado, el solver no lo acepta en silencio: la corrida queda marcada como invalida en `validation.closure_validation`, con mensajes como `Unsupported fixed closure symbols` o `Unsupported endogenous closure symbols`.
+If you pass an unsupported symbol, the solver does not accept it silently: the run is marked invalid in `validation.closure_validation`, with messages such as `Unsupported fixed closure symbols` or `Unsupported endogenous closure symbols`.
 
-## notas de diseño
+## Design notes
 
-- `Shock` y `Scenario` son modelos pydantic inmutables.
-- `Simulator.fit()` cachea el estado base calibrado.
-- `warm_start=True` reutiliza niveles de la corrida anterior.
-- `reference_results_gdx` es opcional; si se incluye, se agrega comparación por escenario.
-- La API es genérica y se extiende por adapters (`model="pep"` hoy, otros modelos después).
-- El reporte incluye `capabilities` del adapter:
+- `Shock` and `Scenario` are immutable pydantic models.
+- `Simulator.fit()` caches the calibrated base state.
+- `warm_start=True` reuses the levels of the previous run.
+- `reference_results_gdx` is optional; when given, a per-scenario comparison is added.
+- The API is generic and is extended through adapters (`model="pep"` today, other models later).
+- The report includes the adapter's `capabilities`:
   - `has_solver`
   - `has_reference_compare`
   - `mode`
 
-## modelos registrados actualmente
+## Models registered today
 
 ```python
 from equilibria.simulations import available_models
@@ -209,7 +209,7 @@ print(available_models())
 # ('gtap', 'icio', 'ieem', 'pep')
 ```
 
-Wrappers convenientes:
+Convenience wrappers:
 
 ```python
 from equilibria.simulations import GTAPSimulator, ICIOSimulator, IEEMSimulator
@@ -219,23 +219,23 @@ gtap = GTAPSimulator(base_state={"x": 1.0}).fit()
 icio = ICIOSimulator(base_state={"x": 1.0}).fit()
 ```
 
-`pep` tiene integración completa calibración + solver.
+`pep` has full calibration + solver integration.
 
-`ieem`, `gtap` e `icio` están habilitados como adapters state-based (sin solver nativo aún):
-- permiten `fit`, catálogo de choques y ejecución de escenarios,
-- `solve_state` corre en modo `no_solver` por defecto,
-- comparación de referencia externa no está implementada por defecto.
+`ieem`, `gtap` and `icio` are enabled as state-based adapters (no native solver yet):
+- they allow `fit`, a shock catalog and running scenarios,
+- `solve_state` runs in `no_solver` mode by default,
+- comparison against an external reference is not implemented by default.
 
-## estado actual por modelo
+## Current status per model
 
-- `pep`: runtime nativo completo (calibración + solve + comparación).
-- `ieem`: sin runtime nativo pre-registrado.
-- `gtap`: sin runtime nativo pre-registrado.
-- `icio`: sin runtime nativo pre-registrado.
+- `pep`: full native runtime (calibration + solve + comparison).
+- `ieem`: no pre-registered native runtime.
+- `gtap`: no pre-registered native runtime.
+- `icio`: no pre-registered native runtime.
 
-Nota: para `ieem/gtap/icio` no se registra runtime automático por diseño, hasta que exista implementación nativa real del modelo.
+Note: for `ieem/gtap/icio` no runtime is registered automatically, by design, until a real native implementation of the model exists.
 
-Tambien puedes inyectar hooks nativos sin cambiar la API:
+You can also inject native hooks without changing the API:
 
 ```python
 from equilibria.simulations import Simulator
@@ -249,12 +249,12 @@ sim = Simulator(
 ).fit()
 ```
 
-Cuando se pasan hooks, `capabilities.mode` cambia automaticamente:
-- `state_only_no_solver` (sin hooks),
-- `state_with_solver_hook` (solo `solve_fn`),
+When hooks are passed, `capabilities.mode` changes automatically:
+- `state_only_no_solver` (no hooks),
+- `state_with_solver_hook` (only `solve_fn`),
 - `state_with_solver_and_compare_hooks` (`solve_fn` + `compare_fn`).
 
-Si no quieres pasar hooks en cada instancia, puedes registrarlos una vez por modelo:
+If you do not want to pass hooks on every instance, you can register them once per model:
 
 ```python
 from equilibria.simulations import (
@@ -273,7 +273,7 @@ sim = IEEMSimulator(base_state={"x": 1.0}).fit()
 report = sim.run_scenarios(...)
 ```
 
-Mismo patrón para `gtap` e `icio`:
+Same pattern for `gtap` and `icio`:
 
 ```python
 from equilibria.simulations import GTAPSimulator, ICIOSimulator, register_mapping_runtime
@@ -285,23 +285,23 @@ gtap = GTAPSimulator(base_state={"x": 1.0}).fit()
 icio = ICIOSimulator(base_state={"x": 1.0}).fit()
 ```
 
-Si pasas hooks explícitos al construir `Simulator(...)`, esos hooks tienen prioridad sobre el runtime registrado.
+If you pass explicit hooks when building `Simulator(...)`, those hooks take priority over the registered runtime.
 
-Utilidades disponibles:
+Available utilities:
 - `register_mapping_runtime(model, ...)`
 - `get_mapping_runtime(model)`
 - `available_mapping_runtimes()`
 - `clear_mapping_runtime(model=None)`
 
-## compatibilidad legacy
+## Legacy compatibility
 
-`equilibria.templates.pep_scenario_parity` se mantiene por compatibilidad.
+`equilibria.templates.pep_scenario_parity` is kept for compatibility.
 
-La ruta recomendada para desarrollo nuevo es `equilibria.simulations` (`Simulator` / `PepSimulator`).
+The recommended path for new development is `equilibria.simulations` (`Simulator` / `PepSimulator`).
 
-### migracion recomendada
+### Recommended migration
 
-Antes (legacy):
+Before (legacy):
 
 ```python
 from equilibria.templates.pep_scenario_parity import PEPScenarioParityRunner
@@ -310,7 +310,7 @@ runner = PEPScenarioParityRunner(...)
 report = runner.run()
 ```
 
-Ahora (recomendado):
+Now (recommended):
 
 ```python
 from equilibria.simulations import PepSimulator

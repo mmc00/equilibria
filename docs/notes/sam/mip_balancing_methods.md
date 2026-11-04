@@ -1,12 +1,12 @@
-# Métodos de Balanceo de MIP: Literatura y Práctica
+# MIP balancing methods: literature and practice
 
-## 1. Identidades que Debe Cumplir una MIP Balanceada
+## 1. Identities a balanced MIP must meet
 
-Una Matriz Insumo-Producto (MIP) balanceada debe satisfacer simultáneamente:
+A balanced input-output matrix (MIP) must satisfy, at the same time:
 
-### 1.1. Balance por Producto (Filas)
+### 1.1. Balance by product (rows)
 
-Para cada producto `i`:
+For each product `i`:
 ```
 Oferta Total = Demanda Total
 
@@ -14,16 +14,16 @@ Producción_doméstica[i] + Importaciones[i] =
     Σ(Uso_intermedio[i,j]) + C[i] + G[i] + I[i] + ΔS[i] + X[i]
 ```
 
-### 1.2. Balance por Sector (Columnas)
+### 1.2. Balance by sector (columns)
 
-Para cada sector `j`:
+For each sector `j`:
 ```
 Insumos Totales = Producción Total
 
 Σ(Insumos_intermedios[i,j]) + VA[j] + Impuestos[j] = Producción[j]
 ```
 
-### 1.3. Identidad PIB
+### 1.3. GDP identity
 
 ```
 PIB (producción) = Σ(VA[j] + Impuestos[j])
@@ -33,27 +33,27 @@ PIB (gasto) = C + G + I + ΔS + (X - M)
 PIB (producción) = PIB (gasto)
 ```
 
-## 2. Métodos Estándar en la Literatura
+## 2. Standard methods in the literature
 
-### 2.1. Método RAS (Biproportional Scaling)
+### 2.1. The RAS method (biproportional scaling)
 
-**Referencia**: Stone (1961), Bacharach (1970)
+**Reference**: Stone (1961), Bacharach (1970)
 
-**Limitación**: Solo balancea una matriz cuadrada (flujos intermedios), no el sistema completo.
+**Limitation**: it only balances a square matrix (intermediate flows), not the whole system.
 
-**Uso apropiado**:
-- Actualizar MIP antigua con nuevos totales de fila/columna
-- Balance preliminar de flujos intermedios
+**Appropriate use**:
+- Updating an old MIP with new row/column totals
+- Preliminary balancing of intermediate flows
 
-**NO apropiado para**: Balance completo de un sistema con demanda final y VA.
+**NOT appropriate for**: fully balancing a system with final demand and value added.
 
-### 2.2. Cross-Entropy Minimization (Método de Mínima Información)
+### 2.2. Cross-Entropy Minimization (minimum-information method)
 
-**Referencia**: Robinson, Cattaneo & El-Said (2001), Golan, Judge & Miller (1996)
+**Reference**: Robinson, Cattaneo & El-Said (2001), Golan, Judge & Miller (1996)
 
-**Idea**: Minimizar la "distancia informacional" entre la matriz desbalanceada y la balanceada, sujeto a restricciones de balance.
+**Idea**: minimize the "information distance" between the unbalanced and the balanced matrix, subject to balance constraints.
 
-**Función objetivo**:
+**Objective function**:
 ```
 min Σ Σ x[i,j] * log(x[i,j] / x₀[i,j])
 
@@ -64,98 +64,98 @@ sujeto a:
 - x[i,j] ≥ 0
 ```
 
-**Ventajas**:
-- ✅ Balancea todo el sistema simultáneamente
-- ✅ Minimiza cambios a los datos originales
-- ✅ Puede incorporar restricciones adicionales
-- ✅ Tratamiento formal de incertidumbre
+**Advantages**:
+- ✅ Balances the whole system at once
+- ✅ Minimizes changes to the original data
+- ✅ Can take further constraints
+- ✅ Formal treatment of uncertainty
 
-**Desventajas**:
-- ⚠️ Requiere optimización no lineal (más complejo computacionalmente)
-- ⚠️ Puede tener múltiples soluciones locales
+**Disadvantages**:
+- ⚠️ Needs nonlinear optimization (computationally more complex)
+- ⚠️ May have several local solutions
 
-### 2.3. Método de Ajuste Proporcional Generalizado (GRAS)
+### 2.3. Generalized proportional adjustment (GRAS)
 
-**Referencia**: Junius & Oosterhaven (2003)
+**Reference**: Junius & Oosterhaven (2003)
 
-**Idea**: Extensión de RAS que ajusta tanto flujos intermedios como demanda final/VA.
+**Idea**: an extension of RAS that adjusts both intermediate flows and final demand/value added.
 
-**Algoritmo**:
-1. Calcular totales objetivo por fila y columna
-2. Aplicar RAS a submatriz de flujos intermedios
-3. Ajustar proporcionalmente demanda final
-4. Ajustar proporcionalmente VA
-5. Iterar hasta convergencia
+**Algorithm**:
+1. Compute the target totals by row and column
+2. Apply RAS to the intermediate-flows submatrix
+3. Adjust final demand proportionally
+4. Adjust value added proportionally
+5. Iterate until convergence
 
-**Ventajas**:
-- ✅ Más simple que cross-entropy
-- ✅ Balancea sistema completo
-- ✅ Converge rápidamente
+**Advantages**:
+- ✅ Simpler than cross-entropy
+- ✅ Balances the whole system
+- ✅ Converges fast
 
-### 2.4. Método de Reconciliación de Cuentas Nacionales (SNA)
+### 2.4. National accounts reconciliation (SNA)
 
-**Referencia**: United Nations SNA 2008, Chapter 26
+**Reference**: United Nations SNA 2008, Chapter 26
 
-**Idea**: Ajustar componentes según su confiabilidad estadística.
+**Idea**: adjust components according to their statistical reliability.
 
-**Jerarquía típica de confiabilidad**:
-1. **Más confiable**: Valor Agregado (de cuentas nacionales)
-2. **Confiable**: Exportaciones, Importaciones (de aduanas)
-3. **Menos confiable**: Flujos intermedios (de encuestas)
-4. **Variable**: Demanda final componentes (diferentes fuentes)
+**Typical reliability ranking**:
+1. **Most reliable**: value added (from the national accounts)
+2. **Reliable**: exports, imports (from customs)
+3. **Less reliable**: intermediate flows (from surveys)
+4. **Variable**: final demand components (various sources)
 
-**Procedimiento**:
-1. Fijar datos más confiables (VA, X, M)
-2. Ajustar datos menos confiables (Z, C, G, I)
-3. Aplicar RAS/GRAS al residuo
+**Procedure**:
+1. Fix the most reliable data (VA, X, M)
+2. Adjust the less reliable data (Z, C, G, I)
+3. Apply RAS/GRAS to the residual
 
-## 3. Recomendación para MIP Bolivia
+## 3. Recommendation for the Bolivia MIP
 
-### 3.1. Diagnóstico
+### 3.1. Diagnosis
 
-La MIP Bolivia tiene:
-- ✅ VA desagregado (confiable - de cuentas nacionales)
-- ✅ Importaciones por sector (confiable - de aduanas)
-- ⚠️ Flujos intermedios (menos confiable - encuestas)
-- ⚠️ Demanda final (mixta - varias fuentes)
+The Bolivia MIP has:
+- ✅ Disaggregated value added (reliable - from the national accounts)
+- ✅ Imports by sector (reliable - from customs)
+- ⚠️ Intermediate flows (less reliable - surveys)
+- ⚠️ Final demand (mixed - several sources)
 
-**Desbalance identificado**:
+**Imbalance found**:
 ```
 PIB (VA) = 48,614
 PIB (gasto) = 50,128
 Diferencia = 1,514 (3.1%)
 ```
 
-### 3.2. Método Recomendado: GRAS + Ajuste de Demanda Final
+### 3.2. Recommended method: GRAS + final demand adjustment
 
-**Paso 1: Fijar componentes confiables**
-- VA por sector: FIJO (viene de cuentas nacionales)
-- Importaciones totales: FIJO (viene de aduanas)
+**Step 1: fix the reliable components**
+- Value added by sector: FIXED (comes from the national accounts)
+- Total imports: FIXED (comes from customs)
 
-**Paso 2: Calcular discrepancia estadística**
+**Step 2: compute the statistical discrepancy**
 ```
 Discrepancia = PIB(gasto) - PIB(VA)
              = 50,128 - 48,614
              = 1,514
 ```
 
-**Paso 3: Distribuir discrepancia**
+**Step 3: distribute the discrepancy**
 
-Opción A: Ajustar demanda final proporcionalmente
+Option A: adjust final demand proportionally
 ```
 C_ajustado = C * (PIB_VA / PIB_gasto)
 G_ajustado = G * (PIB_VA / PIB_gasto)
 ...
 ```
 
-Opción B: Crear cuenta "discrepancia estadística"
+Option B: create a "statistical discrepancy" account
 ```
 PIB = C + G + I + ΔS + (X - M) + DISC
 ```
 
-**Paso 4: Aplicar GRAS para balance fino**
+**Step 4: apply GRAS for fine balancing**
 
-### 3.3. Implementación Práctica
+### 3.3. Practical implementation
 
 ```python
 # Algoritmo GRAS simplificado
@@ -212,41 +212,41 @@ def balance_mip_complete(Z, F, VA, M):
     return Z, F
 ```
 
-## 4. Alternativas Si Datos Son Muy Inconsistentes
+## 4. Alternatives when the data are very inconsistent
 
-### 4.1. Método Híbrido (Recomendado para Bolivia)
+### 4.1. Hybrid method (recommended for Bolivia)
 
-1. **Preservar componentes confiables**:
-   - VA total y estructura sectorial
-   - Total de importaciones
-   - Total de exportaciones
+1. **Preserve the reliable components**:
+   - Total value added and its sector structure
+   - Total imports
+   - Total exports
 
-2. **Ajustar componentes intermedios**:
-   - Matriz Z: RAS con restricciones
-   - Consumo privado: ajuste proporcional
-   - Inversión: ajuste residual
+2. **Adjust the intermediate components**:
+   - Matrix Z: RAS with constraints
+   - Private consumption: proportional adjustment
+   - Investment: residual adjustment
 
-3. **Aceptar discrepancia estadística** pequeña (< 1%)
+3. **Accept a small statistical discrepancy** (< 1%)
 
-### 4.2. Construcción de MIP Sintética
+### 4.2. Building a synthetic MIP
 
-Si la inconsistencia es muy grande (>5%), considerar:
+If the inconsistency is very large (>5%), consider:
 
-1. **Reconstruir desde VA**:
-   - Usar VA como base
-   - Aplicar coeficientes técnicos promedio (regionales/internacionales)
-   - Calibrar con totales conocidos
+1. **Rebuild from value added**:
+   - Use value added as the base
+   - Apply average technical coefficients (regional/international)
+   - Calibrate with known totals
 
-2. **Método de Matriz de Uso/Oferta (SUTs)**:
-   - Construir matrices de Uso y Oferta separadas
-   - Balancear cada una independientemente
-   - Derivar MIP simétrica
+2. **Supply/use tables method (SUTs)**:
+   - Build separate use and supply matrices
+   - Balance each one independently
+   - Derive a symmetric MIP
 
-## 5. Criterios de Validación Post-Balance
+## 5. Post-balancing validation criteria
 
-Una MIP balanceada debe pasar:
+A balanced MIP must pass:
 
-### 5.1. Tests Numéricos
+### 5.1. Numerical tests
 
 ```python
 # 1. Balance de filas (oferta = demanda)
@@ -267,16 +267,16 @@ pib_gasto = F.sum() + (X.sum() - M.sum())
 assert abs(pib_va - pib_gasto) < 0.01
 ```
 
-### 5.2. Tests Económicos
+### 5.2. Economic tests
 
-- ✅ Coeficientes técnicos razonables (0 ≤ a[i,j] ≤ 1)
-- ✅ Estructura sectorial preservada
-- ✅ No se introdujeron flujos negativos
-- ✅ Cambios < 10% en celdas individuales (idealmente)
+- ✅ Reasonable technical coefficients (0 ≤ a[i,j] ≤ 1)
+- ✅ Sector structure preserved
+- ✅ No negative flows introduced
+- ✅ Changes < 10% in individual cells (ideally)
 
-## 6. Software y Herramientas
+## 6. Software and tools
 
-### Implementaciones Existentes
+### Existing implementations
 
 - **Python**:
   - `pymrio` - Multi-Regional Input-Output analysis
@@ -290,9 +290,9 @@ assert abs(pib_va - pib_gasto) < 0.01
   - GTAP database balancing procedures
   - IFPRI SAM balancing tools
 
-### Para Equilibria
+### For Equilibria
 
-Deberíamos implementar:
+We should implement:
 ```python
 def balance_full_mip(
     mip: MIPRawSAM,
@@ -308,27 +308,27 @@ def balance_full_mip(
     ...
 ```
 
-## Referencias
+## References
 
-### Papers Fundamentales
+### Foundational papers
 
 1. **Stone, R. (1961)**. "Input-Output and National Accounts". OECD.
-   - Introduce método RAS
+   - Introduces the RAS method
 
 2. **Bacharach, M. (1970)**. "Biproportional Matrices and Input-Output Change". Cambridge.
-   - Teoría matemática de RAS
+   - Mathematical theory of RAS
 
 3. **Robinson, S., Cattaneo, A., & El-Said, M. (2001)**. "Updating and Estimating a Social Accounting Matrix Using Cross Entropy Methods". Economic Systems Research.
-   - Cross-entropy para SAMs
+   - Cross-entropy for SAMs
 
 4. **Junius, T., & Oosterhaven, J. (2003)**. "The Solution of Updating or Regionalizing a Matrix with both Positive and Negative Entries". Economic Systems Research.
-   - Método GRAS
+   - The GRAS method
 
 5. **Golan, A., Judge, G., & Miller, D. (1996)**. "Maximum Entropy Econometrics". Wiley.
-   - Fundamentos teóricos de cross-entropy
+   - Theoretical foundations of cross-entropy
 
 6. **United Nations (2008)**. "System of National Accounts 2008", Chapter 14 & 26.
-   - Estándares oficiales de balance de MIPs
+   - Official standards for balancing MIPs
 
 ### Software
 
@@ -336,13 +336,13 @@ def balance_full_mip(
 - **GTAP**: https://www.gtap.agecon.purdue.edu/
 - **IFPRI SAM tools**: https://www.ifpri.org/
 
-## Conclusión
+## Conclusion
 
-Para la MIP de Bolivia:
+For the Bolivia MIP:
 
-1. **No es suficiente** balancear solo flujos intermedios
-2. **Se debe** balancear el sistema completo
-3. **Método recomendado**: GRAS con VA fijo
-4. **Objetivo**: Max diff < 0.1, discrepancia PIB < 0.1%
+1. Balancing only intermediate flows **is not enough**
+2. The whole system **must** be balanced
+3. **Recommended method**: GRAS with fixed value added
+4. **Target**: max diff < 0.1, GDP discrepancy < 0.1%
 
-El siguiente paso es implementar `balance_full_mip()` que balancea todo el sistema correctamente.
+The next step is to implement `balance_full_mip()`, which balances the whole system correctly.

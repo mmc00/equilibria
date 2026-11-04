@@ -1,54 +1,54 @@
-# Por que no hay registro de bloques
+# Why there is no block registry
 
-**Fecha:** 2026-09-24 · **Estado:** decidido, antes del primer release a PyPI
+**Date:** 2026-09-24 · **Status:** decided, before the first PyPI release
 
-Se quitaron `BlockRegistry`, `get_registry` y `register_block` de
-`blocks/base.py` y de los dos `__all__` (`equilibria/` y `equilibria/blocks/`).
+`BlockRegistry`, `get_registry` and `register_block` were removed from
+`blocks/base.py` and from both `__all__` (`equilibria/` and `equilibria/blocks/`).
 
-## Que eran
+## What they were
 
-Una tabla `nombre -> clase de bloque` con un singleton global y un decorador,
-para poder pedir un bloque por su nombre en texto:
+A `name -> block class` table with a global singleton and a decorator,
+so that a block could be requested by its name as text:
 
 ```python
 bloque = get_registry().create("IncomeBlock", sigma=0.8)
 ```
 
-## Por que se fueron
+## Why they went
 
-Su unico usuario era un ejemplo que lo demostraba a si mismo. Medido antes de
-borrar:
+Their only user was an example that demonstrated them to itself. Measured before
+deleting:
 
-- **33 subclases de `Block`** en `src/` (GTAP, gtap_logvalue, PEP, trade,
-  institutions, demand, production, equilibrium). **Ninguna** llevaba
+- **33 subclasses of `Block`** in `src/` (GTAP, gtap_logvalue, PEP, trade,
+  institutions, demand, production, equilibrium). **None** carried
   `@register_block`.
-- La unica excepcion estaba en `examples/`: `example_04_custom_blocks.py`
-  decoraba su `SimpleDemand`, imprimia `registry.list_blocks()` y dedicaba un
-  paso entero a `registry.create("SimpleDemand")`. Era un usuario REAL —el CI lo
-  ejecuta como test— pero de un tipo particular: el ejemplo existia para enseñar
-  el registro, no lo usaba para nada que necesitara. El bloque se instanciaba
-  directo (`SimpleDemand(name=...)`) y el propio texto decia
-  "Use @register_block decorator (optional)". Se reescribio en este mismo commit
-  para componer por import directo, que es lo que hace el resto del repo.
-- Fuera de ese ejemplo, `get_registry()` no se llamaba desde ningun sitio: las
-  demas menciones vivas estaban dentro del propio codigo muerto
-  (`register_block` llamandose a si mismo) o en ejemplos `>>>` de docstring.
-- El repo necesito un registro **tres veces** en otros sitios y las tres escribio
-  un `dict` de modulo sin tocar este: `_ADAPTER_REGISTRY`
+- The only exception was in `examples/`: `example_04_custom_blocks.py`
+  decorated its `SimpleDemand`, printed `registry.list_blocks()` and devoted a
+  whole step to `registry.create("SimpleDemand")`. It was a REAL user —CI
+  runs it as a test— but of a particular kind: the example existed to teach
+  the registry, it did not use it for anything it needed. The block was instantiated
+  directly (`SimpleDemand(name=...)`) and the text itself said
+  "Use @register_block decorator (optional)". It was rewritten in this same commit
+  to compose by direct import, which is what the rest of the repo does.
+- Outside that example, `get_registry()` was not called from anywhere: the
+  other live mentions were inside the dead code itself
+  (`register_block` calling itself) or in docstring `>>>` examples.
+- The repo needed a registry **three times** elsewhere, and all three times it wrote
+  a module `dict` without touching this one: `_ADAPTER_REGISTRY`
   (`simulations/simulator.py`), `_MAPPING_RUNTIME_REGISTRY`
   (`simulations/runtimes.py`), `GEMPACK_KIND` (`templates/gtap/shocks.py`).
 
-Y su firma no modelaba el problema real. Los bloques no se crean con parametros
-sueltos: `_mk_unit` (`templates/gtap/gtap_block_model.py`) los instancia con
-`sets` + `params` y enhebra `residual_region` / `if_sub` / `savf_flag` segun los
-campos que declare cada clase, y `_block_classes` los devuelve en **orden de
-dependencia**. `create(name, **kwargs)` no expresa ni el orden ni ese paso de
-contexto.
+And its signature did not model the real problem. Blocks are not created with loose
+parameters: `_mk_unit` (`templates/gtap/gtap_block_model.py`) instantiates them with
+`sets` + `params` and threads `residual_region` / `if_sub` / `savf_flag` according to the
+fields each class declares, and `_block_classes` returns them in **dependency
+order**. `create(name, **kwargs)` expresses neither the order nor that passing of
+context.
 
-## El caso que si nos interesa: describir un modelo en YAML
+## The case that does matter: describing a model in YAML
 
-La motivacion para conservarlo era que un economista pudiera definir su modelo
-sin escribir Python. Se esbozo el fichero que querriamos poder escribir:
+The motivation for keeping it was that an economist could define a model
+without writing Python. The file we would want to be able to write was sketched:
 
 ```yaml
 modelo: gtap7
@@ -70,43 +70,43 @@ solver:
   periodos: [base, check, shock]
 ```
 
-Los valores de arriba estan **medidos contra el repo**, no inventados: `9x10`
-es una de las dos claves reales de `dataset_path` (`['9x10', 'nus333']`) e
-`imptx` —el arancel de importacion, `tms` de GEMPACK— es uno de los instrumentos
-del `ShockBlock`; el % se lee como en el `.EXP` y la conversion a niveles la
-decide el instrumento. La primera version de este boceto
-puso `dataset: gtap7_10x7` y `shock: {tipo: arancel, destino: tm}`: **ninguno de
-los dos lo acepta nada**, lo encontro el code-review. Importa porque este boceto
-es la guia del trabajo futuro, y una guia con valores plausibles pero falsos
-manda al siguiente al sitio equivocado.
+The values above are **measured against the repo**, not invented: `9x10`
+is one of the two real keys of `dataset_path` (`['9x10', 'nus333']`) and
+`imptx` —the import tariff, GEMPACK's `tms`— is one of the instruments
+of the `ShockBlock`; the % reads as in the `.EXP` and the conversion to levels is
+decided by the instrument. The first version of this sketch
+put `dataset: gtap7_10x7` and `shock: {tipo: arancel, destino: tm}`: **neither
+is accepted by anything**; the code review found it. It matters because this sketch
+is the guide for future work, and a guide with plausible but false values
+sends the next person to the wrong place.
 
-Y deja a la vista lo que de verdad falta para el YAML, que no es un registro de
-bloques: los datasets grandes (`gtap7_10x7`, `gtap7_15x10`...) viven como
-carpetas en `data/<model>/` y en listas a mano dentro de `scripts/`, fuera del
-registro de `equilibria.datasets`. Unificar eso es el primer paso real.
+And it lays bare what the YAML really lacks, which is not a block
+registry: the large datasets (`gtap7_10x7`, `gtap7_15x10`...) live as
+folders in `data/<model>/` and in hand-written lists inside `scripts/`, outside the
+`equilibria.datasets` registry. Unifying that is the first real step.
 
-**El boceto no tiene una lista de bloques, y ese es el hallazgo.** Un usuario de
-GTAP no elige bloques: los 7 *son* el modelo GTAP (mas el `ShockBlock`, que solo
-declara los instrumentos fijos), y quitar uno no da otro modelo sino uno roto. Elige dataset, closure, shock y periodos — y las cuatro cosas ya
-tienen su registro. Ninguna es el de bloques.
+**The sketch has no list of blocks, and that is the finding.** A GTAP user
+does not choose blocks: the 7 *are* the GTAP model (plus the `ShockBlock`, which only
+declares the fixed instruments), and removing one does not give another model but a broken one. They choose dataset, closure, shock and periods — and all four already
+have their registry. None of them is the block one.
 
-El camino YAML -> modelo es, casi entero, leer el fichero y llamar a
-`build_block_model(params, sets, closure, residual_region, ...)` con piezas que ya
-existen. Los bloques los pone el template, como ahora.
+The YAML -> model path is, almost entirely, reading the file and calling
+`build_block_model(params, sets, closure, residual_region, ...)` with pieces that already
+exist. The template puts the blocks in, as now.
 
-## Cuando habria que reabrir esto
+## When this should be reopened
 
-Cuando un **tercero** publique bloques en su propio paquete (`equilibria_energia`
-con sus `Block` propios) sin tocar este repo. Ese es el unico caso donde el
-decorador `@register_block` es imprescindible, porque el bloque vive en codigo que
-no controlamos.
+When a **third party** publishes blocks in their own package (`equilibria_energia`
+with their own `Block`s) without touching this repo. That is the only case where the
+`@register_block` decorator is indispensable, because the block lives in code that
+we do not control.
 
-Si llega ese dia, el registro se disena a partir de `_block_classes` y `_mk_unit`
-en `gtap_block_model.py` — que ya son el registro real, escrito a mano y con el
-orden de dependencia que el borrado no modelaba — y no recuperando esta version.
+If that day comes, the registry is designed from `_block_classes` and `_mk_unit`
+in `gtap_block_model.py` — which already are the real registry, written by hand and with the
+dependency order that the deleted one did not model — and not by bringing this version back.
 
-> Nota (2026-10-05): el shock vive en el `ShockBlock` del modelo construido, solo
-> en el periodo shock: `shocks.apply_shock(m, {instrumento: {celda: %}})`. El driver
-> no recibe el shock; lo lee del modelo (`shocks.shock_of`). El viejo
-> `apply_shock(params)`, que cambiaba `params` y dejaba el shock en los 3 periodos,
-> se borro.
+> Note (2026-10-05): the shock lives in the `ShockBlock` of the built model, only
+> in the shock period: `shocks.apply_shock(m, {instrument: {cell: %}})`. The driver
+> does not receive the shock; it reads it from the model (`shocks.shock_of`). The old
+> `apply_shock(params)`, which changed `params` and left the shock in all 3 periods,
+> was deleted.

@@ -1,26 +1,26 @@
 # SimpleOpen GAMS parity
 
-Esta guia cubre la comparacion del benchmark canonico `simple_open_v1` contra su referencia GAMS.
+This guide covers the comparison of the canonical `simple_open_v1` benchmark against its GAMS reference.
 
-## que compara
+## What it compares
 
-La paridad revisa, por closure:
+Parity checks, per closure:
 
 - `benchmark`
 - `level`
 - `residual`
 - `calib`
 
-La lectura del `.gdx` usa `equilibria.babel`, no `gdxdump`.
+The `.gdx` is read with `equilibria.babel`, not `gdxdump`.
 
-## closures canonicas
+## Canonical closures
 
 - `simple_open_default`
 - `flexible_external_balance`
 
-## referencia oficial
+## Official reference
 
-Para generar la referencia oficial:
+To generate the official reference:
 
 ```bash
 uv run python scripts/parity/generate_simple_open_gams_reference.py \
@@ -28,14 +28,14 @@ uv run python scripts/parity/generate_simple_open_gams_reference.py \
   --output-dir output/simple_open_gams_reference/latest
 ```
 
-Eso deja:
+That leaves:
 
 - `output/simple_open_gams_reference/latest/manifest.json`
-- un `Results.gdx` por closure bajo `output/simple_open_gams_reference/latest/closures/<closure>/`
+- one `Results.gdx` per closure under `output/simple_open_gams_reference/latest/closures/<closure>/`
 
-## prerequisito minimo
+## Minimum prerequisite
 
-Primero generar los `.gdx` de referencia con GAMS:
+First generate the reference `.gdx` files with GAMS:
 
 ```bash
 cd src/equilibria/templates/reference/simple_open/scripts
@@ -43,15 +43,15 @@ gams simple_open_v1_benchmark.gms lo=2 --CLOSURE=simple_open_default --OUT_GDX=/
 gams simple_open_v1_benchmark.gms lo=2 --CLOSURE=flexible_external_balance --OUT_GDX=/abs/path/output/simple_open_v1_benchmark_flexible.gdx
 ```
 
-## correr la paridad
+## Running the parity
 
-Con los artefactos en `output/`:
+With the artifacts in `output/`:
 
 ```bash
 uv run python scripts/parity/run_simple_open_gams_parity.py --gate --save-report output/simple_open_gams_parity.json
 ```
 
-Con el manifest oficial:
+With the official manifest:
 
 ```bash
 uv run python scripts/parity/run_simple_open_gams_parity.py \
@@ -61,7 +61,7 @@ uv run python scripts/parity/run_simple_open_gams_parity.py \
   --save-report output/simple_open_gams_parity_from_manifest.json
 ```
 
-Con rutas explicitas:
+With explicit paths:
 
 ```bash
 uv run python scripts/parity/run_simple_open_gams_parity.py \
@@ -70,16 +70,16 @@ uv run python scripts/parity/run_simple_open_gams_parity.py \
   --gdx flexible_external_balance=/abs/path/flexible.gdx
 ```
 
-## criterio de pase
+## Pass criterion
 
-Cada closure debe cumplir:
+Each closure must meet:
 
 - `active_closure_match = true`
 - `modelstat = 1`
 - `solvestat = 1`
-- `benchmark`, `level`, `residual` y `calib` sin mismatches
+- `benchmark`, `level`, `residual` and `calib` with no mismatches
 
-## archivos clave
+## Key files
 
 - [run_simple_open_gams_parity.py](../../../scripts/parity/run_simple_open_gams_parity.py)
 - [generate_simple_open_gams_reference.py](../../../scripts/parity/generate_simple_open_gams_reference.py)

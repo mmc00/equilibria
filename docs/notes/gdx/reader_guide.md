@@ -1,38 +1,38 @@
-# Lector GDX - equilibria.babel.gdx.reader
+# GDX reader - equilibria.babel.gdx.reader
 
-Módulo de lectura de archivos GDX (GAMS Data Exchange) en Python puro, sin necesidad de instalación de GAMS.
+A module that reads GDX (GAMS Data Exchange) files in pure Python, with no GAMS installation needed.
 
-## Características
+## Features
 
-✅ **Lectura completa de archivos GDX v7**
-- Headers (versión, plataforma, productor)
-- Tabla de símbolos (sets, parameters, variables, equations, aliases)
-- UEL (Unique Element List) - elementos de conjuntos
-- Dominios (domain sets)
-- Datos de parámetros (valores numéricos)
-- Datos de variables (level, marginal, bounds, scale)
-- Datos de ecuaciones (level, marginal)
+✅ **Full reading of GDX v7 files**
+- Headers (version, platform, producer)
+- Symbol table (sets, parameters, variables, equations, aliases)
+- UEL (Unique Element List) - set elements
+- Domains (domain sets)
+- Parameter data (numeric values)
+- Variable data (level, marginal, bounds, scale)
+- Equation data (level, marginal)
 
-✅ **Sin dependencias de GAMS**
-- Implementación Python pura
-- Solo requiere librerías estándar (struct, pathlib)
+✅ **No GAMS dependencies**
+- Pure Python implementation
+- Needs only standard libraries (struct, pathlib)
 
-✅ **Soporte para múltiples dimensiones**
-- Parámetros 1D, 2D, 3D+
-- Sets multidimensionales
-- Variables y ecuaciones con índices
+✅ **Support for multiple dimensions**
+- 1D, 2D, 3D+ parameters
+- Multidimensional sets
+- Indexed variables and equations
 
-✅ **Manejo de compresión GDX**
-- Interpolación de valores en secuencias aritméticas
-- Datos sparse (almacenamiento eficiente)
+✅ **GDX compression handling**
+- Interpolation of values in arithmetic sequences
+- Sparse data (efficient storage)
 
-## Instalación
+## Installation
 
 ```bash
 pip install equilibria
 ```
 
-O desde el código fuente:
+Or from source:
 
 ```bash
 git clone https://github.com/tu-usuario/equilibria.git
@@ -40,9 +40,9 @@ cd equilibria
 pip install -e .
 ```
 
-## Uso Básico
+## Basic usage
 
-### Leer un archivo GDX completo
+### Read a whole GDX file
 
 ```python
 from equilibria.babel.gdx.reader import read_gdx
@@ -62,7 +62,7 @@ for sym in gdx_data['symbols']:
 print(f"Elementos: {gdx_data['elements']}")
 ```
 
-### Filtrar símbolos por tipo
+### Filter symbols by type
 
 ```python
 from equilibria.babel.gdx.reader import (
@@ -92,7 +92,7 @@ variables = get_variables(gdx_data)
 equations = get_equations(gdx_data)
 ```
 
-### Buscar un símbolo específico
+### Look up one symbol
 
 ```python
 from equilibria.babel.gdx.reader import read_gdx, get_symbol
@@ -108,7 +108,7 @@ if price:
     print(f"Descripción: {price['description']}")
 ```
 
-### Leer valores de parámetros
+### Read parameter values
 
 ```python
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
@@ -132,7 +132,7 @@ for key, value in sam.items():
 #         ...
 ```
 
-### Leer elementos de sets
+### Read set elements
 
 ```python
 from equilibria.babel.gdx.reader import read_gdx, read_set_elements
@@ -149,7 +149,7 @@ pairs = read_set_elements(gdx_data, "ij")
 # Salida: [('agr', 'food'), ('mfg', 'goods'), ...]
 ```
 
-### Leer variables (resultados del solver)
+### Read variables (solver results)
 
 ```python
 from equilibria.babel.gdx.reader import read_gdx, read_variable_values
@@ -167,7 +167,7 @@ for key, attrs in x_values.items():
     print(f"  scale:    {attrs['scale']}")      # Factor de escala
 ```
 
-### Leer ecuaciones (valores duales)
+### Read equations (dual values)
 
 ```python
 from equilibria.babel.gdx.reader import read_gdx, read_equation_values
@@ -182,7 +182,7 @@ for key, attrs in eq_values.items():
     print(f"  marginal: {attrs['marginal']}")   # Precio sombra (dual)
 ```
 
-## Ejemplo Completo
+## Complete example
 
 ```python
 from pathlib import Path
@@ -258,9 +258,9 @@ if __name__ == "__main__":
     analyze_gdx("model.gdx")
 ```
 
-## Estructura de Datos
+## Data structures
 
-### Objeto GDX retornado por `read_gdx()`
+### The GDX object returned by `read_gdx()`
 
 ```python
 {
@@ -288,7 +288,7 @@ if __name__ == "__main__":
 }
 ```
 
-### Valores de parámetros
+### Parameter values
 
 ```python
 # Para parámetros 1D
@@ -307,7 +307,7 @@ if __name__ == "__main__":
 }
 ```
 
-### Valores de variables/ecuaciones
+### Variable/equation values
 
 ```python
 {
@@ -324,71 +324,71 @@ if __name__ == "__main__":
 
 ## API Reference
 
-### Funciones principales
+### Main functions
 
 #### `read_gdx(filepath: str | Path) -> dict`
-Lee un archivo GDX completo y retorna toda la información.
+Reads a whole GDX file and returns all its information.
 
 #### `get_symbol(gdx_data: dict, name: str) -> dict | None`
-Busca un símbolo por nombre.
+Looks up a symbol by name.
 
 #### `get_sets(gdx_data: dict) -> list[dict]`
-Retorna todos los sets del archivo.
+Returns every set in the file.
 
 #### `get_parameters(gdx_data: dict) -> list[dict]`
-Retorna todos los parámetros del archivo.
+Returns every parameter in the file.
 
 #### `get_variables(gdx_data: dict) -> list[dict]`
-Retorna todas las variables del archivo.
+Returns every variable in the file.
 
 #### `get_equations(gdx_data: dict) -> list[dict]`
-Retorna todas las ecuaciones del archivo.
+Returns every equation in the file.
 
 #### `read_parameter_values(gdx_data: dict, symbol_name: str) -> dict`
-Lee los valores numéricos de un parámetro.
+Reads the numeric values of a parameter.
 
 #### `read_variable_values(gdx_data: dict, symbol_name: str) -> dict`
-Lee los valores (level, marginal, etc.) de una variable.
+Reads the values (level, marginal, etc.) of a variable.
 
 #### `read_equation_values(gdx_data: dict, symbol_name: str) -> dict`
-Lee los valores (level, marginal) de una ecuación.
+Reads the values (level, marginal) of an equation.
 
 #### `read_set_elements(gdx_data: dict, set_name: str) -> list[tuple]`
-Lee los elementos de un conjunto.
+Reads the elements of a set.
 
-### Funciones de bajo nivel
+### Low-level functions
 
 #### `read_header_from_bytes(data: bytes) -> dict`
-Lee el header del GDX desde bytes.
+Reads the GDX header from bytes.
 
 #### `read_symbol_table_from_bytes(data: bytes) -> list`
-Lee la tabla de símbolos desde bytes.
+Reads the symbol table from bytes.
 
 #### `read_uel_from_bytes(data: bytes) -> list`
-Lee la lista de elementos únicos desde bytes.
+Reads the unique element list from bytes.
 
 #### `read_domains_from_bytes(data: bytes) -> list`
-Lee los dominios desde bytes.
+Reads the domains from bytes.
 
-## Limitaciones conocidas
+## Known limitations
 
-1. **Variables y ecuaciones**: La lectura de valores de variables y ecuaciones puede estar incompleta para archivos GDX con formatos complejos o compresión avanzada. Los metadatos (nombre, tipo, dimensión) se leen correctamente.
+1. **Variables and equations**: reading variable and equation values may be incomplete for GDX files with complex formats or advanced compression. The metadata (name, type, dimension) is read correctly.
 
-2. **Compresión de datos**: Los archivos GDX pueden usar varios esquemas de compresión. Actualmente se soportan:
-   - Valores explícitos (sin compresión)
-   - **Secuencias aritméticas** (interpolación lineal): `a, a+d, a+2d, a+3d, ...` ✅
-   - Datos sparse básicos (omisión de ceros) ✅
-   - **Secuencias geométricas**: `a, a×r, a×r², a×r³, ...` ❌ (No soportado - se interpolan incorrectamente como aritméticas)
+2. **Data compression**: GDX files can use several compression schemes. Supported today:
+   - Explicit values (no compression)
+   - **Arithmetic sequences** (linear interpolation): `a, a+d, a+2d, a+3d, ...` ✅
+   - Basic sparse data (zeros omitted) ✅
+   - **Geometric sequences**: `a, a×r, a×r², a×r³, ...` ❌ (Not supported - they are wrongly interpolated as arithmetic)
 
-3. **Interpolación geométrica**: Si un parámetro GDX está comprimido usando una progresión geométrica, los valores reconstruidos serán **incorrectos** porque el código actual asume progresión aritmética (lineal). Esto puede afectar parámetros con tasas de crecimiento exponenciales.
+3. **Geometric interpolation**: if a GDX parameter is compressed with a geometric progression, the rebuilt values will be **wrong**, because the current code assumes an arithmetic (linear) progression. This can affect parameters with exponential growth rates.
 
-4. **Sets multidimensionales**: La lectura de elementos de sets 2D+ está simplificada y puede no capturar todos los detalles.
+4. **Multidimensional sets**: reading the elements of 2D+ sets is simplified and may not capture every detail.
 
-5. **Versión GDX**: Optimizado para GDX v7. Versiones anteriores pueden funcionar pero no están completamente probadas.
+5. **GDX version**: optimized for GDX v7. Earlier versions may work but are not fully tested.
 
 ## Tests
 
-El módulo incluye una suite completa de tests:
+The module comes with a full test suite:
 
 ```bash
 # Ejecutar todos los tests
@@ -401,22 +401,22 @@ pytest tests/babel/gdx/test_reader.py -v
 pytest tests/babel/gdx/test_reader_extended.py -v
 ```
 
-## Contribuir
+## Contributing
 
-Contribuciones son bienvenidas! Áreas de mejora:
+Contributions are welcome. Areas to improve:
 
-- [ ] Mejorar decodificación de variables y ecuaciones
-- [ ] Soportar más esquemas de compresión GDX
-- [ ] Lectura completa de sets multidimensionales
-- [ ] Soporte para GDX v6 y anteriores
-- [ ] Escritura de archivos GDX (writer)
-- [ ] Validación de integridad de datos
+- [ ] Better decoding of variables and equations
+- [ ] Support more GDX compression schemes
+- [ ] Full reading of multidimensional sets
+- [ ] Support for GDX v6 and earlier
+- [ ] Writing GDX files (writer)
+- [ ] Data integrity validation
 
-## Licencia
+## License
 
-[Especificar licencia]
+See [`LICENSE`](../../../LICENSE).
 
-## Referencias
+## References
 
 - [GAMS GDX Documentation](https://www.gams.com/latest/docs/UG_GDX.html)
-- Formato GDX basado en ingeniería inversa y documentación oficial de GAMS
+- GDX format based on reverse engineering and the official GAMS documentation

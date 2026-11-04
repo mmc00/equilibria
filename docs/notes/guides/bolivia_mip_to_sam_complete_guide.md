@@ -1,21 +1,21 @@
-# Guía Completa: MIP Bolivia → SAM PEP
+# Complete guide: Bolivia MIP → PEP SAM
 
-## Resumen Ejecutivo
+## Executive summary
 
-**Objetivo cumplido**: Convertir MIP desbalanceada de Bolivia a SAM compatible con modelos PEP
+**Goal met**: turn Bolivia's unbalanced MIP into a SAM compatible with PEP models
 
-**Resultado**:
-- ✅ MIP balanceada con error PIB 0.38%
-- ✅ SAM creada con 70 sectores, 2 factores, cuentas institucionales
-- ✅ Lista para uso en modelos CGE
+**Result**:
+- ✅ MIP balanced with a GDP error of 0.38%
+- ✅ SAM built with 70 sectors, 2 factors, institutional accounts
+- ✅ Ready for use in CGE models
 
 ---
 
-## Proceso Completo
+## The whole process
 
-### 1. Análisis Inicial
+### 1. Initial analysis
 
-**MIP Original (desbalanceada):**
+**Original MIP (unbalanced):**
 ```
 Componentes:
   Z (flujos intermedios):      30,288.17
@@ -34,36 +34,36 @@ Causa:
   - Matriz Z interna desbalanceada (max diff 2,698)
 ```
 
-**Ventaja de Bolivia**: VA ya desagregado en:
-- Remuneraciones (L): 19,093 (39.3%)
-- Excedente Bruto (K): 29,275 (60.2%)
-- Impuestos indirectos: 246 (0.5%)
+**Bolivia's advantage**: value added already split into:
+- Compensation of employees (L): 19,093 (39.3%)
+- Gross operating surplus (K): 29,275 (60.2%)
+- Indirect taxes: 246 (0.5%)
 
 ---
 
-### 2. Métodos de Balanceo Probados
+### 2. Balancing methods tried
 
-| Método | PIB Error | Z Balance | Tiempo | Resultado |
+| Method | GDP error | Z balance | Time | Result |
 |--------|-----------|-----------|--------|-----------|
-| **RAS clásico** | 5.41% | <0.001 | <1 min | ✅ Funciona |
-| **GRAS original** | 0.00% | NaN | ~1 min | ❌ Overflow |
-| **GRAS Fixed** | **0.38%** | **0.16** | ~1 min | ✅ **MEJOR** |
-| **Targets ajustados** | 12.65% | No conv. | ~1 min | ❌ |
-| **Cross-Entropy** | - | - | >30 min | ⏳ No terminó |
-| **Scipy Optimization** | - | - | >45 min | ⏳ No terminó |
+| **Classic RAS** | 5.41% | <0.001 | <1 min | ✅ Works |
+| **Original GRAS** | 0.00% | NaN | ~1 min | ❌ Overflow |
+| **GRAS Fixed** | **0.38%** | **0.16** | ~1 min | ✅ **BEST** |
+| **Adjusted targets** | 12.65% | No conv. | ~1 min | ❌ |
+| **Cross-Entropy** | - | - | >30 min | ⏳ Did not finish |
+| **Scipy Optimization** | - | - | >45 min | ⏳ Did not finish |
 
-**Método seleccionado**: **GRAS Fixed**
+**Method chosen**: **GRAS Fixed**
 
 ---
 
-### 3. GRAS Fixed - Detalles Técnicos
+### 3. GRAS Fixed - technical details
 
-**¿Qué es GRAS?**
+**What is GRAS?**
 - Generalized RAS (Junius & Oosterhaven, 2003)
-- Permite valores negativos (sign-preserving)
-- Usa transformación exponencial de Lagrange
+- Allows negative values (sign-preserving)
+- Uses a Lagrangian exponential transformation
 
-**¿Por qué el original tenía overflow?**
+**Why did the original overflow?**
 ```
 Problema:
   1. Targets incompatibles (row_sum ≠ col_sum)
@@ -76,7 +76,7 @@ Solución:
   3. Clamping: clip(r, 1e-6, 1e6) para evitar overflow
 ```
 
-**Algoritmo GRAS Fixed:**
+**GRAS Fixed algorithm:**
 ```text
 for outer_iter in range(max_iter):
     # 1. Balance Z con GRAS (targets consistentes)
@@ -97,17 +97,17 @@ for outer_iter in range(max_iter):
         break
 ```
 
-**Resultado:**
-- Convergió en 7 iteraciones
-- PIB error: 0.38%
+**Result:**
+- Converged in 7 iterations
+- GDP error: 0.38%
 - Z balance: 0.16
-- Sin NaN, sin overflow
+- No NaN, no overflow
 
 ---
 
-### 4. Conversión MIP → SAM
+### 4. MIP → SAM conversion
 
-**Estructura de la SAM creada:**
+**Structure of the SAM built:**
 
 ```
 Cuentas:
@@ -139,7 +139,7 @@ Flujos principales:
   K → AG.firm:     10,246  (Utilidades retenidas)
 ```
 
-**Distribución de ingresos de factores:**
+**Distribution of factor income:**
 ```
 Labor (19,093):
   → Households: 18,138 (95%)
@@ -151,7 +151,7 @@ Capital (29,275):
   → Government:  1,464 (5%) [impuestos sobre capital]
 ```
 
-**Balance macro:**
+**Macro balance:**
 ```
 PIB:                    48,614
 Household income:       35,703
@@ -173,9 +173,9 @@ Trade balance:             937
 
 ---
 
-### 5. Archivos Generados
+### 5. Files produced
 
-**MIPs balanceadas:**
+**Balanced MIPs:**
 ```
 1. mip_bol_balanced.xlsx                    (RAS simple, 5.4% error)
 2. mip_bol_balanced_gras_fixed.xlsx         (GRAS, 0.38% error) ← USADO
@@ -184,7 +184,7 @@ Trade balance:             937
 5. mip_bol_balanced_hierarchical.xlsx       (Jerárquico, malo)
 ```
 
-**SAM final:**
+**Final SAM:**
 ```
 sam_bolivia_pep.xlsx
   ├─ SAM_Summary:        Matriz agregada 9×9
@@ -194,7 +194,7 @@ sam_bolivia_pep.xlsx
   └─ Metadata:           PIB, shares, errores
 ```
 
-**Documentación:**
+**Documentation:**
 ```
 docs/
   ├─ technical/
@@ -206,14 +206,14 @@ docs/
   │   ├─ mip_bolivia_balancing_final_summary.md
   │   └─ bolivia_mip_to_sam_complete_guide.md (Este documento)
   └─ guides/
-      └─ mip_to_sam_guide.md                 (Guía general)
+      └─ mip_to_sam_guide.md              (Guía general)
 ```
 
 ---
 
-### 6. Scripts Implementados
+### 6. Scripts written
 
-**Balanceo:**
+**Balancing:**
 ```
 balance_bolivia_pragmatic.py         - RAS simple
 balance_bolivia_gras_true.py         - GRAS original (overflow)
@@ -225,18 +225,18 @@ balance_bolivia_hierarchical.py      - Método jerárquico
 balance_bolivia_complete.py          - GRAS iterativo
 ```
 
-**Conversión:**
+**Conversion:**
 ```
 convert_bolivia_mip_to_sam.py        - MIP → SAM ← USADO
 ```
 
 ---
 
-### 7. Validación de Resultados
+### 7. Validating the results
 
-**Checks implementados:**
+**Checks in place:**
 
-1. **Balance de MIP:**
+1. **MIP balance:**
    ```
    ✓ Z row sums ≈ Z col sums (error: 0.16)
    ✓ PIB (VA) ≈ PIB (gasto) (error: 0.38%)
@@ -244,7 +244,7 @@ convert_bolivia_mip_to_sam.py        - MIP → SAM ← USADO
    ✓ Sin NaN, sin overflow
    ```
 
-2. **Consistencia SAM:**
+2. **SAM consistency:**
    ```
    ✓ Household income = factor income
    ✓ Investment = savings (con gap documentado)
@@ -252,7 +252,7 @@ convert_bolivia_mip_to_sam.py        - MIP → SAM ← USADO
    ✓ Government balance calculado
    ```
 
-3. **Checks económicos:**
+3. **Economic checks:**
    ```
    ✓ Labor share (39%) razonable
    ✓ Capital share (60%) razonable
@@ -262,54 +262,54 @@ convert_bolivia_mip_to_sam.py        - MIP → SAM ← USADO
 
 ---
 
-### 8. Limitaciones y Mejoras Futuras
+### 8. Limitations and future improvements
 
-**Limitaciones actuales:**
+**Current limitations:**
 
-1. **1 hogar agregado**
-   - La SAM tiene solo 1 hogar
-   - No captura desigualdad entre tipos de hogares
+1. **1 aggregate household**
+   - The SAM has only 1 household
+   - It does not capture inequality between household types
 
-2. **Distribución de ingresos simplificada**
-   - Shares de factores (95% L→HH, 60% K→HH) son asumidos
-   - En realidad deberían venir de encuestas de hogares
+2. **Simplified income distribution**
+   - The factor shares (95% L→HH, 60% K→HH) are assumed
+   - They should really come from household surveys
 
-3. **Error residual en PIB (6.27%)**
-   - Al crear cuentas institucionales, el error aumentó de 0.38% a 6.27%
-   - Se puede reducir con balanceo RAS final
+3. **Residual GDP error (6.27%)**
+   - Building the institutional accounts raised the error from 0.38% to 6.27%
+   - A final RAS balancing can reduce it
 
-**Mejoras futuras:**
+**Future improvements:**
 
-1. **Desagregar hogares**
+1. **Split households**
    ```text
    # Extender a múltiples tipos de hogares
    households = ['rural_poor', 'rural_rich', 'urban_poor', 'urban_rich']
    ```
 
-2. **Usar datos reales de distribución**
+2. **Use real distribution data**
    ```text
    # En lugar de asumir 95% L→HH, usar:
    factor_to_household_shares = load_from_household_survey()
    ```
 
-3. **Balanceo final de SAM**
+3. **Final SAM balancing**
    ```text
    # Aplicar RAS a toda la SAM para cerrar gaps
    sam_balanced = balance_sam_ras(sam, max_iter=1000)
    ```
 
-4. **Márgenes comerciales**
+4. **Trade margins**
    ```python
    # Agregar cuenta MARG para servicios de distribución
    ```
 
 ---
 
-### 9. Uso de la SAM en Modelos PEP
+### 9. Using the SAM in PEP models
 
-Hoy no hay una función que convierta esta SAM en un modelo PEP resuelto. Las
-piezas existen, pero el puente no está terminado. Medido el 2026-10-28 con la
-MIP de prueba de 3 sectores (`data/sam_tests/simple_mip.xlsx`):
+Today there is no function that turns this SAM into a solved PEP model. The
+pieces exist, but the bridge is not finished. Measured on 2026-10-28 with the
+3-sector test MIP (`data/sam_tests/simple_mip.xlsx`):
 
 ```python
 from pathlib import Path
@@ -328,52 +328,52 @@ res = solve_pep(build_pep_model(state, form="nlp"))
 print(res.code, res.message)  # 2 infeasible
 ```
 
-La calibración corre (`GDP_BPO` ≈ 131,1), pero el modelo PEP no reproduce su
-propio benchmark: IPOPT termina en un punto localmente infactible (residuo
-máximo 7,7e-2). Mientras eso no se arregle, usa la SAM de este pipeline como
-dato, y ve `docs/site/guide/pep_quickstart.md` para el template PEP sobre su
-SAM de referencia.
+Calibration runs (`GDP_BPO` ≈ 131.1), but the PEP model does not reproduce its
+own benchmark: IPOPT ends at a locally infeasible point (maximum
+residual 7.7e-2). Until that is fixed, use the SAM of this pipeline as
+data, and see `docs/site/guide/pep_quickstart.md` for the PEP template on its
+reference SAM.
 
 ---
 
-### 10. Referencias
+### 10. References
 
-**Literatura implementada:**
+**Literature implemented:**
 
 1. **RAS**: Stone (1961), Bacharach (1970)
 2. **GRAS**: Junius & Oosterhaven (2003)
 3. **Cross-Entropy**: Robinson, Cattaneo & El-Said (2001)
 4. **SNA 2008**: United Nations, Chapter 14 & 26
 
-**Software utilizado:**
+**Software used:**
 - Python 3.14
 - pandas, numpy
-- scipy.optimize (para optimización)
-- openpyxl (para Excel)
+- scipy.optimize (for optimization)
+- openpyxl (for Excel)
 
 ---
 
-## Conclusión
+## Conclusion
 
-**Logros:**
-✅ MIP desbalanceada (5.8% error) → MIP balanceada (0.38% error)
-✅ MIP balanceada → SAM completa con factores e instituciones
-✅ SAM compatible con modelos PEP
-✅ Documentación completa del proceso
-✅ Scripts reutilizables para otros países
+**Achievements:**
+✅ Unbalanced MIP (5.8% error) → balanced MIP (0.38% error)
+✅ Balanced MIP → complete SAM with factors and institutions
+✅ SAM compatible with PEP models
+✅ Complete documentation of the process
+✅ Scripts reusable for other countries
 
-**Ventaja de Bolivia:**
-El hecho de que la MIP ya tenía VA desagregado facilitó significativamente la conversión a SAM.
+**Bolivia's advantage:**
+That the MIP already had value added split made the conversion to a SAM much easier.
 
-**Método recomendado:**
-GRAS Fixed con damping es el método más robusto que combina:
-- Rigurosidad teórica (literatura académica)
-- Velocidad (converge en <1 minuto)
-- Robustez (no overflow, maneja sparse matrices)
-- Precisión (error <0.5%)
+**Recommended method:**
+GRAS Fixed with damping is the most robust method, combining:
+- Theoretical rigor (academic literature)
+- Speed (converges in <1 minute)
+- Robustness (no overflow, handles sparse matrices)
+- Precision (error <0.5%)
 
-**Aplicabilidad:**
-Este pipeline puede usarse para otros países con MIPs similares, ajustando:
-- Número de sectores
-- Distribución de ingresos de factores (según encuestas locales)
-- Número de hogares (según disponibilidad de datos)
+**Applicability:**
+This pipeline can be used for other countries with similar MIPs, adjusting:
+- The number of sectors
+- The distribution of factor income (from local surveys)
+- The number of households (as the data allow)

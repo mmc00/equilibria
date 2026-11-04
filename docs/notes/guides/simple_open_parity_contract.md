@@ -1,26 +1,26 @@
-# simpleopen parity contract
+# SimpleOpen parity contract
 
-Esta guia fija el contrato economico canonico de `SimpleOpen` para la futura paridad contra GAMS.
+This guide pins the canonical economic contract of `SimpleOpen` for the future parity against GAMS.
 
-La idea es dejar explicitas tres cosas:
+The idea is to make three things explicit:
 
-- cual es el contrato que se considera oficial
-- cual es la closure canonica de baseline
-- cual es el benchmark numerico que debe compartir Python y GAMS
+- which contract counts as official
+- which is the canonical baseline closure
+- which numeric benchmark Python and GAMS must share
 
-## contrato canonico
+## Canonical contract
 
-Hoy el contrato oficial de paridad es:
+Today the official parity contract is:
 
 - `contract.name = "simple_open_v1"`
 
-Ese contrato resuelve un sistema minimo de tres ecuaciones:
+That contract solves a minimal system of three equations:
 
 - `EQ_VA`
 - `EQ_INT`
 - `EQ_CET`
 
-Y usa este orden canonico de variables:
+And it uses this canonical variable order:
 
 - `VA`
 - `INT`
@@ -32,32 +32,32 @@ Y usa este orden canonico de variables:
 - `CAB`
 - `FSAV`
 
-Ese orden ya esta formalizado en:
+That order is already formalized in:
 
 - [simple_open_parity_spec.py](../../../src/equilibria/templates/simple_open_parity_spec.py)
 
-## closure canonica de baseline
+## Canonical baseline closure
 
-La closure base para paridad es:
+The base closure for parity is:
 
 - `closure.name = "simple_open_default"`
 
-Interpretacion:
+Interpretation:
 
 - numeraire: `PFX`
-- `PFX` y `FSAV` fijos
-- `ER` y `CAB` endogenos
-- movilidad de capital: `mobile`
+- `PFX` and `FSAV` fixed
+- `ER` and `CAB` endogenous
+- capital mobility: `mobile`
 
-Tambien existe una closure secundaria de benchmark:
+There is also a secondary benchmark closure:
 
 - `flexible_external_balance`
 
-Pero la referencia base de paridad debe arrancar por `simple_open_default`.
+But the base parity reference must start from `simple_open_default`.
 
-## benchmark canonico
+## Canonical benchmark
 
-Como `SimpleOpen` no viene de una SAM calibrada, el benchmark esta definido por un bloque pequeno de parametros y niveles exogenos.
+Since `SimpleOpen` does not come from a calibrated SAM, the benchmark is defined by a small block of parameters and exogenous levels.
 
 ### simple_open_default
 
@@ -89,27 +89,27 @@ Como `SimpleOpen` no viene de una SAM calibrada, el benchmark esta definido por 
 - `CAB = 0.82`
 - `FSAV = 0.82`
 
-Los niveles benchmark derivados de esos parametros ya se construyen en:
+The benchmark levels derived from those parameters are already built in:
 
 - [simple_open_parity_spec.py](../../../src/equilibria/templates/simple_open_parity_spec.py)
 
-Y el harness del Jacobiano ya consume exactamente esa misma especificacion en:
+And the Jacobian harness already consumes exactly that same specification in:
 
 - [simple_open_constraint_jacobian.py](../../../src/equilibria/templates/simple_open_constraint_jacobian.py)
 
-## por que esta guia importa antes de GAMS
+## Why this guide matters before GAMS
 
-Sin esta especificacion explicita, el siguiente paso de GAMS seria ambiguo:
+Without this explicit specification, the next GAMS step would be ambiguous:
 
-- un `.gms` podria usar otra closure
-- otro orden de variables
-- o un benchmark numerico distinto al de Python
+- a `.gms` could use another closure
+- another variable order
+- or a numeric benchmark different from Python's
 
-Con esta guia, el contrato de paridad ya queda fijo antes de escribir el modelo GAMS.
+With this guide, the parity contract is fixed before the GAMS model is written.
 
-## api y helpers
+## API and helpers
 
-Helpers utiles:
+Useful helpers:
 
 ```python
 from equilibria.templates import (
@@ -123,7 +123,7 @@ runtime = build_simple_open_runtime_config("default_template")
 spec = build_simple_open_parity_spec(contract)
 ```
 
-El `spec` resultante deja listos:
+The resulting `spec` has ready:
 
 - `contract_name`
 - `closure_name`
@@ -132,10 +132,10 @@ El `spec` resultante deja listos:
 - `benchmark_parameters`
 - `benchmark_levels`
 
-## criterio para el siguiente corte
+## Criterion for the next cut
 
-El siguiente corte de la epica debe usar este contrato exactamente para:
+The next cut of the epic must use exactly this contract to:
 
-1. escribir el `.gms` minimo
-2. exportar niveles benchmark
-3. comparar Python vs GAMS sin reinterpretar el sistema
+1. write the minimal `.gms`
+2. export the benchmark levels
+3. compare Python vs GAMS without reinterpreting the system

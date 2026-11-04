@@ -1,149 +1,149 @@
-# GTAP: monolito y bloques
+# GTAP: monolith and blocks
 
-Quien llega nuevo al repo suele suponer que `templates/gtap/gtap_model_equations.py` (el
-«monolito») y `blocks/gtap/` (los «bloques») son dos implementaciones alternativas del mismo
-modelo, y que la primera es legado a la espera de ser borrada.
+Newcomers to the repo tend to assume that `templates/gtap/gtap_model_equations.py` (the
+"monolith") and `blocks/gtap/` (the "blocks") are two alternative implementations of the same
+model, and that the first is legacy waiting to be deleted.
 
-**No lo son.** Este documento existe para evitar ese error, que ya costó tiempo una vez.
+**They are not.** This document exists to prevent that mistake, which has already cost time once.
 
-## Quién depende de quién
+## Who depends on whom
 
-Los módulos de `blocks/gtap/*.py` sólo importan `gtap_parameters`. Las menciones a
-`gtap_model_equations` en sus docstrings son comentarios de procedencia
-(`VERBATIM from ... líneas X-Y`): dicen de dónde se copió cada ecuación, no crean una dependencia.
+The modules of `blocks/gtap/*.py` import only `gtap_parameters`. The mentions of
+`gtap_model_equations` in their docstrings are provenance comments
+(`VERBATIM from ... líneas X-Y`): they say where each equation was copied from, they do not create a dependency.
 
-Eso llevaba a concluir —incorrectamente— que el monolito ya no se usa. Desde 2026-09-16 el
-composer **ya no lo importa**: el escalado de benchmark es un módulo aparte y la reflexión
-multiperiodo pide su modelo SP por método. Lo que queda es de otra naturaleza:
+That led to the conclusion —wrong— that the monolith is no longer used. Since 2026-09-16 the
+composer **no longer imports it**: benchmark scaling is a separate module and the multiperiod
+reflection asks for its SP model per method. What remains is of another kind:
 
-| Sitio | Qué hace |
+| Place | What it does |
 |---|---|
-| `templates/gtap/__init__.py:58` | Cualquier `import equilibria.templates.gtap` carga el monolito |
-| 1 de los 5 gates | El monolito es el oráculo contra GAMS (sólo `nl`) |
+| `templates/gtap/__init__.py:58` | Any `import equilibria.templates.gtap` loads the monolith |
+| 1 of the 5 gates | The monolith is the oracle against GAMS (only `nl`) |
 
-Borrar `gtap_model_equations.py` provoca *collection error* en ~34 archivos de test — **incluidos
-los 9 que ejercitan sólo bloques**, porque el import falla antes de llegar a ellos.
+Deleting `gtap_model_equations.py` causes a *collection error* in ~34 test files — **including
+the 9 that exercise only blocks**, because the import fails before reaching them.
 
-## Cobertura de ecuaciones
+## Equation coverage
 
-101 familias `Constraint(...)` en el monolito frente a 100 `eq_*` en bloques.
+101 `Constraint(...)` families in the monolith against 100 `eq_*` in blocks.
 
-De las 7 que sólo existían en el monolito, 6 se declaraban y se desactivaban en la línea siguiente
-—nunca entraban al `.nl`— y ya fueron eliminadas. Queda `eq_pmuv` como único gap real, y sólo
-muerde cuando `closure.rmuv` e `imuv` son ambos no vacíos, lo que no ocurre en ningún dataset del
-gate. Está documentado en `blocks/gtap/__init__.py:47-53`.
+Of the 7 that existed only in the monolith, 6 were declared and deactivated on the next line
+—they never entered the `.nl`— and have been removed. `eq_pmuv` is left as the only real gap, and it only
+bites when `closure.rmuv` and `imuv` are both non-empty, which happens in no dataset of the
+gate. It is documented in `blocks/gtap/__init__.py:47-53`.
 
-Las 6 exclusivas de bloques (`eq_mfr_{bs,sb,ss}`, `eq_mfw_{bs,sb,ss}` en `closure.py:218-341`) no
-son funcionalidad nueva: son la descomposición en constraints de lo que el monolito inlinea como
-Expressions dentro de `eq_pfact`/`eq_pwfact`.
+The 6 exclusive to blocks (`eq_mfr_{bs,sb,ss}`, `eq_mfw_{bs,sb,ss}` in `closure.py:218-341`) are not
+new functionality: they are the decomposition into constraints of what the monolith inlines as
+Expressions inside `eq_pfact`/`eq_pwfact`.
 
-## Los bloques son un superconjunto funcional
+## The blocks are a functional superset
 
-La asimetría va en el sentido contrario al que sugiere la intuición:
+The asymmetry runs the opposite way to what intuition suggests:
 
-| Modo | Monolito | Bloques |
+| Mode | Monolith | Blocks |
 |---|---|---|
-| `capFix`, `capSFix` | sí | sí |
-| `capFlex` | **no** (cae a un `else` genérico en `:7276`) | sí (`demand_utility.py:584`) |
-| `capFixDp` | **no** | sí (`demand_utility.py:116,166`) |
-| `base_calibrated=True` | **no existe** | sí (`gtap_block_model.py:372,440-446`) |
-| basis `gempack` | parcial | sí (`gtap_contract.py:309-321`) |
+| `capFix`, `capSFix` | yes | yes |
+| `capFlex` | **no** (falls into a generic `else` at `:7276`) | yes (`demand_utility.py:584`) |
+| `capFixDp` | **no** | yes (`demand_utility.py:116,166`) |
+| `base_calibrated=True` | **does not exist** | yes (`gtap_block_model.py:372,440-446`) |
+| basis `gempack` | partial | yes (`gtap_contract.py:309-321`) |
 
-`gtap_contract.py:357` declara 5 `savf_flag`; el monolito implementa 2.
+`gtap_contract.py:357` declares 5 `savf_flag`; the monolith implements 2.
 
-## Por qué se conserva el monolito
+## Why the monolith is kept
 
-Es el oráculo de fidelidad contra **GAMS** en 1 de los 5 gates de
-`scripts/gtap/run_parity_gates.py` — sólo `nl`. (Eran 3: `nlp` y `mcp` pasaron a bloques el
+It is the fidelity oracle against **GAMS** in 1 of the 5 gates of
+`scripts/gtap/run_parity_gates.py` — only `nl`. (There were 3: `nlp` and `mcp` moved to blocks on
 2026-09-17.)
 
-| Gate | Camino | Referencia |
+| Gate | Path | Reference |
 |---|---|---|
-| `test_gtap7_mcp_parity.py` | **bloques** (desde 2026-09-17) | GAMS/PATH |
-| `test_gtap7_nlp_parity.py` | **bloques** (desde 2026-09-17) | GAMS/IPOPT |
-| `test_gtap7_nl_parity.py` | monolito (vía `nl_compare`) | `.nl` de GAMS |
-| `test_gtap7_gempack_parity.py` | **bloques** | GEMPACK SL4 |
-| `tests/templates/gtap_logvalue/` | bloques | Julia/port |
+| `test_gtap7_mcp_parity.py` | **blocks** (since 2026-09-17) | GAMS/PATH |
+| `test_gtap7_nlp_parity.py` | **blocks** (since 2026-09-17) | GAMS/IPOPT |
+| `test_gtap7_nl_parity.py` | monolith (via `nl_compare`) | GAMS `.nl` |
+| `test_gtap7_gempack_parity.py` | **blocks** | GEMPACK SL4 |
+| `tests/templates/gtap_logvalue/` | blocks | Julia/port |
 
-El camino de bloques es el oráculo contra **GEMPACK**, y sólo él puede serlo: ese gate necesita
-`capFlex` + `base_calibrated=True`, que el monolito no implementa.
+The blocks path is the oracle against **GEMPACK**, and only it can be: that gate needs
+`capFlex` + `base_calibrated=True`, which the monolith does not implement.
 
-## Deuda: cómo se retiraría
+## Debt: how it would be retired
 
-**Primer corte — hecho (2026-09-16).** El escalado de benchmark vive ahora en
-`templates/gtap/gtap_benchmark_scaling.py`: cuatro funciones libres que reciben un
-`ScalingContext` en vez de `self`. El monolito las conserva como delegadores de una línea, así
-que su comportamiento no cambia y sigue siendo el oráculo. El composer ya no construye un
-`GTAPModelEquations` para tomarle prestados métodos privados.
+**First cut — done (2026-09-16).** Benchmark scaling now lives in
+`templates/gtap/gtap_benchmark_scaling.py`: four free functions that take a
+`ScalingContext` instead of `self`. The monolith keeps them as one-line delegators, so
+its behavior does not change and it is still the oracle. The composer no longer builds a
+`GTAPModelEquations` to borrow private methods from it.
 
-Verificación de ese corte: los niveles post-escalado de ambos modelos en `gtap7_3x3` son
-idénticos bit a bit —3142 celdas, 0 diferencias— contra el commit anterior.
+Check of that cut: the post-scaling levels of both models on `gtap7_3x3` are
+bit-for-bit identical —3142 cells, 0 differences— against the previous commit.
 
-**Segundo corte — hecho (2026-09-16).** La reflexión multiperiodo pide su modelo de período
-simple a `GTAPMultiPeriodModel._build_sp()`, que `GTAPBlockMultiPeriodModel` sobrescribe. Antes
-le hacía monkey-patch a `GTAPModelEquations.build_model` dentro de un `try/finally`. Con eso
-`gtap_block_model.py` **dejó de importar el monolito**.
+**Second cut — done (2026-09-16).** The multiperiod reflection asks for its single-period
+model from `GTAPMultiPeriodModel._build_sp()`, which `GTAPBlockMultiPeriodModel` overrides. Before,
+it monkey-patched `GTAPModelEquations.build_model` inside a `try/finally`. With that,
+`gtap_block_model.py` **stopped importing the monolith**.
 
-Verificación: el modelo multiperiodo de bloques —7392 entradas entre niveles de Var y cuerpos de
-Constraint— es idéntico contra el commit anterior.
+Check: the blocks multiperiod model —7392 entries across Var levels and
+Constraint bodies— is identical against the previous commit.
 
-(`_block_sp()` se conserva como el método que sobrescriben las subclases: lo hace
-`GTAPLogLevelsMultiPeriodModel`. Renombrarlo habría hecho que el modelo log-levels cayera
-calladamente al de bloques normal.)
+(`_block_sp()` is kept as the method the subclasses override: `GTAPLogLevelsMultiPeriodModel`
+does. Renaming it would have made the log-levels model fall
+silently back to the normal blocks one.)
 
-**Tercer corte — hecho (2026-09-17).** Los gates `nlp` (14/14) y `mcp` (18/18) construyen
-bloques. El monolito queda marcado como **referencia manual** en su docstring; el único gate
-que lo mide es `nl`.
+**Third cut — done (2026-09-17).** The `nlp` (14/14) and `mcp` (18/18) gates build
+blocks. The monolith is marked as a **manual reference** in its docstring; the only gate
+that measures it is `nl`.
 
-El gate `nl` sigue leyéndolo, y es deliberado: compara el `.nl` **emitido** contra el de GAMS
-—estructura, no solve— y no tiene equivalente en bloques.
+The `nl` gate still reads it, deliberately: it compares the **emitted** `.nl` against GAMS's
+—structure, not solve— and has no equivalent in blocks.
 
-### Por qué se pudo migrar: el gap era del denominador
+### Why the migration was possible: the gap was in the denominator
 
-El obstáculo registrado aquí era que bloques puntuaba por debajo del monolito en `altertax`
-(−0.17pp en 3x4, −0.35pp en 10x7). **Ese gap no medía calidad de modelo.**
+The obstacle recorded here was that blocks scored below the monolith on `altertax`
+(−0.17pp on 3x4, −0.35pp on 10x7). **That gap did not measure model quality.**
 
-Medido comparando celdas concretas en vez de porcentajes: en `gtap7_10x7` fallan **las mismas 110
-celdas en ambos modelos, 0 exclusivas de cualquiera**. El conteo de fallos coincide en los cinco
-casos con gap (110, 107, 6, 5, 1). Lo único que difiere es el denominador:
+Measured by comparing concrete cells instead of percentages: on `gtap7_10x7` **the same 110
+cells fail in both models, 0 exclusive to either**. The failure count matches in all five
+cases with a gap (110, 107, 6, 5, 1). The only thing that differs is the denominator:
 
 ```
 110/15314 = 0.72% → 99.28%   (monolito)
 110/10349 = 1.06% → 98.94%   (bloques)
 ```
 
-Las 4965 celdas de diferencia son 28 variables de choque exógeno (`a*` técnicos, `lambda*` de
-eficiencia, `*txshft`/`etax`/`mtax`/`kappaf`). No se resuelven: valen lo que el cierre les fija, y
-coinciden con GAMS en las 4610 medibles **sin una sola excepción**. Son aciertos automáticos que
-inflaban el denominador del monolito.
+The 4965 cells of difference are 28 exogenous shock variables (technical `a*`, efficiency `lambda*`,
+`*txshft`/`etax`/`mtax`/`kappaf`). They are not solved: they hold whatever the closure fixes them to, and
+they match GAMS in the 4610 measurable ones **without a single exception**. They are automatic hits that
+inflated the monolith's denominator.
 
-Bloques pasa los floors actuales sin recalibrarlos **en las 14 filas del gate NLP**: margen mínimo
-+0.497pp (3x4 altertax ifsub0) frente a +0.669pp del monolito. Ese margen lo dio el arreglo de
-`rsav` (`7eca586`); antes esa fila estaba en 98.24, bajo su floor.
+Blocks passes the current floors without recalibrating them **in the 14 rows of the NLP gate**: minimum margin
++0.497pp (3x4 altertax ifsub0) against +0.669pp for the monolith. That margin came from the
+`rsav` fix (`7eca586`); before it, that row stood at 98.24, below its floor.
 
-**Esa medición NO cubría el gate MCP**, que incluye `gtap7_15x10` — un dataset ausente de la matriz
-NLP. Ahí bloques falla, por la razón de la sección siguiente.
+**That measurement did NOT cover the MCP gate**, which includes `gtap7_15x10` — a dataset absent from the
+NLP matrix. There blocks failed, for the reason in the next section.
 
-## El MCP con bloques: RESUELTO (2026-09-17)
+## MCP with blocks: RESOLVED (2026-09-17)
 
-Durante un tiempo `gtap7_15x10-pure-ifsub1` daba **87.00%** con bloques contra un floor de
-99.0, con `pft[USA,Land]` clavado en su floor `1e-3`, `pf[USA,Land,*]` en 0.00104 y
-`xf[USA,Land,*]` entre 4x y 12x sobre GAMS. Convergía (`code=1`): aterrizaba en OTRO punto.
+For a while `gtap7_15x10-pure-ifsub1` gave **87.00%** with blocks against a floor of
+99.0, with `pft[USA,Land]` stuck at its floor `1e-3`, `pf[USA,Land,*]` at 0.00104 and
+`xf[USA,Land,*]` between 4x and 12x above GAMS. It converged (`code=1`): it landed on ANOTHER point.
 
-**La causa eran 33 filas y 33 columnas MUERTAS.**
+**The cause was 33 DEAD rows and 33 DEAD columns.**
 
-`build_equations_fisher` (en la clase base, compartida por ambos modelos) reemplaza
-`eq_pfact`/`eq_pwfact` por versiones **cross-período** sobre `mq_factr_*`/`mq_factw_*`, y
-borra las intra-período. Pero bloques declara además sus propios agregados auxiliares
-`eq_mfr_*`/`eq_mfw_*` (`closure.py:216-341`), con los que parte la suma ancha de **su**
-`eq_pfact` intra-período. Al borrarse ese `eq_pfact`, esas filas se quedan sin ningún
-consumidor — y nadie las borraba.
+`build_equations_fisher` (in the base class, shared by both models) replaces
+`eq_pfact`/`eq_pwfact` with **cross-period** versions over `mq_factr_*`/`mq_factw_*`, and
+deletes the intra-period ones. But blocks also declares its own auxiliary aggregates
+`eq_mfr_*`/`eq_mfw_*` (`closure.py:216-341`), with which it splits the wide sum of **its**
+intra-period `eq_pfact`. Once that `eq_pfact` was deleted, those rows were left with no
+consumer — and nobody deleted them.
 
-Medido: **0 consumidores** de `mfr_*`/`mfw_*`, frente a `eq_pfact` (60) + `eq_pwfact` (6)
-para `mq_fact*`.
+Measured: **0 consumers** of `mfr_*`/`mfw_*`, against `eq_pfact` (60) + `eq_pwfact` (6)
+for `mq_fact*`.
 
-Y no son un agregado nuevo: son **duplicados exactos** de los `mq_factr_*`/`mq_factw_*` que
-declara la versión cross-período. Misma suma, mismo ancho (151 vars), mismo período. Medido en
+And they are not a new aggregate: they are **exact duplicates** of the `mq_factr_*`/`mq_factw_*` that
+the cross-period version declares. Same sum, same width (151 vars), same period. Measured on
 `gtap7_15x10` shock:
 
 ```
@@ -151,93 +151,93 @@ mq_factr_ss[USA,shock] = 16.014072   residual 0        ← el agregado vivo, bie
 mfr_ss[USA,shock]      = 15.605181   residual 0.409    ← el duplicado, con el seed viejo
 ```
 
-Bloques emitía **66** filas de agregados donde el monolito emite **33**.
+Blocks emitted **66** aggregate rows where the monolith emits **33**.
 
-### Por qué rompe: la ecuación sacrificada
+### Why it breaks: the sacrificed equation
 
-Una definición redundante **no puede mover el equilibrio por sí misma** — define una variable
-que nadie consume. Lo que mueve el equilibrio es lo que el *squaring* hace para compensarla.
+A redundant definition **cannot move the equilibrium by itself** — it defines a variable
+that nobody consumes. What moves the equilibrium is what *squaring* does to compensate for it.
 
-Las 33 filas de más dejan el sistema **sobredeterminado**, y
-`deactivate_zero_unique_var_eqs` lo cuadra **desactivando una ecuación real**. Medido:
+The 33 extra rows leave the system **overdetermined**, and
+`deactivate_zero_unique_var_eqs` squares it **by deactivating a real equation**. Measured:
 
 ```
 [nonlinear-full] DEACTIVATED-ROW: eq_xseq[USA,VegFruit,check]
 [nonlinear-full] DEACTIVATED-ROW: eq_xseq[USA,VegFruit,shock]
 ```
 
-`eq_xseq` es el balance físico de oferta `xs == xds + xet`. El propio `_closure_patches.py:437`
-advierte que soltarlo *"breaks the physical balance and lands a spurious root"* — que es
-exactamente lo que ocurría: `pf`/`pft[USA,*]` al floor `1e-3`.
+`eq_xseq` is the physical supply balance `xs == xds + xet`. `_closure_patches.py:437` itself
+warns that dropping it *"breaks the physical balance and lands a spurious root"* — which is
+exactly what happened: `pf`/`pft[USA,*]` at the floor `1e-3`.
 
-Comprobación que descarta la explicación alternativa: sembrar los agregados de forma
-**consistente** (residual 0 en las 33 filas) y resolver con las filas puestas → `pft` sigue en
-`0.001`. No era el valor del seed; era la ecuación perdida.
+A check that rules out the alternative explanation: seed the aggregates
+**consistently** (residual 0 in the 33 rows) and solve with the rows in place → `pft` stays at
+`0.001`. It was not the seed value; it was the lost equation.
 
-**El fix** (`gtap_model_multiperiod.build_equations_fisher`): borrar también las seis
-familias auxiliares **y sus Vars**, ahí donde el código ya borraba
-`eq_pabs`/`eq_pfact`/`eq_pwfact`. Las Vars se **borran**, no se fijan: son sumas definidas, y
-congelarlas en un valor rancio estanca la shock en `code=0` (es la razón de ser de
-`refresh_fisher_aggregates`).
+**The fix** (`gtap_model_multiperiod.build_equations_fisher`): also delete the six
+auxiliary families **and their Vars**, right where the code already deleted
+`eq_pabs`/`eq_pfact`/`eq_pwfact`. The Vars are **deleted**, not fixed: they are defined sums, and
+freezing them at a stale value stalls the shock at `code=0` (that is the reason
+`refresh_fisher_aggregates` exists).
 
-Resultado: estructura byte-idéntica al monolito —74754 filas, 85857 columnas, `solo-A=0` y
-`solo-B=0` en filas y columnas— y **gate MCP 18/18 con bloques**, NLP 14/14.
+Result: structure byte-identical to the monolith —74754 rows, 85857 columns, `solo-A=0` and
+`solo-B=0` in rows and columns— and **MCP gate 18/18 with blocks**, NLP 14/14.
 
-### Por qué costó tanto encontrarlo
+### Why it took so long to find
 
-Cinco comparaciones dieron "idéntico" y ninguna era el sistema real: el `.nl` ROW+COL diff
-compara **nombres** (y las 99 filas/columnas extra parecían balancearse), el emparejamiento
-se autoapareaba, y el seed y las cotas coincidían. La única señal fue contar **nonzeros del
-Jacobiano**, no filas ni columnas. Descartes previos, todos medidos: forzar el emparejamiento
-de las filas Fisher (87.00% bit-idéntico) y hacer inmutables los `forced_pairs`
-(87.00% → 53.76%, activamente dañino — que Hopcroft-Karp pueda reemparejar es *load-bearing*).
+Five comparisons said "identical" and none of them was the real system: the `.nl` ROW+COL diff
+compares **names** (and the 99 extra rows/columns seemed to balance out), the pairing
+paired with itself, and the seed and the bounds matched. The only signal was counting **nonzeros of the
+Jacobian**, not rows or columns. Earlier dead ends, all measured: forcing the pairing
+of the Fisher rows (87.00% bit-identical) and making the `forced_pairs` immutable
+(87.00% → 53.76%, actively harmful — that Hopcroft-Karp can re-pair is *load-bearing*).
 
-**Trampa de probe.** Un probe single-period da «33/33 filas Fisher mal emparejadas, todas
-robando `xf[*,Land,*]`», que encaja perfecto con el síntoma (`pf[USA,Land]`) — y es
-**artefacto**: truncar `fv[:n]` para cuadrar corta justo las columnas Fisher del final, y el
-gate no usa single-period. Enumerar el MP crudo tampoco sirve: 74853 filas × 85956 vars son
-los tres períodos sin cruzar (74853 = 3×24951), no el sistema que factoriza el solver
-(24851). La señal de que estás mirando el sistema equivocado es que el número de filas sea
-múltiplo exacto del número de períodos.
+**Probe trap.** A single-period probe gives "33/33 Fisher rows mis-paired, all
+stealing `xf[*,Land,*]`", which fits the symptom perfectly (`pf[USA,Land]`) — and it is an
+**artifact**: truncating `fv[:n]` to square it cuts exactly the Fisher columns at the end, and the
+gate does not use single-period. Enumerating the raw MP does not work either: 74853 rows × 85956 vars are
+the three periods uncrossed (74853 = 3×24951), not the system the solver factorizes
+(24851). The sign that you are looking at the wrong system is that the row count is an
+exact multiple of the number of periods.
 
-### Diez hipótesis descartadas (para no repetirlas)
+### Ten hypotheses ruled out (so as not to repeat them)
 
-Seeds/floors distintos, filas faltantes, `mqfactr_bb` distinto, `pfa` mal fijado, expresiones de
-`eq_xweq` distintas, `sqrt` anidado, cuenca/arranque (sembrar bloques en la solución del monolito:
-se va igual), cotas de los agregados (`Reals`→`NonNegativeReals`: bit-idéntico), fijar los agregados
-(bit-idéntico), y las 33 filas como causa directa (desactivarlas: 3738 igual).
+Different seeds/floors, missing rows, a different `mqfactr_bb`, `pfa` wrongly fixed, different
+`eq_xweq` expressions, nested `sqrt`, basin/start (seeding blocks at the monolith's solution:
+it drifts away the same), the aggregates' bounds (`Reals`→`NonNegativeReals`: bit-identical), fixing the aggregates
+(bit-identical), and the 33 rows as the direct cause (deactivating them: 3738 the same).
 
-**Trampa de método que costó la sesión:** medir contando `component_data_objects(Constraint,
-active=True)` da los TRES períodos sin cuadrar, no el sistema que el solver factoriza. La señal que
-lo delata está en `project_btf_probe_y_condensacion_cuadratura_2026_09_02` (dev-tools): *"contar
-filas y comprobar si es múltiplo del número de períodos"*. Las mías eran 74754 y 74853 — múltiplos
-exactos de 3. El sistema cuadrado real se lee del log de `structural_matching`: 24818 vs 24851.
+**The method trap that cost the session:** measuring by counting `component_data_objects(Constraint,
+active=True)` gives the THREE periods unsquared, not the system the solver factorizes. The sign that
+gives it away is in `project_btf_probe_y_condensacion_cuadratura_2026_09_02` (dev-tools): *"count
+rows and check whether it is a multiple of the number of periods"*. Mine were 74754 and 74853 — exact
+multiples of 3. The real square system is read from the `structural_matching` log: 24818 vs 24851.
 
-**Trampa de método, por segunda vez en este repo:** un gap entre dos porcentajes puede ser del
-numerador o del denominador, y el porcentaje solo no lo distingue. Ya había pasado con `qga`
-(ver memoria `project_gtap_qga_floor_levels_vs_linearization`). Comparar las celdas que fallan
-debe ser el primer paso, no el cuarto.
+**A method trap, for the second time in this repo:** a gap between two percentages can be in the
+numerator or in the denominator, and the percentage alone does not tell them apart. It had already happened with `qga`
+(see memory `project_gtap_qga_floor_levels_vs_linearization`). Comparing the failing cells
+must be the first step, not the fourth.
 
-### Lo que se pierde, y por qué se aceptó
+### What is lost, and why it was accepted
 
-Con los gates en bloques, el monolito deja de medirse contra nada. Esa redundancia —dos
-implementaciones contra dos oráculos— fue la que hizo visible el bug del snapshot Fisher. La
-alternativa evaluada era correr ambos modelos en los gates, al doble de tiempo. Se eligió bloques
-solo: el monolito queda accesible como referencia, pero no debe generar ruido ni usarse como si
-fuera código vivo.
+With the gates on blocks, the monolith is no longer measured against anything. That redundancy —two
+implementations against two oracles— is what made the Fisher snapshot bug visible. The
+alternative evaluated was running both models in the gates, at twice the time. Blocks
+alone was chosen: the monolith stays available as a reference, but it must not generate noise or be used as if
+it were live code.
 
-Ver también: `docs/roadmap.md` (registro de deuda técnica) y
-`docs/archive/findings/repo_cleanup_spec_2026-09-16.md` (la medición que originó este documento).
+See also: `docs/roadmap.md` (technical debt record) and
+`docs/archive/findings/repo_cleanup_spec_2026-09-16.md` (the measurement that gave rise to this document).
 
-## Corrección (2026-09-21): el fix Fisher NO bajó el match de altertax
+## Correction (2026-09-21): the Fisher fix did NOT lower the altertax match
 
-El mensaje de `2602db2` y el PR #67 afirman que `faa911b` baja `gtap7_10x7 altertax
-shock` de **99.3% a 98.97%**, y argumentan por qué conservarlo igual (fidelidad sobre
-match%, GEMPACK byte-idéntica). **La caída no existe: no había nada que justificar.**
+The message of `2602db2` and PR #67 claim that `faa911b` lowers `gtap7_10x7 altertax
+shock` from **99.3% to 98.97%**, and argue why to keep it anyway (fidelity over
+match%, GEMPACK byte-identical). **The drop does not exist: there was nothing to justify.**
 
-Medido con el mismo probe en dos árboles que solo difieren en `faa911b` — al
-pre-Fisher `cbf060f` se le backporteó el fix del lector GDX (`8a501df`), para que
-Fisher fuera la única variable:
+Measured with the same probe on two trees that differ only in `faa911b` — the
+pre-Fisher `cbf060f` got the GDX reader fix (`8a501df`) backported, so that
+Fisher was the only variable:
 
 ```
 post-Fisher (main 2c53711)   10349 celdas, 107 fallos, 98.966%
@@ -247,25 +247,25 @@ celdas idénticas 107/107 · solo-post 0 · solo-pre 0
 peor dif_rel del valor Python entre árboles: 6.1e-10
 ```
 
-El `99.3%` contra el que se comparó **no era una medición viva**: es el campo
-`gap_note` de `scripts/gtap/coverage_matrix.py`, texto escrito en `8dc561b`
-(2026-06-30) y medido contra el **monolito**. Y `faa911b` es justo el commit donde el
-gate MCP pasa a construir `GTAPBlockMultiPeriodModel` (visible en su diff del test).
+The `99.3%` it was compared against **was not a live measurement**: it is the
+`gap_note` field of `scripts/gtap/coverage_matrix.py`, text written in `8dc561b`
+(2026-06-30) and measured against the **monolith**. And `faa911b` is exactly the commit where the
+MCP gate starts building `GTAPBlockMultiPeriodModel` (visible in its test diff).
 
-O sea: **se restó una nota de junio del monolito contra una medición de septiembre de
-bloques**. Es el mismo error de denominador que la sección "Por qué se pudo migrar" ya
-había documentado para el gate NLP (110 celdas, 15314 vs 10349) — sólo que allí se
-midió y aquí no. El floor real de esa fila es **98.0**, y 98.966 lo pasa con margen.
+In other words: **a June note about the monolith was subtracted from a September measurement of
+blocks**. It is the same denominator mistake that the section "Why the migration was possible" had already
+documented for the NLP gate (110 cells, 15314 vs 10349) — except that there it was
+measured and here it was not. The real floor of that row is **98.0**, and 98.966 clears it with margin.
 
-### El "sesgo direccional 92.5%" es artefacto de conteo
+### The "92.5% directional bias" is a counting artifact
 
-De las 107 celdas, 99 (92.5%) quedan por encima de GAMS, lo que se leyó como *un
-término que falta* (el residual `qxs` documentado es simétrico, ~49%). **No son 107
-errores: son 10**, uno por par `(región importadora, sector)`, repetido una vez por
-cada agente comprador y cada origen bilateral.
+Of the 107 cells, 99 (92.5%) sit above GAMS, which was read as *a
+missing term* (the documented `qxs` residual is symmetric, ~49%). **They are not 107
+errors: they are 10**, one per `(importing region, sector)` pair, repeated once per
+buying agent and per bilateral origin.
 
-La desviación estándar dentro de cada par es **0.03–0.23** contra medias de +1.1 a
-+6.4: es un número repetido, no N errores independientes.
+The standard deviation within each pair is **0.03–0.23** against means of +1.1 to
++6.4: it is one number repeated, not N independent errors.
 
 ```
 JPN,c_Rice   agentes(xm) +5.99 +6.22 +6.51 +6.55 +6.57
@@ -273,24 +273,24 @@ JPN,c_Rice   agentes(xm) +5.99 +6.22 +6.51 +6.55 +6.57
              bilateral por DESTINO +6.21
 ```
 
-`xw` agrupado por **destino** queda apretado; por **origen**, disperso → el error vive
-del lado del **importador**. Y `pa` (precio) se mueve al revés que la cantidad, que es
-lo que se espera de un desplazamiento de demanda, no de ruido entre motores.
+`xw` grouped by **destination** is tight; by **origin**, scattered → the error lives
+on the **importer** side. And `pa` (price) moves opposite to the quantity, which is
+what a demand shift produces, not noise between engines.
 
-Los 10 pares: `JPN{Rice,Livestock,FoodProc,Crops}`, `IND{Crops,FoodProc}`,
+The 10 pairs: `JPN{Rice,Livestock,FoodProc,Crops}`, `IND{Crops,FoodProc}`,
 `CHN{Livestock,FoodProc}`, `SSA{Textiles}`, `USA{Textiles}`.
 
-**Lo que queda realmente abierto** es un residual de importaciones agrícolas ~1–6%
-sobre GAMS en esos 10 pares, **preexistente** a todo este trabajo, de la familia del
-residual `qxs` de 2026-08-21 — donde el culpable término-por-término resultó ser
-`pim`, un índice de precio de importación. Ese es el hilo, y es viejo.
+**What is really still open** is a residual of agricultural imports ~1–6%
+above GAMS in those 10 pairs, **predating** all this work, of the same family as the
+`qxs` residual of 2026-08-21 — where the term-by-term culprit turned out to be
+`pim`, an import price index. That is the thread, and it is old.
 
-### Lección
+### Lesson
 
-Un número en una nota **no es una medición**. Antes de llamar regresión a una caída,
-verificar que el número viejo y el nuevo midan **el mismo objeto**: aquí cambiaron el
-motor (monolito → bloques) y el denominador, con tres meses de diferencia.
+A number in a note **is not a measurement**. Before calling a drop a regression,
+check that the old number and the new one measure **the same object**: here the
+engine (monolith → blocks) and the denominator changed, three months apart.
 
-Y antes de explicar un sesgo direccional, agrupar por la unidad **estructural** (el par
-`r,i`) en vez de contar celdas: la multiplicidad de agentes fabrica sesgos que no
-existen.
+And before explaining a directional bias, group by the **structural** unit (the pair
+`r,i`) instead of counting cells: the multiplicity of agents fabricates biases that do not
+exist.

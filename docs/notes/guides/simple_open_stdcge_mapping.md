@@ -1,66 +1,66 @@
-# simpleopen stdcge mapping
+# SimpleOpen stdcge mapping
 
-Esta guia fija como usamos `stdcge.gms` como ancla oficial para `SimpleOpen`.
+This guide pins how we use `stdcge.gms` as the official anchor for `SimpleOpen`.
 
-Referencia oficial:
+Official reference:
 
 - `stdcge.gms : A Standard CGE Model`
 - https://www.gams.com/latest/gamslib_ml/libhtml/gamslib_stdcge.html
 
-## decision de alcance
+## Scope decision
 
-No estamos copiando `stdcge` completo.
+We are not copying the whole of `stdcge`.
 
-Estamos usando una reduccion minima y explicita de `stdcge` para el contrato:
+We are using a minimal, explicit reduction of `stdcge` for the contract:
 
 - `simple_open_v1`
 
-Eso significa:
+That means:
 
-- `stdcge` es el ancla conceptual y algebraica
-- `simple_open_v1` es una reduccion pequena y controlada
-- el `.gms` nuevo es un `stdcge-reduced benchmark`, no un clon del modelo completo
+- `stdcge` is the conceptual and algebraic anchor
+- `simple_open_v1` is a small, controlled reduction
+- the new `.gms` is a `stdcge-reduced benchmark`, not a clone of the whole model
 
-## que partes de stdcge si usamos
+## Which parts of stdcge we do use
 
-### 1. bloque de transformacion
+### 1. Transformation block
 
-En `stdcge`:
+In `stdcge`:
 
 - `eqpzd`
 - `eqE`
 - `eqDs`
 
-En `SimpleOpen` usamos la idea de transformacion CET entre:
+In `SimpleOpen` we use the idea of a CET transformation between:
 
-- bien domestico `D`
-- exportacion `E`
-- tipo de cambio `ER/PFX`
+- the domestic good `D`
+- exports `E`
+- the exchange rate `ER/PFX`
 
-Eso se reduce a:
+That reduces to:
 
 - `EQ_CET`
 
-## 2. bloque de precios externos
+## 2. External prices block
 
-En `stdcge`:
+In `stdcge`:
 
 - `eqpe`
 - `eqpm`
 - `epsilon`
 
-En `SimpleOpen` no modelamos todo el bloque comercial.
+In `SimpleOpen` we do not model the whole trade block.
 
-Tomamos solo la idea de:
+We take only the idea of:
 
 - `ER`
 - `PFX`
 
-como precios exogenos del benchmark.
+as exogenous prices of the benchmark.
 
-## 3. bloque domestico / absorcion
+## 3. Domestic / absorption block
 
-En `stdcge`:
+In `stdcge`:
 
 - `Q`
 - `M`
@@ -70,95 +70,95 @@ En `stdcge`:
 - `eqD`
 - `eqpqd`
 
-En `SimpleOpen` no mantenemos el bloque Armington completo.
+In `SimpleOpen` we do not keep the whole Armington block.
 
-Solo retenemos:
+We keep only:
 
 - `D`
 
-como input exogeno del benchmark reducido.
+as an exogenous input of the reduced benchmark.
 
-## 4. bloque de valor agregado
+## 4. Value added block
 
-En `stdcge`:
+In `stdcge`:
 
 - `Y`
 - `F`
 - `py`
 - `pf`
 
-En `SimpleOpen` se reduce a un agregado minimo:
+In `SimpleOpen` it reduces to a minimal aggregate:
 
 - `EQ_VA`
 
-La idea es conservar un agregado CES pequeno entre:
+The idea is to keep a small CES aggregate between:
 
 - `ER`
 - `PFX`
 
-Eso no es una copia literal del bloque productivo de `stdcge`, pero si sigue su espiritu de bloque agregado con parametros calibrados.
+That is not a literal copy of the production block of `stdcge`, but it does follow its spirit of an aggregate block with calibrated parameters.
 
-## 5. identidad intermedia reducida
+## 5. Reduced intermediate identity
 
-`EQ_INT` no viene de una sola ecuacion literal de `stdcge`.
+`EQ_INT` does not come from a single literal equation of `stdcge`.
 
-Es una identidad reducida que captura una pequena capa de consistencia interna entre:
+It is a reduced identity that captures a small layer of internal consistency between:
 
 - `INT`
 - `X`
 - `CAB`
 - `FSAV`
 
-Sirve para cerrar el benchmark minimo de `SimpleOpen` sin introducir todo el aparato de absorcion/inversion/gobierno de `stdcge`.
+It closes the minimal `SimpleOpen` benchmark without bringing in the whole absorption/investment/government machinery of `stdcge`.
 
-## que partes de stdcge no usamos
+## Which parts of stdcge we do not use
 
-Por ahora quedan fuera:
+For now these stay out:
 
-- utilidad y demanda de hogares
-- consumo de gobierno
-- inversion
-- impuestos directos y de produccion
-- importaciones `M`
-- bien compuesto Armington `Q`
-- mercados factoriales completos
-- balance macro completo
+- household utility and demand
+- government consumption
+- investment
+- direct and production taxes
+- imports `M`
+- the Armington composite good `Q`
+- complete factor markets
+- the complete macro balance
 
-Eso es intencional. El objetivo actual de la epica no es reproducir `stdcge` entero, sino dar a `SimpleOpen` una referencia GAMS minima y limpia.
+That is on purpose. The current goal of the epic is not to reproduce the whole of `stdcge`, but to give `SimpleOpen` a minimal, clean GAMS reference.
 
-## resultado de esta decision
+## Outcome of this decision
 
-El primer artefacto GAMS que sale de esta ancla es:
+The first GAMS artifact that comes out of this anchor is:
 
 - [simple_open_v1_benchmark.gms](../../../src/equilibria/templates/reference/simple_open/scripts/simple_open_v1_benchmark.gms)
 
-Ese script:
+That script:
 
-- usa `stdcge` como referencia conceptual
-- respeta el contrato canonico de `SimpleOpen`
-- resuelve solo el benchmark reducido
-- exporta niveles y residuales a GDX
+- uses `stdcge` as the conceptual reference
+- respects the canonical `SimpleOpen` contract
+- solves only the reduced benchmark
+- exports levels and residuals to GDX
 
-## por que no copiamos stdcge literal
+## Why we do not copy stdcge literally
 
-Porque hoy `SimpleOpen` todavia no tiene:
+Because today `SimpleOpen` does not yet have:
 
-- el mismo numero de bloques
-- el mismo closure macro
-- el mismo conjunto de variables
+- the same number of blocks
+- the same macro closure
+- the same set of variables
 
-Si copiaramos `stdcge` completo, dejaria de ser `SimpleOpen` y se volveria otro modelo.
+If we copied the whole of `stdcge`, it would stop being `SimpleOpen` and become another model.
 
-La decision correcta aqui es:
+The right decision here is:
 
-- ancla oficial: `stdcge`
-- implementacion propia: `simple_open_v1`
-- mapeo explicito entre ambos
+- official anchor: `stdcge`
+- own implementation: `simple_open_v1`
+- an explicit mapping between the two
 
-## siguiente corte
+## Next cut
 
-Con este mapeo ya fijado, el siguiente paso es:
+With this mapping pinned, the next step is:
 
-1. correr el `.gms` benchmark
-2. leer el GDX desde Python
-3. montar el primer comparador Python vs GAMS para `SimpleOpen`
+1. run the benchmark `.gms`
+2. read the GDX from Python
+3. set up the first Python vs GAMS comparator for `SimpleOpen`

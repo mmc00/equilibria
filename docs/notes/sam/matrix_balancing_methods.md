@@ -1,25 +1,25 @@
-# Métodos de Balanceo de Matrices para MIP/SAM
+# Matrix balancing methods for MIP/SAM
 
-## Introducción
+## Introduction
 
-Los métodos de balanceo ajustan matrices económicas (MIP, SAM, tablas I-O) para que cumplan restricciones de consistencia contable, minimizando la distancia a la matriz original.
+Balancing methods adjust economic matrices (MIP, SAM, I-O tables) so that they meet accounting-consistency constraints, while minimizing the distance to the original matrix.
 
-**Problema típico**: Dada matriz X₀ y targets (u, v), encontrar X tal que:
-- `X.sum(axis=1) = u` (sumas por fila)
-- `X.sum(axis=0) = v` (sumas por columna)
-- `X` es "cercana" a `X₀` según alguna métrica
+**Typical problem**: given a matrix X₀ and targets (u, v), find X such that:
+- `X.sum(axis=1) = u` (row sums)
+- `X.sum(axis=0) = v` (column sums)
+- `X` is "close" to `X₀` under some metric
 
 ---
 
 ## 1. RAS (Biproportional Scaling)
 
-### Descripción
+### Description
 
-El método más clásico y simple. Ajusta filas y columnas alternativamente usando factores multiplicativos.
+The most classic and simplest method. It adjusts rows and columns in turn with multiplicative factors.
 
-**Nombre**: RAS viene de R×A×S donde R y S son matrices diagonales de factores.
+**Name**: RAS comes from R×A×S, where R and S are diagonal matrices of factors.
 
-### Algoritmo
+### Algorithm
 
 ```
 Inicializar: r = ones(n), s = ones(m)
@@ -31,19 +31,19 @@ Repetir hasta convergencia:
   X = diag(r) @ X₀ @ diag(s)
 ```
 
-### Ventajas
-- ✓ Simple de implementar
-- ✓ Converge rápido (típicamente <100 iters)
-- ✓ Preserva ceros (si X₀[i,j]=0 → X[i,j]=0)
-- ✓ Bajo costo computacional
+### Advantages
+- ✓ Simple to implement
+- ✓ Converges fast (typically <100 iters)
+- ✓ Preserves zeros (if X₀[i,j]=0 → X[i,j]=0)
+- ✓ Low computational cost
 
-### Desventajas
-- ✗ Solo funciona con matrices no-negativas
-- ✗ Requiere targets consistentes (sum(u) = sum(v))
-- ✗ No maneja valores negativos
-- ✗ Puede fallar con filas/columnas de ceros
+### Disadvantages
+- ✗ Only works with non-negative matrices
+- ✗ Needs consistent targets (sum(u) = sum(v))
+- ✗ Does not handle negative values
+- ✗ Can fail with rows/columns of zeros
 
-### Implementación
+### Implementation
 
 ```python
 def ras(X0, u, v, max_iter=200, tol=1e-9):
@@ -84,23 +84,23 @@ def ras(X0, u, v, max_iter=200, tol=1e-9):
     return X, max_iter, False
 ```
 
-### Cuándo usar
-- Matrices 100% no-negativas
-- Targets exactos conocidos
-- Necesitas velocidad
-- Tablas I-O simples
+### When to use
+- 100% non-negative matrices
+- Exact targets known
+- You need speed
+- Simple I-O tables
 
 ---
 
 ## 2. GRAS (Generalized RAS)
 
-### Descripción
+### Description
 
-Extensión de RAS que maneja **valores negativos** separando la matriz en componentes positivos y negativos.
+An extension of RAS that handles **negative values** by splitting the matrix into positive and negative components.
 
-**Innovación clave**: `X = X_pos - X_neg` donde ambas son ≥0.
+**Key innovation**: `X = X_pos - X_neg`, where both are ≥0.
 
-### Algoritmo
+### Algorithm
 
 ```
 X₀_pos = max(X₀, 0)
@@ -120,30 +120,30 @@ Repetir:
   X = r[:,None] * X₀_pos * s - r[:,None] * X₀_neg * s
 ```
 
-### Mejoras con Damping
+### Improvements with damping
 
-Para prevenir oscilación/overflow:
+To prevent oscillation/overflow:
 
 ```python
 r[i] = damping * r_old[i] + (1 - damping) * r_new[i]
 s[j] = damping * s_old[j] + (1 - damping) * s_new[j]
 ```
 
-Típico: `damping = 0.3-0.5`
+Typical: `damping = 0.3-0.5`
 
-### Ventajas
-- ✓ Maneja valores negativos (ej: Variación de Stock)
-- ✓ Preserva signos
-- ✓ Más robusto que RAS
-- ✓ Preserva ceros
+### Advantages
+- ✓ Handles negative values (e.g. change in stocks)
+- ✓ Preserves signs
+- ✓ More robust than RAS
+- ✓ Preserves zeros
 
-### Desventajas
-- ✗ Convergencia más lenta que RAS
-- ✗ Puede requerir damping para estabilidad
-- ✗ Más complejo de implementar
-- ✗ Puede no converger si targets inconsistentes
+### Disadvantages
+- ✗ Slower convergence than RAS
+- ✗ May need damping for stability
+- ✗ More complex to implement
+- ✗ May not converge if targets are inconsistent
 
-### Implementación
+### Implementation
 
 ```python
 def gras_with_damping(X0, u, v, max_iter=1000, tol=1e-4, damping=0.5):
@@ -188,21 +188,21 @@ def gras_with_damping(X0, u, v, max_iter=1000, tol=1e-4, damping=0.5):
     return X, max_iter, False
 ```
 
-### Cuándo usar
-- Matrices con valores negativos (SAM, MIP con Var.Stock)
-- Necesitas preservar estructura (ceros, signos)
-- Puedes tolerar convergencia más lenta
-- Targets razonablemente consistentes
+### When to use
+- Matrices with negative values (SAM, MIP with change in stocks)
+- You need to preserve structure (zeros, signs)
+- You can tolerate slower convergence
+- Reasonably consistent targets
 
 ---
 
-## 3. Cross-Entropy (Minimización de Información)
+## 3. Cross-Entropy (information minimization)
 
-### Descripción
+### Description
 
-Método basado en **optimización** que minimiza la divergencia de información entre X y X₀, sujeto a restricciones lineales.
+An **optimization**-based method that minimizes the information divergence between X and X₀, subject to linear constraints.
 
-**Función objetivo** (Kullback-Leibler divergence):
+**Objective function** (Kullback-Leibler divergence):
 ```
 min Σᵢⱼ X[i,j] * log(X[i,j] / X₀[i,j]) - X[i,j] + X₀[i,j]
 
@@ -211,20 +211,20 @@ s.t. X.sum(axis=1) = u
      X[i,j] ≥ 0
 ```
 
-### Ventajas
-- ✓ Solución directa (no iterativo sobre matriz)
-- ✓ Garantiza convergencia
-- ✓ Puede agregar restricciones adicionales fácilmente
-- ✓ Fundamento teórico sólido (teoría de información)
-- ✓ Equivalente a RAS en límite (si sin restricciones extras)
+### Advantages
+- ✓ Direct solution (not iterative over the matrix)
+- ✓ Guarantees convergence
+- ✓ Can add further constraints easily
+- ✓ Solid theoretical basis (information theory)
+- ✓ Equivalent to RAS in the limit (without extra constraints)
 
-### Desventajas
-- ✗ Requiere solver de optimización (scipy, cvxpy)
-- ✗ Más lento que RAS para matrices grandes
-- ✗ No preserva ceros (X[i,j]=0 → X[i,j]≈0 pequeño)
-- ✗ Solo para valores no-negativos (en forma estándar)
+### Disadvantages
+- ✗ Needs an optimization solver (scipy, cvxpy)
+- ✗ Slower than RAS for large matrices
+- ✗ Does not preserve zeros (X[i,j]=0 → X[i,j]≈0, small)
+- ✗ Only for non-negative values (in standard form)
 
-### Implementación
+### Implementation
 
 ```python
 from scipy.optimize import minimize
@@ -285,20 +285,20 @@ def cross_entropy(X0, u, v):
         return result.x.reshape((n, m)), False
 ```
 
-### Cuándo usar
-- Necesitas garantía de convergencia
-- Targets inconsistentes (optimizer los ajusta)
-- Restricciones adicionales (ej: X[i,j] ≤ bound)
-- Tamaño moderado (n×m < 10,000)
-- Fundamento teórico importa
+### When to use
+- You need guaranteed convergence
+- Inconsistent targets (the optimizer adjusts them)
+- Further constraints (e.g. X[i,j] ≤ bound)
+- Moderate size (n×m < 10,000)
+- The theoretical basis matters
 
 ---
 
-## 4. Métodos de Ajuste Directo
+## 4. Direct adjustment methods
 
-### 4.1 Ajuste Proporcional Simple
+### 4.1 Simple proportional adjustment
 
-Escala toda la matriz proporcionalmente.
+Scales the whole matrix proportionally.
 
 ```python
 def proportional_scaling(X0, u, v):
@@ -314,11 +314,11 @@ def proportional_scaling(X0, u, v):
     return X
 ```
 
-**Uso**: Primer paso antes de balanceo fino.
+**Use**: a first step before fine balancing.
 
-### 4.2 Ajuste por Fila/Columna
+### 4.2 Row/column adjustment
 
-Ajusta solo filas o solo columnas (no ambas).
+Adjusts only rows or only columns (not both).
 
 ```python
 def row_scaling(X0, u):
@@ -334,11 +334,11 @@ def column_scaling(X0, v):
     return X0 * scales
 ```
 
-**Uso**: Cuando solo una dimensión necesita ajuste.
+**Use**: when only one dimension needs adjusting.
 
-### 4.3 Ajuste de Bloques
+### 4.3 Block adjustment
 
-Para MIPs, ajustar bloques (Z, F, IMP_Z, IMP_F) independientemente.
+For MIPs, adjust the blocks (Z, F, IMP_Z, IMP_F) independently.
 
 ```python
 def balance_mip_blocks(Z, F, IMP_Z, IMP_F, VA, PIB_target):
@@ -372,13 +372,13 @@ def balance_mip_blocks(Z, F, IMP_Z, IMP_F, VA, PIB_target):
     return Z_balanced, F_adjusted, IMP_Z, IMP_F
 ```
 
-**Uso**: MIPs con estructura de bloques bien definida.
+**Use**: MIPs with a well-defined block structure.
 
 ---
 
-## 5. Stone's Method (RAS Geométrico)
+## 5. Stone's method (geometric RAS)
 
-Variante de RAS usando **media geométrica** en vez de aritmética para targets.
+A variant of RAS that uses the **geometric mean** instead of the arithmetic one for the targets.
 
 ```python
 def ras_geometric(X0, u, v, max_iter=200, tol=1e-9):
@@ -410,15 +410,15 @@ def ras_geometric(X0, u, v, max_iter=200, tol=1e-9):
     return X, max_iter, False
 ```
 
-**Ventaja**: Convergencia más suave cuando targets muy inconsistentes.
+**Advantage**: smoother convergence when targets are very inconsistent.
 
 ---
 
-## 6. Métodos Híbridos
+## 6. Hybrid methods
 
-### Hybrid RAS + Ajuste
+### Hybrid RAS + adjustment
 
-Combina RAS para Z con ajuste directo para F.
+Combines RAS for Z with direct adjustment for F.
 
 ```python
 def hybrid_balance(Z, F, VA_target, max_iter_outer=20):
@@ -457,19 +457,19 @@ def hybrid_balance(Z, F, VA_target, max_iter_outer=20):
     return Z, F
 ```
 
-**Ventaja**: Combina velocidad de ajuste directo con precisión de RAS.
+**Advantage**: combines the speed of direct adjustment with the precision of RAS.
 
 ---
 
 ## 7. MRAS (Modified RAS)
 
-### Descripción
+### Description
 
-RAS modificado que permite **pesos diferenciados** por celda, dando mayor confianza a ciertas estimaciones.
+A modified RAS that allows **differentiated weights** per cell, giving more confidence to certain estimates.
 
-**Idea clave**: No todas las celdas de X₀ tienen la misma calidad/confianza.
+**Key idea**: not every cell of X₀ has the same quality/confidence.
 
-### Algoritmo
+### Algorithm
 
 ```
 Pesos W[i,j] ∈ [0, 1]:
@@ -485,7 +485,7 @@ Donde:
   - 0<W<1 es intermedio
 ```
 
-### Implementación
+### Implementation
 
 ```python
 def mras(X0, u, v, W=None, max_iter=200, tol=1e-9):
@@ -535,17 +535,17 @@ def mras(X0, u, v, W=None, max_iter=200, tol=1e-9):
     return X, max_iter, False
 ```
 
-### Ventajas
-- ✓ Preserva celdas confiables
-- ✓ Permite incorporar conocimiento experto
-- ✓ Útil cuando hay celdas medidas vs estimadas
+### Advantages
+- ✓ Preserves reliable cells
+- ✓ Lets you bring in expert knowledge
+- ✓ Useful when there are measured vs estimated cells
 
-### Desventajas
-- ✗ Requiere definir pesos (subjetivo)
-- ✗ Más complejo que RAS estándar
-- ✗ Puede no converger si pesos mal elegidos
+### Disadvantages
+- ✗ Needs weights to be defined (subjective)
+- ✗ More complex than standard RAS
+- ✗ May not converge if the weights are badly chosen
 
-### Ejemplo de Uso
+### Usage example
 
 ```python
 # Caso: Datos de encuestas (confiables) vs estimaciones (no confiables)
@@ -564,22 +564,22 @@ for i, j in estimadas_indices:
 X_balanced = mras(X0, u, v, W)
 ```
 
-### Cuándo usar
-- Datos mixtos (encuestas + estimaciones)
-- Celdas benchmark conocidas
-- Actualización parcial de matrices
+### When to use
+- Mixed data (surveys + estimates)
+- Known benchmark cells
+- Partial updating of matrices
 
 ---
 
 ## 8. KRAS (Kernel RAS)
 
-### Descripción
+### Description
 
-RAS con **suavizado espacial** usando funciones kernel. Útil para tablas I-O **regionales** donde regiones vecinas tienen tecnologías similares.
+RAS with **spatial smoothing** using kernel functions. Useful for **regional** I-O tables, where neighboring regions have similar technologies.
 
-**Innovación**: Incorpora spillovers espaciales en el ajuste.
+**Innovation**: brings spatial spillovers into the adjustment.
 
-### Algoritmo
+### Algorithm
 
 ```
 Definir kernel espacial K[r, s]:
@@ -597,7 +597,7 @@ KRAS:
        s[j] = Σᵢ K[i,j] * s'[i] / Σᵢ K[i,j]
 ```
 
-### Implementación
+### Implementation
 
 ```python
 def kras(X0, u, v, distance_matrix, sigma=1.0, max_iter=200, tol=1e-9):
@@ -647,7 +647,7 @@ def kras(X0, u, v, distance_matrix, sigma=1.0, max_iter=200, tol=1e-9):
     return X, max_iter, False
 ```
 
-### Construcción de Matriz de Distancias
+### Building the distance matrix
 
 ```python
 def create_distance_matrix(regions_coords):
@@ -678,24 +678,24 @@ D = create_distance_matrix(coords)
 X_balanced = kras(X0, u, v, D, sigma=500)  # sigma in km
 ```
 
-### Ventajas
-- ✓ Suaviza estimaciones entre regiones vecinas
-- ✓ Reduce ruido en datos regionales
-- ✓ Incorpora estructura espacial
+### Advantages
+- ✓ Smooths estimates across neighboring regions
+- ✓ Reduces noise in regional data
+- ✓ Brings in spatial structure
 
-### Desventajas
-- ✗ Requiere información espacial (coordenadas)
-- ✗ Más lento que RAS estándar
-- ✗ Parámetro σ debe calibrarse
-- ✗ Solo útil para datos con estructura espacial
+### Disadvantages
+- ✗ Needs spatial information (coordinates)
+- ✗ Slower than standard RAS
+- ✗ The σ parameter must be calibrated
+- ✗ Only useful for data with spatial structure
 
-### Cuándo usar
-- Tablas I-O multi-regionales
-- Datos con correlación espacial conocida
-- Actualización de matrices regionales
-- Spillovers tecnológicos entre regiones
+### When to use
+- Multi-regional I-O tables
+- Data with known spatial correlation
+- Updating regional matrices
+- Technological spillovers between regions
 
-### Referencias
+### References
 
 **KRAS**:
 - Lenzen, M., Moran, D., Kanemoto, K. & Geschke, A. (2013). "Building Eora: A global multi-region input-output database at high country and sector resolution." Economic Systems Research, 25(1), 20-49.
@@ -705,24 +705,24 @@ X_balanced = kras(X0, u, v, D, sigma=500)  # sigma in km
 
 ---
 
-## 9. Comparación de Métodos
+## 9. Comparison of methods
 
-| Método | Velocidad | Valores Neg. | Converge | Ceros | Uso Típico |
+| Method | Speed | Neg. values | Converges | Zeros | Typical use |
 |--------|-----------|--------------|----------|-------|------------|
-| **RAS** | ⭐⭐⭐⭐⭐ | ❌ | ✓ | Preserva | I-O simples |
-| **GRAS** | ⭐⭐⭐ | ✓ | ⚠️ | Preserva | MIP/SAM complejas |
-| **Cross-Entropy** | ⭐⭐ | ❌ | ✓✓ | Aprox. | Targets inconsist. |
-| **Ajuste Directo** | ⭐⭐⭐⭐⭐ | ✓ | - | No preserva | Pre-procesamiento |
-| **RAS Geométrico** | ⭐⭐⭐⭐ | ❌ | ✓ | Preserva | Targets inconsist. |
-| **Hybrid** | ⭐⭐⭐⭐ | ✓ | ✓ | Mixto | MIP por bloques |
-| **MRAS** | ⭐⭐⭐⭐ | ❌ | ✓ | Ponderado | Datos mixtos |
-| **KRAS** | ⭐⭐ | ❌ | ✓ | Suaviza | I-O regionales |
+| **RAS** | ⭐⭐⭐⭐⭐ | ❌ | ✓ | Preserves | Simple I-O |
+| **GRAS** | ⭐⭐⭐ | ✓ | ⚠️ | Preserves | Complex MIP/SAM |
+| **Cross-Entropy** | ⭐⭐ | ❌ | ✓✓ | Approx. | Inconsistent targets |
+| **Direct adjustment** | ⭐⭐⭐⭐⭐ | ✓ | - | Does not preserve | Pre-processing |
+| **Geometric RAS** | ⭐⭐⭐⭐ | ❌ | ✓ | Preserves | Inconsistent targets |
+| **Hybrid** | ⭐⭐⭐⭐ | ✓ | ✓ | Mixed | MIP by blocks |
+| **MRAS** | ⭐⭐⭐⭐ | ❌ | ✓ | Weighted | Mixed data |
+| **KRAS** | ⭐⭐ | ❌ | ✓ | Smooths | Regional I-O |
 
 ---
 
-## 8. Guía de Selección
+## 8. Selection guide
 
-### Flowchart de Decisión
+### Decision flowchart
 
 ```
 ¿Tu matriz tiene valores negativos?
@@ -736,27 +736,27 @@ X_balanced = kras(X0, u, v, D, sigma=500)  # sigma in km
          └─ NO  → GRAS con damping
 ```
 
-### Por Tipo de Matriz
+### By type of matrix
 
-**Tabla Insumo-Producto (I-O)**:
-- Primera opción: RAS
-- Si valores negativos: GRAS
+**Input-output table (I-O)**:
+- First choice: RAS
+- With negative values: GRAS
 
-**MIP (Matriz Insumo-Producto extendida)**:
-- Primera opción: Hybrid
-- Alternativa: GRAS para toda la matriz
+**MIP (extended input-output matrix)**:
+- First choice: Hybrid
+- Alternative: GRAS for the whole matrix
 
 **SAM (Social Accounting Matrix)**:
-- Primera opción: GRAS (muchos valores negativos)
-- Alternativa: Cross-Entropy con restricciones adicionales
+- First choice: GRAS (many negative values)
+- Alternative: Cross-Entropy with further constraints
 
-**Cuentas Nacionales**:
-- Primera opción: Ajuste directo + RAS
-- Para consistencia teórica: Cross-Entropy
+**National accounts**:
+- First choice: direct adjustment + RAS
+- For theoretical consistency: Cross-Entropy
 
 ---
 
-## 9. Parámetros Recomendados
+## 9. Recommended parameters
 
 ### RAS
 ```python
@@ -787,19 +787,19 @@ pib_tol = 1.0   # USD para cierre PIB
 
 ---
 
-## 10. Diagnóstico de Problemas
+## 10. Diagnosing problems
 
-### GRAS no converge
+### GRAS does not converge
 
-**Síntomas**: Alcanza max_iter sin llegar a tol.
+**Symptoms**: reaches max_iter without reaching tol.
 
-**Causas posibles**:
-1. Tolerancia muy estricta → relajar a 1e-3 o 1e-2
-2. Damping muy fuerte → aumentar a 0.5
-3. Targets inconsistentes → usar promedio aritmético/geométrico
-4. Matriz mal condicionada → normalizar antes
+**Possible causes**:
+1. Tolerance too strict → relax to 1e-3 or 1e-2
+2. Damping too strong → raise to 0.5
+3. Inconsistent targets → use the arithmetic/geometric mean
+4. Ill-conditioned matrix → normalize first
 
-**Solución**:
+**Fix**:
 ```python
 # Antes
 tol = 1e-9, damping = 0.3, max_iter = 500
@@ -808,16 +808,16 @@ tol = 1e-9, damping = 0.3, max_iter = 500
 tol = 1e-2, damping = 0.5, max_iter = 1000
 ```
 
-### RAS diverge (overflow)
+### RAS diverges (overflow)
 
-**Síntomas**: r o s → ∞ o NaN.
+**Symptoms**: r or s → ∞ or NaN.
 
-**Causas**:
-1. Filas/columnas de ceros
-2. Targets = 0 pero matriz > 0
-3. Matriz mal condicionada
+**Causes**:
+1. Rows/columns of zeros
+2. Targets = 0 but matrix > 0
+3. Ill-conditioned matrix
 
-**Solución**:
+**Fix**:
 ```python
 # Agregar clipping
 r = np.clip(r, 1e-6, 1e6)
@@ -826,16 +826,16 @@ s = np.clip(s, 1e-6, 1e6)
 # O cambiar a GRAS con damping
 ```
 
-### Cross-Entropy muy lento
+### Cross-Entropy very slow
 
-**Síntomas**: Minutos para convergencia.
+**Symptoms**: minutes to converge.
 
-**Causas**:
-1. Matriz muy grande (n×m > 10,000)
-2. Mal condicionamiento
-3. Solver ineficiente
+**Causes**:
+1. Very large matrix (n×m > 10,000)
+2. Ill-conditioning
+3. Inefficient solver
 
-**Solución**:
+**Fix**:
 ```python
 # 1. Usar sparse matrices
 from scipy.sparse import csr_matrix
@@ -852,9 +852,9 @@ X_final = cross_entropy(X_pre, u, v)  # Refinamiento
 
 ---
 
-## 11. Validación de Resultados
+## 11. Validating results
 
-### Métricas de Calidad
+### Quality metrics
 
 ```python
 def evaluate_balance(X, X0, u, v):
@@ -894,7 +894,7 @@ def evaluate_balance(X, X0, u, v):
     return metrics
 ```
 
-### Criterios de Aceptación (CGE)
+### Acceptance criteria (CGE)
 
 ```python
 def is_acceptable_for_cge(metrics):
@@ -920,9 +920,9 @@ def is_acceptable_for_cge(metrics):
 
 ---
 
-## 12. Referencias
+## 12. References
 
-### Artículos Fundamentales
+### Foundational papers
 
 1. **RAS Original**:
    - Stone, R. (1961). "Input-Output and National Accounts." OECD.
@@ -934,7 +934,7 @@ def is_acceptable_for_cge(metrics):
 3. **Cross-Entropy**:
    - Robinson, S., Cattaneo, A. & El-Said, M. (2001). "Updating and Estimating a Social Accounting Matrix Using Cross Entropy Methods." Economic Systems Research, 13(1), 47-64.
 
-4. **Comparaciones**:
+4. **Comparisons**:
    - Lofgren, H., Harris, R.L. & Robinson, S. (2002). "A Standard Computable General Equilibrium (CGE) Model in GAMS." IFPRI Microcomputers in Policy Research 5.
 
 ### Software
@@ -944,7 +944,7 @@ def is_acceptable_for_cge(metrics):
 - **GAMS**: Built-in `GAMS.Matrix` balancing
 - **Stata**: `ras` command
 
-### Implementaciones de Referencia
+### Reference implementations
 
 - IFPRI CGE models: https://github.com/IFPRI
 - PEP models: https://www.pep-net.org/
@@ -952,16 +952,16 @@ def is_acceptable_for_cge(metrics):
 
 ---
 
-## 13. Casos de Uso Específicos
+## 13. Specific use cases
 
-### Caso 1: MIP Bolivia (Este Proyecto)
+### Case 1: Bolivia MIP (this project)
 
-**Problema**:
-- Error PIB: 5.81%
-- Z desbalanceado: 2,698 USD max diff
-- Valores negativos en Var.Stock
+**Problem**:
+- GDP error: 5.81%
+- Z unbalanced: 2,698 USD max diff
+- Negative values in the change in stocks
 
-**Solución aplicada**:
+**Fix applied**:
 ```python
 # Hybrid: GRAS para Z + ajuste F
 Z_balanced = gras(Z, z_targets, z_targets, damping=0.3)
@@ -972,16 +972,16 @@ F_adjusted = F * (PIB_target / F.sum())
 # - Z balance: 10.54 USD (0.035%)
 ```
 
-**Lección**: Hybrid es ideal para MIPs con estructura de bloques.
+**Lesson**: Hybrid is ideal for MIPs with a block structure.
 
-### Caso 2: SAM Regional
+### Case 2: regional SAM
 
-**Problema**:
-- SAM 100×100 con muchos negativos
-- Targets de encuestas de hogares
-- Necesita preservar flujos gobierno
+**Problem**:
+- A 100×100 SAM with many negatives
+- Targets from household surveys
+- Government flows must be preserved
 
-**Solución**:
+**Fix**:
 ```python
 # GRAS con restricciones adicionales
 # Preservar bloques específicos
@@ -989,14 +989,14 @@ fixed_blocks = [(80, 90, 0, 10)]  # Transferencias gobierno
 X_balanced = gras_with_fixed_blocks(X, u, v, fixed_blocks)
 ```
 
-### Caso 3: Actualización I-O
+### Case 3: I-O update
 
-**Problema**:
-- I-O de 2015 → actualizar a 2023
-- Solo totales nuevos disponibles
-- Preservar estructura tecnológica
+**Problem**:
+- I-O of 2015 → update to 2023
+- Only new totals available
+- Preserve the technological structure
 
-**Solución**:
+**Fix**:
 ```python
 # RAS simple (no negativos en I-O)
 X_2023 = ras(X_2015, u_2023, v_2023)
@@ -1006,22 +1006,22 @@ X_2023 = ras(X_2015, u_2023, v_2023)
 
 ---
 
-## 14. Mejores Prácticas
+## 14. Good practice
 
-### Antes de Balancear
+### Before balancing
 
-1. **Validar datos**:
+1. **Validate the data**:
    ```python
    assert np.all(np.isfinite(X0)), "Contiene NaN o Inf"
    assert X0.shape == (n, m), "Dimensiones incorrectas"
    ```
 
-2. **Verificar targets**:
+2. **Check the targets**:
    ```python
    assert abs(u.sum() - v.sum()) < 1e-6, "Targets inconsistentes"
    ```
 
-3. **Normalizar si es necesario**:
+3. **Normalize if needed**:
    ```python
    # Si valores muy grandes (>1e10) o pequeños (<1e-10)
    scale = np.abs(X0).max()
@@ -1030,24 +1030,24 @@ X_2023 = ras(X_2015, u_2023, v_2023)
    X_balanced = X_balanced_norm * scale
    ```
 
-### Durante el Balanceo
+### While balancing
 
-1. **Monitorear convergencia**:
+1. **Monitor convergence**:
    ```python
    if iteration % 100 == 0:
        print(f"Iter {iteration}: error={error:.4e}")
    ```
 
-2. **Detectar divergencia temprano**:
+2. **Detect divergence early**:
    ```python
    if np.any(np.isnan(r)) or r.max() > 1e6:
        print("Divergencia detectada!")
        break
    ```
 
-### Después del Balanceo
+### After balancing
 
-1. **Validar resultado**:
+1. **Validate the result**:
    ```python
    metrics = evaluate_balance(X, X0, u, v)
    is_ok, criteria = is_acceptable_for_cge(metrics)
@@ -1056,7 +1056,7 @@ X_2023 = ras(X_2015, u_2023, v_2023)
        print("Advertencia: No cumple criterios CGE")
    ```
 
-2. **Documentar**:
+2. **Document**:
    ```python
    metadata = {
        'method': 'GRAS',
@@ -1070,76 +1070,76 @@ X_2023 = ras(X_2015, u_2023, v_2023)
 
 ---
 
-## 15. Código de Ejemplo Completo
+## 15. Complete example code
 
-Ver implementaciones en:
-- `/balance_bolivia_gras_fixed.py` - GRAS con damping
-- `/balance_bolivia_hybrid_final.py` - Método Hybrid
-- `/src/equilibria/sam_tools/balancing.py` - Utilidades de balanceo
+Implementations in:
+- `/balance_bolivia_gras_fixed.py` - GRAS with damping
+- `/balance_bolivia_hybrid_final.py` - Hybrid method
+- `/src/equilibria/sam_tools/balancing.py` - balancing utilities
 
 ---
 
-## 16. Índice de Scripts Implementados
+## 16. Index of implemented scripts
 
-### Scripts en `/` (raíz del proyecto)
+### Scripts in `/` (project root)
 
-| Script | Método | Descripción | Usado en |
+| Script | Method | Description | Used in |
 |--------|--------|-------------|----------|
-| `balance_bolivia_gras_fixed.py` | **GRAS con damping** | GRAS con separación pos/neg y damping=0.3 | ✓ `mip_bol_unbalanced2.xlsx` |
-| `balance_bolivia_gras_true.py` | **GRAS original** | GRAS sin damping, implementación estándar | - |
-| `balance_bolivia_hybrid_final.py` | **Hybrid** | RAS para Z + ajuste F para PIB | ✓ `mip_bol_balanced_hybrid.xlsx` |
-| `balance_bolivia_crossentropy.py` | **Cross-Entropy** | Minimización KL divergence con scipy | - |
-| `balance_bolivia_optimization.py` | **Optimización** | cvxpy con todas las restricciones | - |
-| `balance_bolivia_full_optimization.py` | **Optimización Full** | Optimiza Z, F, IMP simultáneamente | - |
-| `balance_bolivia_hierarchical.py` | **RAS Jerárquico** | RAS en niveles (Z primero, F después) | - |
-| `balance_bolivia_pragmatic.py` | **RAS Simple** | RAS cuadrado básico | - |
-| `balance_bolivia_triple_ras.py` | **Triple RAS** | RAS aplicado 3 veces | - |
-| `balance_bolivia_with_targets.py` | **RAS con targets** | Targets de fuente externa | - |
-| `balance_bolivia_complete.py` | **GRAS completo** | GRAS con restricciones MIP | - |
+| `balance_bolivia_gras_fixed.py` | **GRAS with damping** | GRAS with pos/neg split and damping=0.3 | ✓ `mip_bol_unbalanced2.xlsx` |
+| `balance_bolivia_gras_true.py` | **Original GRAS** | GRAS without damping, standard implementation | - |
+| `balance_bolivia_hybrid_final.py` | **Hybrid** | RAS for Z + F adjustment for GDP | ✓ `mip_bol_balanced_hybrid.xlsx` |
+| `balance_bolivia_crossentropy.py` | **Cross-Entropy** | KL divergence minimization with scipy | - |
+| `balance_bolivia_optimization.py` | **Optimization** | cvxpy with every constraint | - |
+| `balance_bolivia_full_optimization.py` | **Full optimization** | Optimizes Z, F, IMP at once | - |
+| `balance_bolivia_hierarchical.py` | **Hierarchical RAS** | RAS by levels (Z first, F after) | - |
+| `balance_bolivia_pragmatic.py` | **Simple RAS** | Basic square RAS | - |
+| `balance_bolivia_triple_ras.py` | **Triple RAS** | RAS applied 3 times | - |
+| `balance_bolivia_with_targets.py` | **RAS with targets** | Targets from an external source | - |
+| `balance_bolivia_complete.py` | **Complete GRAS** | GRAS with MIP constraints | - |
 
-### Métodos Implementados en Documentación (sin script)
+### Methods implemented in the documentation (no script)
 
-| Método | Sección | Estado |
+| Method | Section | Status |
 |--------|---------|--------|
-| **RAS estándar** | §1 | ✓ Código ejemplo |
-| **GRAS** | §2 | ✓ Código completo |
-| **Cross-Entropy** | §3 | ✓ Código ejemplo |
-| **Ajustes Directos** | §4 | ✓ Código ejemplo |
-| **RAS Geométrico** | §5 | ✓ Código ejemplo |
-| **Hybrid** | §6 | ✓ Código ejemplo |
-| **MRAS** | §7 | ✓ Código completo |
-| **KRAS** | §8 | ✓ Código completo |
+| **Standard RAS** | §1 | ✓ Example code |
+| **GRAS** | §2 | ✓ Complete code |
+| **Cross-Entropy** | §3 | ✓ Example code |
+| **Direct adjustments** | §4 | ✓ Example code |
+| **Geometric RAS** | §5 | ✓ Example code |
+| **Hybrid** | §6 | ✓ Example code |
+| **MRAS** | §7 | ✓ Complete code |
+| **KRAS** | §8 | ✓ Complete code |
 
-### Métodos NO Implementados
+### Methods NOT implemented
 
-Estos métodos están documentados pero **no tienen script dedicado**:
-- ❌ MRAS (Modified RAS) - solo ejemplo en docs
-- ❌ KRAS (Kernel RAS) - solo ejemplo en docs
-- ❌ RAS Geométrico (Stone's method) - solo ejemplo en docs
+These methods are documented but **have no dedicated script**:
+- ❌ MRAS (Modified RAS) - example in the docs only
+- ❌ KRAS (Kernel RAS) - example in the docs only
+- ❌ Geometric RAS (Stone's method) - example in the docs only
 
-**Nota**: Los ejemplos en la documentación son funcionales y pueden usarse directamente.
+**Note**: the examples in the documentation work and can be used directly.
 
-### Ejecución en Este Chat
+### Runs in this chat
 
-| Fecha | Método | Script | Input | Output | Resultado |
+| Date | Method | Script | Input | Output | Result |
 |-------|--------|--------|-------|--------|-----------|
-| 2025-04-11 | GRAS damping | `balance_bolivia_gras_fixed.py` | `mip_bol_unbalanced2.xlsx` | `mip_bol_balanced_gras.xlsx` | Error PIB: 5.81%→0.93% |
-| 2025-04-09 | Hybrid | `balance_bolivia_hybrid_final.py` | `mip_bol_unbalanced.xlsx` | `mip_bol_balanced_hybrid.xlsx` | Error PIB: 5.81%→0.00% |
+| 2025-04-11 | GRAS damping | `balance_bolivia_gras_fixed.py` | `mip_bol_unbalanced2.xlsx` | `mip_bol_balanced_gras.xlsx` | GDP error: 5.81%→0.93% |
+| 2025-04-09 | Hybrid | `balance_bolivia_hybrid_final.py` | `mip_bol_unbalanced.xlsx` | `mip_bol_balanced_hybrid.xlsx` | GDP error: 5.81%→0.00% |
 
-### Recomendaciones de Uso
+### Usage recommendations
 
-**Para tu caso (MIP Bolivia)**:
-1. **Primera opción**: `balance_bolivia_hybrid_final.py` - Error PIB = 0.00%
-2. **Segunda opción**: `balance_bolivia_gras_fixed.py` - Error PIB = 0.93%
-3. **Exploración**: `balance_bolivia_crossentropy.py` - Garantiza convergencia
+**For your case (Bolivia MIP)**:
+1. **First choice**: `balance_bolivia_hybrid_final.py` - GDP error = 0.00%
+2. **Second choice**: `balance_bolivia_gras_fixed.py` - GDP error = 0.93%
+3. **Exploration**: `balance_bolivia_crossentropy.py` - guarantees convergence
 
-**Para casos generales**:
-- I-O simple → `balance_bolivia_pragmatic.py` (RAS simple)
-- SAM compleja → `balance_bolivia_gras_fixed.py` (GRAS con damping)
-- Targets inconsistentes → `balance_bolivia_crossentropy.py`
+**For general cases**:
+- Simple I-O → `balance_bolivia_pragmatic.py` (simple RAS)
+- Complex SAM → `balance_bolivia_gras_fixed.py` (GRAS with damping)
+- Inconsistent targets → `balance_bolivia_crossentropy.py`
 
 ---
 
-**Última actualización**: Abril 2025
-**Autor**: Análisis para proyecto Equilibria
-**Licencia**: Documentación del proyecto
+**Last updated**: April 2025
+**Author**: analysis for the Equilibria project
+**License**: project documentation

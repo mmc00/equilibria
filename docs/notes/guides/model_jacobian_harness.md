@@ -1,19 +1,19 @@
-# model jacobian harness
+# Model Jacobian harness
 
-Esta guia resume la capa comun que hoy usamos para benchmarks y gates de Jacobiano en `equilibria`.
+This guide summarizes the common layer we use today for Jacobian benchmarks and gates in `equilibria`.
 
-La idea es separar dos cosas:
+The idea is to separate two things:
 
-- la logica comun de evaluacion/estructura/reporting del Jacobiano
-- la matematica especifica de cada modelo
+- the common logic for evaluating, structuring and reporting the Jacobian
+- the math specific to each model
 
-## que ya es generico
+## What is already generic
 
-La capa comun vive en:
+The common layer lives in:
 
 - `equilibria.solver.jacobians`
 
-Piezas principales:
+Main pieces:
 
 - `ConstraintJacobianHarness`
 - `ConstraintJacobianStats`
@@ -24,43 +24,43 @@ Piezas principales:
 - `compare_jacobian_modes(...)`
 - `evaluate_jacobian_mode_gate(...)`
 
-En simple:
+Put simply:
 
-- el harness comun sabe evaluar residuales, estructura esparsa y valores del Jacobiano
-- puede mezclar derivadas analiticas con fallback numerico
-- la capa de reporting/gate sabe comparar `analytic` vs `numeric` sin depender de PEP
+- the common harness knows how to evaluate residuals, the sparse structure and the values of the Jacobian
+- it can mix analytic derivatives with a numeric fallback
+- the reporting/gate layer knows how to compare `analytic` vs `numeric` without depending on PEP
 
-## que sigue siendo especifico por modelo
+## What is still model-specific
 
-Cada modelo sigue definiendo:
+Each model still defines:
 
-- sus variables
-- sus ecuaciones
-- su benchmark/punto de referencia
-- sus derivadas analiticas por fila
+- its variables
+- its equations
+- its benchmark/reference point
+- its analytic derivatives per row
 
-Hoy hay dos implementaciones reales encima de la base:
+Today there are two real implementations on top of the base:
 
 - PEP: `equilibria.templates.pep_constraint_jacobian`
 - SimpleOpen: `equilibria.templates.simple_open_constraint_jacobian`
 
-## contrato minimo de una implementacion hija
+## Minimum contract of a child implementation
 
-Una implementacion hija del harness debe proveer tres cosas:
+A child implementation of the harness must provide three things:
 
-1. como construir el contexto en un punto `x`
-2. como devolver el residual de cada ecuacion en orden estable
-3. que derivadas analiticas conoce para una ecuacion dada
+1. how to build the context at a point `x`
+2. how to return the residual of each equation in a stable order
+3. which analytic derivatives it knows for a given equation
 
-Eso corresponde a estos hooks:
+That maps to these hooks:
 
 - `_build_context(...)`
 - `_calculate_constraint_residual_dict(...)`
 - `_analytic_constraint_derivatives(...)`
 
-Si una fila no tiene derivada analitica, el harness comun cae a diferencias finitas para esa fila.
+If a row has no analytic derivative, the common harness falls back to finite differences for that row.
 
-## que valida hoy la capa comun
+## What the common layer validates today
 
 ### pep
 
@@ -68,11 +68,11 @@ Script:
 
 - `scripts/parity/measure_pep_jacobian_modes.py`
 
-Valida:
+It checks:
 
-- convergencia de `analytic` y `numeric`
-- que `analytic` no use diferencias finitas por encima del maximo permitido
-- que la paridad de `analytic` no sea peor que la de `numeric`
+- convergence of `analytic` and `numeric`
+- that `analytic` does not use finite differences above the allowed maximum
+- that the parity of `analytic` is no worse than that of `numeric`
 
 ### simpleopen
 
@@ -80,32 +80,32 @@ Script:
 
 - `scripts/parity/measure_simple_open_jacobian_modes.py`
 
-Valida:
+It checks:
 
-- benchmark residual exacto en dos closures
-- misma estructura esparsa en `analytic` y `numeric`
-- que `analytic` use `0` diferencias finitas
-- que `numeric` no sea mejor que `analytic` contra la referencia analitica
+- exact benchmark residual in two closures
+- the same sparse structure in `analytic` and `numeric`
+- that `analytic` uses `0` finite differences
+- that `numeric` is no better than `analytic` against the analytic reference
 
-## cuando usar cada benchmark
+## When to use each benchmark
 
-- usar `measure_pep_jacobian_modes.py` cuando el cambio toca el solver PEP o su paridad
-- usar `measure_simple_open_jacobian_modes.py` cuando el cambio toca la capa comun del harness o del reporting/gate
+- use `measure_pep_jacobian_modes.py` when the change touches the PEP solver or its parity
+- use `measure_simple_open_jacobian_modes.py` when the change touches the common layer of the harness or of the reporting/gate
 
-Si cambias la base comun y solo corre PEP, todavia no validaste que la abstraccion sirva fuera de PEP.
+If you change the common base and only PEP runs, you have not yet checked that the abstraction works outside PEP.
 
-## patron recomendado para un tercer modelo
+## Recommended pattern for a third model
 
-1. crear `<modelo>_constraint_jacobian.py`
-2. heredar de `ConstraintJacobianHarness`
-3. exponer un benchmark pequeno y determinista
-4. agregar un script `measure_<modelo>_jacobian_modes.py`
-5. reusar:
+1. create `<model>_constraint_jacobian.py`
+2. inherit from `ConstraintJacobianHarness`
+3. expose a small, deterministic benchmark
+4. add a `measure_<model>_jacobian_modes.py` script
+5. reuse:
    - `solver_stats_payload`
    - `compare_jacobian_modes`
    - `evaluate_jacobian_mode_gate`
 
-## importaciones utiles
+## Useful imports
 
 ```python
 from equilibria.solver import (
@@ -116,7 +116,7 @@ from equilibria.solver import (
 )
 ```
 
-Y para el segundo modelo de ejemplo:
+And for the second example model:
 
 ```python
 from equilibria.templates import SimpleOpenConstraintJacobianHarness
