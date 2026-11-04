@@ -19,7 +19,7 @@ Dates are the day the file entered the repository.
 | `findings/gempack_linearization_study_2026-07-24.md` | 2026-07-24 | Status of the study of the residual against GEMPACK. |
 | `findings/gempack_linearization_study_spec_2026-07-24.md` | 2026-07-24 | Design of that study. |
 | `findings/gempack_linearization_study_plan_2026-07-24.md` | 2026-07-24 | Implementation plan of that study. |
-| `findings/gempack_residual_is_linearization_2026-07-24.md` | 2026-07-24 | The residual against GEMPACK is linearization, not model scope or configuration. |
+| `findings/gempack_residual_is_linearization_2026-07-24.md` | 2026-07-24 | Claimed the residual against GEMPACK is linearization. **Refuted 2026-08-19** by its own notice: the cause was the seed (`base_calibrated=True`). |
 | `findings/gtap_ifsub_is_faithful_not_inverted_2026-07-24.md` | 2026-07-24 | `ifSUB` is faithful; the apparent inversion was a report-variable read. |
 | `findings/f3_blocks_extraction_spec_2026-07-25.md` | 2026-07-29 | Design of F3: GTAP as composed symbolic blocks. |
 | `findings/f3_blocks_extraction_plan_2026-07-25.md` | 2026-07-29 | Implementation plan of F3. |

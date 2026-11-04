@@ -23,7 +23,7 @@
 - [ ] Baseline synced, or the PR is labeled `no-delta` / `bootstrap`
 - [ ] `context.md` updated if vocabulary, risky files or commands changed
 - [ ] ADR added if the decision is expensive to reverse
-- [ ] User docs updated (`docs/site`, `docs/guides`, `examples`) or not needed
+- [ ] User docs updated (`docs/site`, `docs/notes`, `examples`) or not needed
 
 ## Parity gates
 

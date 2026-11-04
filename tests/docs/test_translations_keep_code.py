@@ -10,9 +10,12 @@ separators (``0,099`` and ``0.099`` both give ``0`` and ``099``; ``1.058`` and
 changes, and still catches any digit that changed, appeared or vanished.
 
 The Spanish text is read from ``BASE``, the last commit of ``main`` before the
-phase. Code blocks are compared after applying the phase's path renames to the
-Spanish side (a code block may name a moved file). Shallow clones (CI) do not
-have ``BASE``; the test then skips.
+phase, and the English from ``TRANSLATED``, the commit that finished the
+translations — not from the working tree. The test certifies that one event;
+the notes stay free to change afterwards (they are maintained, see
+``docs/readme.md``). Code blocks are compared after applying the phase's path
+renames to the Spanish side (a code block may name a moved file). A clone that
+lacks either commit skips.
 """
 
 from __future__ import annotations
@@ -26,9 +29,10 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = "e2a34e72"
+TRANSLATED = "f994ff47"
 
-# Spanish document at BASE -> its English translation today.
-TRANSLATED = {
+# Spanish document at BASE -> its English translation at TRANSLATED.
+DOCUMENTS = {
     "ROADMAP.md": "docs/roadmap.md",
     "docs/architecture/monolito_vs_bloques.md": "docs/notes/architecture/monolith_vs_blocks.md",
     "docs/architecture/registro_de_bloques.md": "docs/notes/architecture/no_block_registry.md",
@@ -56,17 +60,20 @@ def _git(*args: str) -> str:
     return subprocess.check_output(["git", "-C", str(ROOT), *args]).decode("utf-8")
 
 
-def _has_base() -> bool:
-    probe = subprocess.run(
-        ["git", "-C", str(ROOT), "cat-file", "-e", f"{BASE}^{{commit}}"],
-        capture_output=True,
-    )
-    return probe.returncode == 0
+def _has_commits() -> bool:
+    for commit in (BASE, TRANSLATED):
+        probe = subprocess.run(
+            ["git", "-C", str(ROOT), "cat-file", "-e", f"{commit}^{{commit}}"],
+            capture_output=True,
+        )
+        if probe.returncode != 0:
+            return False
+    return True
 
 
 def _renames() -> list[tuple[str, str]]:
     """(old, new) path pairs this phase renamed, longest first, plus basenames."""
-    out = _git("diff", "-M", "--name-status", BASE, "HEAD")
+    out = _git("diff", "-M", "--name-status", BASE, TRANSLATED)
     pairs = []
     for line in out.splitlines():
         parts = line.split("\t")
@@ -92,22 +99,24 @@ def _renamed(text: str, renames: list[tuple[str, str]]) -> str:
     return text
 
 
-needs_base = pytest.mark.skipif(not _has_base(), reason=f"{BASE} not in this clone")
+needs_base = pytest.mark.skipif(
+    not _has_commits(), reason=f"{BASE} or {TRANSLATED} not in this clone"
+)
 
 
 @needs_base
-@pytest.mark.parametrize("old,new", sorted(TRANSLATED.items()))
+@pytest.mark.parametrize("old,new", sorted(DOCUMENTS.items()))
 def test_code_blocks_are_unchanged(old: str, new: str) -> None:
     spanish = _renamed(_git("show", f"{BASE}:{old}"), _renames())
-    english = (ROOT / new).read_text(encoding="utf-8")
+    english = _git("show", f"{TRANSLATED}:{new}")
     assert code_blocks(english) == code_blocks(spanish)
 
 
 @needs_base
-@pytest.mark.parametrize("old,new", sorted(TRANSLATED.items()))
+@pytest.mark.parametrize("old,new", sorted(DOCUMENTS.items()))
 def test_numbers_keep_their_digits(old: str, new: str) -> None:
     spanish = _git("show", f"{BASE}:{old}")
-    english = (ROOT / new).read_text(encoding="utf-8")
+    english = _git("show", f"{TRANSLATED}:{new}")
     assert digit_runs(english) == digit_runs(spanish)
 
 

@@ -56,9 +56,13 @@ _LINK = re.compile(r"\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
 # One pattern per family of paths this phase moves (the "From" column of the
 # plan). Relative links to them are the link test's job; these catch the text.
 MOVED = {
-    "docs-family": r"docs/(?:analysis|findings|plans|architecture|reference|technical|guides)/",
+    "docs-family": r"docs/(?:analysis|findings|plans|architecture|reference|technical|guides)\b",
     "docs-loose": r"docs/(?:gtap_gams_mcp_parity_plan|ieem_to_pep_transformations)",
-    "reports": r"(?<![\w./-])reports/(?:gdx_comparison_final_report|gdx_comparison_report|validation_report_final)",
+    # Both as a path and as a pathlib join (``root / "reports" / "x.md"``).
+    "reports": (
+        r"(?<![\w./-])[\"']?reports[\"']?\s*/\s*[\"']?"
+        r"(?:gdx_comparison_final_report|gdx_comparison_report|validation_report_final)"
+    ),
     "glossary-root": r"GLOSSARY\.md",
     "roadmap-root": r"ROADMAP\.md",
     "renamed-doc": r"monolito_vs_bloques|registro_de_bloques\.md|gdx_reader_guide|mip_to_sam_guide_en",
@@ -144,3 +148,24 @@ def test_link_parser_sees_relative_and_skips_urls_and_code() -> None:
         "[a](../x.md) [b](https://e.org) [c](#top) `[d](y.md)`\n```\n[e](z.md)\n```\n"
     )
     assert [t for t in _links(text) if _local(t)] == ["../x.md"]
+
+
+def test_archive_index_flags_refuted_documents() -> None:
+    """An archived document that opens with a refutation notice is marked so in the index.
+
+    The index is read before the documents; a one-line summary that repeats a
+    refuted title, without saying so, restates the false claim (phase 6 final review).
+    """
+    archive = ROOT / "docs" / "archive"
+    index = (archive / "readme.md").read_text(encoding="utf-8")
+    rows = {
+        line.split("`")[1]: line
+        for line in index.splitlines()
+        if line.startswith("| `")
+    }
+    unflagged = []
+    for rel, row in rows.items():
+        head = "\n".join((archive / rel).read_text(encoding="utf-8").splitlines()[:15])
+        if re.search(r"⚠️ *UPDATE", head) and "refuted" not in row.lower():
+            unflagged.append(rel)
+    assert unflagged == [], f"archive/readme.md rows hide a refutation: {unflagged}"

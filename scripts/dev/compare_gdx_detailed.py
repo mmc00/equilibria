@@ -468,7 +468,7 @@ def main():
     # Define paths
     original_dir = repo_root / "src" / "equilibria" / "templates" / "reference" / "pep2" / "data"
     equilibria_dir = repo_root / "src" / "equilibria" / "templates" / "data" / "pep"
-    report_path = repo_root / "reports" / "gdx_comparison_report.md"
+    report_path = repo_root / "notes" / "tmp" / "gdx_comparison_report.md"
 
     # Create comparator
     comparator = GDXComparator(original_dir, equilibria_dir)

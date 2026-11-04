@@ -39,7 +39,7 @@ PEP is earlier on the same road: it still has both the monolith
 A template that still has a monolith carries an open change to retire it. For
 GTAP that is the `gtap_model_equations.py` cannot be retired row of `docs/roadmap.md`
 "Known blockers", whose first step is to migrate the `nl` gate to measure
-blocks; "Sacar el monolito del test de forma" in "Plan de arquitectura" is only
+blocks; "Take the monolith out of the form test" in "Architecture plan" is only
 a partial step on the way. PEP has no such entry yet and needs one. The monolith
 refuses `@overwrite` hooks (`require_blocks`) instead of ignoring them silently,
 so an exercise cannot run on the wrong model by accident.
