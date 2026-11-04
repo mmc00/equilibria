@@ -76,7 +76,7 @@ class Oracle:
                 itertools.product(*(self.sets[d] for d in doms)),
                 strict=True,
             ):
-                key = idx[0] if len(idx) == 1 else idx
+                key = None if not idx else idx[0] if len(idx) == 1 else idx
                 if key not in comp:
                     continue  # never built: acts as a fixed 0, emits no column
                 cell = comp[key]
@@ -163,10 +163,12 @@ def backend_z(o: Oracle, layout: VarLayout, x: np.ndarray) -> np.ndarray:
     return z
 
 
-def pyomo_entries(o: Oracle, x: np.ndarray):
-    """(row name -> F) and ((row name, col name) -> J) for the Phase 0 families."""
+def pyomo_entries(o: Oracle, x: np.ndarray, families=FAMILIES):
+    """(row name -> F) and ((row name, col name) -> J) for ``families`` (None: all)."""
     F, J = o.F_J(x)
-    rows = set(o.rows_of().tolist())
+    if families is None:
+        families = {n.split("[")[0] for n in o.con_names}
+    rows = set(o.rows_of(families).tolist())
     f = {o.con_names[k]: float(F[k]) for k in rows}
     j = {}
     for r, c, v in zip(J.row, J.col, J.data, strict=True):
@@ -188,9 +190,11 @@ def backend_entries(system, layout: VarLayout, z: np.ndarray):
     return f, j
 
 
-def assert_same(system, layout: VarLayout, o: Oracle, x: np.ndarray) -> None:
+def assert_same(
+    system, layout: VarLayout, o: Oracle, x: np.ndarray, families=FAMILIES
+) -> None:
     """Gate 1: same rows, same (row, col) pattern and nnz, same F and J values."""
-    fp, jp = pyomo_entries(o, x)
+    fp, jp = pyomo_entries(o, x, families)
     fb, jb = backend_entries(system, layout, backend_z(o, layout, x))
     assert set(fb) == set(fp), (
         f"rows differ: only backend {sorted(set(fb) - set(fp))[:5]}, "
@@ -201,10 +205,17 @@ def assert_same(system, layout: VarLayout, o: Oracle, x: np.ndarray) -> None:
         f"only pyomo {sorted(set(jp) - set(jb))[:5]}"
     )
     assert system.nnz == len(jp)
+    # F tolerance is relative to the row's magnitude (sum_j |J_ij x_j|): a row that is
+    # ~0 at the solution but sums terms of ~1e2 carries ~1e-14 of summation-order noise.
+    where = {n: k for k, n in enumerate(o.var_names)}
+    scale: dict[str, float] = {}
+    for (r, c), v in jp.items():
+        scale[r] = scale.get(r, 0.0) + abs(v * x[where[c]])
     rk = sorted(fp)
-    np.testing.assert_allclose(
-        [fb[k] for k in rk], [fp[k] for k in rk], rtol=RTOL, atol=ATOL, err_msg="F"
-    )
+    diff = np.array([abs(fb[k] - fp[k]) for k in rk])
+    tol = np.array([RTOL * max(abs(fp[k]), scale.get(k, 0.0)) + ATOL for k in rk])
+    bad = [(k, fb[k], fp[k]) for k, d, t in zip(rk, diff, tol, strict=True) if d > t]
+    assert not bad, f"F differs in {len(bad)} rows, e.g. {bad[:5]}"
     jk = sorted(jp)
     np.testing.assert_allclose(
         [jb[k] for k in jk], [jp[k] for k in jk], rtol=RTOL, atol=ATOL, err_msg="J"

@@ -182,7 +182,7 @@ class FamilySystem:
     def row_names(self) -> list[str]:
         """Pyomo-style row names (``family[label]``)."""
         return [
-            f"{f.name}[{lab}]"
+            f"{f.name}[{lab}]" if lab != "" else f.name
             for f in self.families
             for lab in (f.row_labels or [str(k) for k in range(f.n_rows)])
         ]

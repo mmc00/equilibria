@@ -120,3 +120,14 @@ def test_no_recompile_on_second_eval():
     sysm2.F(z * 1.1)
     sysm2.jac(z * 1.1)
     assert [k._cache_size() for k in kernels] == before
+
+
+def test_scalar_row_name_has_no_brackets():
+    from equilibria.family.core import CompiledFamily, TermGroup
+
+    fam = CompiledFamily(
+        "eq_walras",
+        [""],
+        [TermGroup(np.array([0]), _row_fn, np.array([[0]]), {"e": np.array([1.0])})],
+    )
+    assert FamilySystem([fam], n_cols=1).row_names == ["eq_walras"]

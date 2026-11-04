@@ -121,3 +121,61 @@ def test_group_count_is_distinct_term_shapes():
     _, _, fam, _ = _toy_system()
     # p**e and share*q**e: two shapes, whatever the number of rows or terms per row
     assert len(fam.groups) == 2
+
+
+def _layout_with_fixed_t(m, t_value):
+    from equilibria.family.layout import VarLayout
+
+    values = {v: np.asarray(m._vars[v][1], float).copy() for v in m.var_domains}
+    values["t"] = np.array(t_value)
+    free = {v: np.ones(a.shape, bool) for v, a in values.items()}
+    free["t"] = np.array(False)
+    return VarLayout.from_state(m.sets, m.var_domains, values, free)
+
+
+def _pattern_cols(m, layout, rule):
+    from equilibria.family.core import FamilySystem
+    from equilibria.family.recorder import compile_family
+
+    fam = compile_family("eq", [(("A",), rule(m))], layout)
+    J = FamilySystem.from_families([fam], layout).jac(layout.free_values)
+    names = layout.col_names
+    return sorted(names[c] for c in J.col)
+
+
+def test_fixed_zero_factor_drops_the_term_like_the_nl_writer():
+    m = _rec()
+
+    def rule(m):  # ytax-like: (instrument + 0) * price * quantity, plus an own term
+        return m.p["A"] == (m.t + 0.0) * m.q["A", "x"] * m.q["A", "y"]
+
+    assert _pattern_cols(m, _layout_with_fixed_t(m, 0.0), rule) == ["p[A]"]
+    assert _pattern_cols(m, _layout_with_fixed_t(m, 0.1), rule) == [
+        "p[A]",
+        "q[A,x]",
+        "q[A,y]",
+    ]
+
+
+def test_scalar_var_name_has_no_brackets():
+    m = _rec()
+    layout = _layout_with_fixed_t(m, 1.0)
+    free_t = layout.__class__.from_state(
+        layout.sets,
+        layout.var_domains,
+        {"p": np.ones(2), "q": np.ones((2, 3)), "t": np.array(1.0)},
+        {"p": np.ones(2, bool), "q": np.ones((2, 3), bool), "t": np.array(True)},
+    )
+    assert "t" in free_t.col_names
+
+
+def test_indexed_var_equals_scalar_var_flips_like_pyomo():
+    # Pyomo: ScalarVar subclasses VarData, so `q[A,x] == t` dispatches to t.__eq__ first
+    # and the body is t - q[A,x]. Expressions and other operand kinds keep their order.
+    m = _rec()
+    assert (m.q["A", "x"] == m.t).evaluate() == pytest.approx(4.0 - 1.0)
+    assert (m.t == m.q["A", "x"]).evaluate() == pytest.approx(4.0 - 1.0)
+    assert (m.q["A", "x"] * 1.0 + 0.0 == m.p["A"]).evaluate() == pytest.approx(
+        1.0 - 1.1
+    )
+    assert (2.0 * m.q["A", "x"] == m.t).evaluate() == pytest.approx(2.0 - 4.0)

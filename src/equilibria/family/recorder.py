@@ -29,7 +29,7 @@ def _is_num(x) -> bool:
 class Node:
     """Expression node. ``op`` in {'v', 'add', 'mul', 'div', 'pow', 'neg', 'sqrt', 'log', 'exp'}.
 
-    A leaf ('v') holds ``(var_name, flat_index, level)``. An 'add' node holds a list that
+    A leaf ('v') holds ``(var_name, flat_index, level, is_scalar)``. An 'add' node holds a list that
     may be shared with the node it was extended from (``_n`` is its own length), so
     ``sum()`` over n terms is O(n), as in Pyomo.
     """
@@ -116,6 +116,16 @@ class Node:
         return self
 
     def __eq__(self, o):  # type: ignore[override]
+        # Pyomo's ScalarVar subclasses VarData: `indexed_cell == scalar_var` dispatches
+        # to the scalar's __eq__ first, so Pyomo's body is scalar - cell. Mirror it.
+        if (
+            self.op == "v"
+            and not self.args[3]
+            and isinstance(o, Node)
+            and o.op == "v"
+            and o.args[3]
+        ):
+            return Residual(o, self)
         return Residual(self, o)
 
     __hash__ = object.__hash__
@@ -310,7 +320,7 @@ class _ParamView(_Indexed):
 class _VarView(_Indexed):
     def __getitem__(self, key) -> Node:
         k = self.flat(key)
-        return Node("v", (self.name, k, self.data[k]))
+        return Node("v", (self.name, k, self.data[k], False))
 
 
 class RecordingModel:
@@ -360,7 +370,7 @@ class RecordingModel:
         elif name in d["_vars"]:
             doms, arr = d["_vars"][name]
             view = (
-                Node("v", (name, 0, float(arr.ravel()[0])))
+                Node("v", (name, 0, float(arr.ravel()[0]), True))
                 if not doms
                 else _VarView(name, doms, d["_pos"], arr)
             )
@@ -403,6 +413,31 @@ def _sig(x, leaves, consts):
         leaves.append((x.args[0], x.args[1]))
         return "v"
     return (x.op, *(_sig(c, leaves, consts) for c in x.children()))
+
+
+def fold_zeros(x, is_zero) -> Any:
+    """Rebuild ``x`` with the leaves ``is_zero((var, flat))`` replaced by 0.0, through the
+    same simplifying algebra (a product with 0 vanishes, ``y**0`` is 1). Mirrors the
+    ``.nl`` writer, which substitutes fixed variables by their values."""
+    if not isinstance(x, Node):
+        return x
+    if x.op == "v":
+        return 0.0 if is_zero((x.args[0], x.args[1])) else x
+    kids = [fold_zeros(c, is_zero) for c in x.children()]
+    if x.op == "add":
+        out = 0.0
+        for k in kids:
+            out = _add(out, k)
+        return out
+    if x.op == "mul":
+        return _mul(kids[0], kids[1])
+    if x.op == "div":
+        return _div(kids[0], kids[1])
+    if x.op == "pow":
+        return _pow(kids[0], kids[1])
+    if x.op == "neg":
+        return _neg(kids[0])
+    return intrinsic(x.op)(kids[0])
 
 
 _TEMPLATES: dict[tuple, Any] = {}
@@ -459,12 +494,31 @@ def compile_family(name: str, records, layout) -> Any:
     """
     from equilibria.family.core import CompiledFamily, TermGroup
 
+    flat_slots = {v: np.asarray(a).ravel() for v, a in layout.slots.items()}
+    n_cols = layout.n_cols
+    fixed = np.asarray(layout.fixed_values, dtype=float)
+
+    def is_fixed_zero(leaf) -> bool:
+        slot = flat_slots[leaf[0]][leaf[1]]
+        return bool(slot >= n_cols and fixed[slot - n_cols] == 0.0)
+
+    def signed_terms(res):
+        """Terms of the residual; a term touching a fixed cell at 0 is re-simplified
+        with that 0 in place (it may vanish or split), as the ``.nl`` writer does."""
+        for sgn, term in residual_terms(res):
+            key, leaves, consts = signature(term)
+            if any(is_fixed_zero(lf) for lf in leaves):
+                folded = fold_zeros(term, is_fixed_zero)
+                for s2, t2 in residual_terms(Residual(folded, 0.0)):
+                    yield (sgn * s2, *signature(t2))
+            else:
+                yield sgn, key, leaves, consts
+
     buckets: dict[tuple, dict[str, list]] = {}
     labels = []
     for row, (idx, res) in enumerate(records):
         labels.append(",".join(str(i) for i in idx))
-        for sgn, term in residual_terms(res):
-            key, leaves, consts = signature(term)
+        for sgn, key, leaves, consts in signed_terms(res):
             b = buckets.get(key)
             if b is None:
                 b = buckets[key] = {"rows": [], "leaves": [], "c": [], "s": []}
@@ -473,7 +527,6 @@ def compile_family(name: str, records, layout) -> Any:
             b["c"].append(consts)
             b["s"].append(sgn)
 
-    flat_slots = {v: np.asarray(a).ravel() for v, a in layout.slots.items()}
     groups = []
     for key, b in buckets.items():
         n = len(b["rows"])

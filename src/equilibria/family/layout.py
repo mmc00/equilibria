@@ -69,5 +69,5 @@ class VarLayout:
                 itertools.product(*(self.sets[d] for d in doms)), s.ravel(), strict=True
             ):
                 if slot < self.n_cols:
-                    names[slot] = f"{v}[{','.join(idx)}]"
+                    names[slot] = f"{v}[{','.join(idx)}]" if idx else v
         return names
