@@ -17,10 +17,11 @@ from pathlib import Path
 
 import target_shocks
 from _job_cli import common
-from gemsim_job import cmf_text, exp_file, finish, run_in_package_copy
+from gemsim_job import NOTE_FILE, cmf_text, exp_file, finish, run_in_package_copy
 from gemsim_job import run as _run
 
 run = _run  # tests replace it
+__all__ = ["NOTE_FILE", "main", "run"]
 
 
 def main(argv: list[str] | None = None) -> int:

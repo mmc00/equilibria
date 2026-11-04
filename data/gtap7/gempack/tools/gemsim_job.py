@@ -24,13 +24,14 @@ from pathlib import Path
 
 import target_shocks
 from _job_cli import common, not_yet
-from release_check import ReleaseMismatch, require
+from release_check import ReleaseMismatch, release, require
 
 from equilibria.sources import check_tree, own_files
 
 DIR_EXP = ("me8", "tbl813")  # run their -dir.exp (rate% translated)
 NORMAL_END = "completed without error"
 OUTPUTS = ("solution.sl4", "updated.har")  # a gragg run without both did not finish
+NOTE_FILE = "retry_note.txt"  # write_source --notes-from: appended to the record's notes
 
 
 class JobError(RuntimeError):
@@ -124,22 +125,36 @@ def run_in_package_copy(
     folder (git-ignored, no user name), not %TEMP%; it is removed afterwards.
     """
     pkg = work.resolve() / "package" / name
-    shutil.rmtree(pkg, ignore_errors=True)
-    for f in own_files(package):
-        target = pkg / f.relative_to(package)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(f, target)
-    try:
-        return (runner or run)([str(exe), "-cmf", str(cmf)], pkg, console)
-    finally:
+    cmd = [str(exe), "-cmf", str(cmf)]
+    for attempt in (1, 2):
         shutil.rmtree(pkg, ignore_errors=True)
+        for f in own_files(package):
+            target = pkg / f.relative_to(package)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(f, target)
+        try:
+            rc = (runner or run)(cmd, pkg, console)
+        finally:
+            shutil.rmtree(pkg, ignore_errors=True)
+        # Now and then a GEMPACK program never starts (3a-1, me4b: no banner in the
+        # console, rc 0xC0000142). One retry, said in the record (write_source
+        # --notes-from); a program that started and failed is a result, not retried.
+        if attempt == 2 or release(console) is not None:
+            return rc
+        (console.parent / NOTE_FILE).write_text(
+            f"{exe.name} did not start on the first attempt (no GEMPACK banner, "
+            f"rc={rc}); retried once",
+            encoding="utf-8",
+        )
+    raise AssertionError("unreachable")
 
 
 def finish(out: Path, console: Path, rc: int, *, expect_release: str, name: str) -> bool:
     """Drop the work files, then whether the run counts: release, normal end, outputs."""
-    # GEMPACK's work files (run-GPXXX7.ud8) and the solution's .slc are not results:
-    # the .sl4 and the updated data are the record (maintainer, 2026-11-03)
-    for scratch in [*out.glob("*GPXXX*"), *out.glob("*.slc")]:
+    # GEMPACK's work files (run-GPXXX7.ud8), the solution's .slc and the automatic
+    # accuracy log .aal (times of day; the accuracy is in the console) are not
+    # results: the .sl4 and the updated data are the record (maintainer, 2026-11-03)
+    for scratch in [*out.glob("*GPXXX*"), *out.glob("*.slc"), *out.glob("*.aal")]:
         scratch.unlink()
     text = console.read_text(encoding=target_shocks.ENCODING, errors="replace")
     try:

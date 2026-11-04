@@ -259,3 +259,11 @@ def test_default_work_names_no_user(monkeypatch: pytest.MonkeyPatch) -> None:
     assert work == (ROOT / "runs" / "gempack_work").resolve()
     assert not work.is_relative_to(Path(tempfile.gettempdir()).resolve())
     assert not work.is_relative_to(DATA_ROOT)
+
+
+def test_every_command_takes_the_retry_note() -> None:
+    """A job that retried a program that did not start leaves a note for the record."""
+    m = _module()
+    for j in m.jobs(list(COUNTS)):
+        cmd = m.job_command(j, gempack_release="12.1.003", gp_release="11.3.004")
+        assert cmd[cmd.index("--notes-from") + 1] == "retry_note.txt"

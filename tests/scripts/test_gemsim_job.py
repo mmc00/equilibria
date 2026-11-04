@@ -214,9 +214,10 @@ def test_gemsim_scratch_files_are_not_kept(tmp_path: Path, monkeypatch: pytest.M
     """GEMSIM leaves <cmf>-GPXXX<n>.ud<k> work files and the solution's .slc next to
     the solution: not results (the .sl4 and the updated data are the record;
     maintainer, 2026-11-03)."""
-    files = ("solution.sl4", "updated.har", "solution.slc", "run-GPXXX7.ud8", "run-GPXXX2.ud3")
+    files = ("solution.sl4", "updated.har", "solution.slc", "solution.aal",
+             "run-GPXXX7.ud8", "run-GPXXX2.ud3")
     run, _ = _fake_gemsim(BANNER + "completed without error\n", files)
     monkeypatch.setattr(gemsim_job, "run", run)
     assert gemsim_job.main(_gragg(tmp_path)) == 0
     left = sorted(p.name for p in (tmp_path / "out").iterdir())
-    assert not any("GPXXX" in name or name.endswith(".slc") for name in left), left
+    assert not any("GPXXX" in name or name.endswith((".slc", ".aal")) for name in left), left

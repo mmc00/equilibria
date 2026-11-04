@@ -386,6 +386,8 @@ def job_command(
         *(a for name, path in job.inputs.items() for a in ("--input", f"{name}={path}")),
         *externals,
         *(("--solver", job.solver) if job.solver else ()),
+        # a job that retried a program that never started says so (gemsim_job.NOTE_FILE)
+        "--notes-from", "retry_note.txt",
         "--",
         py, str(TOOLS / job.script), *job.args,
         "--out", str(job.folder), "--expect-release", tool_version,

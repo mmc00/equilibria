@@ -263,6 +263,10 @@ def main(argv: list[str] | None = None) -> int:
         help="the command solved remotely: neos reads <folder>/neos_job.json",
     )
     ap.add_argument("--notes", default="")
+    ap.add_argument(
+        "--notes-from",
+        help="file the command may leave in the folder: appended to notes, not an output",
+    )
     ap.add_argument("--no-run", action="store_true")
     ap.add_argument("command", nargs=argparse.REMAINDER)
     args = ap.parse_args(argv)
@@ -301,6 +305,12 @@ def main(argv: list[str] | None = None) -> int:
             if created:  # a failed job leaves nothing; the next run resumes from it
                 shutil.rmtree(folder)
             return proc.returncode
+        # what the command wants said about this run (e.g. a retried start)
+        note = folder / args.notes_from if args.notes_from else None
+        if note is not None and note.is_file():
+            extra = note.read_text(encoding="utf-8").strip()
+            note.unlink()
+            args.notes = "; ".join(s for s in (args.notes, extra) if s)
         run_info: dict[str, Any] = {
             "date": started.isoformat(timespec="seconds"),
             "duration_s": round(duration, 3),

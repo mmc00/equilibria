@@ -539,3 +539,25 @@ def test_missing_external_fails_before_running(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         _module().main(argv)
     assert not (folder / "ran.txt").exists()
+
+
+def test_notes_from_file_is_appended_not_an_output(tmp_path: Path) -> None:
+    """--notes-from FILE: what the command leaves there goes to notes, not to outputs."""
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gemsim_x"
+    cmd = [sys.executable, "-c",
+           "open('out.txt','w').write('x'); open('note.txt','w').write('retried once')"]  # fmt: skip
+    argv = _argv(tmp_path, folder, cmd)
+    argv[argv.index("--") : argv.index("--")] = ["--notes", "base", "--notes-from", "note.txt"]
+    assert _module().main(argv) == 0
+    raw = load_source(folder).raw
+    assert raw["notes"] == "base; retried once"
+    assert set(raw["outputs"]) == {"out.txt"}
+    assert not (folder / "note.txt").exists()
+
+
+def test_notes_from_absent_file_keeps_notes(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gemsim_x"
+    argv = _argv(tmp_path, folder, [sys.executable, "-c", "open('out.txt','w').write('x')"])
+    argv[argv.index("--") : argv.index("--")] = ["--notes-from", "note.txt"]
+    assert _module().main(argv) == 0
+    assert load_source(folder).raw["notes"] == ""

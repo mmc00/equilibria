@@ -112,8 +112,59 @@ def test_release_mismatch_refuses(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
 def test_scratch_files_are_not_kept(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     run, _ = _fake(BANNER + "completed without error\n",
-                   (*FILES, "solution.slc", "run-GPXXX3.ud8"))  # fmt: skip
+                   (*FILES, "solution.slc", "solution.aal", "run-GPXXX3.ud8"))  # fmt: skip
     monkeypatch.setattr(burfisher_job, "run", run)
     assert burfisher_job.main(_argv(tmp_path, "me9c")) == 0
     left = {p.name for p in (tmp_path / "out").iterdir()}
     assert left == {*FILES, "run.cmf", "solve_console.txt"}
+
+
+def _starts_on(attempt: int, files: tuple[str, ...] = FILES):
+    """A program that does not start (empty console, no banner) until ``attempt``."""
+    calls: list[int] = []
+
+    def run(cmd: list[str], cwd: Path, console_path: Path) -> int:
+        calls.append(len(calls) + 1)
+        if len(calls) < attempt:
+            console_path.write_text("")
+            return -1073741502  # 0xC0000142, STATUS_DLL_INIT_FAILED
+        for f in files:
+            (console_path.parent / f).write_bytes(b"x")
+        console_path.write_text(BANNER + "completed without error\n")
+        return 0
+
+    return run, calls
+
+
+def test_retries_once_when_the_program_does_not_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """3a-1 and me4b: now and then gtapuv7.exe never starts (no banner). One retry,
+    and the record says so (the note write_source --notes-from picks up)."""
+    run, calls = _starts_on(2)
+    monkeypatch.setattr(burfisher_job, "run", run)
+    assert burfisher_job.main(_argv(tmp_path, "me4b")) == 0
+    assert calls == [1, 2]
+    note = (tmp_path / "out" / burfisher_job.NOTE_FILE).read_text()
+    assert "did not start" in note and "retried once" in note
+
+
+def test_a_second_failed_start_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    run, calls = _starts_on(3)
+    monkeypatch.setattr(burfisher_job, "run", run)
+    assert burfisher_job.main(_argv(tmp_path, "me4b")) == 1
+    assert calls == [1, 2]
+
+
+def test_a_solve_that_started_is_not_retried(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only a program that never started is retried; a failed solve is a result."""
+    calls: list[int] = []
+
+    def run(cmd: list[str], cwd: Path, console_path: Path) -> int:
+        calls.append(1)
+        console_path.write_text(BANNER + "Accuracy too low\n")
+        return 1
+
+    monkeypatch.setattr(burfisher_job, "run", run)
+    assert burfisher_job.main(_argv(tmp_path, "me4a")) == 1
+    assert calls == [1]
