@@ -98,3 +98,25 @@ def test_pattern_is_index_arrays():
         + [(r, 3 + 2 * r + i) for r in range(3) for i in range(2)]
     )
     assert got == want
+
+
+def test_row_names_use_labels():
+    sysm = _toy()
+    sysm.families[0].row_labels = ["a", "b", "c"]
+    assert sysm.row_names == ["toy[a]", "toy[b]", "toy[c]"]
+
+
+def test_no_recompile_on_second_eval():
+    from equilibria.family import core
+
+    kernels = (core._eval_part, core._jac_part, core._scatter)
+    sysm = _toy()
+    z = _z()
+    sysm.F(z)
+    sysm.jac(z)
+    before = [k._cache_size() for k in kernels]
+    # Same shapes, new values and a fresh system object: no new compilation.
+    sysm2 = _toy()
+    sysm2.F(z * 1.1)
+    sysm2.jac(z * 1.1)
+    assert [k._cache_size() for k in kernels] == before

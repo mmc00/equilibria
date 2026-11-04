@@ -1,4 +1,4 @@
-"""Phase 0 GTAP families: ``eq_pndeq`` (CES price) and ``eq_facty`` (factor income sum).
+"""Phase 0 GTAP families: ``eq_pndeq``/``eq_pvaeq`` (CES prices) and ``eq_facty`` (sum).
 
 Each family is written once over set-indexed arrays. Parameters come from the same
 ``_derived_params`` recipes the blocks use (``ProductionSupplyBlock``, ``IncomeBlock``),
@@ -9,6 +9,9 @@ Pyomo bodies reproduced (``lhs == rhs`` evaluates as ``lhs - rhs``):
 - ``eq_pndeq[r,a]`` (production_supply.py): ``pnd**e == sum_i io*(pa[r,i,a]/lambdaio)**e``
   with ``e = 1 - sigmand``, ``lambdaio`` floored at 1e-8, terms only where ``io > 0``
   and rows only where some term exists.
+- ``eq_pvaeq[r,a]`` (production_supply.py, ifSUB=0): ``pva**e == sum_f af*(pfa/lambdaf)**e``
+  with ``e = 1 - sigmav``, terms only where ``af > 0``; ``lambdaf`` is a (normally
+  fixed) variable, so it enters the term as a second slot.
 - ``eq_facty[r]`` (income.py): ``facty == sum_{f,a: xfflag>0} pf*xf/xscale
   - fdepr*pi*kstock``.
 """
@@ -28,6 +31,9 @@ from equilibria.templates.gtap.gtap_block_model import _set_elems
 PHASE0_VARS: dict[str, tuple[str, ...]] = {
     "pa": ("r", "i", "aa"),
     "pnd": ("r", "a"),
+    "pva": ("r", "a"),
+    "pfa": ("r", "f", "a"),
+    "lambdaf": ("r", "f", "a"),
     "pf": ("r", "f", "a"),
     "xf": ("r", "f", "a"),
     "facty": ("r",),
@@ -44,6 +50,10 @@ def _pndeq_term(xs, io, lam, e):
     return io * (xs[0] / lam) ** e
 
 
+def _pvaeq_term(xs, af, e):
+    return af * (xs[0] / xs[1]) ** e
+
+
 def _facty_row(xs, fdepr):
     return xs[0] + fdepr * xs[1] * xs[2]
 
@@ -55,6 +65,13 @@ def _facty_term(xs, xscale):
 def _positions(sub: list[str], full: list[str]) -> np.ndarray:
     where = {e: k for k, e in enumerate(full)}
     return np.array([where[e] for e in sub], dtype=np.int64)
+
+
+def _labels(*elems_by_dim: list[str], idx: tuple[np.ndarray, ...]) -> list[str]:
+    return [
+        ",".join(e[k] for e, k in zip(elems_by_dim, cell, strict=True))
+        for cell in zip(*idx, strict=True)
+    ]
 
 
 def pndeq_family(params: Any, sets: Any, layout: VarLayout) -> Family:
@@ -83,6 +100,34 @@ def pndeq_family(params: Any, sets: Any, layout: VarLayout) -> Family:
         term_rows=row_id[tr, ta],
         term_cols=pa_slots[tr, ti, ta].reshape(-1, 1),
         term_args={"io": io[tr, ti, ta], "lam": lam[tr, ti, ta], "e": expo[tr, ta]},
+        row_labels=_labels(r, a, idx=np.nonzero(row_mask)),
+    )
+
+
+def pvaeq_family(params: Any, sets: Any, layout: VarLayout) -> Family:
+    el = _set_elems(sets)
+    r, f, a = el["r"], el["f"], el["a"]
+    af = dp.to_array(dp.af_param_data(params, sets), [r, f, a], 0.0)
+    sig = params.elasticities.sigmav
+    expo = 1.0 - np.array([[sig.get((rr, x), 1.0) for x in a] for rr in r], dtype=float)
+
+    term_mask = af > 0.0
+    row_mask = term_mask.any(axis=1)
+    row_id = np.full(row_mask.shape, -1, dtype=np.int64)
+    row_id[row_mask] = np.arange(int(row_mask.sum()))
+    tr, tf, ta = np.nonzero(term_mask)
+    return Family(
+        name="eq_pvaeq",
+        row_fn=_pndeq_row,
+        row_cols=layout.col("pva")[row_mask].reshape(-1, 1),
+        row_args={"e": expo[row_mask]},
+        term_fn=_pvaeq_term,
+        term_rows=row_id[tr, ta],
+        term_cols=np.stack(
+            [layout.col("pfa")[tr, tf, ta], layout.col("lambdaf")[tr, tf, ta]], axis=1
+        ),
+        term_args={"af": af[tr, tf, ta], "e": expo[tr, ta]},
+        row_labels=_labels(r, a, idx=np.nonzero(row_mask)),
     )
 
 
@@ -112,6 +157,7 @@ def facty_family(
             [layout.col("pf")[tr, tf, ta], layout.col("xf")[tr, tf, ta]], axis=1
         ),
         term_args={"xscale": xscale[tr, ta]},
+        row_labels=list(r),
     )
 
 
@@ -120,6 +166,7 @@ def build_phase0_system(
 ) -> FamilySystem:
     families = [
         pndeq_family(params, sets, layout),
+        pvaeq_family(params, sets, layout),
         facty_family(params, sets, layout, residual_region),
     ]
     return FamilySystem(

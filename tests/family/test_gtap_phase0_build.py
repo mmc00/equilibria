@@ -32,13 +32,29 @@ def test_shapes_3x3():
     io = dp.to_array(dp.io_param_data(p, p.sets), [r, i, a], 0.0)
     xfflag = dp.to_array(dp.xfflag_data(p, p.sets), [r, f, a], 0.0)
     n_pnd = int((io > 0).any(axis=1).sum())
+    af = dp.to_array(dp.af_param_data(p, p.sets), [r, f, a], 0.0)
+    n_pva = int((af > 0).any(axis=1).sum())
 
     by_family = {}
     for name, _ in system.rows:
         by_family[name] = by_family.get(name, 0) + 1
-    assert by_family == {"eq_pndeq": n_pnd, "eq_facty": len(r)}
-    assert system.nnz == n_pnd + int((io > 0).sum()) + 3 * len(r) + 2 * int(
-        (xfflag > 0).sum()
+    assert by_family == {"eq_pndeq": n_pnd, "eq_pvaeq": n_pva, "eq_facty": len(r)}
+    assert system.nnz == (
+        n_pnd
+        + int((io > 0).sum())
+        + n_pva
+        + 2 * int((af > 0).sum())  # pfa and lambdaf, both free in this layout
+        + 3 * len(r)
+        + 2 * int((xfflag > 0).sum())
     )
     assert len(layout.col_names) == system.n_cols
     assert layout.col_names[0] == f"pa[{r[0]},{i[0]},{sets['aa'][0]}]"
+
+
+def test_row_names_are_pyomo_style():
+    p = load_params("gtap7_3x3")
+    sets = _set_elems(p.sets)
+    system = build_phase0_system(p, p.sets, _all_free_layout(sets), sets["r"][-1])
+    names = system.row_names
+    assert f"eq_facty[{sets['r'][0]}]" in names
+    assert any(n.startswith("eq_pndeq[") and n.count(",") == 1 for n in names)

@@ -63,6 +63,8 @@ class Family:
     term_rows: np.ndarray | None = None
     term_cols: np.ndarray | None = None
     term_args: dict[str, np.ndarray] = field(default_factory=dict)
+    # Index labels of the rows ("USA,Food"), for names only; never read by F/J.
+    row_labels: list[str] = field(default_factory=list)
 
     @property
     def n_rows(self) -> int:
@@ -132,6 +134,15 @@ class FamilySystem:
         self._pat_rows = uniq // self.n_cols
         self._pat_cols = uniq % self.n_cols
         self.nnz = int(len(uniq))
+
+    @property
+    def row_names(self) -> list[str]:
+        """Pyomo-style row names (``family[label]``), falling back to the row number."""
+        return [
+            f"{f.name}[{f.row_labels[k] if f.row_labels else k}]"
+            for f in self.families
+            for k in range(f.n_rows)
+        ]
 
     def _x_all(self, z):
         return jnp.concatenate(
