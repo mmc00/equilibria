@@ -15,7 +15,7 @@ generated_from:
       tools/_job_cli.py: 5cd1ef864b79364b03329857de37fa8b8b3f2d96fef474416a1c0290ff6478e5
       tools/burfisher_job.py: d211be387cd554b50db48b3b947da3eaaa6399a81b50e985159db03714e38b6c
       tools/export_sl4_levels.py: d3fe47958ee23e21c778b467a650007edcfe0b08390fec1af0a5ce97f3ea1c45
-      tools/gemsim_job.py: f348ee1ad24f161bf3a7903e51fdb1906817c0c807d1fe0e2baf7744bcbd02aa
+      tools/gemsim_job.py: 59ff7bb32b68365f2f32bc1e40ee507217cf8f6adf3694c2f846abf44416c7d7
       tools/levels_job.py: 9571e957a91fd4fb469fcbbd0f8606504c4560048e4c64151b395e5c756002fb
       tools/make_levels_tab.py: 52e58f847f0033b2dcc3c223cbdf99993638633d4a524057adf71d1c583bb80a
       tools/regenerate_gempack.py: ecb1099c39fb686315c0b5a2e7935d6a7481578475688980aa84f6345d5b94a6
@@ -160,21 +160,20 @@ command: '''C:\Documentos\proyectos\equilibria\.venv\Scripts\python.exe'' ''C:\D
   --aux ''C:\Documentos\proyectos\equilibria\runs\gempack_work\gtapuv7_levels\gtapuv7_levels''
   --gemsim ''C:\GP\gemsim.exe'' --out ''C:\Documentos\proyectos\equilibria\data\gtap7\nus333\gemsim_burfisher_gragg\tbl53''
   --expect-release 11.3.004'
-equilibria_commit: ''
+equilibria_commit: 38b773cf
 exit:
   code: 0
 outputs:
-  decomp.har: 3833269a5ef80ececa75e4f3ff82f91ab56244809b0e130920407ac2501ff327
-  gemsim_console.txt: 35307d53866e0037b7584c25f07bf004bda531f907f46c74ef09791f34297a38
+  decomp.har: 97db44b9dc974d771b75523484ec1de0840e4ef4a516e666879fd9ed5995d516
+  gemsim_console.txt: 85377baf10e94651b19584e7982a6f57b84edbe47eaf565ec26f510f4fd621d3
   run.cmf: b59f4e0367760893b58e1d89e95d99ce3867fc8072f944a0ec32bc002c3fdaf4
-  solution.sl4: 8adf9f79bac8df017291d3151d5c09a4e0647a4310d5391cfa90f93d73dc52a3
-  solution.slc: 9d582e517f726a745e87d77d2729e4353c3feedbb7c7013d23c0f0ed250e214b
-  summary.har: 1197baec6e2e2a7c8ee2f8885f7215e07bf6eccbcddb6e7ba97e4e4e3b4a6d6f
-  updated.har: d2cd5d6d5cc9d1987ea63b8f679bf3e61a1a7918df7b215ad8452524a3b685f5
-  volume.har: e68d7f0f0a1816a1476e864cc3fd6f5401bb92397e368ef1c4b47b6af25379f7
+  solution.sl4: 687f0baaa1859666c217b4820be35d1de141976f7e438c06a4a89d887792ebbd
+  summary.har: 788ddbaf11bbb27f66cafa5ed212acb5e61628d3c38217657386d894f15d7e0c
+  updated.har: 3a49eaae4345910538bac5381965210a80c4364fb976610aba550b1ee01c7f7f
+  volume.har: 92878573dc9957ccde54babc0ebbcadaf23bd0daf00650d2611cabc48c965a26
 run:
-  date: '2026-11-03T19:34:28-06:00'
-  duration_s: 17.21
+  date: '2026-11-03T21:49:15-06:00'
+  duration_s: 19.633
   machine:
     os: Windows 11 (10.0.26200)
     cpu: 13th Gen Intel(R) Core(TM) i7-1365U
