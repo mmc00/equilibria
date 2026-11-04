@@ -33,4 +33,4 @@ removed version.
 
 ## Sources
 
-- `docs/architecture/registro_de_bloques.md`
+- `docs/notes/architecture/no_block_registry.md`

@@ -80,4 +80,4 @@ Nota de arquitectura:
 ## Transformaciones IEEM -> PEP
 
 - Indice (2 idiomas: espanol e ingles):
-  - `docs/ieem_to_pep_transformations.md`
+  - `docs/notes/pep/ieem_to_pep_transformations.md`

@@ -9,7 +9,7 @@
 | Entender qué es el proyecto y cómo se usa | `../README.md` |
 | Saber en qué estado está y qué falta | `roadmap.md` |
 | Entender la arquitectura (bloques, driver, shock) | `site/guide/architecture.md` y las decisiones en `adr/` |
-| Saber por qué el monolito de GTAP sigue existiendo | `architecture/monolito_vs_bloques.md` |
+| Saber por qué el monolito de GTAP sigue existiendo | `notes/architecture/monolith_vs_blocks.md` |
 | Saber por qué un número no coincide con GAMS o GEMPACK | `findings/` (ordenado por fecha) |
 
 ## Los directorios

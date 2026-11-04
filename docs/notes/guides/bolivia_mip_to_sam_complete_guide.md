@@ -206,7 +206,7 @@ docs/
   │   ├─ mip_bolivia_balancing_final_summary.md
   │   └─ bolivia_mip_to_sam_complete_guide.md (Este documento)
   └─ guides/
-      └─ mip_to_sam_guide_en.md              (Guía general)
+      └─ mip_to_sam_guide.md                 (Guía general)
 ```
 
 ---

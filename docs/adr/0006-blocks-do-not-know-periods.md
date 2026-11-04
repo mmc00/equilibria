@@ -39,5 +39,5 @@ The rule covers equations, not all block code. `blocks/gtap/periods.py` lives in
 ## Sources
 
 - `docs/roadmap.md`, "Architecture plan", "Next, in this order" item 1
-- `docs/architecture/monolito_vs_bloques.md` (the multi-period reflection asks
+- `docs/notes/architecture/monolith_vs_blocks.md` (the multi-period reflection asks
   for its SP model by method)

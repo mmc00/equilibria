@@ -129,7 +129,7 @@ def main():
     print("=" * 70)
 
     # Los bloques se componen por import directo: se importa la clase y se
-    # instancia. Ver docs/architecture/registro_de_bloques.md.
+    # instancia. Ver docs/notes/architecture/no_block_registry.md.
     print("\n" + "-" * 70)
     print("Step 1: Creating Custom Block Instance")
     print("-" * 70)

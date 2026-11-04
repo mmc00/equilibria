@@ -16,7 +16,7 @@
    deliberado: compara el ``.nl`` EMITIDO contra el de GAMS --una comparacion
    estructural, no de solve-- y no tiene equivalente en bloques.
 
-   Contexto y decision: ``docs/architecture/monolito_vs_bloques.md``.
+   Contexto y decision: ``docs/notes/architecture/monolith_vs_blocks.md``.
 
 Implementa el modelo GTAP CGE completo: todas las ecuaciones estan escritas
 para formar un sistema cuadrado resoluble.

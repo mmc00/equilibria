@@ -59,17 +59,7 @@ DOCS_TOP = frozenset(
     }
 )
 # What docs/ held before phase 6; each task of the phase removes what it moves.
-DOCS_TOP_TEMPORARY = frozenset(
-    {
-        "architecture",
-        "guides",
-        "reference",
-        "technical",
-        "ieem_to_pep_transformations.md",
-        "ieem_to_pep_transformations_en.md",
-        "ieem_to_pep_transformations_es.md",
-    }
-)
+DOCS_TOP_TEMPORARY: frozenset[str] = frozenset()
 
 SPANISH_WORDS = frozenset(
     [
@@ -143,8 +133,6 @@ _TOKEN_SPLIT = re.compile(r"[_\-.\s]+")
 # or renames each one removes it from here.
 SPANISH_LEGACY = frozenset(
     {
-        "docs/architecture/monolito_vs_bloques.md",
-        "docs/architecture/registro_de_bloques.md",
         "runs/gempack_20x41_validation/RESULTADO.md",
         "scripts/windows/corridas_paper.ps1",
         "tests/babel/gdx/test_gdxdump_sin_rutas_fijas.py",

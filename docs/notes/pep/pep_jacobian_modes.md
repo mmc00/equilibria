@@ -9,7 +9,7 @@ Esta guia resume como controlar y auditar el Jacobiano del solver PEP.
 
 Si lo que quieres es entender la capa comun reutilizable del harness, ver tambien:
 
-- `docs/guides/model_jacobian_harness.md`
+- `docs/notes/guides/model_jacobian_harness.md`
 
 ## idea simple
 

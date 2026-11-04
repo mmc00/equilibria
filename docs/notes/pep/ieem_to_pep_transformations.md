@@ -3,9 +3,9 @@
 This topic is available in two languages:
 
 1. Espanol:
-   - `docs/ieem_to_pep_transformations_es.md`
+   - `docs/notes/pep/ieem_to_pep_transformations_es.md`
 2. English:
-   - `docs/ieem_to_pep_transformations_en.md`
+   - `docs/notes/pep/ieem_to_pep_transformations_en.md`
 
 ## recommendation
 

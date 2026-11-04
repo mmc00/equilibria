@@ -459,7 +459,7 @@ result = run_mip_to_sam(
 ### Technical Documentation
 - `docs/archive/analysis/bolivia_mip_technical_report.md`: Mathematical proof of constraint incompatibility
 - `docs/archive/analysis/bolivia_mip_implementation_guide.md`: Bolivia-specific parameters
-- `docs/technical/matrix_balancing_methods.md`: Algorithm details
+- `docs/notes/sam/matrix_balancing_methods.md`: Algorithm details
 
 ---
 

@@ -46,5 +46,5 @@ so an exercise cannot run on the wrong model by accident.
 
 ## Sources
 
-- `docs/architecture/monolito_vs_bloques.md`
+- `docs/notes/architecture/monolith_vs_blocks.md`
 - `docs/roadmap.md`, "Known blockers" (`gtap_model_equations.py` cannot be retired)

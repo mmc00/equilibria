@@ -154,6 +154,6 @@ La API publica de `equilibria` queda mas estable y mas facil de explicar si:
 
 Ver tambien:
 
-- `docs/guides/simulations_api.md`
-- `docs/guides/pep_contract_api.md`
-- `docs/guides/pep_core_scenarios_gate.md`
+- `docs/notes/guides/simulations_api.md`
+- `docs/notes/pep/pep_contract_api.md`
+- `docs/notes/pep/pep_core_scenarios_gate.md`

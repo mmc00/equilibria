@@ -13,8 +13,10 @@ of stale pointer behind:
   written; each task of the phase shrinks it, and an entry that no longer hits
   fails, so the allowance can only go down.
 
-``specs/`` and ``docs/archive/`` are history, written then and not maintained, so
-neither test reads them; ``CHANGELOG.md`` is history too.
+The changes under ``specs/**/changes/`` (proposals, designs, plans) and
+``docs/archive/`` are history, written then and not maintained, so neither test
+reads them; ``CHANGELOG.md`` is history too. The rest of ``specs/`` (the
+baselines, ``areas.toml``, the templates) is live and is read.
 """
 
 from __future__ import annotations
@@ -25,7 +27,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-HISTORY = ("specs/", "docs/archive/", "CHANGELOG.md")
+HISTORY = ("docs/archive/", "CHANGELOG.md")
+HISTORY_SEGMENTS = ("/changes/", "/archive/")
 # Generators under data/ are fingerprinted by their source.yaml (ADR-0010): a
 # comment edit there breaks the record, so the mention scan leaves them alone.
 FINGERPRINTED = ("data/",)
@@ -67,66 +70,20 @@ MOVED = {
 # "file: target" links already broken when the test was written (most sit in
 # documents bound for docs/archive/). Each task removes the ones it fixes or
 # archives; Task 6 deletes the set.
-LINK_ALLOWANCE: set[str] = {
-    "docs/guides/simple_open_gams_parity.md: scripts/parity/generate_simple_open_gams_reference.py",
-    "docs/guides/simple_open_gams_parity.md: scripts/parity/run_simple_open_gams_parity.py",
-    "docs/guides/simple_open_gams_parity.md: src/equilibria/templates/reference/simple_open/scripts/simple_open_v1_benchmark.gms",
-    "docs/guides/simple_open_gams_parity.md: src/equilibria/templates/simple_open_parity_pipeline.py",
-    "docs/guides/simple_open_parity_contract.md: src/equilibria/templates/simple_open_constraint_jacobian.py",
-    "docs/guides/simple_open_parity_contract.md: src/equilibria/templates/simple_open_parity_spec.py",
-    "docs/guides/simple_open_stdcge_mapping.md: src/equilibria/templates/reference/simple_open/scripts/simple_open_v1_benchmark.gms",
-    "src/equilibria/babel/gdx/README.md: ../../CONTRIBUTING.md",
-}
+LINK_ALLOWANCE: set[str] = set()
 
 # (file, family) pairs that hit when the test was written. Each task removes
 # the pairs it fixes; Task 6 deletes the dict.
 MENTION_ALLOWANCE: set[tuple[str, str]] = {
-    ("docs/adr/0001-blocks-are-the-model.md", "docs-family"),
-    ("docs/adr/0001-blocks-are-the-model.md", "renamed-doc"),
-    ("docs/adr/0003-shock-lives-in-shock-block.md", "docs-family"),
-    ("docs/adr/0003-shock-lives-in-shock-block.md", "renamed-doc"),
-    ("docs/adr/0006-blocks-do-not-know-periods.md", "docs-family"),
-    ("docs/adr/0006-blocks-do-not-know-periods.md", "renamed-doc"),
-    ("docs/adr/0007-no-block-registry.md", "docs-family"),
-    ("docs/adr/0007-no-block-registry.md", "renamed-doc"),
-    ("docs/adr/0008-reference-models-are-the-source-of-truth.md", "docs-family"),
-    ("docs/adr/0008-reference-models-are-the-source-of-truth.md", "renamed-doc"),
-    ("docs/guides/bolivia_mip_to_sam_complete_guide.md", "renamed-doc"),
-    ("docs/guides/mip_to_sam_conversion.md", "docs-family"),
-    ("docs/guides/mip_to_sam_guide_en.md", "docs-family"),
-    ("docs/guides/pep_jacobian_modes.md", "docs-family"),
-    ("docs/guides/pep_user_flow_examples.md", "docs-family"),
-    ("docs/guides/simulations_api.md", "docs-family"),
-    ("docs/ieem_to_pep_transformations.md", "docs-loose"),
     ("docs/readme.md", "renamed-doc"),
-    ("docs/roadmap.md", "docs-family"),
-    ("docs/roadmap.md", "renamed-doc"),
-    ("examples/cge/example_04_custom_blocks.py", "docs-family"),
-    ("examples/cge/example_04_custom_blocks.py", "renamed-doc"),
-    ("examples/sam/readme.md", "docs-loose"),
-    ("scripts/dev/check_layout.py", "docs-family"),
-    ("scripts/dev/check_layout.py", "renamed-doc"),
     ("scripts/dev/check_layout.py", "renamed-test"),
-    ("scripts/gtap/_parity_json.py", "docs-family"),
     ("scripts/gtap/run_burfisher.py", "renamed-test"),
     ("scripts/paper/run_tables.py", "renamed-test"),
-    ("src/equilibria/babel/gdx/README.md", "docs-family"),
-    ("src/equilibria/babel/gdx/README.md", "renamed-doc"),
-    ("src/equilibria/solver/path_capi.py", "docs-family"),
-    ("src/equilibria/templates/gtap/gtap_block_model.py", "docs-family"),
-    ("src/equilibria/templates/gtap/gtap_block_model.py", "renamed-doc"),
-    ("src/equilibria/templates/gtap/gtap_model_equations.py", "docs-family"),
-    ("src/equilibria/templates/gtap/gtap_model_equations.py", "renamed-doc"),
     ("tests/babel/gdx/test_gdxdump_sin_rutas_fijas.py", "renamed-test"),
     ("tests/blocks/gtap/test_overwrite.py", "renamed-test"),
-    ("tests/blocks/test_sin_registro_de_bloques.py", "docs-family"),
-    ("tests/blocks/test_sin_registro_de_bloques.py", "renamed-doc"),
     ("tests/blocks/test_sin_registro_de_bloques.py", "renamed-test"),
     ("tests/scripts/test_check_commit_msg.py", "renamed-test"),
-    ("tests/scripts/test_spec_tools.py", "docs-family"),
     ("tests/templates/gtap/_desempleo.py", "renamed-test"),
-    ("tests/templates/gtap/test_gtap7_nlp_parity.py", "docs-family"),
-    ("tests/templates/gtap/test_gtap7_nlp_parity.py", "renamed-doc"),
     ("tests/templates/gtap/test_nus333_instrument_shocks.py", "renamed-test"),
     ("tests/templates/gtap/test_nus333_tbl65b_desempleo.py", "renamed-test"),
 }
@@ -134,9 +91,13 @@ MENTION_ALLOWANCE: set[tuple[str, str]] = {
 
 def _tracked(pattern: str) -> list[str]:
     out = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "-z", pattern])
-    return [
-        p for p in out.decode("utf-8").split("\0") if p and not p.startswith(HISTORY)
-    ]
+    return [p for p in out.decode("utf-8").split("\0") if p and not _history(p)]
+
+
+def _history(path: str) -> bool:
+    if path.startswith(HISTORY):
+        return True
+    return path.startswith("specs/") and any(s in path for s in HISTORY_SEGMENTS)
 
 
 def _links(text: str) -> list[str]:

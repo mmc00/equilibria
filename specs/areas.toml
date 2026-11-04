@@ -90,10 +90,10 @@ parity = [
   "docs/site/guide/pep_quickstart.md",
   "docs/site/guide/pep_coverage_matrix.md",
   "docs/site/api/templates_pep_pyomo.md",
-  "docs/guides/pep_*.md",
+  "docs/notes/pep/pep_*.md",
 ]
-"templates/simple_open" = ["docs/guides/simple_open_*.md"]
-templates = ["docs/site/guide/templates.md", "docs/guides/simulations_api.md"]
+"templates/simple_open" = ["docs/notes/guides/simple_open_*.md"]
+templates = ["docs/site/guide/templates.md", "docs/notes/guides/simulations_api.md"]
 blocks = [
   "docs/site/api/blocks.md",
   "docs/site/api/core.md",
@@ -103,9 +103,9 @@ data = [
   "docs/site/guide/har_io.md",
   "docs/site/guide/mip_to_sam.md",
   "docs/site/api/sam_tools.md",
-  "docs/guides/*mip*",
-  "docs/guides/bolivia_*",
+  "docs/notes/guides/*mip*",
+  "docs/notes/guides/bolivia_*",
   "data/README.md",
 ]
-solver = ["docs/site/guide/path_capi.md", "docs/guides/model_jacobian_harness.md"]
+solver = ["docs/site/guide/path_capi.md", "docs/notes/guides/model_jacobian_harness.md"]
 parity = ["docs/site/guide/benchmarks.md"]

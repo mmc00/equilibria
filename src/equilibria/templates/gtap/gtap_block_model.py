@@ -22,7 +22,7 @@ them as one-line delegators — they mutate the model's VarData by name
 Este modulo ya NO importa el monolito. La reflexion multi-periodo heredada de
 ``GTAPMultiPeriodModel`` pide su modelo SP a ``_build_sp()``, que esta clase
 sobrescribe; antes habia que hacerle monkey-patch a
-``GTAPModelEquations.build_model``. Ver ``docs/architecture/monolito_vs_bloques.md``.
+``GTAPModelEquations.build_model``. Ver ``docs/notes/architecture/monolith_vs_blocks.md``.
 
 :class:`GTAPBlockMultiPeriodModel` subclasses ``GTAPMultiPeriodModel`` and swaps the
 single-period model source to the block-composed SP model by overriding

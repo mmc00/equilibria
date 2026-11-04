@@ -40,5 +40,5 @@ plan", the shocks row: PR 2 after #113).
 ## Sources
 
 - #113
-- `docs/architecture/registro_de_bloques.md` (closing note)
+- `docs/notes/architecture/no_block_registry.md` (closing note)
 - `docs/roadmap.md`, "Architecture plan"

@@ -31,5 +31,5 @@ cells that fail, not the percentages.
 ## Sources
 
 - `docs/roadmap.md`, "Conventions not worth relearning the hard way"
-- `docs/architecture/monolito_vs_bloques.md` ("Por qué se pudo migrar" and the
+- `docs/notes/architecture/monolith_vs_blocks.md` ("Por qué se pudo migrar" and the
   2026-09-21 correction)

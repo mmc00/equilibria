@@ -60,7 +60,7 @@ report = sim.run_shock(var="PWM", index="agr", multiplier=1.25)
 Si quieres ver como estructurar un flujo de proyecto mas humano
 (`preprocesar SAM` -> `fit()` -> `shocks` -> `report`), revisa tambien:
 
-- `docs/guides/pep_user_flow_examples.md`
+- `docs/notes/pep/pep_user_flow_examples.md`
 
 ## escenario export tax (ttix)
 
@@ -152,7 +152,7 @@ Importante:
 - `closure` si forma parte de la API publica por escenario.
 - `equations` y `bounds` no forman parte de la API publica por escenario.
 - Si necesitas cambiar `equations`, `bounds` o la `config` del solver, eso se hace al nivel de `PepSimulator(...)`, no dentro de `Scenario(...)`.
-- La guia detallada de esta separacion esta en `docs/guides/pep_contract_api.md`.
+- La guia detallada de esta separacion esta en `docs/notes/pep/pep_contract_api.md`.
 
 ### simbolos de closure soportados hoy en pep
 

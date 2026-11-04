@@ -1,7 +1,7 @@
 # tests/blocks/test_sin_registro_de_bloques.py
 #
 # Candado de la decision documentada en
-# docs/architecture/registro_de_bloques.md: no hay registro de bloques.
+# docs/notes/architecture/no_block_registry.md: no hay registro de bloques.
 #
 # Son dos candados de distinta naturaleza y el segundo es el que aguanta:
 #   1. El de nombres es un recordatorio, no una barrera: una lista de simbolos
@@ -22,7 +22,7 @@ def test_el_registro_no_esta_en_la_superficie_publica():
         presentes = [n for n in NOMBRES if hasattr(mod, n)]
         assert not presentes, (
             f"{mod.__name__} reexpone {presentes}; ver "
-            "docs/architecture/registro_de_bloques.md"
+            "docs/notes/architecture/no_block_registry.md"
         )
         exportados = [n for n in NOMBRES if n in getattr(mod, "__all__", ())]
         assert not exportados, f"{mod.__name__}.__all__ exporta {exportados}"

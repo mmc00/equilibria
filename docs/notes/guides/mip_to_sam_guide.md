@@ -797,7 +797,7 @@ tax_rates = {
 ### Software Documentation
 
 - Equilibria documentation: `/docs/`
-- PEP model guide: `/docs/guides/pep_user_flow_examples.md`
+- PEP model guide: `/docs/notes/pep/pep_user_flow_examples.md`
 - SAM tools API: `src/equilibria/sam_tools/`
 
 ## Examples
