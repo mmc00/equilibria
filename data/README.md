@@ -11,7 +11,10 @@ tests; neither holds data.
 > `src/equilibria/templates/reference/`, `runs/`. The input datasets moved in
 > phase 1; the GAMS model and the GAMS results that run locally in phase 2a;
 > the GAMS results that need NEOS, both FBEP variants, nus333 and 9x10 in
-> phase 2b.
+> phase 2b; the reader, solver and snapshot fixtures in phase 4
+> (`gdx_tests/specimens/`, `solver_tests/`, `sam_tests/`, and the `equilibria_*`
+> and `gams_burfisher_levels` folders next to their dataset). Only the GEMPACK
+> files are left in `tests/fixtures/` (phase 3b).
 
 ## Layout
 
@@ -34,7 +37,9 @@ data/
     nus333/ ...
   gtap6/ ...
   pep/ ...
-  gdx_tests/                  GDX format specimens for the reader tests
+  gdx_tests/                  GDX format specimens for the reader tests (specimens/: one folder per generator)
+  solver_tests/               solver output files (.sol) for the backend tests
+  sam_tests/                  input-output tables for the sam_tools tests
 ```
 
 ## source.yaml

@@ -27,7 +27,7 @@ def example_5d_trade_matrix():
     print("  4. Región destino (m)")
     print("  5. Año/periodo (n)")
 
-    gdx_file = Path("tests/fixtures/test_5d.gdx")
+    gdx_file = Path("data/gdx_tests/specimens/5d_test/test_5d.gdx")
     if not gdx_file.exists():
         print("\n⚠️  Archivo de prueba no encontrado")
         return
@@ -64,7 +64,7 @@ def example_5d_io_coefficients():
     print("\nTabla IO multidimensional:")
     print("PARAMETER IO(buyer_sector, seller_sector, region, factor, period)")
 
-    gdx_file = Path("tests/fixtures/test_5d.gdx")
+    gdx_file = Path("data/gdx_tests/specimens/5d_test/test_5d.gdx")
     if not gdx_file.exists():
         print("\n⚠️  Archivo de prueba no encontrado")
         return
@@ -119,7 +119,7 @@ def example_5d_advanced_slicing():
     print("Ejemplo: Slicing Avanzado en 5D")
     print("="*70)
 
-    gdx_file = Path("tests/fixtures/test_5d.gdx")
+    gdx_file = Path("data/gdx_tests/specimens/5d_test/test_5d.gdx")
     if not gdx_file.exists():
         print("\n⚠️  Archivo de prueba no encontrado")
         return
@@ -190,7 +190,7 @@ def example_5d_aggregations():
     print("Ejemplo: Agregaciones Múltiples en 5D")
     print("="*70)
 
-    gdx_file = Path("tests/fixtures/test_5d.gdx")
+    gdx_file = Path("data/gdx_tests/specimens/5d_test/test_5d.gdx")
     if not gdx_file.exists():
         print("\n⚠️  Archivo de prueba no encontrado")
         return

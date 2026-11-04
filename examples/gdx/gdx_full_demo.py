@@ -212,7 +212,7 @@ def demo_search_symbol(gdx_data: dict, symbol_name: str) -> None:
 def main():
     """Función principal."""
     # Determinar archivo a leer
-    fixtures_dir = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
+    fixtures_dir = Path(__file__).resolve().parents[2] / "data" / "gdx_tests" / "specimens" / "simple"
     gdx_file = fixtures_dir / "simple_test.gdx"
 
     if len(sys.argv) > 1:
