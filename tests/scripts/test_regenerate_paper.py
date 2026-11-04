@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import shutil
 import sys
+import tempfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
@@ -247,10 +248,14 @@ def test_missing_executables_stop_before_job_one(tmp_path: Path) -> None:
 
 
 def test_default_work_names_no_user(monkeypatch: pytest.MonkeyPatch) -> None:
-    """--work ends up in external paths and the command: not under the home folder
-    (Windows' %TEMP% is C:/Users/<name>/...), and never under data/."""
+    """--work ends up in external paths and the command, so it is not the temp folder
+    (Windows' %TEMP% is C:/Users/<name>/...): it is the clone's git-ignored
+    runs/gempack_work, never under data/. The clone itself may be under $HOME
+    (macOS/Linux), which the records of the Windows machine never are."""
     monkeypatch.delenv("EQUILIBRIA_GEMPACK_WORK", raising=False)
-    work = _module()._default_work()
-    assert not work.resolve().is_relative_to(Path.home().resolve())
-    assert not work.resolve().is_relative_to(DATA_ROOT)
-    assert work.resolve().is_relative_to(ROOT)
+    # macOS/Linux clones live under $HOME (/Users/<name>/...): reproduce that here
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: ROOT.parent))
+    work = _module()._default_work().resolve()
+    assert work == (ROOT / "runs" / "gempack_work").resolve()
+    assert not work.is_relative_to(Path(tempfile.gettempdir()).resolve())
+    assert not work.is_relative_to(DATA_ROOT)
