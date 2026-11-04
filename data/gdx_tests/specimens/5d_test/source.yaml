@@ -1,0 +1,25 @@
+kind: result
+model: gtap7
+dataset: gdx_tests
+tool: gams
+tool_version: 53.5.0
+variant: {}
+generated_from: {}
+command: gams generate_5d_test.gms lo=0 o=/dev/null
+equilibria_commit: 73e11605
+exit:
+  code: 0
+outputs:
+  generate_5d_test.gms: 7548b23212ddc9259956071699f62c15c6d04c52690dd68b92bc58ee9507afa2
+  test_5d.gdx: 8d4110bfa1d0352d69d17f16639dc7da71413a9200150dc0e104f7c7cc2eeb5c
+run:
+  date: '2026-11-03T21:48:50-06:00'
+  duration_s: 0.624
+  machine:
+    os: macOS 26.2 (Darwin 25.2.0)
+    cpu: Apple M3 Pro
+    cores: 11
+    ram_gb: 18.0
+status: verified
+notes: Regenerated with GAMS 53.5; gdxdump identical to the file committed in tests/fixtures
+  at 4e91d12a

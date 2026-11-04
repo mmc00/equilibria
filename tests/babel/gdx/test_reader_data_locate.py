@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 from equilibria._local_refs import refs_dir

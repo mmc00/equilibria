@@ -16,12 +16,11 @@ from equilibria.babel.gdx.reader import (
     read_set_elements,
     read_variable_values,
 )
-
-FIXTURES_DIR: Path = Path(__file__).parent.parent.parent / "fixtures"
+from tests.babel.gdx._specimens import specimen
 
 
 @pytest.mark.skipif(
-    not (FIXTURES_DIR / "variables_equations_test.gdx").exists(),
+    not (specimen("variables_equations_test.gdx")).exists(),
     reason="Test fixture variables_equations_test.gdx not found",
 )
 class TestReadVariableValues:
@@ -29,7 +28,7 @@ class TestReadVariableValues:
 
     def test_read_variable_basic(self) -> None:
         """Should read basic variable structure."""
-        gdx_path: Path = FIXTURES_DIR / "variables_equations_test.gdx"
+        gdx_path: Path = specimen("variables_equations_test.gdx")
         result: dict = read_gdx(gdx_path)
 
         # Try to read a variable (may not get all data due to GDX complexity)
@@ -43,7 +42,7 @@ class TestReadVariableValues:
 
     def test_variable_not_found_raises(self) -> None:
         """Should raise ValueError for non-existent variable."""
-        gdx_path: Path = FIXTURES_DIR / "variables_equations_test.gdx"
+        gdx_path: Path = specimen("variables_equations_test.gdx")
         result: dict = read_gdx(gdx_path)
 
         with pytest.raises(ValueError, match="not found"):
@@ -51,7 +50,7 @@ class TestReadVariableValues:
 
     def test_non_variable_raises(self) -> None:
         """Should raise ValueError when reading non-variable symbol."""
-        gdx_path: Path = FIXTURES_DIR / "variables_equations_test.gdx"
+        gdx_path: Path = specimen("variables_equations_test.gdx")
         result: dict = read_gdx(gdx_path)
 
         with pytest.raises(ValueError, match="not a variable"):
@@ -59,7 +58,7 @@ class TestReadVariableValues:
 
 
 @pytest.mark.skipif(
-    not (FIXTURES_DIR / "variables_equations_test.gdx").exists(),
+    not (specimen("variables_equations_test.gdx")).exists(),
     reason="Test fixture variables_equations_test.gdx not found",
 )
 class TestReadEquationValues:
@@ -67,7 +66,7 @@ class TestReadEquationValues:
 
     def test_read_equation_basic(self) -> None:
         """Should read basic equation structure."""
-        gdx_path: Path = FIXTURES_DIR / "variables_equations_test.gdx"
+        gdx_path: Path = specimen("variables_equations_test.gdx")
         result: dict = read_gdx(gdx_path)
 
         # Try to read an equation
@@ -79,7 +78,7 @@ class TestReadEquationValues:
 
     def test_equation_not_found_raises(self) -> None:
         """Should raise ValueError for non-existent equation."""
-        gdx_path: Path = FIXTURES_DIR / "variables_equations_test.gdx"
+        gdx_path: Path = specimen("variables_equations_test.gdx")
         result: dict = read_gdx(gdx_path)
 
         with pytest.raises(ValueError, match="not found"):
@@ -87,7 +86,7 @@ class TestReadEquationValues:
 
     def test_non_equation_raises(self) -> None:
         """Should raise ValueError when reading non-equation symbol."""
-        gdx_path: Path = FIXTURES_DIR / "variables_equations_test.gdx"
+        gdx_path: Path = specimen("variables_equations_test.gdx")
         result: dict = read_gdx(gdx_path)
 
         with pytest.raises(ValueError, match="not an equation"):
@@ -95,7 +94,7 @@ class TestReadEquationValues:
 
 
 @pytest.mark.skipif(
-    not (FIXTURES_DIR / "simple_test.gdx").exists(),
+    not (specimen("simple_test.gdx")).exists(),
     reason="Test fixture simple_test.gdx not found",
 )
 class TestReadSetElements:
@@ -103,7 +102,7 @@ class TestReadSetElements:
 
     def test_read_set_elements(self) -> None:
         """Should read set elements."""
-        gdx_path: Path = FIXTURES_DIR / "simple_test.gdx"
+        gdx_path: Path = specimen("simple_test.gdx")
         result: dict = read_gdx(gdx_path)
 
         elements: list = read_set_elements(result, "i")
@@ -114,7 +113,7 @@ class TestReadSetElements:
 
     def test_set_not_found_raises(self) -> None:
         """Should raise ValueError for non-existent set."""
-        gdx_path: Path = FIXTURES_DIR / "simple_test.gdx"
+        gdx_path: Path = specimen("simple_test.gdx")
         result: dict = read_gdx(gdx_path)
 
         with pytest.raises(ValueError, match="not found"):
@@ -122,7 +121,7 @@ class TestReadSetElements:
 
     def test_non_set_raises(self) -> None:
         """Should raise ValueError when reading non-set symbol."""
-        gdx_path: Path = FIXTURES_DIR / "simple_test.gdx"
+        gdx_path: Path = specimen("simple_test.gdx")
         result: dict = read_gdx(gdx_path)
 
         with pytest.raises(ValueError, match="not a set"):
@@ -130,7 +129,7 @@ class TestReadSetElements:
 
 
 @pytest.mark.skipif(
-    not (FIXTURES_DIR / "multidim_test.gdx").exists(),
+    not (specimen("multidim_test.gdx")).exists(),
     reason="Test fixture multidim_test.gdx not found",
 )
 class TestReadMultidimSets:
@@ -138,7 +137,7 @@ class TestReadMultidimSets:
 
     def test_read_multidim_set_structure(self) -> None:
         """Should handle multi-dimensional sets."""
-        gdx_path: Path = FIXTURES_DIR / "multidim_test.gdx"
+        gdx_path: Path = specimen("multidim_test.gdx")
         result: dict = read_gdx(gdx_path)
 
         # Should be able to identify sets

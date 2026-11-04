@@ -1,0 +1,25 @@
+kind: result
+model: gtap7
+dataset: gdx_tests
+tool: gams
+tool_version: 53.5.0
+variant: {}
+generated_from: {}
+command: gams generate_multi_col_set.gms lo=0 o=/dev/null
+equilibria_commit: 73e11605
+exit:
+  code: 0
+outputs:
+  generate_multi_col_set.gms: 7f5645a2190bdff0885879999a61a1aac2a5ec92e8bc31a212b2756f9ddbba5d
+  set_2d_multi_col.gdx: 9e86782cf951c3e49bb2505fef1b566d2a6008ed0230c2568cabcf4feaa8efca
+run:
+  date: '2026-11-03T21:48:54-06:00'
+  duration_s: 0.637
+  machine:
+    os: macOS 26.2 (Darwin 25.2.0)
+    cpu: Apple M3 Pro
+    cores: 11
+    ram_gb: 18.0
+status: verified
+notes: Regenerated with GAMS 53.5; gdxdump identical to the file committed in tests/fixtures
+  at 4e91d12a

@@ -13,6 +13,8 @@ import pytest
 from equilibria.babel.gdx.decoder import decode_parameter_delta
 from equilibria.babel.gdx.reader import read_data_sections, read_gdx
 
+ROOT = Path(__file__).resolve().parents[3]
+
 
 class TestGDXDecoderAgainstCSV:
     """Test GDX decoder accuracy against CSV ground truth."""
@@ -20,12 +22,12 @@ class TestGDXDecoderAgainstCSV:
     @pytest.fixture
     def gdx_file(self):
         """Path to SAM-V2_0.gdx fixture."""
-        return Path(__file__).parent / "fixtures" / "SAM-V2_0.gdx"
+        return ROOT / "data" / "gdx_tests" / "sam_v2_0" / "SAM-V2_0.gdx"
 
     @pytest.fixture
     def csv_file(self):
         """Path to expected values CSV fixture."""
-        return Path(__file__).parent / "fixtures" / "sam_v2_0_expected.csv"
+        return ROOT / "data" / "gdx_tests" / "sam_v2_0" / "sam_v2_0_expected.csv"
 
     @pytest.fixture
     def expected_values(self, csv_file):

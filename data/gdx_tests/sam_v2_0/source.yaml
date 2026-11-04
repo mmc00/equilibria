@@ -1,0 +1,11 @@
+kind: data
+model: gtap7
+dataset: gdx_tests
+source: SAM-V2_0.gdx and its expected values (CSV), committed in tests/babel/gdx/fixtures
+  (last at 4e91d12a); origin not recorded
+license: not stated; to confirm
+outputs:
+  SAM-V2_0.gdx: 9645f9cacc65f3d3d3d855fb3b515cff9cd28e281023fba50bb6800104dceda3
+  sam_v2_0_expected.csv: a68598a351789f6b2ea645c5d8d074b3bcc9da0c33af322b83d681df942afd6b
+status: verified
+notes: ''

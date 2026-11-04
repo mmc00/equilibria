@@ -1,0 +1,33 @@
+kind: result
+model: gtap7
+dataset: gdx_tests
+tool: gams
+tool_version: 53.5.0
+variant: {}
+generated_from: {}
+command: gams generate_compression_tests.gms lo=0 o=/dev/null
+equilibria_commit: 73e11605
+exit:
+  code: 0
+outputs:
+  generate_compression_tests.gms: 7cb54cce3a68a9152d123f405f32edbb52a1e8986c4bf7196d6e27bdc7bc5b0c
+  test_arithmetic.gdx: de845f2303f8bf689013aa3877e7feb5056a132c3bef2b5866fb6b1ca6d634bb
+  test_arithmetic_compressed.gdx: 827dc180b132f6277de4d68d34cb9e67a52303560b9e038577aee4fe98d49ca4
+  test_geometric.gdx: 496bec6a004ee0f5ef35509ab399c7e5fe4692194d9d559e2554f95d039b348d
+  test_geometric_compressed.gdx: 0a37314ffbc94330208439040f39cea3980835bfef6baad7c54082c1625f42b8
+  test_growth.gdx: 1c65bb9fa12496d7c143f030f64d8939fb533e8acb3b86a4ba8ff0dd53617b09
+  test_mixed.gdx: 106b89cdba417ce83b3b7691b9c1e056838d20ecf4a87219b5aab310a6262b01
+  test_small_arithmetic.gdx: a65fa25429ec25b6d8e6b043c5253057a87f4cb98f61a41952470df58510ff53
+  test_small_geometric.gdx: 4314acf16d9dfc42281bb8adad6d6e1835d6f4794bd42732e0e923e952196044
+  test_sparse.gdx: 31128eafcd57fbc7756a06656f5b8f67694a158bcbffb81727105daee76afef1
+run:
+  date: '2026-11-03T21:48:52-06:00'
+  duration_s: 0.6
+  machine:
+    os: macOS 26.2 (Darwin 25.2.0)
+    cpu: Apple M3 Pro
+    cores: 11
+    ram_gb: 18.0
+status: verified
+notes: Regenerated with GAMS 53.5; gdxdump identical to the file committed in tests/fixtures
+  at 4e91d12a

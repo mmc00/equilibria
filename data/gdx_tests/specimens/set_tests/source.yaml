@@ -1,0 +1,32 @@
+kind: result
+model: gtap7
+dataset: gdx_tests
+tool: gams
+tool_version: 53.5.0
+variant: {}
+generated_from: {}
+command: gams generate_set_tests.gms lo=0 o=/dev/null
+equilibria_commit: 73e11605
+exit:
+  code: 0
+outputs:
+  generate_set_tests.gms: 8746d364e26941a6816ea4dd05e3d7db2804f9fd93c0f880edd529995a7540bc
+  set_2d_cartesian.gdx: 1f6062214a1486e9158a8663246484306dfe4793f69ffdca46fd4d267b44597e
+  set_2d_empty.gdx: 98087c798127a5a0ea4751ab8ffbbf92aed810b367523c606fc67dc095b95b5b
+  set_2d_full.gdx: aed6cb077599fc4e028979a80ceb3d5a470fc2d7f6b0cde70f666a0415715437
+  set_2d_sparse.gdx: 29cd9fdd4320329e73aca5613634899d68391470fada00da6a32289d1c10729e
+  set_2d_with_param.gdx: 469f313a6b68687e673062992443e92a881631ee0c58a81360e085f7d12315cd
+  set_2d_with_text.gdx: 4c014ec5b9450d598c339a2cb8e644c8cf5fae9704ba689c0ef8ab5bb87a21eb
+  set_3d.gdx: 95a0eb3118faea93a266f6c9cf133517861d70f429bc1dc4c20fe12fe9569ec7
+  set_4d.gdx: 3f1dcf4b12158e1b4d5db4a6224e2a6e5d87ee41d45fb71d2310e76242718a22
+run:
+  date: '2026-11-03T21:48:56-06:00'
+  duration_s: 0.613
+  machine:
+    os: macOS 26.2 (Darwin 25.2.0)
+    cpu: Apple M3 Pro
+    cores: 11
+    ram_gb: 18.0
+status: verified
+notes: Regenerated with GAMS 53.5; gdxdump identical to the file committed in tests/fixtures
+  at 4e91d12a

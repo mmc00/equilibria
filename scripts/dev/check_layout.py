@@ -160,7 +160,7 @@ ALLOWED_EXACT: set[str] = {
     "src/equilibria/templates/gtap/README.md",
     "runs/gempack_20x41_validation/README.md",
     "scripts/windows/README.md",
-    "tests/babel/gdx/fixtures/SAM-V2_0.gdx",
+    "data/gdx_tests/sam_v2_0/SAM-V2_0.gdx",
     # Sphinx documentation site:
     #   - Makefile is the GNU Make / Sphinx convention; renaming would
     #     break the standard `make html` workflow developers expect.
