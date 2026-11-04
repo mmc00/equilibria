@@ -7,13 +7,14 @@ source: 'equilibria''s drivers of the RunGTAP GEMPACK solver (gtapv7.exe): tools
   levels_job, gemsim_job, swap_job) under write_source; tools/make_levels_tab.py patches
   RunGTAP''s gtapv7.tab (data/gtap7/gempack_rungtap375) for six more levels, tools/export_sl4_levels.py
   exports the levels of a .sl4, tools/release_check.py checks the GEMPACK release
-  a console names. The compiled models (gtapv7.exe, gtapuv7.exe) are not redistributed
+  a console names, tools/target_shocks.py writes RunGTAP''s target% shocks (TBL53)
+  as plain shocks. The compiled models (gtapv7.exe, gtapuv7.exe) are not redistributed
   here.'
 outputs:
   tools/_job_cli.py: 5cd1ef864b79364b03329857de37fa8b8b3f2d96fef474416a1c0290ff6478e5
   tools/burfisher_job.py: d211be387cd554b50db48b3b947da3eaaa6399a81b50e985159db03714e38b6c
   tools/export_sl4_levels.py: d3fe47958ee23e21c778b467a650007edcfe0b08390fec1af0a5ce97f3ea1c45
-  tools/gemsim_job.py: 0839a5e3f1b11ec9043a1ed554ebf2f18537cd9af95803bdd827d92ceedc6d2b
+  tools/gemsim_job.py: c9ca8f9677c43981d61955375ef0c0375607e0a99e9280c2c71a11ed73c0b246
   tools/levels_job.py: 9571e957a91fd4fb469fcbbd0f8606504c4560048e4c64151b395e5c756002fb
   tools/make_levels_tab.py: 52e58f847f0033b2dcc3c223cbdf99993638633d4a524057adf71d1c583bb80a
   tools/regenerate_gempack.py: ecb1099c39fb686315c0b5a2e7935d6a7481578475688980aa84f6345d5b94a6
@@ -21,5 +22,6 @@ outputs:
   tools/release_check.py: 7ef240328c439d32ff203b6a30d4a84f39266c6a4b082d314977c34866241b5e
   tools/run_gempack_matrix.py: dad828823ecafc5b55022454e35d83e0a0d5e200ee6e5e5d4ca1acc16af0ff6d
   tools/swap_job.py: 24d6c441a880666c7cb58b0f7d94f695c7ac5862ba6ca4ceb4b48c8e5ab8509c
+  tools/target_shocks.py: 983253cd6adac881107450837959cde36a371a1d2e2ec819f967c61fa015f4cc
 status: verified
 notes: ''
