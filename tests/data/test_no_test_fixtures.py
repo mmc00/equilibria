@@ -6,8 +6,10 @@ moves the GEMPACK ones and empties the allowance.
 
 from __future__ import annotations
 
+import io
 import re
 import subprocess
+import tokenize
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -82,4 +84,44 @@ def test_no_code_points_into_tests_fixtures() -> None:
         and not re.match(r"data/.*source\.yaml:", line)
         and not any(k in line for k in _UNTIL_PHASE_3B)
     ]
+    assert not hits, "\n".join(hits)
+
+
+# Folders named "fixtures" that are not tests/**/fixtures (a tmp_path subfolder).
+_NOT_TESTS_FIXTURES = frozenset(
+    {
+        "tests/templates/gtap/test_linearization_study_gen.py",
+        "tests/data/test_no_test_fixtures.py",  # this guard names the word
+    }
+)
+
+
+def _fixtures_segments(path: Path) -> list[int]:
+    """Lines where a Python string literal is exactly "fixtures" (a Path segment)."""
+    tokens = tokenize.generate_tokens(io.StringIO(path.read_text()).readline)
+    return [
+        t.start[0]
+        for t in tokens
+        if t.type == tokenize.STRING and t.string.strip("\"'") == "fixtures"
+    ]
+
+
+def test_no_python_path_segment_into_tests_fixtures() -> None:
+    """Catches ``parent / "fixtures" / ...`` however it is split over lines."""
+    files = subprocess.run(
+        ["git", "ls-files", "*.py"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    hits = []
+    for rel in files:
+        if rel.startswith(_EXEMPT_FILES) or rel in _NOT_TESTS_FIXTURES:
+            continue
+        lines = (ROOT / rel).read_text().splitlines()
+        for n in _fixtures_segments(ROOT / rel):
+            window = "\n".join(lines[n - 1 : n + 3])
+            if not any(k in window for k in _UNTIL_PHASE_3B):
+                hits.append(f"{rel}:{n}: {lines[n - 1].strip()}")
     assert not hits, "\n".join(hits)

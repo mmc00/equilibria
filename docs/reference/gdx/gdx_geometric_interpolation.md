@@ -1,5 +1,7 @@
 # GDX Geometric Interpolation - Implementation Summary
 
+> The `examples/gdx/` analysis scripts this page names (`gdx_binary_analyzer.py`, `gdx_deep_analysis.py`, `test_geometric_interpolation.py`) were removed in phase 4 of the one-data-folder change (ADR-0010); they are in the git history before `d53bd28f`. The reader tests in `tests/babel/gdx/` cover what they explored.
+
 ## Overview
 
 Successfully implemented automatic detection and support for both **arithmetic** and **geometric** sequence interpolation in the GDX reader.
@@ -26,8 +28,8 @@ Performed deep analysis of GDX binary format to understand compression:
 - Both progression types use same binary structure
 
 **Files Created:**
-- [gdx_binary_analyzer.py](../../../examples/gdx/gdx_binary_analyzer.py) - Compare binary structures
-- [gdx_deep_analysis.py](../../../examples/gdx/gdx_deep_analysis.py) - Byte-by-byte analysis
+- `examples/gdx/gdx_binary_analyzer.py` - Compare binary structures
+- `examples/gdx/gdx_deep_analysis.py` - Byte-by-byte analysis
 
 ### 2. Heuristic Detection Algorithm
 
@@ -81,7 +83,7 @@ Modified `_decode_1d_parameter()` function to:
 
 Created comprehensive test suite:
 
-**File:** [test_geometric_interpolation.py](../../../examples/gdx/test_geometric_interpolation.py)
+**File:** `examples/gdx/test_geometric_interpolation.py`
 
 ```bash
 $ python examples/gdx/test_geometric_interpolation.py
@@ -116,7 +118,7 @@ $ python -m pytest tests/ -v
 
 Generated GAMS test files with known sequences:
 
-**File:** [generate_compression_tests.gms](../../../tests/fixtures/generate_compression_tests.gms)
+**File:** [generate_compression_tests.gms](../../../data/gdx_tests/specimens/compression_tests/generate_compression_tests.gms)
 
 **Generated GDX files:**
 - `test_arithmetic.gdx` - Linear sequence (10, 20, 30, ..., 100)
@@ -151,7 +153,7 @@ Generated GAMS test files with known sequences:
 
 - GDX Format Specification (informal, reverse-engineered)
 - GAMS Documentation: Data Compression
-- Test fixtures: `tests/fixtures/test_*.gdx`
+- Test fixtures: `data/gdx_tests/specimens/compression_tests/test_*.gdx`
 
 ## Files Modified
 
@@ -167,7 +169,7 @@ Generated GAMS test files with known sequences:
 
 ### Tests
 - `examples/gdx/test_geometric_interpolation.py` - Validation suite
-- `tests/fixtures/generate_compression_tests.gms` - Test data generator
+- `data/gdx_tests/specimens/compression_tests/generate_compression_tests.gms` - Test data generator
 
 ## Conclusion
 
