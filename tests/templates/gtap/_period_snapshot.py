@@ -35,7 +35,7 @@ from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[3]
 DATASET = dataset_dir("gtap7_3x3")
-FIXTURE = ROOT / "tests" / "fixtures" / "period_prep_snapshot.json"
+FIXTURE = dataset_dir("gtap7_3x3_equilibria_period_prep") / "period_prep_snapshot.json"
 
 # Cada caso: (nombre, mode, if_sub, opciones de build, opciones del driver). La
 # opcion "shock" no va al driver: se escribe en el ShockBlock con apply_shock.

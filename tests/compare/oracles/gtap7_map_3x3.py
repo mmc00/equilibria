@@ -1,7 +1,7 @@
 """Reproduce el oraculo del ejemplo 15 (tests/compare/_oracle.py) SIN equilibria.compare.
 
 El mapeo GTAP de equilibria (#132): equilibria resuelto contra GEMPACK en NIVELES,
-pre y post. A = ``tests/compare/fixtures/eq_gtap7_3x3_levels.json.gz``
+pre y post. A = ``data/gtap7/gtap7_3x3/equilibria_levels/eq_gtap7_3x3_levels.json.gz``
 (``make_eq_gtap7_levels.py``: ``_solve_shock("gtap7_3x3", 0)``, capFlex, el cierre del
 fixture de GEMPACK); B = ``sl4levels6_gtap7_3x3_tm10.har`` (LEVB = pre, LEVA = post).
 Periodos de A: check -> pre, shock -> post. Todo a mano, con numpy:
@@ -38,7 +38,7 @@ from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[3]
 FIX = ROOT / "tests" / "fixtures" / "gtap7_gempack"
-EQ = ROOT / "tests" / "compare" / "fixtures" / "eq_gtap7_3x3_levels.json.gz"
+EQ = dataset_dir("gtap7_3x3_equilibria_levels") / "eq_gtap7_3x3_levels.json.gz"
 THRESHOLDS = (1e-3, 5e-3, 1e-2)
 PERIODS = {"pre": "check", "post": "shock"}
 INSCALE = 1e-6

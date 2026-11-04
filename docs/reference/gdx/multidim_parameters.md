@@ -101,7 +101,7 @@ Los tests están en `tests/babel/gdx/test_multidim_parameters.py` y `tests/babel
 
 ```bash
 # Generar archivos de prueba (requiere GAMS)
-cd tests/fixtures
+cd data/gdx_tests/specimens/<generator>   # e.g. 6d_test
 /Library/Frameworks/GAMS.framework/Versions/48/Resources/gams generate_multidim_test.gms
 /Library/Frameworks/GAMS.framework/Versions/48/Resources/gams generate_5d_test.gms
 

@@ -1,7 +1,7 @@
 """Bienestar contra GAMS: ``ev``, ``cv``, ``u``, ``ug``, ``us`` y ``uh`` en el check y el shock.
 
 Oraculo: los niveles que resolvio GAMS en el MCP de cada ejercicio
-(``tests/fixtures/nus333_bienestar_gams_levels.json.gz``, de
+(``data/gtap7/nus333/gams_burfisher_levels/welfare.json.gz``, de
 ``scripts/gtap/gams_welfare_fixture.py``). En GAMS ``eveq``, ``cveq``, ``ueq``, ``ugeq``,
 ``useq`` y ``uheq`` estan en ``model gtap``; el driver de equilibria saca las cinco
 primeras del sistema simultaneo (son hojas: nada depende de ellas) y las resuelve
@@ -21,11 +21,13 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from tests.templates.gtap._nus333 import ROOT, gams_levels, nus333_params, run_burfisher
+from tests.templates.gtap._nus333 import gams_levels, nus333_params, run_burfisher
+
+from equilibria.sources import dataset_dir
 
 pytestmark = pytest.mark.integration
 
-FIXTURE = ROOT / "tests" / "fixtures" / "nus333_bienestar_gams_levels.json.gz"
+FIXTURE = dataset_dir("nus333_gams_burfisher_levels") / "welfare.json.gz"
 EXERCISES = ("TBL62A", "TBL45A", "TBL63A")
 VARS = ("ev", "cv", "u", "ug", "uh")
 TOL = 1e-3

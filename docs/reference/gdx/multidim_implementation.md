@@ -1,5 +1,7 @@
 # Soporte Completo para Parámetros Multidimensionales (3D - 5D+)
 
+> The `examples/gdx/` analysis scripts this page names (`test_5d_params.py`) were removed in phase 4 of the one-data-folder change (ADR-0010); they are in the git history before `d53bd28f`. The reader tests in `tests/babel/gdx/` cover what they explored.
+
 ## Resumen de Implementación
 
 Se ha implementado **soporte completo** para lectura de parámetros multidimensionales desde archivos GDX, incluyendo parámetros de 3, 4, 5 y potencialmente más dimensiones.
@@ -35,8 +37,8 @@ El lector GDX ahora reconoce y decodifica 4 patrones de codificación binaria:
 ### Tests
 - `tests/babel/gdx/test_multidim_parameters.py` - Tests 3D/4D (4 tests)
 - `tests/babel/gdx/test_5d_parameters.py` - Tests 5D (4 tests) - **NUEVO**
-- `tests/fixtures/generate_multidim_test.gms` - Generador 3D/4D
-- `tests/fixtures/generate_5d_test.gms` - Generador 5D - **NUEVO**
+- `data/gdx_tests/specimens/multidim_test/generate_multidim_test.gms` - Generador 3D/4D
+- `data/gdx_tests/specimens/5d_test/generate_5d_test.gms` - Generador 5D - **NUEVO**
 
 ### Ejemplos y Documentación
 - `examples/gdx/multidim_examples.py` - Ejemplos prácticos 3D/4D

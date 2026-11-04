@@ -1,7 +1,7 @@
 # MIP to SAM Conversion Guide
 
 > The examples read your own MIP (`mip.xlsx`, `mip_bolivia.xlsx`). The repository
-> ships a 3-sector test MIP at `tests/sam_tools/fixtures/simple_mip.xlsx` to try them on.
+> ships a 3-sector test MIP at `data/sam_tests/simple_mip.xlsx` to try them on.
 
 This guide explains how to convert an Input-Output Matrix (MIP) to a Social Accounting Matrix (SAM) compatible with CGE models like PEP.
 

@@ -23,7 +23,7 @@ de la corrida (post).
 Uso (desde la raiz). Con niveles de equilibria ya guardados::
 
     uv run python scripts/gtap/compare_gempack_levels.py \\
-        --eq tests/compare/fixtures/eq_gtap7_3x3_levels.json.gz \\
+        --eq data/gtap7/gtap7_3x3/equilibria_levels/eq_gtap7_3x3_levels.json.gz \\
         --har tests/fixtures/gtap7_gempack/sl4levels6_gtap7_3x3_tm10.har \\
         --basedata data/gtap7/gtap7_3x3/basedata.har \\
         --updated tests/fixtures/gtap7_gempack/updated_gtap7_3x3_tm10.har
@@ -38,7 +38,7 @@ Newton-TR + MUMPS del 20x41, que necesita pymumps)::
         --updated tests/fixtures/gtap7_gempack/updated_gtap7_20x41_tm10_s8-16-32_capfix.har \\
         --out reporte.json
 
-``--eq``/``--save-eq`` tienen la forma de ``tests/compare/fixtures/make_eq_gtap7_levels.py``.
+``--eq``/``--save-eq`` tienen la forma de ``data/gtap7/gtap7_3x3/equilibria_levels/make_eq_gtap7_levels.py``.
 """
 
 from __future__ import annotations

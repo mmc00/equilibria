@@ -126,11 +126,7 @@ SPANISH_LEGACY = frozenset(
         "scripts/windows/corridas_paper.ps1",
         "tests/babel/gdx/test_gdxdump_sin_rutas_fijas.py",
         "tests/blocks/test_sin_registro_de_bloques.py",
-        "tests/fixtures/gtap7_3x3_punto_sin_shock_3f3fe5f.json.gz",
-        "tests/fixtures/gtap7_3x3_residuos_sin_shock_3f3fe5f.json.gz",
-        "tests/fixtures/nus333_bienestar_gams_levels.json.gz",
         "tests/fixtures/nus333_bienestar_gempack.json.gz",
-        "tests/fixtures/nus333_desempleo_gams_levels.json.gz",
         "tests/templates/gtap/_desempleo.py",
         "tests/templates/gtap/test_driver_default_es_bloques.py",
         "tests/templates/gtap/test_nus333_bienestar.py",
@@ -160,7 +156,7 @@ ALLOWED_EXACT: set[str] = {
     "src/equilibria/templates/gtap/README.md",
     "runs/gempack_20x41_validation/README.md",
     "scripts/windows/README.md",
-    "tests/babel/gdx/fixtures/SAM-V2_0.gdx",
+    "data/gdx_tests/sam_v2_0/SAM-V2_0.gdx",
     # Sphinx documentation site:
     #   - Makefile is the GNU Make / Sphinx convention; renaming would
     #     break the standard `make html` workflow developers expect.

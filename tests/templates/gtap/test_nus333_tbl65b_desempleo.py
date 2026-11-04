@@ -23,7 +23,7 @@ igual al check (<=3e-6 en pft/pa/xa), asi que anclar a la base equivale al cierr
 del oraculo, que ancla al check.
 
 Todas las celdas: los niveles GAMS de check y shock de TBL65B y ME3C (cada uno
-con su GDX, gen_gams UNEMP) estan en ``tests/fixtures/nus333_desempleo_gams_levels.json.gz``,
+con su GDX, gen_gams UNEMP) estan en ``data/gtap7/nus333/gams_burfisher_levels/unemployment_tbl65b_me3c.json.gz``,
 extraidos con ``_diff_core.gams_levels``, y se comparan con ``run_burfisher.compare``
 (la misma logica que los 35 ejercicios). ME3C es el mismo .EXP que TBL65B.
 
@@ -32,13 +32,11 @@ LOCAL-only: SKIP si falta nus333.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, cast
 
 import pytest
 from tests.templates.gtap._desempleo import register_desempleo_hooks
 from tests.templates.gtap._nus333 import (
-    ROOT,
     closure,
     gams_levels,
     nus333_params,
@@ -46,9 +44,13 @@ from tests.templates.gtap._nus333 import (
     run_burfisher,
 )
 
+from equilibria.sources import dataset_dir
+
 pytestmark = pytest.mark.integration
 
-LEVELS = ROOT / "tests" / "fixtures" / "nus333_desempleo_gams_levels.json.gz"
+LEVELS = (
+    dataset_dir("nus333_gams_burfisher_levels") / "unemployment_tbl65b_me3c.json.gz"
+)
 TOL_PP = 0.002
 
 # GAMS capFlex, % shock/check (oraculo de arriba).

@@ -1,7 +1,7 @@
 # MIP to SAM Conversion Guide
 
 > The examples read your own MIP (`mip.xlsx`, `data/...`). The repository ships
-> a 3-sector test MIP at `tests/sam_tools/fixtures/simple_mip.xlsx` to try them on.
+> a 3-sector test MIP at `data/sam_tests/simple_mip.xlsx` to try them on.
 
 ## Overview
 
@@ -676,7 +676,7 @@ for step in result.steps:
 
 There is no one-call API that turns this SAM into a solved PEP model. The
 pieces exist, but the bridge is not finished. Measured on 2026-10-28 with the
-3-sector test MIP (`tests/sam_tools/fixtures/simple_mip.xlsx`):
+3-sector test MIP (`data/sam_tests/simple_mip.xlsx`):
 
 ```python
 from pathlib import Path
@@ -686,7 +686,7 @@ from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibrato
 from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
 from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep
 
-run_mip_to_sam(Path("tests/sam_tools/fixtures/simple_mip.xlsx"), output_path=Path("sam.xlsx"))
+run_mip_to_sam(Path("data/sam_tests/simple_mip.xlsx"), output_path=Path("sam.xlsx"))
 
 # dynamic_sets=True reads the sectors and households from the SAM;
 # without it the calibrator expects the PEP reference labels and calibrates zeros.
@@ -810,7 +810,7 @@ from pathlib import Path
 from equilibria.sam_tools import run_mip_to_sam
 
 result = run_mip_to_sam(
-    Path("tests/sam_tools/fixtures/simple_mip.xlsx"),  # your MIP here
+    Path("data/sam_tests/simple_mip.xlsx"),  # your MIP here
     va_factor_shares={"L": 0.67, "K": 0.33},
     output_path=Path("sam.xlsx"),
     report_path=Path("report.json"),

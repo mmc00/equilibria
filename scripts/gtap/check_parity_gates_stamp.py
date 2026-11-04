@@ -33,7 +33,7 @@ INPUT_TREES = [
     "scripts/gtap",
     "tests/templates/gtap",
     "tests/templates/gtap_logvalue",
-    "tests/fixtures/gtap_logvalue",
+    "data/gtap7/gtap7_3x3/julia_logvalue_calibrated",
     "data/gtap6",
     "data/gtap7",
 ]

@@ -1,0 +1,11 @@
+kind: data
+model: gtap7
+dataset: gdx_tests_no_generator
+source: Committed in tests/fixtures (last at 4e91d12a); no generator in the repository
+license: test specimens written for equilibria
+outputs:
+  bigskip_test.gdx: 2f33be080e19209ebdefb57774db90f4bfa909bed3152be62040ddeed55bfbc7
+  patterns_test.gdx: c688e24b13d044bad3b906ff520ea552cfbaf098885808df2fc2189c9da717d6
+  skip_test.gdx: 02233cfa744e3198169ed6d39ed595aa9419919183bba9dafc3cb7d66825daa8
+status: verified
+notes: ''

@@ -1,0 +1,15 @@
+kind: data
+model: gtap7
+dataset: gtap7_3x3_equilibria_no_shock
+source: 'equilibria golden snapshots of the no-shock system (point and row residuals,
+  gtap7_3x3, pure closure) first taken on main 3f3fe5f and last regenerated at 7c3c9fa3
+  (see the docstring of tests/templates/gtap/test_no_shock_identical_to_main.py for
+  each regeneration). Moved byte for byte from tests/fixtures at 4e91d12a; the test
+  passing on that commit is the check. Regenerate the residuals with: python tests/templates/gtap/test_no_shock_identical_to_main.py
+  <repo_root> <out>'
+license: equilibria output (MIT, as the package)
+outputs:
+  no_shock_point_3f3fe5f.json.gz: a8a8ceb8bc9a805ce50a93301f7f57730813d69313ea9a27b5e1428fbfdcab89
+  no_shock_residuals_3f3fe5f.json.gz: 225802c83acc39a1a44a9d9529b7acda3541351c6ac832b5a4746eac87a3087c
+status: verified
+notes: ''

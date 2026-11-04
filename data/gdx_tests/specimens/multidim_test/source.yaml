@@ -1,0 +1,25 @@
+kind: result
+model: gtap7
+dataset: gdx_tests
+tool: gams
+tool_version: 53.5.0
+variant: {}
+generated_from: {}
+command: gams generate_multidim_test.gms lo=0 o=/dev/null
+equilibria_commit: 73e11605
+exit:
+  code: 0
+outputs:
+  generate_multidim_test.gms: 97b2e94d28557e35e0422a98c56c47cafec0659892b4564efdb63299b37e98be
+  multidim_test.gdx: 774059015145847002092dc1a4e59a9f3a83fcf8f4de9273af387f08099ade02
+run:
+  date: '2026-11-03T21:48:55-06:00'
+  duration_s: 0.587
+  machine:
+    os: macOS 26.2 (Darwin 25.2.0)
+    cpu: Apple M3 Pro
+    cores: 11
+    ram_gb: 18.0
+status: verified
+notes: Regenerated with GAMS 53.5; gdxdump identical to the file committed in tests/fixtures
+  at 4e91d12a

@@ -4,7 +4,7 @@ Dos ejercicios de Burfisher: TBL46A (arancel de USA a MFG de ROW, ``esubd0.8.prm
 GEMPACK Gragg 2-4-6) y TBL45A (productividad de SER en USA, Johansen de 1 paso, como
 el libro: no tiene por que coincidir con una solucion en niveles).
 equilibria resuelto contra GEMPACK en NIVELES, pre y post, con las mismas formulas
-del ejemplo 15 (``gtap7_map_3x3.py``). A = ``tests/compare/fixtures/
+del ejemplo 15 (``gtap7_map_3x3.py``). A = ``data/gtap7/nus333/equilibria_burfisher_levels/
 eq_burfisher_<exp>_levels.json.gz`` (``make_eq_burfisher_levels.py``); B = el ``.sl4``
 de GEMPACK (``tests/fixtures/gtap7_gempack/burfisher/<exp>.sl4.gz``),
 leido aca a mano: VARS/PLEV/VNCP dan donde empieza cada variable en LEVB (pre) y
@@ -33,7 +33,7 @@ from equilibria.babel.har.reader import read_har
 from equilibria.sources import dataset_dir
 
 FIX = ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher"
-EQ = ROOT / "tests" / "compare" / "fixtures"
+EQ = ROOT / "data" / "gtap7" / "nus333" / "equilibria_burfisher_levels"
 
 
 def sl4_levels(path: Path) -> dict[str, dict[tuple[str, tuple[str, ...]], float]]:

@@ -1,0 +1,16 @@
+kind: data
+model: gtap7
+dataset: nus333_gams_burfisher_levels
+source: 'GAMS levels of the Burfisher exercises on nus333, read with gdxdump (scripts/gtap/_diff_core.gams_levels)
+  from the GDX that scripts/gtap/gen_burfisher_gams.py writes: welfare.json.gz (ev,
+  cv, u, ug, us, uh; written by scripts/gtap/gams_welfare_fixture.py at a678e711),
+  unemployment_tbl65b_me3c.json.gz (46a03116) and tbl94.json.gz (a4fab212). Moved
+  byte for byte from tests/fixtures at 4e91d12a; the Burfisher GAMS GDX are not in
+  data/ yet, so they are not regenerated here'
+license: GAMS output on the nus333 dataset; as that dataset (to confirm)
+outputs:
+  tbl94.json.gz: 5c9bce513e1160cff84c86f966f56b4a8720ca588d931ccf67262a86afe17bf5
+  unemployment_tbl65b_me3c.json.gz: 72179f003bd24cb0bb6914d30df484f31ab235d586ee9d92979e8b2a04758c4e
+  welfare.json.gz: 64794f1cd1392ab19c197f724357f709f6d6897a4c26d4c6d2cd47d58fabac9b
+status: verified
+notes: ''

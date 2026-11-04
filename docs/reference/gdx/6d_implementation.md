@@ -1,5 +1,7 @@
 # 6D Parameter Support Implementation
 
+> The `examples/gdx/` analysis scripts this page names (`verify_6d.py`, `test_6d_params.py`, `analyze_6d_binary.py`) were removed in phase 4 of the one-data-folder change (ADR-0010); they are in the git history before `d53bd28f`. The reader tests in `tests/babel/gdx/` cover what they explored.
+
 ## Summary
 
 Successfully implemented support for reading 6-dimensional (6D) parameters from GDX files in the `equilibria.babel.gdx.reader` module. This extends the existing support from 5D to 6D and beyond.
@@ -49,7 +51,7 @@ Corrected documentation inconsistency in `_data_section_has_floats()`:
 
 ### Test Files
 
-1. **`tests/fixtures/generate_6d_test.gms`**
+1. **`data/gdx_tests/specimens/6d_test/generate_6d_test.gms`**
    - Generates test GDX with 6D parameters
    - `p6d_sparse`: 8 values (corners of 6D hypercube)
    - `p6d_dense`: 64 values (full 2^6 hypercube)
@@ -186,7 +188,7 @@ The implementation supports **7D and beyond** through the existing pattern syste
 2. `tests/babel/gdx/test_6d_parameters.py` (new)
    - 4 comprehensive tests
 
-3. `tests/fixtures/generate_6d_test.gms` (new)
+3. `data/gdx_tests/specimens/6d_test/generate_6d_test.gms` (new)
    - GAMS test data generator
 
 4. `examples/gdx/example_6d_usage.py` (new)
@@ -201,7 +203,7 @@ Run complete verification:
 
 ```bash
 # Generate test data
-cd tests/fixtures
+cd data/gdx_tests/specimens/<generator>   # e.g. 6d_test
 gams generate_6d_test.gms
 
 # Run tests
