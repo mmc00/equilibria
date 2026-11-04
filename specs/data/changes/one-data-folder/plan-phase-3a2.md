@@ -60,6 +60,8 @@ Nothing old is deleted or rewired here.
   - `experiment`: the lower-case `.exp` stem
   - `method`: `book` (as the `.exp` says) | `gragg` (Johansen 1-step rewritten to Gragg 2-4-6)
 - **Solutions are stored raw** (D3). `.sl4` files are kept uncompressed, as GEMPACK wrote them: about 42.5 MB for both Burfisher sets. `data/` is already excluded from `check-added-large-files`.
+- **No `levels.txt`** (maintainer, 2026-11-04). The `sltoht -SHL -SIC` text that `export_sl4_levels.py` parses is not kept: it is 60.8 MB for each 20x41 run, about 270 MB of the first full run's 338 MB, and `sltoht` rebuilds it from `solution.sl4`. `sl4levels.har` is the record.
+- **One batch of tools changes, then one full run** (maintainer, 2026-11-04). Every record lists the sha256 of every file of `data/gtap7/gempack/tools/`, so a change there makes every recorded result stale. All `tools/` changes go in one batch, reviewed before the run, and then everything runs once.
 
 ## Review Focus
 
@@ -173,7 +175,7 @@ Today the input of steps 1 and 6a is `tests/fixtures/gtap7_gempack/burfisher/`, 
 - **Variant** `{experiment: <exp>, method: book}`. `--input solution=gtap7/nus333/gempack_burfisher/<exp>`.
 - **Files**
   - All 39: `sl4dump.har` (step 6a: sltoht batch `<stem>/c/n/har/<out>/e`, as `Dump-Changes`) and `sltoht_console.txt`.
-  - `tbl45a`, `me9c`, `gtapv7` also get step 1: `levels.txt` (`sltoht -SHL -SIC`), `sl4levels.har` and `export_console.txt` (`export_sl4_levels.py --sl4dump <its own sl4dump.har>`).
+  - `tbl45a`, `me9c`, `gtapv7` also get step 1: `sl4levels.har` and `export_console.txt` (`export_sl4_levels.py --sl4dump <its own sl4dump.har>`).
 - **Replaces**
   - `burfisher/sl4dump_tbl45a.har`, `sl4dump_me9c.har`, `sl4dump_gtapv7.har`.
   - Nothing for step 1's levels or the other 36 dumps: they were never committed. They appear as new oracles; step 6 already makes them today.
@@ -193,7 +195,7 @@ The 3a-1 folders do not keep the `.sl4`, and the frozen `collect_job` drops it. 
 - **Folder** `data/gtap7/<ds>/sltoht_tm10_s8-16-32_<capflex|capfix>/`, 6 jobs: capFlex for `gtap7_{3x3,3x4,5x5,10x7,15x10}`, and capFix for `gtap7_20x41`.
 - **Variant** `{shock: 10, steps: "8-16-32", closure}`. `--data-dir data/gtap7/<ds>`; `--input sl4dump=gtap7/<ds>/gempack_tm10_s8-16-32_<closure>/sl4dump.har`.
 - **External** `gtapv7.exe` with release 12.1.003.
-- **Files** `run.cmf`, `solution.sl4`, `solve_console.txt`, `levels.txt`, `sl4levels.har`, `export_console.txt`.
+- **Files** `run.cmf`, `solution.sl4`, `solve_console.txt`, `sl4levels.har`, `export_console.txt`.
 - **Replaces**
   - `sl4levels_gtap7_{3x3,3x4,5x5,10x7,15x10}_tm10.har`
   - `sl4levels_gtap7_20x41_tm10_s8-16-32_capfix.har`
@@ -240,7 +242,7 @@ The 3a-1 folders do not keep the `.sl4`, and the frozen `collect_job` drops it. 
 - **Group** `levels6`. **Tool** `gemsim`, `--gp-release`.
 - **Folder** `data/gtap7/<ds>/gemsim_levels6_tm10_s8-16-32_<capflex|capfix>/`, 12 jobs (6 datasets × 2 closures).
 - **Variant** `{shock: 10, steps: "8-16-32", closure, tab: gtapv7_levels}`. `--data-dir data/gtap7/<ds>`; `--input sl4dump=gtap7/<ds>/gempack_tm10_s8-16-32_<closure>/sl4dump.har` (the unpatched solution, as step 4 used).
-- **Files** `run.cmf` (3a-1 `prepare` with the `Auxiliary files` line rewritten), `default_rdlt0.prm` (capFix only, from `_force_rdlt`), `solution.sl4`, `gemsim_console.txt`, `levels.txt`, `sl4levels.har`, `export_console.txt`.
+- **Files** `run.cmf` (3a-1 `prepare` with the `Auxiliary files` line rewritten), `default_rdlt0.prm` (capFix only, from `_force_rdlt`), `solution.sl4`, `gemsim_console.txt`, `sl4levels.har`, `export_console.txt`.
 - **Replaces**
   - `sl4levels6_gtap7_{3x3,3x4,5x5,10x7,15x10,20x41}_tm10_s8-16-32.har` (capFlex)
   - `…_tm10_s8-16-32_capfix.har` (capFix)
@@ -293,7 +295,7 @@ The 3a-1 folders do not keep the `.sl4`, and the frozen `collect_job` drops it. 
 - **Variant** `{experiment, method: gragg}`. `--input solution=gtap7/nus333/gemsim_burfisher_gragg/<exp>`.
 - **Files**
   - `sl4dump.har` (step 6b)
-  - `levels.txt`, `sl4levels.har` and `export_console.txt` (step 7, cross-checked against this folder's own `sl4dump.har`)
+  - `sl4levels.har` and `export_console.txt` (step 7, cross-checked against this folder's own `sl4dump.har`)
   - `sltoht_console.txt`
 - **Replaces** `burfisher_gragg/sl4levels_<exp>.har` (41 of 43). The step-6b dumps were never committed; `gtapv7` and `tbl53` are new.
 - This task also retires the `-gt 6` bug of `corridas_paper.ps1` (step 7 rejected without the local patch): the driver has no step numbers.

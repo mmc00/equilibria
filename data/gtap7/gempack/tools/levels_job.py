@@ -22,7 +22,7 @@ from _job_cli import common, releases
 from gemsim_job import JobError, _collect, _fresh, _normal_end, _work
 from gemsim_job import check_release, export_levels, run_retry, sltoht_dump
 from run_gempack_matrix import INPUT_FILES, prepare
-from swap_job import from_template
+from swap_job import crlf, from_template
 
 from equilibria.sources import dataset_dir
 
@@ -49,7 +49,9 @@ def run_dump(args: argparse.Namespace) -> int:
             print(f"FAILED {name}: levels export rc={rc}, xcheck-mismatch={mismatch}",
                   file=sys.stderr)  # fmt: skip
             return 1
-        pairs += [(wd / "solution_levels.txt", "levels.txt"), (wd / "sl4levels.har", "sl4levels.har")]
+        # levels.txt (sltoht -SHL -SIC) is not kept: sltoht rebuilds it from
+        # solution.sl4; sl4levels.har is the record (maintainer, 2026-11-04)
+        pairs.append((wd / "sl4levels.har", "sl4levels.har"))
     _collect(out, pairs)
     shutil.rmtree(wd, ignore_errors=True)
     print(f"OK dump {name}" + (" with levels" if args.levels else ""))
@@ -70,7 +72,7 @@ def run_resolve(args: argparse.Namespace) -> int:
             shutil.copy2(dataset_dir(args.dataset) / f, run_dir / f)
         text = from_template(args.template.read_bytes().decode(target_shocks.ENCODING),
                              shock=args.shock, aux=aux)  # fmt: skip
-        (run_dir / "run.cmf").write_bytes(text.encode(target_shocks.ENCODING))
+        (run_dir / "run.cmf").write_bytes(crlf(text).encode(target_shocks.ENCODING))
     console = out / "solve_console.txt"
     rc = run_retry([str(args.gtapv7), "-cmf", f"{tag}.cmf"], run_dir, console, note_dir=out)
     gtapv7_rel = releases(args).get("gtapv7.exe")
@@ -91,8 +93,9 @@ def run_resolve(args: argparse.Namespace) -> int:
               f"(export rc={rc}, xcheck-mismatch={mismatch}; see {export_console.name})",
               file=sys.stderr)  # fmt: skip
         return 1
+    # levels.txt (sltoht -SHL -SIC) is not kept: 60 MB for 20x41, and sltoht
+    # rebuilds it from solution.sl4; sl4levels.har is the record (maintainer, 2026-11-04)
     _collect(out, [(run_dir / f"{tag}.cmf", "run.cmf"), (sl4, "solution.sl4"),
-                   (run_dir / f"{tag}_levels.txt", "levels.txt"),
                    (run_dir / "sl4levels.har", "sl4levels.har")])  # fmt: skip
     shutil.rmtree(root, ignore_errors=True)
     print(f"OK resolve {name}: levels match the recorded sl4dump")

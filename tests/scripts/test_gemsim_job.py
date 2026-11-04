@@ -233,6 +233,7 @@ def fake(monkeypatch: pytest.MonkeyPatch):
 
     f = FakeGempack()
     monkeypatch.setattr(gemsim_job, "run", f)
+    monkeypatch.setattr(gemsim_job, "RETRY_PAUSE_S", 0)
     return f
 
 
@@ -270,7 +271,7 @@ def test_levels6_runs_the_patched_tab(tmp_path: Path, fake) -> None:
     assert gemsim_job.main(_levels6(tmp_path, "1")) == 0
     out = tmp_path / "out"
     assert {p.name for p in out.iterdir()} == {
-        "run.cmf", "solution.sl4", "gemsim_console.txt", "levels.txt", "sl4levels.har",
+        "run.cmf", "solution.sl4", "gemsim_console.txt", "sl4levels.har",
         "export_console.txt",
     }  # fmt: skip
     aux = str(tmp_path / "work" / "gtapv7_levels" / "gtapv7_levels")
@@ -296,3 +297,15 @@ def test_levels6_keeps_the_xcheck_drops(tmp_path: Path, fake) -> None:
     fake.mismatch = 2
     assert gemsim_job.main(_levels6(tmp_path, "1")) == 0
     assert "xcheck-mismatch=2" in (tmp_path / "out" / "export_console.txt").read_text()
+
+
+def test_retry_waits_before_the_second_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake
+) -> None:
+    """An immediate retry failed like the first attempt (full 3a-2 run): wait first."""
+    slept: list[float] = []
+    monkeypatch.setattr(gemsim_job, "RETRY_PAUSE_S", 15)
+    monkeypatch.setattr(gemsim_job.time, "sleep", slept.append)
+    fake.fail_start.add("gemsim.exe")
+    assert gemsim_job.main(_levels6(tmp_path, "1")) == 0
+    assert slept == [15]

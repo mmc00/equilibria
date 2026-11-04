@@ -187,6 +187,8 @@ ALLOWED_PREFIXES: tuple[str, ...] = (
     # Horridge's SIMPLE distribution (tpmh0103): simpleMCP.gms / simpleNLP.gms
     # keep the author's upstream CamelCase — renaming would break fidelity to
     # the published sources and the references in dogams.bat / the README.
+    # data/horridge_simple/ is the copy phase 3a-2 records; runs/ leaves in 3b.
+    "data/horridge_simple/",
     "runs/horridge_simple/",
 )
 

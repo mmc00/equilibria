@@ -35,15 +35,31 @@ TRACKED = {
 def fake(monkeypatch: pytest.MonkeyPatch) -> FakeGempack:
     f = FakeGempack()
     monkeypatch.setattr(gemsim_job, "run", f)
+    monkeypatch.setattr(gemsim_job, "RETRY_PAUSE_S", 0)
     return f
+
+
+def _git_bytes(path: Path) -> bytes | None:
+    """The committed bytes of ``path``: what every clone gets, whatever its autocrlf."""
+    import subprocess
+
+    rel = path.relative_to(ROOT).as_posix()
+    proc = subprocess.run(["git", "-C", str(ROOT), "show", f"HEAD:{rel}"],
+                          capture_output=True, check=False)  # fmt: skip
+    return proc.stdout if proc.returncode == 0 else None
 
 
 @pytest.mark.parametrize("ds", list(TRACKED))
 def test_templates_are_the_tracked_cmf(ds: str) -> None:
-    """tools/cmf/ keeps the runs/ .cmf byte for byte (runs/ goes away in 3b)."""
-    if not TRACKED[ds].exists():
+    """tools/cmf/ keeps the runs/ .cmf byte for byte (runs/ goes away in 3b).
+
+    Compared with the bytes git holds for runs/, not the file on disk: on a
+    Windows clone autocrlf turns runs/ into CRLF, and a copy of that disk file
+    under data/ (-text) kept CRLF while macOS has LF (the bug of #186)."""
+    tracked = _git_bytes(TRACKED[ds])
+    if tracked is None:
         pytest.skip("runs/ already removed (phase 3b)")
-    assert (CMF / f"{ds}_tm10_dpsaveswap.cmf").read_bytes() == TRACKED[ds].read_bytes()
+    assert (CMF / f"{ds}_tm10_dpsaveswap.cmf").read_bytes() == tracked
 
 
 def test_only_aux_and_shock_change() -> None:
@@ -99,3 +115,12 @@ def test_expected_abort_only_on_signature(tmp_path: Path, fake: FakeGempack) -> 
 
 def test_a_converged_run_is_not_the_abort(tmp_path: Path, fake: FakeGempack) -> None:
     assert swap_job.main(_argv(tmp_path, "abort", "gtap7_20x41")) == 1
+
+
+def test_run_cmf_is_crlf(tmp_path: Path, fake: FakeGempack) -> None:
+    """The templates keep git's LF (runs/), but every .cmf gtapv7.exe has solved here
+    was CRLF: the run's .cmf is written CRLF whatever the template's line ends."""
+    assert b"\r\n" not in (CMF / "nus333_tm10_dpsaveswap.cmf").read_bytes()
+    assert swap_job.main(_argv(tmp_path, "swap")) == 0
+    raw = (tmp_path / "out" / "run.cmf").read_bytes()
+    assert b"\r\n" in raw and b"\n" not in raw.replace(b"\r\n", b"")

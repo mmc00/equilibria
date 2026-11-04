@@ -31,6 +31,12 @@ _SHOCK = re.compile(r"(?im)^(?P<k>[ \t]*Shock tm[ \t]*=[ \t]*uniform[ \t]+)[-+\d
 ABORT_SIGNATURE = ('in equation "E_u"', "Attempt to take LOGE of zero or of a negative number")
 
 
+def crlf(text: str) -> str:
+    """``text`` with CRLF line ends: every .cmf gtapv7.exe solved in 3a-1 and in the
+    3a-2 smoke runs was CRLF; the templates keep git's LF bytes of runs/."""
+    return text.replace("\r\n", "\n").replace("\n", "\r\n")
+
+
 def from_template(template: str, *, shock: float, aux: Path) -> str:
     """``template`` with only its Auxiliary files line and its tm shock changed."""
     for pattern, what in ((_AUX, "Auxiliary files"), (_SHOCK, "Shock tm = uniform")):
@@ -48,7 +54,7 @@ def _setup(args: argparse.Namespace, stem: str) -> tuple[Path, Path]:
         shutil.copy2(dataset_dir(args.dataset) / f, wd / f)
     text = from_template(args.template.read_bytes().decode(target_shocks.ENCODING),
                          shock=args.shock, aux=args.gtapv7.with_suffix(""))  # fmt: skip
-    (wd / f"{stem}.cmf").write_bytes(text.encode(target_shocks.ENCODING))
+    (wd / f"{stem}.cmf").write_bytes(crlf(text).encode(target_shocks.ENCODING))
     return out, wd
 
 

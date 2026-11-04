@@ -18,6 +18,7 @@ from equilibria.sources import DATA_ROOT, GEMPACK_MODEL_DIR
 
 sys.path.insert(0, str(GEMPACK_MODEL_DIR / "tools"))
 import burfisher_job  # noqa: E402
+import gemsim_job  # noqa: E402
 
 NUS333 = DATA_ROOT / "gtap7" / "nus333"
 BANNER = " <GEMPACK Release 12.1.003   January 2020>\n"
@@ -143,6 +144,7 @@ def test_retries_once_when_the_program_does_not_start(
     and the record says so (the note write_source --notes-from picks up)."""
     run, calls = _starts_on(2)
     monkeypatch.setattr(burfisher_job, "run", run)
+    monkeypatch.setattr(gemsim_job, "RETRY_PAUSE_S", 0)
     assert burfisher_job.main(_argv(tmp_path, "me4b")) == 0
     assert calls == [1, 2]
     note = (tmp_path / "out" / burfisher_job.NOTE_FILE).read_text()
@@ -152,6 +154,7 @@ def test_retries_once_when_the_program_does_not_start(
 def test_a_second_failed_start_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     run, calls = _starts_on(3)
     monkeypatch.setattr(burfisher_job, "run", run)
+    monkeypatch.setattr(gemsim_job, "RETRY_PAUSE_S", 0)
     assert burfisher_job.main(_argv(tmp_path, "me4b")) == 1
     assert calls == [1, 2]
 

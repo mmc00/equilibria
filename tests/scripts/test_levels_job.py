@@ -30,6 +30,7 @@ MATRIX = DATA_ROOT / "gtap7" / "gtap7_3x3" / "gempack_tm10_s8-16-32_capflex"
 def fake(monkeypatch: pytest.MonkeyPatch) -> FakeGempack:
     f = FakeGempack()
     monkeypatch.setattr(gemsim_job, "run", f)
+    monkeypatch.setattr(gemsim_job, "RETRY_PAUSE_S", 0)
     return f
 
 
@@ -62,8 +63,7 @@ def test_dump_writes_the_sl4dump(tmp_path: Path, fake: FakeGempack) -> None:
 def test_dump_with_levels(tmp_path: Path, fake: FakeGempack) -> None:
     assert levels_job.main(_dump(tmp_path, "--levels")) == 0
     assert _names(tmp_path / "out") == {
-        "sl4dump.har", "sltoht_console.txt", "levels.txt", "sl4levels.har",
-        "export_console.txt",
+        "sl4dump.har", "sltoht_console.txt", "sl4levels.har", "export_console.txt",
     }  # fmt: skip
 
 
@@ -92,7 +92,7 @@ def _resolve(tmp_path: Path, *how: str) -> list[str]:
 def test_resolve_keeps_the_sl4(tmp_path: Path, fake: FakeGempack) -> None:
     assert levels_job.main(_resolve(tmp_path)) == 0
     assert _names(tmp_path / "out") == {
-        "run.cmf", "solution.sl4", "solve_console.txt", "levels.txt", "sl4levels.har",
+        "run.cmf", "solution.sl4", "solve_console.txt", "sl4levels.har",
         "export_console.txt",
     }  # fmt: skip
     cmf = (tmp_path / "out" / "run.cmf").read_text(encoding="latin-1")

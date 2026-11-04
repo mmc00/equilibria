@@ -24,6 +24,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -39,6 +40,7 @@ DIR_EXP = ("me8", "tbl813")  # run their -dir.exp (rate% translated)
 NORMAL_END = "completed without error"
 OUTPUTS = ("solution.sl4", "updated.har")  # a Burfisher run without both did not finish
 NOTE_FILE = "retry_note.txt"  # write_source --notes-from: appended to the record's notes
+RETRY_PAUSE_S = 15  # before running a program that did not start once more
 _MISMATCH = re.compile(r"xcheck-mismatch=(\d+)")
 
 
@@ -71,6 +73,8 @@ def run_retry(
     for attempt in (1, 2):
         if setup is not None:
             setup()
+        if attempt == 2:
+            time.sleep(RETRY_PAUSE_S)  # an immediate retry failed like the first attempt
         rc = _runner(runner)(cmd, cwd, console)
         if attempt == 2 or release(console) is not None:
             return rc
@@ -334,8 +338,9 @@ def run_levels6(args: argparse.Namespace) -> int:
     if rc != 0 or not (run_dir / f"{tag}_levels.txt").exists():
         print(f"FAILED {name}: levels export rc={rc} (see export_console.txt)", file=sys.stderr)
         return 1
+    # levels.txt (sltoht -SHL -SIC) is not kept: 60 MB for 20x41, and sltoht
+    # rebuilds it from solution.sl4; sl4levels.har is the record (maintainer, 2026-11-04)
     pairs = [(run_dir / f"{tag}.cmf", "run.cmf"), (sl4, "solution.sl4"),
-             (run_dir / f"{tag}_levels.txt", "levels.txt"),
              (run_dir / "sl4levels.har", "sl4levels.har")]  # fmt: skip
     if args.rordelta == 0:  # the .prm GEMSIM read (RDLT 0), from _force_rdlt
         pairs.append((run_dir / f"default_{tag}.prm", "default_rdlt0.prm"))
