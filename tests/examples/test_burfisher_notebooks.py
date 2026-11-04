@@ -22,6 +22,7 @@ NOT marked slow on purpose: the CI skips ``slow`` (see ``test_cge_examples_run.p
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -77,6 +78,16 @@ def test_notebooks_are_what_the_generator_writes(tmp_path: Path) -> None:
     assert written == sorted(p.name for p in NB_DIR.glob("*.ipynb"))
     for name in written:
         assert (tmp_path / name).read_bytes() == (NB_DIR / name).read_bytes(), name
+
+
+def test_notebooks_name_the_prm_files_as_they_are() -> None:
+    """With the exact case: Linux (the CI) does not find 3x3CES.prm as 3x3ces.prm."""
+    import re
+
+    files = set(os.listdir(ROOT / "data" / "gtap7" / "nus333"))
+    for nb in sorted(NB_DIR.glob("*.ipynb")):
+        (prm,) = re.findall(r'default_path=har / "([^"]+)"', _code(nb))
+        assert prm in files, (nb.name, prm)
 
 
 @pytest.mark.needs_path

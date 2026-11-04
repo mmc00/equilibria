@@ -61,8 +61,8 @@ def me9(land, ao_agr, afe):
 EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, float]]]] = {
     # avaall -> lambdava
     "TBL45A": ("default.prm", [("lambdava", ("USA", "SER"), 10.0)]),
-    "TBL45B": ("3x3CES.prm", [("lambdava", ("USA", "SER"), 10.0)]),
-    "TBL45C": ("3x3CobbDouglas.prm", [("lambdava", ("USA", "SER"), 10.0)]),
+    "TBL45B": ("3x3ces.prm", [("lambdava", ("USA", "SER"), 10.0)]),
+    "TBL45C": ("3x3cobbdouglas.prm", [("lambdava", ("USA", "SER"), 10.0)]),
     # qe -> aft
     "TBL55": ("default.prm", [("aft", ("USA", "CAPITAL"), 10.0)]),
     "TBL63A": ("default.prm", [("aft", ("USA", "LABOR"), 10.0)]),
@@ -99,7 +99,7 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, float]]]] = {
     ),
     # tfe -> fcttx (region, factor, actividad)
     "TBL54A": (
-        "ESUBVAmfg1.2.prm",
+        "esubvamfg1.2.prm",
         [("fcttx", ("USA", "LABOR", "MFG"), 4.2969)],
     ),
     "TBL54B": (
@@ -112,11 +112,11 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, float]]]] = {
         [("dintx_tgt", ("USA", "MFG", "hhd"), -13.7359)],
     ),
     "TBL62B": (
-        "SectorspecificK.prm",
+        "sectorspecifick.prm",
         [("dintx_tgt", ("USA", "MFG", "hhd"), -13.7359)],
     ),
     "TBL62C": (
-        "SluggishK.prm",
+        "sluggishk.prm",
         [("dintx_tgt", ("USA", "MFG", "hhd"), -13.7359)],
     ),
     # afeall -> lambdaf (region, factor, actividad)
@@ -125,7 +125,7 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, float]]]] = {
         [("lambdaf", ("USA", "LABOR", a), 10.0) for a in ACTS],
     ),
     "ME4A": ("default.prm", [("lambdaf", ("ROW", "LAND", "AGR"), -81.0)]),
-    "ME4B": ("3x3CobbDouglas.prm", [("lambdaf", ("ROW", "LAND", "AGR"), -81.0)]),
+    "ME4B": ("3x3cobbdouglas.prm", [("lambdaf", ("ROW", "LAND", "AGR"), -81.0)]),
     # aoall -> axp (region, actividad)
     "TBL78": ("default.prm", [("axp", ("ROW", "MFG"), -6.0)]),
     # ams -> lambdam (origen, bien, destino)
