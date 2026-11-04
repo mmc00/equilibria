@@ -54,7 +54,33 @@ _scatter: Any = jax.jit(_scatter_impl, static_argnames=("num_rows",))
 
 
 @dataclass
+class TermGroup:
+    """Terms of one shape: ``residual[rows[t]] += sign * fn(x[cols[t]], **args[t])``."""
+
+    rows: np.ndarray
+    fn: Callable
+    cols: np.ndarray
+    args: dict[str, np.ndarray]
+    sign: float = 1.0
+
+
+@dataclass
+class CompiledFamily:
+    """A family as rows plus term groups: what FamilySystem evaluates."""
+
+    name: str
+    row_labels: list[str]
+    groups: list[TermGroup]
+
+    @property
+    def n_rows(self) -> int:
+        return len(self.row_labels)
+
+
+@dataclass
 class Family:
+    """Hand-written family: one row template plus one term template (Phase 0)."""
+
     name: str
     row_fn: Callable
     row_cols: np.ndarray
@@ -78,51 +104,64 @@ class Family:
             and len(self.term_rows) > 0
         )
 
+    def compiled(self) -> CompiledFamily:
+        groups = [
+            TermGroup(np.arange(self.n_rows), self.row_fn, self.row_cols, self.row_args)
+        ]
+        if self.has_terms:
+            assert self.term_fn is not None and self.term_rows is not None
+            assert self.term_cols is not None
+            groups.append(
+                TermGroup(
+                    self.term_rows, self.term_fn, self.term_cols, self.term_args, -1.0
+                )
+            )
+        labels = self.row_labels or [str(k) for k in range(self.n_rows)]
+        return CompiledFamily(self.name, list(labels), groups)
+
 
 class FamilySystem:
     """Stack of families: F(z) in family order and J(z) with a fixed COO pattern."""
 
     def __init__(
         self,
-        families: list[Family],
+        families: list[Family] | list[CompiledFamily] | list[Family | CompiledFamily],
         n_cols: int,
         fixed_values: np.ndarray | None = None,
     ):
         self.families = families
+        self._compiled = [
+            f.compiled() if isinstance(f, Family) else f for f in families
+        ]
         self.n_cols = int(n_cols)
         self.fixed_values = np.asarray(
             [] if fixed_values is None else fixed_values, dtype=float
         )
         self.rows: list[tuple[str, int]] = [
-            (f.name, k) for f in families for k in range(f.n_rows)
+            (f.name, k) for f in self._compiled for k in range(f.n_rows)
         ]
         self.n_rows = len(self.rows)
 
         # Device copies of the index/data arrays, built once.
-        self._dev = []
+        self._dev: list[list[dict]] = []
         offset = 0
         raw_rows, raw_cols = [], []
-        for f in families:
-            d = {
-                "row_cols": jnp.asarray(f.row_cols, dtype=jnp.int64),
-                "row_args": {
-                    k: jnp.asarray(v, dtype=float) for k, v in f.row_args.items()
-                },
-            }
-            k_row = f.row_cols.shape[1]
-            raw_rows.append(np.repeat(np.arange(f.n_rows), k_row) + offset)
-            raw_cols.append(f.row_cols.ravel())
-            if f.has_terms:
-                assert f.term_rows is not None and f.term_cols is not None
-                d["term_rows"] = jnp.asarray(f.term_rows, dtype=jnp.int64)
-                d["term_cols"] = jnp.asarray(f.term_cols, dtype=jnp.int64)
-                d["term_args"] = {
-                    k: jnp.asarray(v, dtype=float) for k, v in f.term_args.items()
-                }
-                k_term = f.term_cols.shape[1]
-                raw_rows.append(np.repeat(np.asarray(f.term_rows), k_term) + offset)
-                raw_cols.append(np.asarray(f.term_cols).ravel())
-            self._dev.append(d)
+        for f in self._compiled:
+            dev = []
+            for g in f.groups:
+                cols = np.asarray(g.cols, dtype=np.int64).reshape(len(g.rows), -1)
+                dev.append(
+                    {
+                        "rows": jnp.asarray(g.rows, dtype=jnp.int64),
+                        "cols": jnp.asarray(cols, dtype=jnp.int64),
+                        "args": {
+                            k: jnp.asarray(v, dtype=float) for k, v in g.args.items()
+                        },
+                    }
+                )
+                raw_rows.append(np.repeat(np.asarray(g.rows), cols.shape[1]) + offset)
+                raw_cols.append(cols.ravel())
+            self._dev.append(dev)
             offset += f.n_rows
 
         # Fixed pattern: keep free slots, coalesce duplicate (row, col) entries.
@@ -131,17 +170,21 @@ class FamilySystem:
         self._keep = cc < self.n_cols
         keys = rr[self._keep] * self.n_cols + cc[self._keep]
         uniq, self._inverse = np.unique(keys, return_inverse=True)
-        self._pat_rows = uniq // self.n_cols
-        self._pat_cols = uniq % self.n_cols
+        self._pat_rows = uniq // max(self.n_cols, 1)
+        self._pat_cols = uniq % max(self.n_cols, 1)
         self.nnz = int(len(uniq))
+
+    @classmethod
+    def from_families(cls, families, layout) -> FamilySystem:
+        return cls(families, n_cols=layout.n_cols, fixed_values=layout.fixed_values)
 
     @property
     def row_names(self) -> list[str]:
-        """Pyomo-style row names (``family[label]``), falling back to the row number."""
+        """Pyomo-style row names (``family[label]``)."""
         return [
-            f"{f.name}[{f.row_labels[k] if f.row_labels else k}]"
+            f"{f.name}[{lab}]"
             for f in self.families
-            for k in range(f.n_rows)
+            for lab in (f.row_labels or [str(k) for k in range(f.n_rows)])
         ]
 
     def _x_all(self, z):
@@ -152,23 +195,20 @@ class FamilySystem:
     def F(self, z: np.ndarray) -> np.ndarray:
         x = self._x_all(z)
         out = []
-        for f, d in zip(self.families, self._dev, strict=True):
-            res = _eval_part(f.row_fn, x, d["row_cols"], d["row_args"])
-            if f.has_terms:
-                t = _eval_part(f.term_fn, x, d["term_cols"], d["term_args"])
-                res = res - _scatter(t, d["term_rows"], f.n_rows)
+        for f, dev in zip(self._compiled, self._dev, strict=True):
+            res = jnp.zeros(f.n_rows)
+            for g, d in zip(f.groups, dev, strict=True):
+                t = _eval_part(g.fn, x, d["cols"], d["args"])
+                res = res + g.sign * _scatter(t, d["rows"], f.n_rows)
             out.append(res)
         return np.asarray(jnp.concatenate(out)) if out else np.zeros(0)
 
     def jac(self, z: np.ndarray) -> sp.coo_matrix:
         x = self._x_all(z)
         vals = []
-        for f, d in zip(self.families, self._dev, strict=True):
-            vals.append(_jac_part(f.row_fn, x, d["row_cols"], d["row_args"]).ravel())
-            if f.has_terms:
-                vals.append(
-                    -_jac_part(f.term_fn, x, d["term_cols"], d["term_args"]).ravel()
-                )
+        for f, dev in zip(self._compiled, self._dev, strict=True):
+            for g, d in zip(f.groups, dev, strict=True):
+                vals.append(g.sign * _jac_part(g.fn, x, d["cols"], d["args"]).ravel())
         v = np.asarray(jnp.concatenate(vals)) if vals else np.zeros(0)
         data = np.bincount(self._inverse, weights=v[self._keep], minlength=self.nnz)
         return sp.coo_matrix(

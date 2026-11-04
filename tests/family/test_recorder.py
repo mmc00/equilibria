@@ -78,3 +78,46 @@ def test_cancelling_linear_terms_stay_structural():
     m = _rec()
     terms = residual_terms(m.t - m.t == m.p["A"])
     assert sum(len(t.var_leaves()) for _, t in terms if isinstance(t, Node)) == 3
+
+
+def _toy_system():
+    from equilibria.family.layout import VarLayout
+    from equilibria.family.recorder import compile_family
+
+    m = _rec()
+    records = [(("A",), _ces(m, "A")), (("B",), _ces(m, "B"))]
+    values = {v: np.asarray(m._vars[v][1], float) for v in m.var_domains}
+    free = {v: np.ones(a.shape, bool) for v, a in values.items()}
+    layout = VarLayout.from_state(m.sets, m.var_domains, values, free)
+    from equilibria.family.core import FamilySystem
+
+    fam = compile_family("eq_ces", records, layout)
+    return records, layout, fam, FamilySystem.from_families([fam], layout)
+
+
+def test_recorded_family_matches_closed_form():
+    records, layout, fam, system = _toy_system()
+    z = layout.free_values
+    np.testing.assert_allclose(
+        system.F(z), [res.evaluate() for _, res in records], rtol=1e-14
+    )
+    J = system.jac(z).toarray()
+    names = layout.col_names
+    col = {n: k for k, n in enumerate(names)}
+    # Row A: e = 0.5, shares x=0.2, z=0.8 ; Row B: e = -1, shares x=0.5, y=0.5
+    p, q = np.array([1.1, 0.9]), np.arange(1.0, 7.0).reshape(2, 3)
+    want = np.zeros_like(J)
+    want[0, col["p[A]"]] = 0.5 * p[0] ** -0.5
+    want[0, col["q[A,x]"]] = -0.2 * 0.5 * q[0, 0] ** -0.5
+    want[0, col["q[A,z]"]] = -0.8 * 0.5 * q[0, 2] ** -0.5
+    want[1, col["p[B]"]] = -1.0 * p[1] ** -2.0
+    want[1, col["q[B,x]"]] = -0.5 * -1.0 * q[1, 0] ** -2.0
+    want[1, col["q[B,y]"]] = -0.5 * -1.0 * q[1, 1] ** -2.0
+    np.testing.assert_allclose(J, want, rtol=1e-14)
+    assert system.row_names == ["eq_ces[A]", "eq_ces[B]"]
+
+
+def test_group_count_is_distinct_term_shapes():
+    _, _, fam, _ = _toy_system()
+    # p**e and share*q**e: two shapes, whatever the number of rows or terms per row
+    assert len(fam.groups) == 2

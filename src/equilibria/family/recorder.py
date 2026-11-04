@@ -381,7 +381,125 @@ def var_shape(rec: RecordingModel, name: str) -> tuple[int, ...]:
     return tuple(len(rec.sets[d]) for d in rec.var_domains[name])
 
 
+# ----------------------------------------------------------------------------------
+# Shapes, templates and term groups
+# ----------------------------------------------------------------------------------
+
+
+def signature(x) -> tuple[tuple, list[tuple[str, int]], list[float]]:
+    """(shape key, variable leaves, constants) in one DFS. Leaves and constants become
+    the slots and data of the term; the key says which template evaluates it."""
+    leaves: list[tuple[str, int]] = []
+    consts: list[float] = []
+    key = _sig(x, leaves, consts)
+    return key, leaves, consts
+
+
+def _sig(x, leaves, consts):
+    if not isinstance(x, Node):
+        consts.append(float(x))
+        return "c"
+    if x.op == "v":
+        leaves.append((x.args[0], x.args[1]))
+        return "v"
+    return (x.op, *(_sig(c, leaves, consts) for c in x.children()))
+
+
+_TEMPLATES: dict[tuple, Any] = {}
+
+
+def template(key) -> Any:
+    """``fn(xs, c, s) = s * term(xs, c)`` for a shape key; one function object per key so
+    the jitted kernels reuse their compilation."""
+    fn = _TEMPLATES.get(key)
+    if fn is None:
+        import jax.numpy as jnp
+
+        jfuncs = {"sqrt": jnp.sqrt, "log": jnp.log, "exp": jnp.exp}
+        counter = {"v": 0, "c": 0}
+
+        def build(k):
+            if k == "v":
+                i = counter["v"]
+                counter["v"] += 1
+                return lambda xs, c: xs[i]
+            if k == "c":
+                j = counter["c"]
+                counter["c"] += 1
+                return lambda xs, c: c[j]
+            op, *kids = k
+            fs = [build(kk) for kk in kids]
+            if op == "add":
+                return lambda xs, c: sum(f(xs, c) for f in fs)
+            if op == "mul":
+                return lambda xs, c: fs[0](xs, c) * fs[1](xs, c)
+            if op == "div":
+                return lambda xs, c: fs[0](xs, c) / fs[1](xs, c)
+            if op == "pow":
+                return lambda xs, c: fs[0](xs, c) ** fs[1](xs, c)
+            if op == "neg":
+                return lambda xs, c: -fs[0](xs, c)
+            g = jfuncs[op]
+            return lambda xs, c: g(fs[0](xs, c))
+
+        body = build(key)
+
+        def fn(xs, c, s):
+            return s * body(xs, c)
+
+        fn.__name__ = f"term_{len(_TEMPLATES)}"
+        _TEMPLATES[key] = fn
+    return fn
+
+
+def compile_family(name: str, records, layout) -> Any:
+    """Recorded cells of one equation -> ``CompiledFamily`` (rows + term groups by shape).
+
+    ``records`` is ``[(indices, Residual), ...]`` for the cells the rule did not skip.
+    """
+    from equilibria.family.core import CompiledFamily, TermGroup
+
+    buckets: dict[tuple, dict[str, list]] = {}
+    labels = []
+    for row, (idx, res) in enumerate(records):
+        labels.append(",".join(str(i) for i in idx))
+        for sgn, term in residual_terms(res):
+            key, leaves, consts = signature(term)
+            b = buckets.get(key)
+            if b is None:
+                b = buckets[key] = {"rows": [], "leaves": [], "c": [], "s": []}
+            b["rows"].append(row)
+            b["leaves"].append(leaves)
+            b["c"].append(consts)
+            b["s"].append(sgn)
+
+    flat_slots = {v: np.asarray(a).ravel() for v, a in layout.slots.items()}
+    groups = []
+    for key, b in buckets.items():
+        n = len(b["rows"])
+        k = len(b["leaves"][0])
+        cols = np.empty((n, k), dtype=np.int64)
+        for t, leaves in enumerate(b["leaves"]):
+            for j, (var, flat) in enumerate(leaves):
+                cols[t, j] = flat_slots[var][flat]
+        groups.append(
+            TermGroup(
+                rows=np.asarray(b["rows"], dtype=np.int64),
+                fn=template(key),
+                cols=cols,
+                args={
+                    "c": np.asarray(b["c"], dtype=float).reshape(n, -1),
+                    "s": np.asarray(b["s"], dtype=float),
+                },
+            )
+        )
+    return CompiledFamily(name=name, row_labels=labels, groups=groups)
+
+
 __all__ = [
+    "compile_family",
+    "signature",
+    "template",
     "Node",
     "Number",
     "RecordingModel",
