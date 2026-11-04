@@ -44,8 +44,37 @@ ROOT_FILES = frozenset(
 )
 # Emptied by later phases of specs/data/changes/one-data-folder; each phase
 # removes its entry.
-ROOT_DIRS_TEMPORARY = frozenset(
-    {"output", "reports", "results", "runs"}
+ROOT_DIRS_TEMPORARY = frozenset({"output", "reports", "results", "runs"})
+
+# The top level of docs/ (phase 6 of specs/data/changes/one-data-folder).
+DOCS_TOP = frozenset(
+    {
+        "readme.md",
+        "glossary.md",
+        "roadmap.md",
+        "adr",
+        "agents",
+        "assets",
+        "site",
+        "notes",
+        "archive",
+    }
+)
+# What docs/ held before phase 6; each task of the phase removes what it moves.
+DOCS_TOP_TEMPORARY = frozenset(
+    {
+        "analysis",
+        "architecture",
+        "findings",
+        "guides",
+        "plans",
+        "reference",
+        "technical",
+        "gtap_gams_mcp_parity_plan.md",
+        "ieem_to_pep_transformations.md",
+        "ieem_to_pep_transformations_en.md",
+        "ieem_to_pep_transformations_es.md",
+    }
 )
 
 SPANISH_WORDS = frozenset(
@@ -210,6 +239,16 @@ def violations(paths: list[str]) -> list[str]:
         elif top not in ROOT_DIRS and top not in ROOT_DIRS_TEMPORARY:
             bad.append(
                 f"{path}: new folder {top}/ at the root (see data/README.md for where things go)"
+            )
+
+        if (
+            top == "docs"
+            and len(parts) > 1
+            and parts[1] not in DOCS_TOP
+            and parts[1] not in DOCS_TOP_TEMPORARY
+        ):
+            bad.append(
+                f"{path}: docs/{parts[1]} is not in the docs layout (docs/readme.md)"
             )
 
         name = parts[-1]
