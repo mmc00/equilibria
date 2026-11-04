@@ -273,8 +273,18 @@ def as_shock(rows: list[tuple[str, tuple, float]]) -> dict[str, dict[tuple, floa
     return out
 
 
-def solve_exercise(exp: str, har: Path):
-    """Construye, aplica los shocks del ejercicio y resuelve base/check/shock."""
+def solve_exercise(
+    exp: str,
+    har: Path,
+    *,
+    shock_method: str = "nonlinear",
+    rows: list[tuple[str, tuple, float]] | None = None,
+):
+    """Builds the exercise, applies its shocks and solves base/check/shock.
+
+    ``shock_method="johansen"``: the shock as one linear step from check, as the
+    book's Johansen exercises (no SHOCK_STEPS). ``rows`` replaces the exercise's
+    shocks (same form as EXERCISES)."""
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
@@ -282,6 +292,8 @@ def solve_exercise(exp: str, har: Path):
     from equilibria.templates.gtap.shocks import apply_shock
 
     prm, shocks = EXERCISES[exp]
+    if rows is not None:
+        shocks = rows
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=har / "basedata.har",
@@ -314,7 +326,8 @@ def solve_exercise(exp: str, har: Path):
         seed_from_prior=False,
         mode="gtap",
         solve_check=True,
-        shock_steps=SHOCK_STEPS,
+        shock_steps=SHOCK_STEPS if shock_method == "nonlinear" else None,
+        shock_method=shock_method,
     )
     return m, p, {k: int(res[k]["code"]) for k in res}
 

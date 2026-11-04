@@ -64,10 +64,17 @@ FINAL_AGENTS = ("hhd", "gov", "inv", "tmg")
 BASE = "check"  # el periodo base del modelo de equilibria (el pre de GEMPACK)
 
 
-def equilibria_side(levels: Levels, xscale: AbcMapping[Any, float]) -> Solution:
+def equilibria_side(
+    levels: Levels, xscale: AbcMapping[Any, float], *, linear: bool = False
+) -> Solution:
     """``levels[var][(indices..., periodo)] = nivel`` del modelo de equilibria, mas
     las variables armadas (ver el docstring del modulo). ``xscale[(r, a)]`` va como
-    parametro de la fuente."""
+    parametro de la fuente.
+
+    ``linear``: the levels are a Johansen solution (``shock_method="johansen"``).
+    There a product or a ratio moves by the first-order change of its factors, as
+    GEMPACK reports it, not by the product of the new levels; the other derived
+    variables are already linear in the levels."""
     xds, xda, xma, pd = levels["xds"], levels["xda"], levels["xma"], levels["pd"]
     acts = {a for (_, a, _) in levels["xp"]}
     regs = {r for (r, _) in levels["rore"]}
@@ -106,10 +113,21 @@ def equilibria_side(levels: Levels, xscale: AbcMapping[Any, float]) -> Solution:
     data["tpd"] = {
         (r, c, t): 1.0 + x for (r, c, a, t), x in levels["dintx"].items() if a == "hhd"
     }
-    data["pd_pmt"] = {k: x / levels["pmt"][k] for k, x in pd.items()}
+    pmt = levels["pmt"]
+    data["pd_pmt"] = {k: x / pmt[k] for k, x in pd.items()}
     data["vdfb"] = {
         (r, c, a, t): pd[(r, c, t)] * q for (r, c, a, t), q in xda.items() if a in acts
     }
+    if linear:
+        # d(p/m) = dp/m0 - p0·dm/m0²  and  d(p·q) = q0·dp + p0·dq, from check.
+        for (r, c, t), x in pd.items():
+            p0, m0 = pd[(r, c, BASE)], pmt[(r, c, BASE)]
+            dp, dm = x - p0, pmt[(r, c, t)] - m0
+            data["pd_pmt"][(r, c, t)] = p0 / m0 + dp / m0 - p0 * dm / m0**2
+        for r, c, a, t in data["vdfb"]:
+            p0, q0 = pd[(r, c, BASE)], xda[(r, c, a, BASE)]
+            dp, dq = pd[(r, c, t)] - p0, xda[(r, c, a, t)] - q0
+            data["vdfb"][(r, c, a, t)] = p0 * q0 + q0 * dp + p0 * dq
     return from_dict(
         data, period_dim=-1, origin="equilibria", params={"xscale": dict(xscale)}
     )
@@ -230,9 +248,17 @@ def load_eq_json(path: Path) -> tuple[dict, dict]:
     return levels, xscale
 
 
-def run(levels: dict, xscale: dict, har: Path, basedata: Path, updated: Path) -> Report:
+def run(
+    levels: dict,
+    xscale: dict,
+    har: Path,
+    basedata: Path,
+    updated: Path,
+    *,
+    linear: bool = False,
+) -> Report:
     return compare(
-        equilibria_side(levels, xscale),
+        equilibria_side(levels, xscale, linear=linear),
         gempack_side(har, basedata, updated),
         Mapping.builtin("gtap7"),
     )
