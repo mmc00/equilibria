@@ -10,6 +10,11 @@ The standard exercises come from ``scripts/gtap/run_burfisher.py`` (``EXERCISES`
 exercises whose closure differs from GTAP's (TBL65B, ME3C, TBL94, ME9A) add their
 ``@overwrite`` hooks below.
 
+The six exercises the book solves with Johansen (``Method = Johansen`` in the
+``.EXP``) also solve with ``shock_method="johansen"`` and compare, in linear form,
+with the book's GEMPACK Johansen run. ME4A and ME4B have only that comparison:
+solved exactly, neither GEMPACK nor equilibria reach their shock.
+
 Usage, from the repository root::
 
     uv run python examples/notebooks/gtap7/burfisher/make_notebooks.py [--out DIR]
@@ -31,12 +36,17 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 import run_burfisher as rb  # noqa: E402
 
-# Neither GEMPACK ("Accuracy too low") nor equilibria (code 2) reach the shock.
-NO_SOLUTION = {"ME4A", "ME4B"}
+# Solved exactly, neither GEMPACK ("Accuracy too low") nor equilibria reach the shock:
+# these get only the Johansen comparison.
+JOHANSEN_ONLY = ("ME4A", "ME4B")
+# The book solves these with Johansen (its .EXP says Method = Johansen).
+JOHANSEN = ("TBL45A", "TBL45B", "TBL45C", "TBL64", *JOHANSEN_ONLY)
+# The book's own GEMPACK runs, with each .EXP's method.
+GEMPACK_BOOK_DIR = 'ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher"'
 # GEMPACK's Gragg solutions of the book's exercises; TBL53 and GTAPV7 have none yet.
 GEMPACK_DIR = 'ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher_gragg"'
 
-UNEMPLOYMENT = '''\
+UNEMPLOYMENT = """\
 @overwrite(ShockBlock, period="shock")
 def unemployment(b):
     b.endogenous("aft", ("USA", "LABOR"))
@@ -50,9 +60,9 @@ def real_wage(b):
         ("USA", "LABOR"),
         lambda m, r, f: m.pft[r, f] == value(m.pft[r, f]) * ppriv_tornqvist(m, r),
     )
-'''
+"""
 
-REGULATION = '''\
+REGULATION = """\
 CELL = ("USA", "MFG", "MFG")
 
 
@@ -65,9 +75,9 @@ def regulation(b):
         quantity=lambda m, r, a, i: m.x[r, a, i],
         domains=("r", "a", "i"),
     )
-'''
+"""
 
-BASELINE = '''\
+BASELINE = """\
 REGS = ("USA", "ROW")
 ACTS = ("AGR", "MFG", "SER")
 
@@ -91,11 +101,11 @@ def uniform_productivity(b):
                 == m.axp[r, "AGR"] / value(m.axp[r, "AGR"]),
                 domains=("r", "a"),
             )
-'''
+"""
 
 _UNEMPLOYMENT_MD = (
-    "GEMPACK's `ME3C.EXP` swaps `qe(\"LABOR\",\"USA\")` for "
-    "`pebfactreal(\"LABOR\",\"USA\")`: the real wage of USA is fixed and employment "
+    'GEMPACK\'s `ME3C.EXP` swaps `qe("LABOR","USA")` for '
+    '`pebfactreal("LABOR","USA")`: the real wage of USA is fixed and employment '
     "adjusts. Here, with two `@overwrite` hooks that act only in the shock period:\n\n"
     "- `ShockBlock`: labour supply `aft[USA,LABOR]` becomes endogenous;\n"
     "- `ClosureBlock`: a new row `eq_wreal`, `pft = pft0 × T`, with `T` the Törnqvist "
@@ -126,7 +136,7 @@ HOOKED: dict[str, tuple[str, list, str, str, bool]] = {
         "A regulation cuts the output of MFG by the MFG activity of USA by 1%. The "
         "model finds the production tax that has the same effect: the shadow tax "
         "of the regulation. GEMPACK's `TBL94.EXP` swaps "
-        "`qca(\"MFG\",\"MFG\",\"USA\")` for `to(\"MFG\",\"MFG\",\"USA\")` and "
+        '`qca("MFG","MFG","USA")` for `to("MFG","MFG","USA")` and '
         "shocks `qca = -1`. Here:\n\n"
         "- the production tax `prdtx_rai[USA,MFG,MFG]` becomes endogenous;\n"
         "- `b.target` declares the target `qca_target` on output `x`: a new "
@@ -152,7 +162,7 @@ HOOKED: dict[str, tuple[str, list, str, str, bool]] = {
     ),
 }
 
-CLOSURE = '''\
+CLOSURE = """\
 gc = GTAPClosureConfig(
     name="base",
     closure_type="MCP",
@@ -167,9 +177,9 @@ gc = GTAPClosureConfig(
 # Like GAMS compStat, the base is not solved: its levels are the reference of the
 # Fisher indices of check and shock.
 m, _ = build_block_model(p, p.sets, gc, "ROW", base_calibrated=False, ref_gdx=None)
-'''
+"""
 
-SOLVE = f'''\
+SOLVE = f"""\
 res = solve_multiperiod(
     m,
     p,
@@ -186,7 +196,73 @@ res = solve_multiperiod(
 codes = {{k: int(res[k]["code"]) for k in res}}
 print("codes:", codes)
 assert set(codes.values()) == {{1}}, codes
-'''
+"""
+
+
+def _solve_johansen(model: str) -> str:
+    return f"""\
+res = solve_multiperiod(
+    {model},
+    p,
+    gc,
+    ref_gdx=None,
+    skip_base_solve=True,
+    mute_welfare=True,
+    seed_from_prior=False,
+    mode="gtap",
+    solve_check=True,
+    shock_method="johansen",  # one linear step from check, as GEMPACK's Johansen
+)
+codes = {{k: int(res[k]["code"]) for k in res}}
+print("codes:", codes)
+assert set(codes.values()) == {{1}}, codes
+"""
+
+
+def _compare_johansen(exp: str, model: str) -> str:
+    return (
+        "import compare_burfisher_gempack as cbg\n"
+        "import compare_gempack_levels as cg\n\n"
+        f'EXP = "{exp}"\n'
+        f"BOOK_DIR = {GEMPACK_BOOK_DIR}\n"
+        'GOVERNMENT = {"qgd", "qgm"}  # government demand: the open gap of #201\n'
+        f"report = cbg.run(EXP, cg.model_levels({model}), dict(xscale_data(p, p.sets)), "
+        "BOOK_DIR, linear=True)\n"
+        "cells = [c for c in report.cells if c.variable not in GOVERNMENT]\n"
+        "gov = max(c.d for c in report.cells if c.variable in GOVERNMENT)\n"
+        "print(f\"{len(cells)} cells (pre and post) against the book's GEMPACK run, "
+        'method {cbg.method(EXP, BOOK_DIR)}")\n'
+        'print(f"largest difference: {100 * max(c.d for c in cells):.3f}%")\n'
+        'print(f"government demand qgd/qgm (#201, not checked): up to {100 * gov:.2f}%")\n'
+        'print("\\nlargest differences:")\n'
+        "for c in sorted(cells, key=lambda c: -c.d)[:5]:\n"
+        '    cell = ",".join(c.index)\n'
+        '    print(f"{c.variable:10s}{c.period:>7s}  {cell:24s}{c.a:14.6g}{c.b:14.6g}'
+        '{100 * c.d:8.3f}%")\n'
+        "assert max(c.d for c in cells) <= 5e-3, (\n"
+        '    f"{EXP}: not every cell within 0.5% of the book\'s Johansen result"\n'
+        ")\n"
+        'print("every cell within 0.5% of the book\'s Johansen result (qgd/qgm aside, #201)")\n'
+    )
+
+
+_JOHANSEN_MD = (
+    "The book solves {exp} with GEMPACK's Johansen method (`Method = Johansen; "
+    "Steps = 1` in the `.EXP`): the model linearized at the starting point, solved "
+    'once. `shock_method="johansen"` gives the same solution: the slope of the '
+    "solution path at check (finite differences of the system PATH solves), times "
+    "the whole shock. A Johansen result is compared in linear form: a product moves "
+    "by the sum of the % changes of its factors."
+)
+
+_WALL_MD = (
+    "\n\n**Why only Johansen here.** A land productivity loss of 81% in ROW "
+    "agriculture is too large to solve exactly: on equilibria's nonlinear path ROW "
+    "investment turns negative at 55% of the shock and the solve fails at 60%; "
+    'GEMPACK\'s Gragg run reports negative flows and "Accuracy too low". The '
+    "book's numbers are a first-order answer, and that is what this notebook "
+    "reproduces."
+)
 
 
 def _setup(hooked: bool) -> str:
@@ -237,7 +313,9 @@ def _shock(rows: list) -> str:
             lines.append(f"    {name!r}: {{{idx!r}: {pct!r}}},".replace("'", '"'))
             continue
         lines.append(f'    "{name}": {{')
-        lines += [f"        {idx!r}: {pct!r},".replace("'", '"') for idx, pct in cells.items()]
+        lines += [
+            f"        {idx!r}: {pct!r},".replace("'", '"') for idx, pct in cells.items()
+        ]
         lines.append("    },")
     lines.append("}")
     return "\n".join(lines) + "\napply_shock(m, SHOCK)\n"
@@ -257,14 +335,14 @@ def _compare(exp: str, checked: bool) -> str:
         f"GEMPACK_DIR = {GEMPACK_DIR}\n"
         "report = cbg.run(EXP, cg.model_levels(m), dict(xscale_data(p, p.sets)), "
         "GEMPACK_DIR)\n"
-        'o = report.overall\n'
+        "o = report.overall\n"
         'w = o["pct_within"]\n'
-        'print(f"{o[\'cells\']} cells (pre and post) against GEMPACK {cbg.method(EXP, GEMPACK_DIR)}")\n'
+        "print(f\"{o['cells']} cells (pre and post) against GEMPACK {cbg.method(EXP, GEMPACK_DIR)}\")\n"
         'print(f"within 0.1%: {w[1e-3]:.2f}%   within 0.5%: {w[5e-3]:.2f}%   '
         'within 1%: {w[1e-2]:.2f}%")\n'
         'print("\\nlargest differences:")\n'
-        'print(f"{\'variable\':10s}{\'period\':>7s}  {\'cell\':24s}{\'equilibria\':>14s}'
-        '{\'GEMPACK\':>14s}{\'diff\':>9s}")\n'
+        "print(f\"{'variable':10s}{'period':>7s}  {'cell':24s}{'equilibria':>14s}"
+        "{'GEMPACK':>14s}{'diff':>9s}\")\n"
         "for c in sorted(report.cells, key=lambda c: -c.d)[:5]:\n"
         '    cell = ",".join(c.index)\n'
         '    print(f"{c.variable:10s}{c.period:>7s}  {cell:24s}{c.a:14.6g}{c.b:14.6g}'
@@ -311,7 +389,10 @@ def notebook(exp: str) -> dict:
         _py(_data(prm)),
     ]
     if hook:
-        cells += [_md("## 2. The exercise's closure, with `@overwrite`\n\n" + hook_md), _py(hook)]
+        cells += [
+            _md("## 2. The exercise's closure, with `@overwrite`\n\n" + hook_md),
+            _py(hook),
+        ]
     n = 3 if hook else 2
     cells += [
         _md(f"## {n}. GTAP closure and model (base / check / shock)"),
@@ -322,15 +403,46 @@ def notebook(exp: str) -> dict:
             "levels and writes it in the shock period only."
         ),
         _py(_shock(rows)),
-        _md(f"## {n + 2}. Solve check and shock"),
-        _py(SOLVE),
-        _md(f"## {n + 3}. Every level against GEMPACK"),
-        _py(_compare(exp, checked)),
     ]
+    if exp in JOHANSEN_ONLY:
+        cells += [
+            _md(
+                f"## {n + 2}. Solve check, and the shock with Johansen\n\n"
+                + _JOHANSEN_MD.format(exp=exp)
+                + _WALL_MD
+            ),
+            _py(_solve_johansen("m")),
+            _md(f"## {n + 3}. Every level against the book's Johansen result"),
+            _py(_compare_johansen(exp, "m")),
+        ]
+    else:
+        cells += [
+            _md(f"## {n + 2}. Solve check and shock"),
+            _py(SOLVE),
+            _md(f"## {n + 3}. Every level against GEMPACK"),
+            _py(_compare(exp, checked)),
+        ]
+    if exp in JOHANSEN and exp not in JOHANSEN_ONLY:
+        cells += [
+            _md(
+                f"## {n + 4}. The book's own result: Johansen\n\n"
+                + _JOHANSEN_MD.format(exp=exp)
+                + " The same exercise, on a fresh model:"
+            ),
+            _py(
+                'mj, _ = build_block_model(p, p.sets, gc, "ROW", base_calibrated=False, '
+                "ref_gdx=None)\napply_shock(mj, SHOCK)\n" + _solve_johansen("mj")
+            ),
+            _py(_compare_johansen(exp, "mj")),
+        ]
     return {
         "cells": cells,
         "metadata": {
-            "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+            "kernelspec": {
+                "display_name": "Python 3",
+                "language": "python",
+                "name": "python3",
+            },
             "language_info": {"name": "python"},
         },
         "nbformat": 4,
@@ -339,10 +451,19 @@ def notebook(exp: str) -> dict:
 
 
 def exercises() -> list[str]:
-    """The exercises that get a notebook: those with a GEMPACK solution."""
-    fix = ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher_gragg"
-    names = [e for e in (*rb.EXERCISES, *HOOKED) if e not in NO_SOLUTION]
-    return [e for e in names if (fix / f"{e.lower()}.sl4.gz").exists()]
+    """The exercises that get a notebook: those with a GEMPACK solution to compare."""
+    gempack = ROOT / "tests" / "fixtures" / "gtap7_gempack"
+    names = [e for e in (*rb.EXERCISES, *HOOKED) if e not in JOHANSEN_ONLY]
+    names = [
+        e
+        for e in names
+        if (gempack / "burfisher_gragg" / f"{e.lower()}.sl4.gz").exists()
+    ]
+    return names + [
+        e
+        for e in JOHANSEN_ONLY
+        if (gempack / "burfisher" / f"{e.lower()}.sl4.gz").exists()
+    ]
 
 
 def main() -> int:
@@ -352,7 +473,9 @@ def main() -> int:
     a.out.mkdir(parents=True, exist_ok=True)
     for exp in exercises():
         text = json.dumps(notebook(exp), indent=1, ensure_ascii=False) + "\n"
-        (a.out / f"{exp.lower()}.ipynb").write_text(text, encoding="utf-8", newline="\n")
+        (a.out / f"{exp.lower()}.ipynb").write_text(
+            text, encoding="utf-8", newline="\n"
+        )
     return 0
 
 

@@ -8,13 +8,18 @@ the committed files must be exactly what it writes, so a change goes through it.
 
 Not checked against GEMPACK here, each for its reason:
 
-- ME4A, ME4B: neither GEMPACK ("Accuracy too low") nor equilibria (code 2) reach
-  the shock, so there is nothing to compare.
+- ME4A, ME4B: checked against the book's own Johansen result instead (see below);
+  solved exactly, neither GEMPACK ("Accuracy too low") nor equilibria reach the shock.
 - TBL53, GTAPV7: no GEMPACK Gragg solution yet (phase 3a-2 of one-data-folder
   adds them).
 - ME9A: up to 0.77% from GEMPACK (``pe`` ROW LAND), while it matches GAMS. GEMPACK's
   own log rates many of its results to 2 figures; a rerun with more steps decides.
   Its notebook is kept, without the check.
+
+The six exercises the book solves with Johansen (TBL45A/B/C, TBL64, ME4A, ME4B)
+also check equilibria's Johansen solution (``shock_method="johansen"``) against the
+book's GEMPACK Johansen run, within 0.5% in every cell except government demand
+``qgd``/``qgm`` (#201), which each notebook prints apart.
 
 NOT marked slow on purpose: the CI skips ``slow`` (see ``test_cge_examples_run.py``).
 """
@@ -42,6 +47,9 @@ MATCHED = (
     "ME5", "ME7A", "ME7B", "ME8", "ME9B", "ME9C", "ME9D",
 )  # fmt: skip
 UNCHECKED = ("ME9A",)
+JOHANSEN_ONLY = ("ME4A", "ME4B")
+JOHANSEN = ("TBL45A", "TBL45B", "TBL45C", "TBL64", *JOHANSEN_ONLY)
+JOHANSEN_OK = "every cell within 0.5% of the book's Johansen result"
 
 
 def _code(notebook: Path) -> str:
@@ -64,7 +72,7 @@ def _run(code: str, where: Path) -> subprocess.CompletedProcess:
 def test_every_exercise_has_a_notebook() -> None:
     """And nothing else: an empty parametrize below would pass by vacuity."""
     found = {p.stem for p in NB_DIR.glob("*.ipynb")}
-    assert found == {e.lower() for e in MATCHED + UNCHECKED}
+    assert found == {e.lower() for e in MATCHED + UNCHECKED + JOHANSEN_ONLY}
 
 
 def test_notebooks_are_what_the_generator_writes(tmp_path: Path) -> None:
@@ -96,6 +104,28 @@ def test_notebook_matches_gempack(exp: str, tmp_path: Path) -> None:
     r = _run(_code(NB_DIR / f"{exp.lower()}.ipynb"), tmp_path)
     assert r.returncode == 0, r.stderr[-3000:]
     assert "every cell within 0.5% of GEMPACK" in r.stdout
+    assert (JOHANSEN_OK in r.stdout) == (exp in JOHANSEN), exp
+
+
+@pytest.mark.needs_path
+@pytest.mark.parametrize("exp", JOHANSEN_ONLY)
+def test_johansen_notebook_matches_the_book(exp: str, tmp_path: Path) -> None:
+    r = _run(_code(NB_DIR / f"{exp.lower()}.ipynb"), tmp_path)
+    assert r.returncode == 0, r.stderr[-3000:]
+    assert JOHANSEN_OK in r.stdout
+
+
+@pytest.mark.needs_path
+def test_a_wrong_johansen_shock_fails(tmp_path: Path) -> None:
+    """The Johansen check can fail too: ME4A with half the land productivity loss."""
+    code = _code(NB_DIR / "me4a.ipynb")
+    shock = '"lambdaf": {("ROW", "LAND", "AGR"): -81.0}'
+    assert shock in code
+    r = _run(
+        code.replace(shock, '"lambdaf": {("ROW", "LAND", "AGR"): -40.5}'), tmp_path
+    )
+    assert r.returncode != 0
+    assert "not every cell within 0.5% of the book's Johansen result" in r.stderr
 
 
 @pytest.mark.needs_path
