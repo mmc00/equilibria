@@ -71,18 +71,53 @@ def test_the_overlaps_are_resolved() -> None:
     assert _classify("src/equilibria/baseline/other.py", components) == "parity"
 
 
-def test_coverage_is_uploaded_by_both_test_jobs() -> None:
-    """python-tests and gdxdump-tests split the suite: both measure and upload."""
-    wf = yaml.safe_load((ROOT / ".github" / "workflows" / "tests.yml").read_text())
-    for job in ("python-tests", "gdxdump-tests"):
-        steps = wf["jobs"][job]["steps"]
-        runs = " ".join(s.get("run", "") for s in steps)
-        assert "--cov" in runs and "--cov-report=xml" in runs, job
-        upload = [
-            s
-            for s in steps
-            if str(s.get("uses", "")).startswith("codecov/codecov-action")
-        ]
-        assert len(upload) == 1, job
-        assert upload[0]["with"]["token"] == "${{ secrets.CODECOV_TOKEN }}", job
-        assert upload[0]["with"]["flags"] == job, job
+def _workflow(name: str) -> dict:
+    return yaml.safe_load((ROOT / ".github" / "workflows" / name).read_text())
+
+
+def test_pull_requests_do_not_measure_coverage() -> None:
+    """Measured on python 3.11 with branches, coverage made python-tests 3x
+    slower in CI (24 -> 75 min) and gdxdump-tests 2x (30 -> 61 min)."""
+    runs = " ".join(
+        s.get("run", "") + str(s.get("uses", ""))
+        for job in _workflow("tests.yml")["jobs"].values()
+        for s in job["steps"]
+    )
+    assert "--cov" not in runs and "codecov" not in runs
+
+
+def test_coverage_runs_on_main_with_sysmon() -> None:
+    """Python 3.13's sys.monitoring tracer, lines only: +8 % on a GTAP test
+    (12.3 -> 13.3 s), against +62 % for branches on the old tracer."""
+    wf = _workflow("coverage.yml")
+    on = wf[True] if True in wf else wf["on"]  # YAML 1.1 reads `on` as true
+    assert set(on) == {"push", "workflow_dispatch"} and on["push"]["branches"] == [
+        "main"
+    ]
+    (job,) = wf["jobs"].values()
+    assert job["env"]["COVERAGE_CORE"] == "sysmon"
+    parts = {p["name"]: p["marks"] for p in job["strategy"]["matrix"]["part"]}
+    assert parts == {
+        "python-tests": "not gams and not slow and not needs_gdxdump",
+        "gdxdump-tests": "needs_gdxdump and not gams and not slow",
+    }
+    steps = job["steps"]
+    setup = next(
+        s for s in steps if s.get("uses") == "./.github/actions/setup-test-env"
+    )
+    assert setup["with"]["python-version"] == "3.13"
+    runs = " ".join(s.get("run", "") for s in steps)
+    assert "--cov --cov-report=xml" in runs and "${{ matrix.part.marks }}" in runs
+    (upload,) = [s for s in steps if str(s.get("uses", "")).startswith("codecov/")]
+    assert upload["with"]["token"] == "${{ secrets.CODECOV_TOKEN }}"
+    assert upload["with"]["flags"] == "${{ matrix.part.name }}"
+
+
+def test_coverage_counts_lines_not_branches() -> None:
+    """sys.monitoring traces branches only from Python 3.14 on."""
+    import tomllib  # ty: ignore[unresolved-import]  (3.11+; CI runs 3.11)
+
+    run = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["coverage"][
+        "run"
+    ]
+    assert run["branch"] is False

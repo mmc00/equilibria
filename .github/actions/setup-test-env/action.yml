@@ -3,6 +3,11 @@ description: >-
   Entorno de la suite: uv, Python 3.11 y dependencias, IPOPT/PyNumero ASL, la
   libreria PATH y path-capi-python. Deja exportadas (GITHUB_ENV) las variables
   que los tests necesitan para encontrar PATH.
+inputs:
+  python-version:
+    description: Python for the suite (coverage.yml uses 3.13 for sys.monitoring).
+    required: false
+    default: "3.11"
 runs:
   using: composite
   steps:
@@ -12,11 +17,11 @@ runs:
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: "3.11"
+        python-version: ${{ inputs.python-version }}
 
     - name: Install dependencies
       shell: bash
-      run: uv sync --dev
+      run: uv sync --dev --python ${{ inputs.python-version }}
 
     # --- solvers: sin esto, 64 de 1151 tests se SALTABAN en silencio -------
     # Los guards de solver (tests/conftest.py) saltan needs_path/needs_ipopt
