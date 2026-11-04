@@ -24,9 +24,6 @@ ALLOWED_UNTIL_PHASE_4 = frozenset(
         "tests/compare/fixtures/gtap3x3_minimo.yaml",
         "tests/compare/fixtures/make_eq_burfisher_levels.py",
         "tests/compare/fixtures/make_eq_gtap7_levels.py",
-        "tests/fixtures/nus333_bienestar_gams_levels.json.gz",
-        "tests/fixtures/nus333_desempleo_gams_levels.json.gz",
-        "tests/fixtures/nus333_tbl94_gams_levels.json.gz",
     }
 )
 
