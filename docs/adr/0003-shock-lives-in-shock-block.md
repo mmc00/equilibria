@@ -34,11 +34,11 @@ benchmark whatever the shock is.
 `apply_shock` is all or nothing and rejects a shock that changes nothing
 (`check_shock_value`): with no shock in the model the driver would silently
 apply its default +10 % tariff. That default still lives in the driver until
-the open change `tariff-to-shock-block` moves it here (`ROADMAP.md` "Plan de
-arquitectura", the shocks row: PR 2 after #113).
+the open change `tariff-to-shock-block` moves it here (`docs/roadmap.md` "Architecture
+plan", the shocks row: PR 2 after #113).
 
 ## Sources
 
 - #113
 - `docs/architecture/registro_de_bloques.md` (closing note)
-- `ROADMAP.md`, "Plan de arquitectura"
+- `docs/roadmap.md`, "Architecture plan"

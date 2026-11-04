@@ -29,8 +29,6 @@ ROOT_FILES = frozenset(
         "README.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",
-        "ROADMAP.md",
-        "GLOSSARY.md",
         "LICENSE",
         "NOTICE",
         "CITATION.cff",
@@ -163,12 +161,6 @@ SPANISH_LEGACY = frozenset(
 ALLOWED_EXACT: set[str] = {
     "CHANGELOG.md",
     "CONTRIBUTING.md",
-    # Mismo convenio de raiz que CHANGELOG/CONTRIBUTING: GitHub y los lectores
-    # esperan ROADMAP.md en mayusculas junto a README.md.
-    "ROADMAP.md",
-    # Root domain glossary: same root convention, and the domain-modeling format
-    # names it GLOSSARY.md.
-    "GLOSSARY.md",
     "Makefile",
     "NOTICE",
     "README.md",

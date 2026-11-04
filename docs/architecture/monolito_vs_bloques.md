@@ -226,7 +226,7 @@ alternativa evaluada era correr ambos modelos en los gates, al doble de tiempo. 
 solo: el monolito queda accesible como referencia, pero no debe generar ruido ni usarse como si
 fuera código vivo.
 
-Ver también: `ROADMAP.md` (registro de deuda técnica) y
+Ver también: `docs/roadmap.md` (registro de deuda técnica) y
 `docs/archive/findings/repo_cleanup_spec_2026-09-16.md` (la medición que originó este documento).
 
 ## Corrección (2026-09-21): el fix Fisher NO bajó el match de altertax

@@ -31,10 +31,10 @@ pins a snapshot of the model before every solve.
 The driver is not there yet. It still applies the default +10 % tariff when the
 model carries no shock, and rebuilds shock equations to do it (the
 `_rebuild_*_shock` functions). Moving that tariff into the `ShockBlock` is the
-open change `tariff-to-shock-block` (`ROADMAP.md` "Plan de arquitectura", the
+open change `tariff-to-shock-block` (`docs/roadmap.md` "Architecture plan", the
 shocks row: PR 2 after #113; see ADR-0003).
 
 ## Sources
 
 - #103 (base and check prepared by recipes), #108 (the shock recipe)
-- `ROADMAP.md`, "Plan de arquitectura"
+- `docs/roadmap.md`, "Architecture plan"

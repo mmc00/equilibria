@@ -7,7 +7,7 @@
 | Si quieres… | Lee |
 |---|---|
 | Entender qué es el proyecto y cómo se usa | `../README.md` |
-| Saber en qué estado está y qué falta | `../ROADMAP.md` |
+| Saber en qué estado está y qué falta | `roadmap.md` |
 | Entender la arquitectura (bloques, driver, shock) | `site/guide/architecture.md` y las decisiones en `adr/` |
 | Saber por qué el monolito de GTAP sigue existiendo | `architecture/monolito_vs_bloques.md` |
 | Saber por qué un número no coincide con GAMS o GEMPACK | `findings/` (ordenado por fecha) |
@@ -64,7 +64,7 @@ Estructura binaria de GDX, principalmente.
 ### `plans/` — planes de implementación, con fecha
 
 Histórico de cómo se abordó cada bloque de trabajo. Consúltalos para entender decisiones pasadas,
-no como indicación de lo que está pendiente hoy: para eso está `../ROADMAP.md`.
+no como indicación de lo que está pendiente hoy: para eso está `roadmap.md`.
 
 ### `archive/` — material superado
 
@@ -87,7 +87,7 @@ regeneran solas — no se editan a mano.
 ## Convención sobre fechas
 
 Un documento con fecha en el nombre es un registro de ese momento, no una verdad permanente.
-Si necesitas saber qué es cierto **hoy**, mira `../ROADMAP.md` o corre los gates:
+Si necesitas saber qué es cierto **hoy**, mira `roadmap.md` o corre los gates:
 
 ```bash
 uv run --frozen python scripts/gtap/run_parity_gates.py

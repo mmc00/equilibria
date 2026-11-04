@@ -38,6 +38,6 @@ The rule covers equations, not all block code. `blocks/gtap/periods.py` lives in
 
 ## Sources
 
-- `ROADMAP.md`, "Plan de arquitectura", "Siguiente, en este orden" item 1
+- `docs/roadmap.md`, "Architecture plan", "Next, in this order" item 1
 - `docs/architecture/monolito_vs_bloques.md` (the multi-period reflection asks
   for its SP model by method)
