@@ -133,7 +133,9 @@ def run_gragg(args: argparse.Namespace) -> int:
         rc = run([str(args.gemsim), "-cmf", str(cmf)], pkg, console)
     finally:
         shutil.rmtree(pkg, ignore_errors=True)
-    for scratch in out.glob("*GPXXX*"):  # GEMSIM's work files (run-GPXXX7.ud8)
+    # GEMSIM's work files (run-GPXXX7.ud8) and the solution's .slc are not results:
+    # the .sl4 and the updated data are the record (maintainer, 2026-11-03)
+    for scratch in [*out.glob("*GPXXX*"), *out.glob("*.slc")]:
         scratch.unlink()
     text = console.read_text(encoding=target_shocks.ENCODING, errors="replace")
     try:
