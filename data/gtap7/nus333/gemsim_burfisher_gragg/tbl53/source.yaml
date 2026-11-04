@@ -13,13 +13,13 @@ generated_from:
     path: gtap7/gempack
     sha256:
       tools/_job_cli.py: 5cd1ef864b79364b03329857de37fa8b8b3f2d96fef474416a1c0290ff6478e5
-      tools/burfisher_job.py: d211be387cd554b50db48b3b947da3eaaa6399a81b50e985159db03714e38b6c
+      tools/burfisher_job.py: 11d34dcc22a4a6fad0b3f93cf507d5ac9abf7f0860cf372fed9cd031c69748d7
       tools/export_sl4_levels.py: d3fe47958ee23e21c778b467a650007edcfe0b08390fec1af0a5ce97f3ea1c45
-      tools/gemsim_job.py: 59ff7bb32b68365f2f32bc1e40ee507217cf8f6adf3694c2f846abf44416c7d7
+      tools/gemsim_job.py: a3502d03819576c5fbc74e0d667f6a8f9d604a138cf406a0ad85cee198ea445a
       tools/levels_job.py: 9571e957a91fd4fb469fcbbd0f8606504c4560048e4c64151b395e5c756002fb
       tools/make_levels_tab.py: 52e58f847f0033b2dcc3c223cbdf99993638633d4a524057adf71d1c583bb80a
       tools/regenerate_gempack.py: ecb1099c39fb686315c0b5a2e7935d6a7481578475688980aa84f6345d5b94a6
-      tools/regenerate_paper.py: ecd0dc6a7f663a6ea754a60bf0400357b7fc107dfab9ff1fd8238dc9e9c86e21
+      tools/regenerate_paper.py: 382f9f47d8e61eee3b8f16decaa6768be45dd2a496f2a560cd8fe9dfa805c351
       tools/release_check.py: 7ef240328c439d32ff203b6a30d4a84f39266c6a4b082d314977c34866241b5e
       tools/run_gempack_matrix.py: dad828823ecafc5b55022454e35d83e0a0d5e200ee6e5e5d4ca1acc16af0ff6d
       tools/swap_job.py: 24d6c441a880666c7cb58b0f7d94f695c7ac5862ba6ca4ceb4b48c8e5ab8509c
@@ -160,20 +160,20 @@ command: '''C:\Documentos\proyectos\equilibria\.venv\Scripts\python.exe'' ''C:\D
   --aux ''C:\Documentos\proyectos\equilibria\runs\gempack_work\gtapuv7_levels\gtapuv7_levels''
   --gemsim ''C:\GP\gemsim.exe'' --out ''C:\Documentos\proyectos\equilibria\data\gtap7\nus333\gemsim_burfisher_gragg\tbl53''
   --expect-release 11.3.004'
-equilibria_commit: 38b773cf
+equilibria_commit: a252c2de
 exit:
   code: 0
 outputs:
-  decomp.har: 97db44b9dc974d771b75523484ec1de0840e4ef4a516e666879fd9ed5995d516
-  gemsim_console.txt: 85377baf10e94651b19584e7982a6f57b84edbe47eaf565ec26f510f4fd621d3
+  decomp.har: a6da76a69a806b69bace02825ee3bb5790328cf0657411a11554a607ba59885b
+  gemsim_console.txt: 1500b9f03ce6df4e67e6ecd49215f3d0ba3c53f46b240b3a697c9c1d615dba00
   run.cmf: b59f4e0367760893b58e1d89e95d99ce3867fc8072f944a0ec32bc002c3fdaf4
-  solution.sl4: 687f0baaa1859666c217b4820be35d1de141976f7e438c06a4a89d887792ebbd
-  summary.har: 788ddbaf11bbb27f66cafa5ed212acb5e61628d3c38217657386d894f15d7e0c
-  updated.har: 3a49eaae4345910538bac5381965210a80c4364fb976610aba550b1ee01c7f7f
-  volume.har: 92878573dc9957ccde54babc0ebbcadaf23bd0daf00650d2611cabc48c965a26
+  solution.sl4: 98f8ceb19ea3b2c2a79dbbd4c4179cc11aebaa3d5c6806ea7f1fb5ff687d9b74
+  summary.har: 2835dd5fdcabc1f194f011c3fcc991a62ff5519b01fec5b9b50fce0d8ec312bc
+  updated.har: 6460f7d1834fe486c90aa80b2b86bed1e96375e7ff8ddffc3413d8cd3ca244b6
+  volume.har: 9163413e9ce6959f85ae6d7f73de52e24f14a307eced9a7c786e0b2845b12f53
 run:
-  date: '2026-11-03T21:49:15-06:00'
-  duration_s: 19.633
+  date: '2026-11-03T22:25:43-06:00'
+  duration_s: 18.634
   machine:
     os: Windows 11 (10.0.26200)
     cpu: 13th Gen Intel(R) Core(TM) i7-1365U
