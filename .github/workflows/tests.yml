@@ -63,7 +63,19 @@ jobs:
       # `needs_gdxdump and not gams and not slow`. Cambiar una exige la otra.
       - name: Run tests (excluding GAMS-marked and slow)
         run: |
-          uv run pytest -ra -m "not gams and not slow and not needs_gdxdump" tests
+          uv run pytest -ra -m "not gams and not slow and not needs_gdxdump" tests \
+            --cov --cov-report=xml
+
+      # Coverage of this half of the suite; Codecov merges it with
+      # gdxdump-tests' half (flags). Informational: no floor yet (R-COVERAGE).
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          flags: python-tests
+          fail_ci_if_error: false
 
   # Los tests needs_gdxdump (paridad GTAP7 MCP/NLP, altertax, ifsub, F3.5...)
   # leen GDX de referencia con `gdxdump`, que viene con GAMS. Sin el, el guard
@@ -109,7 +121,17 @@ jobs:
           # tests usa cyipopt, lo unico que CI puede no lograr instalar.
           EQUILIBRIA_REQUIRE_SOLVERS: "1"
         run: |
-          uv run pytest -ra -m "needs_gdxdump and not gams and not slow" tests
+          uv run pytest -ra -m "needs_gdxdump and not gams and not slow" tests \
+            --cov --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          flags: gdxdump-tests
+          fail_ci_if_error: false
 
   structural-gates:
     runs-on: ubuntu-latest
