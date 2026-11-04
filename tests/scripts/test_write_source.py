@@ -220,12 +220,11 @@ def test_windows_cpu_reads_the_registry_name() -> None:
     ]
 
 
-def test_windows_cpu_falls_back_without_the_key() -> None:
-    import platform
-
-    assert _module()._windows_cpu(_FakeWinreg(None)) == (
-        platform.processor() or platform.machine()
-    )
+def test_windows_cpu_falls_back_without_the_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without the registry key: the architecture in the environment, not
+    platform.processor(), which queries WMI (timed out in the 3a-2 run)."""
+    monkeypatch.setenv("PROCESSOR_ARCHITECTURE", "AMD64")
+    assert _module()._windows_cpu(_FakeWinreg(None)) == "AMD64"
 
 
 def test_model_derived_from_records_the_changes(tmp_path: Path) -> None:
@@ -578,6 +577,7 @@ def _not_starting(m, monkeypatch: pytest.MonkeyPatch, times: int) -> list[int]:
         return real(cmd, **kw)
 
     monkeypatch.setattr(m.subprocess, "run", run)
+    monkeypatch.setattr(m.time, "sleep", lambda s: None)  # the pause before a retry
     return calls
 
 
@@ -603,3 +603,41 @@ def test_a_second_failed_start_writes_nothing(
     folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_ifsub0"
     assert m.main(_argv(tmp_path, folder, [sys.executable, "-c", "pass"])) != 0
     assert len(calls) == 2 and not (folder / "source.yaml").exists()
+
+
+def test_windows_machine_info_does_not_touch_wmi(monkeypatch: pytest.MonkeyPatch) -> None:
+    """platform's processor/release/version query WMI on Windows (Python 3.12), and
+    WMI timed out mid-run (WinError 258, KeyError 'Architecture'): a solved job lost
+    its record. machine_info builds the same strings without it."""
+    from types import SimpleNamespace
+
+    m = _module()
+
+    def wmi(*a: object) -> str:
+        raise OSError(258, "WMI timed out")
+
+    monkeypatch.setattr(m.platform, "system", lambda: "Windows")
+    for name in ("processor", "machine", "release", "version", "uname"):
+        monkeypatch.setattr(m.platform, name, wmi)
+    monkeypatch.setattr(m.sys, "getwindowsversion",
+                        lambda: SimpleNamespace(major=10, minor=0, build=26200), raising=False)
+    monkeypatch.setattr(m, "_windows_cpu", lambda: "13th Gen Intel(R) Core(TM) i7-1365U")
+    monkeypatch.setattr(m, "_windows_ram", lambda: 31.4)
+    info = m.machine_info()
+    assert info["os"] == "Windows 11 (10.0.26200)"
+    assert info["cpu"] == "13th Gen Intel(R) Core(TM) i7-1365U"
+    assert info["ram_gb"] == 31.4
+
+
+def test_retry_waits_before_the_second_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The immediate retry failed like the first attempt (full 3a-2 run): wait first."""
+    m = _module()
+    _not_starting(m, monkeypatch, 1)
+    slept: list[float] = []
+    monkeypatch.setattr(m.time, "sleep", slept.append)
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_ifsub0"
+    cmd = [sys.executable, "-c", "open('out.txt','w').write('x')"]
+    assert m.main(_argv(tmp_path, folder, cmd)) == 0
+    assert slept == [m.RETRY_PAUSE_S] and m.RETRY_PAUSE_S >= 10

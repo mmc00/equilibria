@@ -44,11 +44,21 @@ from equilibria.sources import (
 ROOT = Path(__file__).resolve().parents[2]
 # STATUS_DLL_INIT_FAILED, as an unsigned and a signed exit code: the process never started
 NOT_STARTED = (0xC0000142, -1073741502)
+RETRY_PAUSE_S = 15  # before running a command that did not start once more
 
 
 def machine_info() -> dict[str, Any]:
     """OS, CPU model, logical cores and RAM in GB. Nothing that names the machine."""
     system = platform.system()
+    if system == "Windows":
+        # platform's processor/release/version query WMI here (Python 3.12), and WMI
+        # timed out mid-run (WinError 258, KeyError 'Architecture'): no WMI at all
+        return {
+            "os": _windows_os(),
+            "cpu": _windows_cpu(),
+            "cores": os.cpu_count() or 1,
+            "ram_gb": round(_windows_ram(), 1),
+        }
     cpu, ram = platform.processor() or platform.machine(), 0.0
     if system == "Darwin":
         cpu = _sysctl("machdep.cpu.brand_string") or cpu
@@ -64,10 +74,6 @@ def machine_info() -> dict[str, Any]:
             if line.startswith("MemTotal"):
                 ram = int(line.split()[1]) / 2**20
                 break
-    elif system == "Windows":
-        os_name = f"Windows {platform.release()} ({platform.version()})"
-        cpu = _windows_cpu()
-        ram = _windows_ram()
     else:
         os_name = f"{system} {platform.release()}"
     return {
@@ -85,6 +91,14 @@ def _sysctl(key: str) -> str:
         return ""
 
 
+def _windows_os() -> str:
+    """"Windows 11 (10.0.26200)", as platform.release()/version() print it, from the
+    kernel's version: no WMI. Build 22000 and later is Windows 11."""
+    v = sys.getwindowsversion()  # type: ignore[attr-defined]  # Windows only
+    release = "11" if v.major == 10 and v.build >= 22000 else str(v.major)
+    return f"Windows {release} ({v.major}.{v.minor}.{v.build})"
+
+
 def _windows_cpu(winreg_module: Any = None) -> str:
     """The CPU model name; platform.processor() on Windows gives only the family."""
     try:
@@ -97,7 +111,8 @@ def _windows_cpu(winreg_module: Any = None) -> str:
         name, _ = winreg_module.QueryValueEx(key, "ProcessorNameString")
         return str(name).strip()
     except (ImportError, OSError):
-        return platform.processor() or platform.machine()
+        # no WMI here either: the architecture Windows puts in the environment
+        return os.environ.get("PROCESSOR_ARCHITECTURE", "")
 
 
 def _windows_ram() -> float:
@@ -311,6 +326,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(retry)
             args.notes = "; ".join(s for s in (args.notes, retry) if s)
+            time.sleep(RETRY_PAUSE_S)  # an immediate retry failed like the first attempt
             proc = subprocess.run(command, cwd=folder)
         duration = time.perf_counter() - t0
         if proc.returncode != 0:
