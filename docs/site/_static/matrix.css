@@ -1,6 +1,6 @@
 /* matrix.css — artifact-style parity components (mx-*), single source for the
-   coverage matrices and benchmarks. Light on :root; dark via furo body[data-theme]
-   plus prefers-color-scheme for the "auto" theme. */
+   coverage matrices and benchmarks. Light on :root; dark via pydata-sphinx-theme's
+   html[data-theme="dark"] (the theme resolves "auto" to light or dark itself). */
 :root {
   --mx-panel: #ffffff;
   --mx-ink: #1a2129;
@@ -15,23 +15,13 @@
   --mx-bad: #c05038;   --mx-bad-bg: #f7e5df;
   --mx-mono: "SFMono-Regular", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
 }
-body[data-theme="dark"] {
+html[data-theme="dark"] {
   --mx-panel: #161d26; --mx-ink: #e6ebf1; --mx-ink-soft: #9aa7b4;
   --mx-ink-faint: #6a7885; --mx-line: #26313d; --mx-line-soft: #1d2732;
   --mx-accent: #5b9bd8; --mx-accent-soft: #1a2836;
   --mx-good: #4bb37c; --mx-good-bg: #14291e;
   --mx-warn: #d0a542; --mx-warn-bg: #2c2411;
   --mx-bad: #db6a4f;  --mx-bad-bg: #2e1a14;
-}
-@media (prefers-color-scheme: dark) {
-  body[data-theme="auto"] {
-    --mx-panel: #161d26; --mx-ink: #e6ebf1; --mx-ink-soft: #9aa7b4;
-    --mx-ink-faint: #6a7885; --mx-line: #26313d; --mx-line-soft: #1d2732;
-    --mx-accent: #5b9bd8; --mx-accent-soft: #1a2836;
-    --mx-good: #4bb37c; --mx-good-bg: #14291e;
-    --mx-warn: #d0a542; --mx-warn-bg: #2c2411;
-    --mx-bad: #db6a4f;  --mx-bad-bg: #2e1a14;
-  }
 }
 .mx-card { background: var(--mx-panel); border: 1px solid var(--mx-line);
   border-radius: 12px; overflow: hidden; margin: 12px 0 20px; }

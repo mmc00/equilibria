@@ -93,18 +93,45 @@ sphinx_gallery_conf = {
 
 # -- HTML output --------------------------------------------------------------
 
-html_theme = "furo"
+html_theme = "pydata_sphinx_theme"
 html_title = f"equilibria {version}"
-html_static_path = ["_static"]
+# docs/assets is copied into _static, so the theme finds the logos there.
+html_static_path = ["_static", "../assets"]
 html_css_files = ["matrix.css"]
-html_logo = str(ROOT / "docs" / "assets" / "equilibria-mark.svg")
 html_favicon = str(ROOT / "docs" / "assets" / "equilibria-favicon.svg")
+# The guide pages are top-level entries of the navbar, with no children: their
+# left sidebar would be an empty "Section Navigation".
+html_sidebars = {"index": [], "guide/*": [], "changelog": []}
+html_context = {
+    "github_user": "mmc00",
+    "github_repo": "equilibria",
+    "github_version": "main",
+    "doc_path": "docs/site",
+}
 html_theme_options = {
-    "source_repository": "https://github.com/mmc00/equilibria",
-    "source_branch": "main",
-    "source_directory": "docs/site/",
-    "light_logo": str(ROOT / "docs" / "assets" / "equilibria-mark.svg"),
-    "dark_logo": str(ROOT / "docs" / "assets" / "equilibria-mono-white.svg"),
+    "logo": {
+        "text": "equilibria",
+        "image_light": "_static/equilibria-mark.svg",
+        "image_dark": "_static/equilibria-mono-white.svg",
+    },
+    "icon_links": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/mmc00/equilibria",
+            "icon": "fa-brands fa-github",
+        },
+        {
+            "name": "PyPI",
+            "url": "https://pypi.org/project/equilibria/",
+            "icon": "fa-brands fa-python",
+        },
+    ],
+    "use_edit_page_button": True,
+    "navbar_align": "left",
+    "header_links_before_dropdown": 4,
+    "show_toc_level": 2,
+    "footer_start": ["copyright"],
+    "footer_end": ["theme-version"],
 }
 
 # -- doctest ------------------------------------------------------------------
