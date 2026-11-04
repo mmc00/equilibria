@@ -38,7 +38,6 @@ import shlex
 import shutil
 import subprocess
 import sys
-import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath, PureWindowsPath
@@ -127,9 +126,10 @@ def _join(folder: PurePath, name: str) -> PurePath:
 
 
 def _default_work() -> Path:
-    return Path(os.environ.get("EQUILIBRIA_GEMPACK_WORK") or tempfile.gettempdir()) / (
-        "equilibria_gempack_work"
-    )
+    """The compiled TABs go here (git-ignored), not to %TEMP%: the path is recorded in
+    every external and command, and %TEMP% would name the Windows user."""
+    env = os.environ.get("EQUILIBRIA_GEMPACK_WORK")
+    return Path(env) / "paper" if env else ROOT / "runs" / "gempack_work"
 
 
 def _tag(shock: float, closure: str) -> str:

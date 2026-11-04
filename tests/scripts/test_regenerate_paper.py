@@ -244,3 +244,13 @@ def test_missing_executables_stop_before_job_one(tmp_path: Path) -> None:
     rc = m.main([*RELEASES, "--group", "book", "--data-root", str(root),
                  "--gtapdir", str(tmp_path / "nowhere"), "--gp", str(tmp_path / "nowhere")])  # fmt: skip
     assert rc == 2 and ran == []
+
+
+def test_default_work_names_no_user(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--work ends up in external paths and the command: not under the home folder
+    (Windows' %TEMP% is C:/Users/<name>/...), and never under data/."""
+    monkeypatch.delenv("EQUILIBRIA_GEMPACK_WORK", raising=False)
+    work = _module()._default_work()
+    assert not work.resolve().is_relative_to(Path.home().resolve())
+    assert not work.resolve().is_relative_to(DATA_ROOT)
+    assert work.resolve().is_relative_to(ROOT)

@@ -18,7 +18,7 @@ outputs:
   tools/levels_job.py: 9571e957a91fd4fb469fcbbd0f8606504c4560048e4c64151b395e5c756002fb
   tools/make_levels_tab.py: 52e58f847f0033b2dcc3c223cbdf99993638633d4a524057adf71d1c583bb80a
   tools/regenerate_gempack.py: ecb1099c39fb686315c0b5a2e7935d6a7481578475688980aa84f6345d5b94a6
-  tools/regenerate_paper.py: e9be7b9a0a59a710fab84d1245f1d4e6c618cb9a3f05ad40f87bf67c2c01d3aa
+  tools/regenerate_paper.py: ecd0dc6a7f663a6ea754a60bf0400357b7fc107dfab9ff1fd8238dc9e9c86e21
   tools/release_check.py: 7ef240328c439d32ff203b6a30d4a84f39266c6a4b082d314977c34866241b5e
   tools/run_gempack_matrix.py: dad828823ecafc5b55022454e35d83e0a0d5e200ee6e5e5d4ca1acc16af0ff6d
   tools/swap_job.py: 24d6c441a880666c7cb58b0f7d94f695c7ac5862ba6ca4ceb4b48c8e5ab8509c

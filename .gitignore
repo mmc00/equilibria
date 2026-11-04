@@ -308,6 +308,8 @@ scripts/gtap/*
 # Salidas de corridas GEMPACK/GAMS: se ignora todo lo generado (binarios y
 # consolas) y se versiona a mano la evidencia de validacion (.md, .cmf, .py,
 # .json). Antes esto eran 93 patrones enumerados por subdirectorio y extension.
+# phase 3a-2: what tablo compiles from data/gtap7/gempack_rungtap375_levels
+runs/gempack_work/
 runs/**/__pycache__/
 runs/**/*.har
 runs/**/*.sl4
