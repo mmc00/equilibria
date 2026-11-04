@@ -2,7 +2,7 @@
 
 `specs/` holds what each architecture area does **today** (the baseline) and
 what we have decided to change (open changes). It is written for people who
-develop equilibria. User documentation lives in `docs/site/`, `docs/guides/`
+develop equilibria. User documentation lives in `docs/site/`, `docs/notes/`
 and `examples/`.
 
 ## Two levels

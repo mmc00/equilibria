@@ -1,8 +1,8 @@
-# ejemplos sam
+# SAM examples
 
-Pipeline manual para transformar SAM entre formatos y aplicar ajustes secuenciales.
+A manual pipeline to convert a SAM between formats and apply adjustments in sequence.
 
-API simple recomendada (centrada en `Sam`):
+Recommended simple API (centered on `Sam`):
 
 ```python
 from equilibria.sam_tools import export_sam, parse_sam, run_ieem_to_pep
@@ -21,7 +21,7 @@ result = run_ieem_to_pep(
 sam_pep = result.sam
 ```
 
-Tambien puedes usar la API Python con la clase `Sam` (directamente o a traves del pipeline manual):
+You can also use the Python API with the `Sam` class (directly or through the manual pipeline):
 
 ```python
 from equilibria.sam_tools.ieem_raw_excel import IEEMRawSAM
@@ -32,52 +32,52 @@ summary = run_manual_pipeline(sam)
 print(summary.total_flow)
 ```
 
-## Ejemplo RAW IEEM -> PEP compatible (una sola corrida)
+## Example: raw IEEM -> PEP-compatible (a single run)
 
-`input.format: ieem_raw_excel` permite arrancar desde una SAM tipo IEEM (por ejemplo `MCS2016`) y aplicar:
-- lectura raw,
-- agregación con mapping,
-- normalización a cuentas PEP,
-- y luego transformaciones del pipeline.
+`input.format: ieem_raw_excel` starts from an IEEM-style SAM (for example `MCS2016`) and applies:
+- raw reading,
+- aggregation with a mapping,
+- normalization to PEP accounts,
+- and then the pipeline transformations.
 
-En `input.options`:
-- `sheet_name`: nombre de hoja raw (default `MCS2016`).
+In `input.options`:
+- `sheet_name`: name of the raw sheet (default `MCS2016`).
 
-Ejemplo de config:
+Example config:
 - `examples/sam/cri_ieem_raw_to_pep.yaml`
 
-## Operaciones disponibles
+## Available operations
 
-Nota de arquitectura:
-- `aggregate_mapping` es generica para cualquier SAM agregada por mapping.
-- Las operaciones IEEM->PEP (`balance_ras`, `normalize_pep_accounts`, `create_x_block`, `convert_exports_to_x`, `align_ti_to_gvt_j`) viven en `ieem_to_pep_transformations.py`.
+Architecture note:
+- `aggregate_mapping` is generic for any SAM aggregated by a mapping.
+- The IEEM->PEP operations (`balance_ras`, `normalize_pep_accounts`, `create_x_block`, `convert_exports_to_x`, `align_ti_to_gvt_j`) live in `ieem_to_pep_transformations.py`.
 
-- `scale_all`: reescala toda la matriz.
-- `scale_slice`: reescala un bloque (`row`/`col`) con selector.
-- `aggregate_mapping`: agrega una SAM RAW usando `mapping_path`.
-- `balance_ras`: rebalancea matriz RAW con RAS.
+- `scale_all`: rescales the whole matrix.
+- `scale_slice`: rescales a block (`row`/`col`) with a selector.
+- `aggregate_mapping`: aggregates a RAW SAM using `mapping_path`.
+- `balance_ras`: rebalances a RAW matrix with RAS.
   - `ras_type`: `arithmetic` (default), `geometric`, `row`, `column`.
-- `normalize_pep_accounts`: convierte etiquetas agregadas a cuentas PEP (`J/I/L/K/AG/MARG/OTH`).
-- `create_x_block`: agrega cuentas `X.*` para cada commodity `I.*`.
-- `convert_exports_to_x`: mueve exportaciones `I.* -> AG.row` a `X.* -> AG.row` y ajusta `J->I/J->X`.
-- `align_ti_to_gvt_j`: mueve `AG.ti -> J.*` a `AG.gvt -> J.*`.
-- `shift_row_slice`: mueve una fracción de una fila origen a otra fila destino para columnas seleccionadas.
-- `move_cell`: mueve monto entre dos celdas específicas.
-- `move_k_to_ji`: mueve flujos `K.* -> I.*` hacia `J.map(i) -> I.*`.
-- `move_l_to_ji`: mueve flujos `L.* -> I.*` hacia `J.map(i) -> I.*`.
-- `move_margin_to_i_margin`: mueve `MARG.MARG -> I.*` hacia `I.{margin_commodity} -> I.*`.
-- `move_tx_to_ti_on_i`: mueve `AG.tx -> I.*` hacia `AG.ti -> I.*`.
-- `pep_structural_moves`: atajo compuesto (legacy) que ejecuta las cuatro operaciones anteriores.
-- `rebalance_ipfp`: rebalancea con IPFP.
-- `enforce_export_balance`: fuerza identidad de valor exportado.
+- `normalize_pep_accounts`: turns aggregated labels into PEP accounts (`J/I/L/K/AG/MARG/OTH`).
+- `create_x_block`: adds `X.*` accounts for each commodity `I.*`.
+- `convert_exports_to_x`: moves exports `I.* -> AG.row` to `X.* -> AG.row` and adjusts `J->I/J->X`.
+- `align_ti_to_gvt_j`: moves `AG.ti -> J.*` to `AG.gvt -> J.*`.
+- `shift_row_slice`: moves a fraction of a source row to a target row for the selected columns.
+- `move_cell`: moves an amount between two given cells.
+- `move_k_to_ji`: moves flows `K.* -> I.*` to `J.map(i) -> I.*`.
+- `move_l_to_ji`: moves flows `L.* -> I.*` to `J.map(i) -> I.*`.
+- `move_margin_to_i_margin`: moves `MARG.MARG -> I.*` to `I.{margin_commodity} -> I.*`.
+- `move_tx_to_ti_on_i`: moves `AG.tx -> I.*` to `AG.ti -> I.*`.
+- `pep_structural_moves`: a compound shortcut (legacy) that runs the four operations above.
+- `rebalance_ipfp`: rebalances with IPFP.
+- `enforce_export_balance`: enforces the exported-value identity.
 
-## Selectores
+## Selectors
 
-- Exacto: `AG.tx`, `I.agr`
+- Exact: `AG.tx`, `I.agr`
 - Wildcards: `AG.*`, `*.agr`, `*.*`
-- También acepta `{cat: AG, elem: tx}`
+- It also accepts `{cat: AG, elem: tx}`
 
-## Transformaciones IEEM -> PEP
+## IEEM -> PEP transformations
 
-- Indice (2 idiomas: espanol e ingles):
-  - `docs/ieem_to_pep_transformations.md`
+- Index (2 languages: Spanish and English):
+  - `docs/notes/pep/ieem_to_pep_transformations.md`

@@ -106,7 +106,7 @@ script only if you're regenerating from a clean checkout that predates it.
 
 Each run's `tm10.log` should report a max residual ratio ~1e-7 and *"completed
 without error"* (Gragg 8/16/32, no closure errors). The welfare parity was
-validated in `docs/findings/rungtap_welfare_parity_2026-05-15.md`.
+validated in `docs/archive/findings/rungtap_welfare_parity_2026-05-15.md`.
 
 **`gtap7_20x41` does not solve in GEMPACK:** it aborts with a `loge`-of-negative
 arithmetic error in equation `E_u` (utility) for region `Caribbean` — the same
@@ -378,7 +378,7 @@ sector's labour productivity by −10% in a one-country model (`fixcap.cmf`:
 bilateral route, globally** — far more non-linear. GEMPACK is Gragg-*linearized*, so
 its error vs a levels solve grows with the shock's size and reach. The ~0.4pp median
 residual is that linearization signature at a large shock, **not** a model defect
-(§8, and `docs/findings/gempack_residual_is_linearization`).
+(§8, and `docs/archive/findings/gempack_residual_is_linearization`).
 
 **The decisive test (runs on Windows).** Regenerate the RunGTAP solution at a *small*
 shock and re-measure; the match should climb toward ~99% within 1pp:
@@ -405,7 +405,7 @@ other check (Python≡GAMS, Table 4 mapping, factor `qe`=0.00pp) says it will.
 along **two independent axes** — a shock-size sweep and a Gragg-refinement sweep —
 over all five matrix datasets, so "why only 52%?" becomes a quantitative
 convergence curve. Design + acceptance floors:
-`docs/findings/gempack_linearization_study_spec_2026-07-24.md`.
+`docs/archive/findings/gempack_linearization_study_spec_2026-07-24.md`.
 
 **One-time, on either OS — lay out the grid + the Windows driver:**
 

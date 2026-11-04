@@ -237,7 +237,7 @@ def _solve(model, params, *, label: str, strict_dof: bool = True, closure=None):
 
     # Equation scaling (row + col): GAMS solves the raw model, so the Python
     # side must not stack its own pre-scaling on top (see
-    # docs/findings/ on the altertax NLP-scaling saga).
+    # docs/archive/findings/ on the altertax NLP-scaling saga).
     jac_vals = data.callback_jac(list(data.x0))
     row_indices = data.jacobian_structure.row_indices
     col_for_nnz = []

@@ -99,7 +99,7 @@ def gempack_welfare_ev(decomp_har_path: str) -> dict[str, dict[str, float]]:
     Returns {region: {"alloc": .., "tot": .., "invsav": .., "total": ..}} where
     total = alloc + tot + invsav. Empty dict if the file or a recognizable EV
     header is absent (diagnostic use only — welfare is deliberately NOT a floor
-    gate; see docs/findings/gempack_welfare_not_cellwise_2026-07-23).
+    gate; see docs/archive/findings/gempack_welfare_not_cellwise_2026-07-23).
 
     Defensive by design: locates the EV header by NAME (RunGTAP versions differ),
     a 2-D regions × components array; components are summed into the three
@@ -215,7 +215,7 @@ def sl4_levels(har_path: str, gempack_var: str) -> dict[tuple[str, ...], float]:
 # They are NOT the same test. Report both; the level-relative one is the "4-5
 # significant digits" GAMS↔GEMPACK agreement from the literature. (The finite-step
 # Gragg residual is negligible — GEMPACK converges to ~0.002pp across its s4..s64
-# step-grid; see docs/findings/gempack_residual_is_linearization_2026-07-24.md UPDATE.)
+# step-grid; see docs/archive/findings/gempack_residual_is_linearization_2026-07-24.md UPDATE.)
 # 13 GEMPACK quantity vars mapped to Python Vars, established 2026-07-23 by an
 # EXHAUSTIVE discovery pass (discover_qty_map.py): for each GEMPACK q* and each
 # Python quantity Var of matching rank, the index permutation minimizing median

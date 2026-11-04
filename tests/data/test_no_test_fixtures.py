@@ -69,7 +69,7 @@ def test_no_code_points_into_tests_fixtures() -> None:
             "--",
             *_CODE,
             "docs/site",
-            "docs/guides",
+            "docs/notes",
             "examples",
         ],
         cwd=ROOT,

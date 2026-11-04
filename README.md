@@ -18,7 +18,7 @@
 [Installation](#installation) •
 [Quick Start](#quick-start) •
 [Documentation](https://equilibria.readthedocs.io/) •
-[Roadmap](ROADMAP.md) •
+[Roadmap](docs/roadmap.md) •
 [Contributing](#contributing)
 
 </div>
@@ -159,7 +159,7 @@ What matches what, measured: the
 [GTAP coverage matrix against GAMS](https://equilibria.readthedocs.io/en/latest/guide/gtap7_coverage_matrix.html),
 the [one against GEMPACK](https://equilibria.readthedocs.io/en/latest/guide/gtap7_coverage_matrix_gempack.html),
 and the [PEP coverage matrix](https://equilibria.readthedocs.io/en/latest/guide/pep_coverage_matrix.html).
-What comes next: [ROADMAP.md](ROADMAP.md).
+What comes next: [docs/roadmap.md](docs/roadmap.md).
 
 ## Examples
 

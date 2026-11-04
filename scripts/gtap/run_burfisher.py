@@ -335,7 +335,7 @@ def solve_exercise(
 GAMS_PREFIXES = ["a_", "c_", "f_", "r_"]
 WHY_SKIP = (
     "bienestar/Walras: fuera de la Tabla 3; el bienestar se compara aparte "
-    "(test_nus333_bienestar.py) y walras debe ser 0 en los dos"
+    "(test_nus333_welfare.py) y walras debe ser 0 en los dos"
 )
 # psave/chiSave siguen a GTAP v7 (gtapv7.tab), no a GAMS: GAMS aplica chiSave**2 en
 # psave, la mitad (en log) del ajuste de GTAP. Distintos de GAMS a proposito; el

@@ -33,4 +33,4 @@ and turns a missing provider into a clear error when the model is built.
 ## Sources
 
 - #139
-- `ROADMAP.md`, "Plan de arquitectura"
+- `docs/roadmap.md`, "Architecture plan"

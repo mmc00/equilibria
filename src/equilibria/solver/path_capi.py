@@ -131,7 +131,7 @@ def _resolver_gtap_mode(model, explicito: bool | None) -> bool:
     declara free-row. Apagarlo por accidente no rompe nada de forma visible:
     `deactivate_zero_unique_var_eqs` desactiva una ecuacion REAL para cuadrar el
     sistema y el solve aterriza en otra raiz (ver
-    docs/architecture/, y el caso medido de eq_xseq[USA,VegFruit]).
+    docs/notes/architecture/, y el caso medido de eq_xseq[USA,VegFruit]).
 
     Por eso el modo se PASA. El marcador `model._gtap_mode` que estampa el
     driver sigue valiendo como respaldo —hay llamadores que no pueden pasar el

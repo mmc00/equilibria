@@ -3,13 +3,13 @@
 GDX Comparison Tool
 
 Compares original GAMS GDX files with data from Excel files.
-Generates a Markdown report in reports/gdx_comparison_report.md
+Generates a Markdown report in notes/tmp/gdx_comparison_report.md
 
 Usage:
     python scripts/dev/compare_gdx.py
 
 Output:
-    reports/gdx_comparison_report.md
+    notes/tmp/gdx_comparison_report.md
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ class GDXComparator:
     """Compare GDX files and generate comparison report."""
 
     TOLERANCE = 0.0001  # 0.01%
-    REPORT_PATH = Path("reports/gdx_comparison_report.md")
+    REPORT_PATH = Path("notes/tmp/gdx_comparison_report.md")
 
     def __init__(self, original_dir: Path):
         self.original_dir = original_dir

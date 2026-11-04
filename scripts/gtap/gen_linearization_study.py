@@ -266,7 +266,7 @@ Welfare EV is read from GEMPACK's `decomp.har` (WELVIEW) via `gempack_welfare_ev
 and compared to Python's EV by the 3-branch decomposition (allocative /
 terms-of-trade / investment-savings). It is **not** floor-gated: raw welfare `u` is
 a sign-flipping second-order quantity where even GAMS and GEMPACK disagree — see
-`docs/findings/gempack_welfare_not_cellwise_2026-07-23.md`. This section reports the
+`docs/archive/findings/gempack_welfare_not_cellwise_2026-07-23.md`. This section reports the
 EV$ decomposition side by side where a `decomp.har` fixture is present, purely as a
 diagnostic.
 
@@ -275,7 +275,7 @@ diagnostic.
 Python's ifSUB condensation reproduces GAMS to the bit (mac gate #1,
 `verify_ifsub_equivalence.py`; primary quantity block 99.3–99.9% consistent across
 modes on 16,424 cells). See
-`docs/findings/gtap_ifsub_is_faithful_not_inverted_2026-07-24.md`.
+`docs/archive/findings/gtap_ifsub_is_faithful_not_inverted_2026-07-24.md`.
 
 ## Provenance
 

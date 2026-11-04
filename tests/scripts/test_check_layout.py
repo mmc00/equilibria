@@ -74,12 +74,12 @@ def test_tracked_names_keep_their_accents(tmp_path: Path) -> None:
         )
 
     git("init", "-q")
-    (tmp_path / "docs").mkdir()
-    (tmp_path / "docs" / "año.md").write_text("x")
+    (tmp_path / "docs" / "notes").mkdir(parents=True)
+    (tmp_path / "docs" / "notes" / "año.md").write_text("x")
     git("add", ".")
     mod = _module()
     paths = mod._tracked(tmp_path)
-    assert paths == ["docs/año.md"]
+    assert paths == ["docs/notes/año.md"]
     (msg,) = mod.violations(paths)
     assert "not English" in msg
 
@@ -99,3 +99,19 @@ def test_layout_hooks_run_on_windows_too() -> None:
     for hook in ours.values():
         assert hook["language"] == "python"
         assert hook["entry"].split()[0] == "python"
+
+
+def test_unknown_docs_entry_is_rejected() -> None:
+    assert _module().violations(["docs/newfolder/x.md", "docs/loose_note.md"])
+
+
+def test_docs_target_layout_passes() -> None:
+    paths = [
+        "docs/readme.md",
+        "docs/glossary.md",
+        "docs/roadmap.md",
+        "docs/adr/0001-x.md",
+        "docs/notes/sam/x.md",
+        "docs/archive/readme.md",
+    ]
+    assert _module().violations(paths) == []

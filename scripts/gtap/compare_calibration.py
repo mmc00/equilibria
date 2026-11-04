@@ -48,11 +48,11 @@ def _default_dump_gdx() -> Path:
 
 
 def _default_csv_output() -> Path:
-    return REPO_ROOT / f"docs/findings/calibration_diff_{date.today().isoformat()}.csv"
+    return REPO_ROOT / f"notes/tmp/calibration_diff_{date.today().isoformat()}.csv"
 
 
 def _default_json_output() -> Path:
-    return REPO_ROOT / f"docs/findings/calibration_diff_{date.today().isoformat()}.summary.json"
+    return REPO_ROOT / f"notes/tmp/calibration_diff_{date.today().isoformat()}.summary.json"
 
 
 @click.command()

@@ -209,7 +209,7 @@ _NLP_MODE_DATASETS = {"gtap7_10x7", "gtap7_15x10"}
 #   20x41 -> code=1 resid=1.4e-8, 94.7% within 1pp (median 0.15pp) / 98.5% in levels (median 0.10%)
 # base_calibrated=True is REQUIRED: with =False (raw seed → check rebase) the match collapses to
 # 61% (verified: 15x10 too drops 91.9%→54.6% with =False). See
-# docs/findings/gempack_residual_is_linearization_2026-07-24.md (UPDATE 2026-08-19).
+# docs/archive/findings/gempack_residual_is_linearization_2026-07-24.md (UPDATE 2026-08-19).
 # Datasets whose NLP solve is too slow for the normal sweep (~20min). Marked @slow so they are
 # excluded from run_parity_gates (which runs `-m "not slow"`) but still runnable by hand:
 #   uv run pytest tests/templates/gtap/test_gtap7_gempack_parity.py -m slow -k 15x10

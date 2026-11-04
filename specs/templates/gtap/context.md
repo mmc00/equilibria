@@ -1,6 +1,6 @@
 # templates/gtap context
 
-Vocabulary lives in the root `GLOSSARY.md`, not here.
+Vocabulary lives in `docs/glossary.md`, not here.
 
 ## Dangerous files
 
