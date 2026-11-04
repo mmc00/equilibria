@@ -32,7 +32,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = "e2a34e72"
-TRANSLATED = "f994ff47"
+TRANSLATED = "4fb504f2"
 
 # Spanish document at BASE -> its English translation at TRANSLATED.
 DOCUMENTS = {
