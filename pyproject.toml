@@ -245,7 +245,9 @@ markers = [
 
 [tool.coverage.run]
 source = ["src/equilibria"]
-branch = true
+# Lines only: sys.monitoring (COVERAGE_CORE=sysmon, coverage.yml) traces branches
+# only from Python 3.14 on; with branches CI coverage cost 2-3x the test time.
+branch = false
 
 [tool.coverage.report]
 exclude_lines = [

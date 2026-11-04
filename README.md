@@ -10,6 +10,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Documentation](https://img.shields.io/badge/docs-sphinx-blue.svg)](https://equilibria.readthedocs.io/)
 [![DOI](https://zenodo.org/badge/1143895755.svg)](https://doi.org/10.5281/zenodo.23675339)
+[![Coverage](https://codecov.io/gh/mmc00/equilibria/branch/main/graph/badge.svg)](https://codecov.io/gh/mmc00/equilibria)
 
 *Build CGE models from modular blocks — like LEGO for economists — and check them against GAMS and GEMPACK.*
 
