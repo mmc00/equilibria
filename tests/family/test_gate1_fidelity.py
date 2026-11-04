@@ -15,7 +15,7 @@ pytest.importorskip("pyomo.contrib.pynumero.interfaces.pyomo_nlp")
 
 from equilibria.family.core import FamilySystem  # noqa: E402
 from tests.family._data import DATASETS  # noqa: E402
-from tests.family._oracle import assert_same, oracle  # noqa: E402
+from tests.family._oracle import assert_same, build_oracle, oracle  # noqa: E402
 
 
 @pytest.mark.parametrize("point", ["calibrated", "perturbed"])
@@ -68,3 +68,41 @@ def test_ces_exponent_is_exercised():
         next(f for f in system.families if f.name == "eq_pvaeq").row_args["e"]
     )
     assert (np.abs(e - 1.0) > 0.1).all() and (e < 0).any() and (e > 0).any()
+
+
+def test_calibrated_point_is_order_independent():
+    o = oracle("gtap7_3x3")
+    x0 = o.point("calibrated")
+    o.F_J(o.point("perturbed"))  # leaves the NLP at the perturbed point
+    np.testing.assert_array_equal(o.point("calibrated"), x0)
+
+
+def _fresh_oracle_with_nonunit_fixed(dataset):
+    """Uncached oracle whose fixed cells (lambdaf, fixed pa) are moved off 1.0 in Pyomo."""
+    rng = np.random.default_rng(1)
+
+    def prepare(pm):
+        for v in ("lambdaf", "pa"):
+            comp = getattr(pm, v)
+            for k in comp:
+                if comp[k].fixed:
+                    comp[k].fix(float(rng.uniform(0.8, 1.25)))
+
+    return build_oracle(dataset, prepare=prepare)
+
+
+def test_matches_pyomo_with_nonunit_fixed_cells():
+    o = _fresh_oracle_with_nonunit_fixed("gtap7_3x3")
+    layout, system = o.system()
+    assert (np.abs(layout.fixed_values - 1.0) > 1e-3).sum() > 40
+    assert_same(system, layout, o, o.point("perturbed"))
+
+
+def test_wrong_fixed_values_fail():
+    o = _fresh_oracle_with_nonunit_fixed("gtap7_3x3")
+    layout, system = o.system()
+    shuffled = FamilySystem(
+        system.families, n_cols=system.n_cols, fixed_values=layout.fixed_values[::-1]
+    )
+    with pytest.raises(AssertionError):
+        assert_same(shuffled, layout, o, o.point("calibrated"))

@@ -8,6 +8,7 @@ for the backend is the variable state (levels and fixed flags).
 from __future__ import annotations
 
 import itertools
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cache
 from typing import Any
@@ -52,6 +53,7 @@ class Oracle:
     nlp: Any
     con_names: list[str]
     var_names: list[str]
+    x0: np.ndarray | None = None  # calibrated primals, captured before any set_primals
 
     def rows_of(self, families=FAMILIES) -> np.ndarray:
         return np.array(
@@ -91,7 +93,7 @@ class Oracle:
         )
 
     def point(self, kind: str) -> np.ndarray:
-        x = np.asarray(self.nlp.get_primals(), float).copy()
+        x = np.array(self.x0, dtype=float, copy=True)
         if kind == "perturbed":
             u = np.random.default_rng(0).uniform(-1.0, 1.0, x.size)
             x = x * (1.0 + 0.05 * u)
@@ -107,6 +109,11 @@ class Oracle:
 
 @cache
 def oracle(dataset: str) -> Oracle:
+    return build_oracle(dataset)
+
+
+def build_oracle(dataset: str, prepare: Callable[[Any], None] | None = None) -> Oracle:
+    """Uncached oracle; ``prepare(pm)`` runs before PyomoNLP, which freezes fixed values."""
     from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP
     from pyomo.environ import Objective
 
@@ -116,6 +123,8 @@ def oracle(dataset: str) -> Oracle:
     sets = _set_elems(p.sets)
     rr = sets["r"][-1]
     pm = build_block_single_period(p, p.sets, comp_stat_closure(), rr)
+    if prepare is not None:
+        prepare(pm)
     pm._family_phase0_obj = Objective(expr=0.0)
     nlp = PyomoNLP(pm)
     return Oracle(
@@ -127,6 +136,7 @@ def oracle(dataset: str) -> Oracle:
         nlp=nlp,
         con_names=[c.name for c in nlp.get_pyomo_equality_constraints()],
         var_names=[v.name for v in nlp.get_pyomo_variables()],
+        x0=np.asarray(nlp.get_primals(), float).copy(),
     )
 
 

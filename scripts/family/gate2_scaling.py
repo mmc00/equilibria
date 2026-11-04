@@ -12,6 +12,13 @@ between sizes. For the Phase 0 families (eq_pndeq, eq_pvaeq, eq_facty):
   expressions), ``nlp_s`` (PyomoNLP with only these families active), ``FJ_s`` (one
   ``evaluate_eq_constraints`` + ``evaluate_jacobian_eq``).
 
+Garbage collection is collected and disabled while timing (both sides): a gen-2 pause
+triggered by the whole SP build was otherwise charged to these families (review of
+79d32ec: 0.095 s with GC vs 0.004 s without on 15x10).
+
+Criterion (a) is judged on a synthetic eq_pvaeq-shaped family of 1e4..1e6 terms, since the
+real datasets (<4k cells) only measure dispatch overhead.
+
 Usage:
     uv run python scripts/family/gate2_scaling.py --out <file.json>
 """
@@ -19,6 +26,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import platform
 import statistics
@@ -30,6 +38,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DATASETS = ("gtap7_3x3", "gtap7_10x7", "gtap7_15x10")
 FAMILIES = ("eq_pndeq", "eq_pvaeq", "eq_facty")
+SYNTHETIC_TERMS = (10_000, 100_000, 1_000_000)
 
 
 def _measure(dataset: str) -> dict:
@@ -44,6 +53,8 @@ def _measure(dataset: str) -> dict:
     from tests.family._oracle import Oracle, comp_stat_closure
 
     p = load_params(dataset)
+    gc.collect()
+    gc.disable()
 
     # --- Pyomo: time the families' build_expression inside the real SP build ----------
     expr_s = {"t": 0.0}
@@ -91,10 +102,13 @@ def _measure(dataset: str) -> dict:
     t0 = time.perf_counter()
     nlp = PyomoNLP(pm)
     nlp_s = time.perf_counter() - t0
-    t0 = time.perf_counter()
-    nlp.evaluate_eq_constraints()
-    J = nlp.evaluate_jacobian_eq()
-    pyomo_FJ_s = time.perf_counter() - t0
+    pyo = []
+    for _ in range(5):
+        t0 = time.perf_counter()
+        nlp.evaluate_eq_constraints()
+        J = nlp.evaluate_jacobian_eq()
+        pyo.append(time.perf_counter() - t0)
+    pyomo_FJ_s = statistics.median(pyo)
     pyomo_nnz = int(J.nnz)
 
     # --- Family backend ---------------------------------------------------------------
@@ -128,6 +142,7 @@ def _measure(dataset: str) -> dict:
         warm.append(time.perf_counter() - t0)
     warm_FJ_s = statistics.median(warm)
 
+    gc.enable()
     n_terms = sum(len(f.term_rows) for f in system.families if f.has_terms)
     return {
         "dataset": dataset,
@@ -154,6 +169,57 @@ def _measure(dataset: str) -> dict:
     }
 
 
+def _synthetic(n_terms: int) -> dict:
+    """An eq_pvaeq-shaped family (10 terms per row, 2 slots per term) of ``n_terms``."""
+    import numpy as np
+
+    from equilibria.family.core import Family, FamilySystem
+    from equilibria.family.gtap_phase0 import _pndeq_row, _pvaeq_term
+
+    rng = np.random.default_rng(0)
+    n_rows = n_terms // 10
+    n_cols = n_rows + n_terms
+    gc.collect()
+    gc.disable()
+    t0 = time.perf_counter()
+    term_rows = np.repeat(np.arange(n_rows), 10)
+    fam = Family(
+        name="synthetic",
+        row_fn=_pndeq_row,
+        row_cols=np.arange(n_rows).reshape(-1, 1),
+        row_args={"e": rng.uniform(-0.4, 0.8, n_rows)},
+        term_fn=_pvaeq_term,
+        term_rows=term_rows,
+        term_cols=np.stack(
+            [n_rows + np.arange(n_terms), n_cols + np.arange(n_terms)], axis=1
+        ),
+        term_args={"af": rng.uniform(0.1, 1.0, n_terms), "e": rng.uniform(-0.4, 0.8, n_terms)},
+    )
+    system = FamilySystem([fam], n_cols=n_cols, fixed_values=rng.uniform(0.8, 1.2, n_terms))
+    build_s = time.perf_counter() - t0
+    z = rng.uniform(0.8, 1.2, n_cols)
+    t0 = time.perf_counter()
+    system.F(z)
+    system.jac(z)
+    first = time.perf_counter() - t0
+    warm = []
+    for _ in range(5):
+        t0 = time.perf_counter()
+        system.F(z)
+        system.jac(z)
+        warm.append(time.perf_counter() - t0)
+    gc.enable()
+    w = statistics.median(warm)
+    return {
+        "cells": n_rows + n_terms,
+        "nnz": system.nnz,
+        "build_s": build_s,
+        "first_FJ_s": first,
+        "warm_FJ_s": w,
+        "compile_s": first - w,
+    }
+
+
 def _slope(xs, ys) -> float:
     import numpy as np
 
@@ -163,11 +229,15 @@ def _slope(xs, ys) -> float:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", help="measure one dataset (child mode)")
+    ap.add_argument("--synthetic", type=int, help="synthetic family of N terms (child)")
     ap.add_argument("--out", type=Path, help="JSON output (driver mode)")
     args = ap.parse_args()
 
     if args.dataset:
         print(json.dumps(_measure(args.dataset)))
+        return 0
+    if args.synthetic:
+        print(json.dumps(_synthetic(args.synthetic)))
         return 0
 
     results = []
@@ -182,9 +252,19 @@ def main() -> int:
         results.append(json.loads(out.stdout.strip().splitlines()[-1]))
         print(ds, "done", file=sys.stderr)
 
-    cells = [r["cells"] for r in results]
-    fam_scaling = [r["family"]["build_s"] + r["family"]["warm_FJ_s"] for r in results]
-    compile_ = [r["family"]["compile_s"] for r in results]
+    synthetic = []
+    for n in SYNTHETIC_TERMS:
+        out = subprocess.run(
+            [sys.executable, __file__, "--synthetic", str(n)],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        synthetic.append(json.loads(out.stdout.strip().splitlines()[-1]))
+        print("synthetic", n, "done", file=sys.stderr)
+
+    real_compile = [r["family"]["compile_s"] for r in results]
     fam_total = [
         r["family"]["build_s"] + r["family"]["layout_s"] + r["family"]["first_FJ_s"]
         for r in results
@@ -193,21 +273,31 @@ def main() -> int:
         r["pyomo"]["expr_s"] + r["pyomo"]["component_s"] + r["pyomo"]["nlp_s"] + r["pyomo"]["FJ_s"]
         for r in results
     ]
+    s_cells = [x["cells"] for x in synthetic]
+    s_cost = [x["build_s"] + x["warm_FJ_s"] for x in synthetic]
+    # Marginal per-cell costs: Pyomo between 10x7 and 15x10; family on the two largest
+    # synthetic sizes (build + one warm F/J). Fixed costs: totals minus marginal*cells.
+    c_pyo = (pyo_total[-1] - pyo_total[-2]) / (results[-1]["cells"] - results[-2]["cells"])
+    c_fam = (s_cost[-1] - s_cost[-2]) / (s_cells[-1] - s_cells[-2])
+    fixed_pyo = pyo_total[-1] - c_pyo * results[-1]["cells"]
+    fixed_fam = fam_total[-1] - c_fam * results[-1]["cells"]
+    crossover = (fixed_fam - fixed_pyo) / (c_pyo - c_fam) if c_pyo > c_fam else None
     summary = {
-        "slope_build_plus_warm_vs_cells": _slope(cells, fam_scaling),
-        "slope_pyomo_total_vs_cells": _slope(cells, pyo_total),
-        "compile_ratio_15x10_over_3x3": compile_[-1] / compile_[0],
+        "slope_synthetic_build_plus_warm_vs_cells_1e5_1e6": _slope(s_cells[-2:], s_cost[-2:]),
+        "slope_pyomo_total_vs_cells": _slope([r["cells"] for r in results], pyo_total),
+        "compile_ratio_15x10_over_3x3": real_compile[-1] / real_compile[0],
+        "compile_ratio_synthetic_1e6_over_1e4": synthetic[-1]["compile_s"] / synthetic[0]["compile_s"],
+        "per_cell_us": {"family": c_fam * 1e6, "pyomo": c_pyo * 1e6},
+        "fixed_s": {"family": fixed_fam, "pyomo": fixed_pyo},
+        "crossover_cells": crossover,
         "family_total_s": dict(zip(DATASETS, fam_total, strict=True)),
         "pyomo_total_s": dict(zip(DATASETS, pyo_total, strict=True)),
-        "criteria": {
-            "a_slope_le_1.2": None,
-            "b_compile_ratio_le_2": None,
-            "c_total_le_pyomo_at_15x10": None,
-        },
     }
-    summary["criteria"]["a_slope_le_1.2"] = summary["slope_build_plus_warm_vs_cells"] <= 1.2
-    summary["criteria"]["b_compile_ratio_le_2"] = summary["compile_ratio_15x10_over_3x3"] <= 2.0
-    summary["criteria"]["c_total_le_pyomo_at_15x10"] = fam_total[-1] <= pyo_total[-1]
+    summary["criteria"] = {
+        "a_slope_le_1.2": summary["slope_synthetic_build_plus_warm_vs_cells_1e5_1e6"] <= 1.2,
+        "b_compile_ratio_le_2": summary["compile_ratio_15x10_over_3x3"] <= 2.0,
+        "c_total_le_pyomo_at_15x10": fam_total[-1] <= pyo_total[-1],
+    }
 
     sha = subprocess.run(
         ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, cwd=ROOT
@@ -217,6 +307,7 @@ def main() -> int:
         "machine": f"{platform.system()} {platform.machine()} {platform.processor()}",
         "python": platform.python_version(),
         "datasets": {r["dataset"]: r for r in results},
+        "synthetic": synthetic,
         "summary": summary,
     }
     text = json.dumps(payload, indent=2)
