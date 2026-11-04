@@ -18,6 +18,7 @@ Pyomo bodies reproduced (``lhs == rhs`` evaluates as ``lhs - rhs``):
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -74,100 +75,126 @@ def _labels(*elems_by_dim: list[str], idx: tuple[np.ndarray, ...]) -> list[str]:
     ]
 
 
-def pndeq_family(params: Any, sets: Any, layout: VarLayout) -> Family:
+@dataclass
+class Phase0Data:
+    """Parameter arrays of the Phase 0 families, from the blocks' ``_derived_params``."""
+
+    sets: dict[str, list[str]]
+    arrays: dict[str, np.ndarray]
+
+
+def phase0_data(params: Any, sets: Any, residual_region: str) -> Phase0Data:
     el = _set_elems(sets)
-    r, i, a, aa = el["r"], el["i"], el["a"], el["aa"]
+    r, i, a, f, aa = el["r"], el["i"], el["a"], el["f"], el["aa"]
+
+    def expo(sig: dict) -> np.ndarray:
+        return 1.0 - np.array([[sig.get((rr, x), 1.0) for x in a] for rr in r], float)
+
     io = dp.to_array(dp.io_param_data(params, sets), [r, i, a], 0.0)
     if not params.shifts.lambdaio:
         io = dp.to_array(dp.p_io_data(params, sets), [r, i, a], 0.0)
-    lam = np.maximum(dp.to_array(dp.lambdaio_data(params, sets), [r, i, a], 1.0), 1e-8)
-    sig = params.elasticities.sigmand
-    expo = 1.0 - np.array([[sig.get((rr, x), 1.0) for x in a] for rr in r], dtype=float)
+    calib = dp.demand_income_params(params, sets, residual_region=residual_region)
+    xscale = dp.to_array(dp.xscale_data(params, sets), [r, aa], 1.0)
+    return Phase0Data(
+        sets=el,
+        arrays={
+            "io": io,
+            "lambdaio": np.maximum(
+                dp.to_array(dp.lambdaio_data(params, sets), [r, i, a], 1.0), 1e-8
+            ),
+            "e_nd": expo(params.elasticities.sigmand),
+            "af": dp.to_array(dp.af_param_data(params, sets), [r, f, a], 0.0),
+            "e_va": expo(params.elasticities.sigmav),
+            "xfflag": dp.to_array(dp.xfflag_data(params, sets), [r, f, a], 0.0),
+            "xscale": xscale[:, _positions(a, aa)],
+            "fdepr": dp.to_array(calib["fdepr"], [r], 0.0),
+        },
+    )
 
-    term_mask = io > 0.0
+
+def _rows_and_terms(term_mask: np.ndarray):
+    """Rows = (r, a) cells with any term; term index arrays in C order; row ids."""
     row_mask = term_mask.any(axis=1)
     row_id = np.full(row_mask.shape, -1, dtype=np.int64)
     row_id[row_mask] = np.arange(int(row_mask.sum()))
-    tr, ti, ta = np.nonzero(term_mask)
+    return row_mask, row_id, np.nonzero(term_mask)
 
+
+def pndeq_family(data: Phase0Data, layout: VarLayout) -> Family:
+    el, d = data.sets, data.arrays
+    r, a, aa = el["r"], el["a"], el["aa"]
+    e = d["e_nd"]
+    row_mask, row_id, (tr, ti, ta) = _rows_and_terms(d["io"] > 0.0)
     pa_slots = layout.col("pa")[:, :, _positions(a, aa)]
     return Family(
         name="eq_pndeq",
         row_fn=_pndeq_row,
         row_cols=layout.col("pnd")[row_mask].reshape(-1, 1),
-        row_args={"e": expo[row_mask]},
+        row_args={"e": e[row_mask]},
         term_fn=_pndeq_term,
         term_rows=row_id[tr, ta],
         term_cols=pa_slots[tr, ti, ta].reshape(-1, 1),
-        term_args={"io": io[tr, ti, ta], "lam": lam[tr, ti, ta], "e": expo[tr, ta]},
+        term_args={
+            "io": d["io"][tr, ti, ta],
+            "lam": d["lambdaio"][tr, ti, ta],
+            "e": e[tr, ta],
+        },
         row_labels=_labels(r, a, idx=np.nonzero(row_mask)),
     )
 
 
-def pvaeq_family(params: Any, sets: Any, layout: VarLayout) -> Family:
-    el = _set_elems(sets)
-    r, f, a = el["r"], el["f"], el["a"]
-    af = dp.to_array(dp.af_param_data(params, sets), [r, f, a], 0.0)
-    sig = params.elasticities.sigmav
-    expo = 1.0 - np.array([[sig.get((rr, x), 1.0) for x in a] for rr in r], dtype=float)
-
-    term_mask = af > 0.0
-    row_mask = term_mask.any(axis=1)
-    row_id = np.full(row_mask.shape, -1, dtype=np.int64)
-    row_id[row_mask] = np.arange(int(row_mask.sum()))
-    tr, tf, ta = np.nonzero(term_mask)
+def pvaeq_family(data: Phase0Data, layout: VarLayout) -> Family:
+    el, d = data.sets, data.arrays
+    r, a = el["r"], el["a"]
+    e = d["e_va"]
+    row_mask, row_id, (tr, tf, ta) = _rows_and_terms(d["af"] > 0.0)
     return Family(
         name="eq_pvaeq",
         row_fn=_pndeq_row,
         row_cols=layout.col("pva")[row_mask].reshape(-1, 1),
-        row_args={"e": expo[row_mask]},
+        row_args={"e": e[row_mask]},
         term_fn=_pvaeq_term,
         term_rows=row_id[tr, ta],
         term_cols=np.stack(
             [layout.col("pfa")[tr, tf, ta], layout.col("lambdaf")[tr, tf, ta]], axis=1
         ),
-        term_args={"af": af[tr, tf, ta], "e": expo[tr, ta]},
+        term_args={"af": d["af"][tr, tf, ta], "e": e[tr, ta]},
         row_labels=_labels(r, a, idx=np.nonzero(row_mask)),
     )
 
 
-def facty_family(
-    params: Any, sets: Any, layout: VarLayout, residual_region: str
-) -> Family:
-    el = _set_elems(sets)
-    r, f, a, aa = el["r"], el["f"], el["a"], el["aa"]
-    xfflag = dp.to_array(dp.xfflag_data(params, sets), [r, f, a], 0.0)
-    xscale = dp.to_array(dp.xscale_data(params, sets), [r, aa], 1.0)[
-        :, _positions(a, aa)
-    ]
-    calib = dp.demand_income_params(params, sets, residual_region=residual_region)
-    fdepr = dp.to_array(calib["fdepr"], [r], 0.0)
-
-    tr, tf, ta = np.nonzero(xfflag > 0.0)
+def facty_family(data: Phase0Data, layout: VarLayout) -> Family:
+    d = data.arrays
+    tr, tf, ta = np.nonzero(d["xfflag"] > 0.0)
     return Family(
         name="eq_facty",
         row_fn=_facty_row,
         row_cols=np.stack(
             [layout.col("facty"), layout.col("pi"), layout.col("kstock")], axis=1
         ),
-        row_args={"fdepr": fdepr},
+        row_args={"fdepr": d["fdepr"]},
         term_fn=_facty_term,
         term_rows=tr,
         term_cols=np.stack(
             [layout.col("pf")[tr, tf, ta], layout.col("xf")[tr, tf, ta]], axis=1
         ),
-        term_args={"xscale": xscale[tr, ta]},
-        row_labels=list(r),
+        term_args={"xscale": d["xscale"][tr, ta]},
+        row_labels=list(data.sets["r"]),
     )
 
 
 def build_phase0_system(
-    params: Any, sets: Any, layout: VarLayout, residual_region: str
+    params: Any,
+    sets: Any,
+    layout: VarLayout,
+    residual_region: str,
+    data: Phase0Data | None = None,
 ) -> FamilySystem:
+    data = phase0_data(params, sets, residual_region) if data is None else data
     families = [
-        pndeq_family(params, sets, layout),
-        pvaeq_family(params, sets, layout),
-        facty_family(params, sets, layout, residual_region),
+        pndeq_family(data, layout),
+        pvaeq_family(data, layout),
+        facty_family(data, layout),
     ]
     return FamilySystem(
         families, n_cols=layout.n_cols, fixed_values=layout.fixed_values

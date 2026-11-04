@@ -58,3 +58,19 @@ def test_row_names_are_pyomo_style():
     names = system.row_names
     assert f"eq_facty[{sets['r'][0]}]" in names
     assert any(n.startswith("eq_pndeq[") and n.count(",") == 1 for n in names)
+
+
+def test_precomputed_data_gives_same_system():
+    from equilibria.family.gtap_phase0 import phase0_data
+
+    p = load_params("gtap7_3x3")
+    sets = _set_elems(p.sets)
+    layout = _all_free_layout(sets)
+    rr = sets["r"][-1]
+    data = phase0_data(p, p.sets, rr)
+    assert all(isinstance(v, np.ndarray) for v in data.arrays.values())
+    a = build_phase0_system(p, p.sets, layout, rr)
+    b = build_phase0_system(p, p.sets, layout, rr, data=data)
+    z = np.linspace(0.9, 1.1, layout.n_cols)
+    np.testing.assert_array_equal(a.F(z), b.F(z))
+    assert a.row_names == b.row_names and a.nnz == b.nnz
