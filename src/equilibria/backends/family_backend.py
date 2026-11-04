@@ -53,12 +53,15 @@ class FamilyBackend:
     def __init__(self) -> None:
         self.records: dict[str, list[tuple[tuple[str, ...], Any]]] = {}
         self.var_domains: dict[str, tuple[str, ...]] = {}
+        # Mutable Parameters are leaves too (always fixed slots, values from the state).
+        self.param_domains: dict[str, tuple[str, ...]] = {}
         self.sets: dict[str, list[str]] = {}
 
     def build(self, model: Any, only: Iterable[str] | None = None) -> None:
         model.check_uses()
         rec = RecordingModel.from_model(model)
         self.var_domains = dict(rec.var_domains)
+        self.param_domains = dict(rec.param_domains)
         self.sets = rec.sets
         wanted = None if only is None else set(only)
         em = model.equation_manager
@@ -74,6 +77,21 @@ class FamilyBackend:
                         cells.append((tuple(idx), res))
                 if cells:
                     self.records[name] = cells
+
+    def layout(self, state: Any) -> Any:
+        """Variable layout from a ``StateModel``: free cells are columns; fixed cells and
+        mutable Parameters are fixed slots carrying their current values."""
+        import numpy as np
+
+        from equilibria.family.layout import VarLayout
+
+        values = {v: state.values[v] for v in self.var_domains}
+        free = {v: ~state.fixed[v] for v in self.var_domains}
+        for p in self.param_domains:
+            values[p] = state.find_component(p).data
+            free[p] = np.zeros(values[p].shape, dtype=bool)
+        domains = {**self.var_domains, **self.param_domains}
+        return VarLayout.from_state(state.sets, domains, values, free)
 
     def families(self, layout: Any) -> list[CompiledFamily]:
         return [compile_family(n, recs, layout) for n, recs in self.records.items()]

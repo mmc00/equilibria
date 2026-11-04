@@ -317,6 +317,15 @@ class _ParamView(_Indexed):
         return float(self.data[self.flat(key)])
 
 
+class _MutableParamView(_Indexed):
+    """A mutable Parameter stays symbolic in Pyomo: here a leaf whose value comes from
+    the state at evaluation time (a fixed slot), not a folded constant."""
+
+    def __getitem__(self, key) -> Node:
+        k = self.flat(key)
+        return Node("v", (self.name, k, self.data[k], False))
+
+
 class _VarView(_Indexed):
     def __getitem__(self, key) -> Node:
         k = self.flat(key)
@@ -329,23 +338,32 @@ class RecordingModel:
     def __init__(
         self,
         sets: dict[str, list[str]],
-        params: dict[str, tuple[tuple[str, ...], np.ndarray]],
+        params: dict[str, tuple],
         variables: dict[str, tuple[tuple[str, ...], np.ndarray]],
     ):
         d = self.__dict__
         d["_sets"] = {k: list(v) for k, v in sets.items()}
         pos = {k: {e: i for i, e in enumerate(v)} for k, v in d["_sets"].items()}
         d["_pos"] = pos
-        d["_params"] = params
+        # params: name -> (domains, values[, mutable])
+        d["_params"] = {
+            k: (v[0], v[1], bool(v[2]) if len(v) > 2 else False)
+            for k, v in params.items()
+        }
         d["_vars"] = variables
         d["var_domains"] = {k: tuple(v[0]) for k, v in variables.items()}
+        d["param_domains"] = {k: tuple(v[0]) for k, v in d["_params"].items() if v[2]}
 
     @classmethod
     def from_model(cls, model: Any) -> RecordingModel:
         sm, pm, vm = model.set_manager, model.parameter_manager, model.variable_manager
         sets = {n: list(sm.get(n).iter_elements()) for n in sm.list_sets()}
         params = {
-            n: (tuple(p.domains), np.asarray(p.value, float))
+            n: (
+                tuple(p.domains),
+                np.asarray(p.value, float),
+                bool(getattr(p, "mutable", False)),
+            )
             for n in pm.list_params()
             for p in [pm.get(n)]
         }
@@ -361,12 +379,19 @@ class RecordingModel:
         if name in d["_sets"]:
             return d["_sets"][name]
         if name in d["_params"]:
-            doms, arr = d["_params"][name]
-            view = (
-                float(arr.ravel()[0])
-                if not doms
-                else _ParamView(name, doms, d["_pos"], arr)
-            )
+            doms, arr, mutable = d["_params"][name]
+            if mutable:
+                view = (
+                    Node("v", (name, 0, float(arr.ravel()[0]), False))
+                    if not doms
+                    else _MutableParamView(name, doms, d["_pos"], arr)
+                )
+            else:
+                view = (
+                    float(arr.ravel()[0])
+                    if not doms
+                    else _ParamView(name, doms, d["_pos"], arr)
+                )
         elif name in d["_vars"]:
             doms, arr = d["_vars"][name]
             view = (

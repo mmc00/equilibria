@@ -40,6 +40,8 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 from equilibria.backends.pyomo_backend import PyomoBackend
 from equilibria.blocks.gtap import _ifsub_macros as mac
 from equilibria.blocks.gtap import model_cache as _model_cache
@@ -495,6 +497,78 @@ def compose_block_sp(
     return model, units, targets, residual_region
 
 
+def compose_block_state(
+    params: Any,
+    sets: Any,
+    closure: Any = None,
+    residual_region: str | None = None,
+) -> tuple[Model, Any]:
+    """Compose the blocks and run the composer's post-build steps on ARRAYS.
+
+    The same step functions ``build_block_single_period`` applies to the Pyomo model
+    (benchmark scaling, xi/xaa alignment, Fisher snapshot, cell fixes) run here on a
+    ``StateModel`` over the Model's variables, so a non-Pyomo backend gets the same
+    levels, fixed cells and bounds. The Fisher snapshot is written into the CLOSURE
+    block's Parameters (``pf0``, ``xf0``, ``mqfactr_bb``, ``mqfactw_bb``) of the
+    returned Model, where the Pyomo path rebuilds its rows instead; equations that read
+    those Parameters must be (re)built from the returned Model.
+
+    The Model's own variable values stay at their build-time levels: rules that read
+    ``value(var)`` see what they see under ``PyomoBackend``.
+
+    Returns ``(model, state)``. ifSUB=1 is Pyomo-only for now.
+    """
+    from equilibria.blocks.gtap.overwrite import endogenous_cells
+    from equilibria.family.state import StateModel
+
+    if bool(getattr(closure, "if_sub", False)):
+        raise NotImplementedError("compose_block_state: ifSUB=1 steps are Pyomo-only")
+    model, units, targets, residual_region = compose_block_sp(
+        params, sets, closure, residual_region
+    )
+    state = StateModel(model)
+    state._endogenous_instrument_cells = endogenous_cells(units)
+    state._targets = targets
+
+    ctx = ScalingContext(
+        params=params, sets=sets, residual_region=residual_region or "NAmerica"
+    )
+    apply_production_scaling(state, ctx)
+    align_xi_xaa_post_scaling(state, ctx)
+
+    snap, agg = _fisher_snapshot(state)
+    regions, facs, acts = snap["regions"], snap["facs"], snap["acts"]
+    cube = [[[0.0] * len(acts) for _ in facs] for _ in regions]
+    for name in ("pf0", "xf0"):
+        arr = np.array(cube)
+        for i, r in enumerate(regions):
+            for j, f in enumerate(facs):
+                for k, a in enumerate(acts):
+                    arr[i, j, k] = snap[name][(r, f, a)]
+        _set_param(model, state, name, arr)
+    _set_param(
+        model, state, "mqfactr_bb", np.array([snap["mqfactr_bb"][r] for r in regions])
+    )
+    _set_param(model, state, "mqfactw_bb", np.array([snap["mqfactw_bb"]]))
+    _fisher_reseed(state, agg, regions)
+    state.fisher = snap
+
+    _fix_no_demand_cells(state)
+    _fix_cd_welfare(state, params, sets)
+    _fix_instruments(state)
+    state._residual_region = residual_region
+    return model, state
+
+
+def _set_param(model: Model, state: Any, name: str, value: np.ndarray) -> None:
+    """Overwrite a Parameter's values in the Model and in the state's view of it."""
+    p = model.parameter_manager.get(name)
+    p.value = np.asarray(value, dtype=float).reshape(np.shape(p.value))
+    comp = state.find_component(name)
+    if comp is not None:
+        comp.data = p.value.reshape(comp.data.shape)
+
+
 def build_block_single_period(
     params: Any,
     sets: Any,
@@ -930,33 +1004,14 @@ def solve_block_model(
     )
 
 
-def apply_fisher_snapshot_overwrite(pm: ConcreteModel) -> dict[str, Any]:
-    """Rebuild the factor-price Fisher rows against the POST-SCALING snapshot.
+def _fisher_snapshot(pm: Any) -> tuple[dict[str, Any], Any]:
+    """The composer's post-scaling Fisher snapshot, read off any Pyomo-like model.
 
-    ``blocks/gtap/__init__.py`` item 3 states this is the composer's job::
-
-        The composer MUST snapshot pf0=pf.l, xf0=xf.l and recompute
-        mqfactr_bb=sum_{f,a} pf0*xf0/xscale (and mqfactw_bb globally) from the
-        SCALED model, OVERWRITE the CLOSURE block's pf0/xf0/mqfactr_bb/
-        mqfactw_bb Params
-
-    Nothing was doing it. The CLOSURE block seeds ``xf0`` from the UN-scaled
-    benchmark (``_vfm_init``), while the monolith snapshots ``xf.l`` after
-    ``apply_production_scaling``. Measured on gtap7_3x3: the two differ by exactly
-    ``xscale`` — 10.0 in 26 of 45 cells — and ``mqfactw_bb`` comes out 3020.22
-    against the monolith's 66.75, a factor of 45.2. ``pf0`` already matches.
-
-    The Params are immutable, so their values are already folded into the
-    constraint expressions and cannot be reassigned: the rows themselves are
-    rebuilt here from post-scaling ``xf``/``pf`` levels.
-
-    Both backends were carrying the un-scaled value, so this bias cancelled in any
-    POI-vs-Pyomo comparison and only shows against the monolith or GAMS.
-
-    Returns a summary of what was rebuilt.
+    Returns ``(snapshot, agg)``: the snapshot holds ``regions``/``facs``/``acts``,
+    ``pf0``/``xf0`` (current pf/xf levels), ``xscale`` and the constants
+    ``mqfactr_bb``/``mqfactw_bb``; ``agg(kind, region)`` is one Fisher aggregate over
+    the live pf/xf (a Pyomo expression on a Pyomo model, a number on a StateModel).
     """
-    from pyomo.environ import Constraint
-    from pyomo.environ import sqrt as _sqrt
     from pyomo.environ import value as _value
 
     regions = [str(r) for r in pm.r]
@@ -1014,6 +1069,65 @@ def apply_fisher_snapshot_overwrite(pm: ConcreteModel) -> dict[str, Any]:
                             continue
                         total = total + pm.pf[r, f, a] * xf0[(r, f, a)] / xs
         return total
+
+    snap = {
+        "regions": regions,
+        "facs": facs,
+        "acts": acts,
+        "pf0": pf0,
+        "xf0": xf0,
+        "xscale": xscale,
+        "mqfactr_bb": mqfactr_bb,
+        "mqfactw_bb": mqfactw_bb,
+    }
+    return snap, _agg
+
+
+def _fisher_reseed(pm: Any, agg: Any, regions: list[str]) -> None:
+    """Reseed mfw_*/mfr_* at the post-scaling aggregates (see the caller)."""
+    from pyomo.environ import value as _value
+
+    for tag in ("bs", "sb", "ss"):
+        w = pm.find_component(f"mfw_{tag}")
+        if w is not None:
+            w.set_value(float(_value(agg(tag, None))), skip_validation=True)
+        rv = pm.find_component(f"mfr_{tag}")
+        if rv is not None:
+            for r in regions:
+                rv[r].set_value(float(_value(agg(tag, r))), skip_validation=True)
+
+
+def apply_fisher_snapshot_overwrite(pm: ConcreteModel) -> dict[str, Any]:
+    """Rebuild the factor-price Fisher rows against the POST-SCALING snapshot.
+
+    ``blocks/gtap/__init__.py`` item 3 states this is the composer's job::
+
+        The composer MUST snapshot pf0=pf.l, xf0=xf.l and recompute
+        mqfactr_bb=sum_{f,a} pf0*xf0/xscale (and mqfactw_bb globally) from the
+        SCALED model, OVERWRITE the CLOSURE block's pf0/xf0/mqfactr_bb/
+        mqfactw_bb Params
+
+    Nothing was doing it. The CLOSURE block seeds ``xf0`` from the UN-scaled
+    benchmark (``_vfm_init``), while the monolith snapshots ``xf.l`` after
+    ``apply_production_scaling``. Measured on gtap7_3x3: the two differ by exactly
+    ``xscale`` — 10.0 in 26 of 45 cells — and ``mqfactw_bb`` comes out 3020.22
+    against the monolith's 66.75, a factor of 45.2. ``pf0`` already matches.
+
+    The Params are immutable, so their values are already folded into the
+    constraint expressions and cannot be reassigned: the rows themselves are
+    rebuilt here from post-scaling ``xf``/``pf`` levels.
+
+    Both backends were carrying the un-scaled value, so this bias cancelled in any
+    POI-vs-Pyomo comparison and only shows against the monolith or GAMS.
+
+    Returns a summary of what was rebuilt.
+    """
+    from pyomo.environ import Constraint
+    from pyomo.environ import sqrt as _sqrt
+
+    snap, _agg = _fisher_snapshot(pm)
+    regions = snap["regions"]
+    mqfactr_bb, mqfactw_bb = snap["mqfactr_bb"], snap["mqfactw_bb"]
 
     rebuilt: list[str] = []
 
@@ -1076,14 +1190,7 @@ def apply_fisher_snapshot_overwrite(pm: ConcreteModel) -> dict[str, Any]:
     # post-escalado, pero el nivel de mfw_*/mfr_* sigue en el valor con que las
     # seedeo el bloque (sin escalar): dejarlo asi mete un residual de ~2 en
     # eq_pfact, justo donde el benchmark debe empezar en cero.
-    for tag in ("bs", "sb", "ss"):
-        w = pm.find_component(f"mfw_{tag}")
-        if w is not None:
-            w.set_value(float(_value(_agg(tag, None))), skip_validation=True)
-        rv = pm.find_component(f"mfr_{tag}")
-        if rv is not None:
-            for r in regions:
-                rv[r].set_value(float(_value(_agg(tag, r))), skip_validation=True)
+    _fisher_reseed(pm, _agg, regions)
 
     return {
         "rebuilt": rebuilt,

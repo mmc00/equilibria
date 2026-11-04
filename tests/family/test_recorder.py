@@ -179,3 +179,17 @@ def test_indexed_var_equals_scalar_var_flips_like_pyomo():
         1.0 - 1.1
     )
     assert (2.0 * m.q["A", "x"] == m.t).evaluate() == pytest.approx(2.0 - 4.0)
+
+
+def test_mutable_param_is_a_live_leaf():
+    m = RecordingModel(
+        sets={"r": ["A", "B"]},
+        params={"flag": (("r",), np.array([1.0, 0.0]), True), "k": ((), np.array(2.0))},
+        variables={"p": (("r",), np.array([3.0, 4.0]))},
+    )
+    leaf = m.flag["A"]
+    assert isinstance(leaf, Node) and value(leaf) == 1.0  # build-time value
+    assert m.k == 2.0  # immutable: a folded float
+    assert m.param_domains == {"flag": ("r",)}
+    # var == mutable scalar-like param keeps its order (ParamData is not a VarData)
+    assert (m.p["A"] == m.flag["A"]).evaluate() == pytest.approx(3.0 - 1.0)

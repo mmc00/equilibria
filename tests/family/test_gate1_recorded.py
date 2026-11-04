@@ -15,12 +15,15 @@ from tests.family._oracle import FAMILIES, assert_same, oracle  # noqa: E402
 
 def _recorded(o):
     from equilibria.backends.family_backend import FamilyBackend
-    from equilibria.family.layout import VarLayout
+    from equilibria.templates.gtap.gtap_block_model import compose_block_state
+    from tests.family._oracle import comp_stat_closure
 
+    model, state = compose_block_state(
+        o.params, o.params.sets, comp_stat_closure(), o.residual_region
+    )
     backend = FamilyBackend()
-    backend.build(o.model, only=FAMILIES)
-    values, free = o.state(backend.var_domains)
-    layout = VarLayout.from_state(o.sets, backend.var_domains, values, free)
+    backend.build(model, only=FAMILIES)
+    layout = backend.layout(state)
     return layout, backend.system(layout)
 
 
