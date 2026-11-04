@@ -1,0 +1,10 @@
+kind: data
+model: gtap7
+dataset: gtap7_3x3_julia_logvalue
+source: Calibrated values of the Julia GTAP port (log-value form) on gtap7_3x3, committed
+  in tests/fixtures/gtap_logvalue at a9d981f3. Julia is not run in this repository
+license: output of the Julia port; as the gtap7_3x3 dataset (to confirm)
+outputs:
+  julia_3x3_calibrated.csv: 867086a66d791c17f22eb487783695cde0ba85786cc1248dc832657f52b61cc6
+status: verified
+notes: ''

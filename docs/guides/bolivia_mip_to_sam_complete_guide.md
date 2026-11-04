@@ -309,7 +309,7 @@ convert_bolivia_mip_to_sam.py        - MIP → SAM ← USADO
 
 Hoy no hay una función que convierta esta SAM en un modelo PEP resuelto. Las
 piezas existen, pero el puente no está terminado. Medido el 2026-10-28 con la
-MIP de prueba de 3 sectores (`tests/sam_tools/fixtures/simple_mip.xlsx`):
+MIP de prueba de 3 sectores (`data/sam_tests/simple_mip.xlsx`):
 
 ```python
 from pathlib import Path
@@ -319,7 +319,7 @@ from equilibria.templates.pep_calibration_unified_excel import PEPModelCalibrato
 from equilibria.templates.pep_pyomo.pep_pyomo_equations import build_pep_model
 from equilibria.templates.pep_pyomo.pep_pyomo_solver import solve_pep
 
-run_mip_to_sam(Path("tests/sam_tools/fixtures/simple_mip.xlsx"), output_path=Path("sam.xlsx"))
+run_mip_to_sam(Path("data/sam_tests/simple_mip.xlsx"), output_path=Path("sam.xlsx"))
 
 # dynamic_sets=True lee sectores y hogares de la SAM; sin eso el calibrador
 # espera las etiquetas de la PEP de referencia y calibra en cero.

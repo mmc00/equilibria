@@ -1,6 +1,6 @@
 kind: data
 model: gtap7
-dataset: gdx_tests
+dataset: gdx_tests_no_generator
 source: Committed in tests/fixtures (last at 4e91d12a); no generator in the repository
 license: test specimens written for equilibria
 outputs:

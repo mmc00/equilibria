@@ -1,6 +1,6 @@
 kind: data
 model: gtap7
-dataset: gdx_tests
+dataset: sam_v2_0
 source: SAM-V2_0.gdx and its expected values (CSV), committed in tests/babel/gdx/fixtures
   (last at 4e91d12a); origin not recorded
 license: not stated; to confirm

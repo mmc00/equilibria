@@ -17,7 +17,7 @@ from equilibria.sam_tools import run_mip_to_sam
 
 # Locate the test fixture relative to the installed package.
 PKG_ROOT = Path(equilibria.__file__).resolve().parents[2]
-FIXTURE = PKG_ROOT / "tests" / "sam_tools" / "fixtures" / "simple_mip.xlsx"
+FIXTURE = PKG_ROOT / "data" / "sam_tests" / "simple_mip.xlsx"
 
 result = run_mip_to_sam(FIXTURE)
 

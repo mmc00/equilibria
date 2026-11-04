@@ -14,10 +14,11 @@ from typing import Any
 from equilibria.backends.pyomo_backend import PyomoBackend
 from equilibria.core.sets import Set as ESet
 from equilibria.model import Model
+from equilibria.sources import dataset_dir
 from equilibria.templates.gtap_julia.calibration import load_calibrated
 
 ROOT = Path(__file__).resolve().parents[3]
-FIX = ROOT / "tests" / "fixtures" / "gtap_logvalue" / "julia_3x3_calibrated.csv"
+FIX = dataset_dir("gtap7_3x3_julia_logvalue") / "julia_3x3_calibrated.csv"
 
 # port set key -> block-model set name
 _SETMAP = {"reg": "r", "comm": "i", "acts": "a", "endw": "f", "marg": "marg"}

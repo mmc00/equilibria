@@ -428,7 +428,7 @@ def run_mip_to_sam(...) -> MIPToSAMResult:
 ### Test fixtures:
 Crear MIP sintético de prueba (3 sectores):
 ```
-tests/sam_tools/fixtures/simple_mip.xlsx
+data/sam_tests/simple_mip.xlsx
 - 3 sectores: agr, ind, ser
 - 3 commodities: agr, ind, ser
 - Fila VA agregada
@@ -459,7 +459,7 @@ def test_sam_row_col_balance():
 def test_run_mip_to_sam_full_pipeline():
     """Test complete MIP→SAM conversion with defaults"""
     result = run_mip_to_sam(
-        "tests/sam_tools/fixtures/simple_mip.xlsx",
+        "data/sam_tests/simple_mip.xlsx",
         output_path=tmp_path / "sam_output.xlsx"
     )
     assert result.sam is not None
