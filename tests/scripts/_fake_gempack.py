@@ -53,7 +53,11 @@ class FakeGempack:
         text = cmf.read_text(encoding="latin-1")
         if self.abort:
             (cwd / f"{stem}-assert-arith-fail.har").write_bytes(b"dump")
-            console.write_text(banner + "  LOGE of negative number in E_u\n")
+            # the lines of runs/gempack_20x41_validation/solve_console.txt (2725-2730)
+            console.write_text(banner + '     in equation "E_u".\n\n'
+                               "    Attempt to take LOGE of zero or of a negative number.\n"
+                               "    value of LOGE argument is -0.2668599\n"
+                               " (E-loge of zero or of a negative number)\n")  # fmt: skip
             return 1
         m = re.search(r'(?im)^\s*updated file \w+\s*=\s*"?([^";]+?)"?\s*;', text)
         upd = m.group(1).replace("<cmf>", stem) if m else f"{stem}.upd"

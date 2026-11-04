@@ -4,7 +4,7 @@
            only the Auxiliary files line and the shock changed; collected as the
            3a-1 matrix records (Task 10).
 ``abort``  runs/gempack_20x41_validation/tm10.cmf: recorded only when GEMPACK
-           aborts with the known signature, "LOGE of negative" in E_u and its
+           aborts with the known signature (LOGE of a negative number in E_u) and its
            assert-arith dump; a converged run or another error records nothing
            (Task 11).
 """
@@ -27,7 +27,8 @@ from equilibria.sources import dataset_dir
 
 _AUX = re.compile(r"(?im)^(?P<k>[ \t]*Auxiliary files[ \t]*=[ \t]*)[^;\r\n]*?(?P<e>[ \t]*;)")
 _SHOCK = re.compile(r"(?im)^(?P<k>[ \t]*Shock tm[ \t]*=[ \t]*uniform[ \t]+)[-+\d.eE]+(?P<e>[ \t]*;)")
-ABORT_SIGNATURE = "LOGE of negative"
+# runs/gempack_20x41_validation/solve_console.txt lines 2725-2727 (RESULTADO.md)
+ABORT_SIGNATURE = ('in equation "E_u"', "Attempt to take LOGE of zero or of a negative number")
 
 
 def from_template(template: str, *, shock: float, aux: Path) -> str:
@@ -84,8 +85,9 @@ def run_abort(args: argparse.Namespace) -> int:
         return 1
     text = console.read_text(encoding=target_shocks.ENCODING, errors="replace")
     dump = wd / "tm10-assert-arith-fail.har"
-    if NORMAL_END in text or ABORT_SIGNATURE not in text or not dump.exists():
-        print(f"FAILED {name}: rc={rc}, signature={ABORT_SIGNATURE in text}, "
+    signature = all(s in text for s in ABORT_SIGNATURE)
+    if NORMAL_END in text or not signature or not dump.exists():
+        print(f"FAILED {name}: rc={rc}, signature={signature}, "
               f"dump={dump.exists()}, normal end={NORMAL_END in text}", file=sys.stderr)  # fmt: skip
         return 1
     _collect(out, [(wd / "tm10.cmf", "run.cmf"), (dump, "assert_arith_fail.har")])

@@ -25,7 +25,7 @@ outputs:
   tools/regenerate_paper.py: 80f057d8c274ee06d1d34a09b369eedc2e54b05f341a8bd1e9b23f53553222b6
   tools/release_check.py: 7ef240328c439d32ff203b6a30d4a84f39266c6a4b082d314977c34866241b5e
   tools/run_gempack_matrix.py: dad828823ecafc5b55022454e35d83e0a0d5e200ee6e5e5d4ca1acc16af0ff6d
-  tools/swap_job.py: 2947acbb013c60319211f20cb6c124ae5a8a28324d7cc84236c266727a9f8dc7
+  tools/swap_job.py: 379073802cdc7f144aca762b700a19ecb05a6abaf2d5e2867b0a96e62e35b691
   tools/target_shocks.py: 983253cd6adac881107450837959cde36a371a1d2e2ec819f967c61fa015f4cc
 status: verified
 notes: ''

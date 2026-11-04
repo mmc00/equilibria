@@ -42,6 +42,8 @@ from equilibria.sources import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
+# STATUS_DLL_INIT_FAILED, as an unsigned and a signed exit code: the process never started
+NOT_STARTED = (0xC0000142, -1073741502)
 
 
 def machine_info() -> dict[str, Any]:
@@ -299,6 +301,17 @@ def main(argv: list[str] | None = None) -> int:
         started = dt.datetime.now().astimezone()
         t0 = time.perf_counter()
         proc = subprocess.run(command, cwd=folder)
+        # Now and then Windows does not start the command at all (3a-1, 3a-2:
+        # STATUS_DLL_INIT_FAILED). It never ran, so it is run once more, and the
+        # record says so; a command that ran and failed is not retried.
+        if proc.returncode in NOT_STARTED:
+            retry = (
+                f"the command did not start on the first attempt "
+                f"(exit 0x{proc.returncode & 0xFFFFFFFF:08X}); retried once"
+            )
+            print(retry)
+            args.notes = "; ".join(s for s in (args.notes, retry) if s)
+            proc = subprocess.run(command, cwd=folder)
         duration = time.perf_counter() - t0
         if proc.returncode != 0:
             print(f"command failed (exit {proc.returncode}); no source.yaml written")

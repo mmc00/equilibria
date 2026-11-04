@@ -561,3 +561,45 @@ def test_notes_from_absent_file_keeps_notes(tmp_path: Path) -> None:
     argv[argv.index("--") : argv.index("--")] = ["--notes-from", "note.txt"]
     assert _module().main(argv) == 0
     assert load_source(folder).raw["notes"] == ""
+
+
+def _not_starting(m, monkeypatch: pytest.MonkeyPatch, times: int) -> list[int]:
+    """subprocess.run fails to start the command ``times`` times (0xC0000142)."""
+    import subprocess
+
+    real, calls = m.subprocess.run, []
+
+    def run(cmd, **kw):
+        if not (isinstance(cmd, list) and cmd[:2] == [sys.executable, "-c"]):
+            return real(cmd, **kw)  # not the recorded command (platform, git...)
+        calls.append(1)
+        if len(calls) <= times:
+            return subprocess.CompletedProcess(cmd, 0xC0000142)
+        return real(cmd, **kw)
+
+    monkeypatch.setattr(m.subprocess, "run", run)
+    return calls
+
+
+def test_command_that_does_not_start_is_retried_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """3a-1 and 3a-2: now and then Windows does not start the command (the python
+    of a job: STATUS_DLL_INIT_FAILED). One retry, and the record says so."""
+    m = _module()
+    calls = _not_starting(m, monkeypatch, 1)
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_ifsub0"
+    cmd = [sys.executable, "-c", "open('out.txt','w').write('x')"]
+    assert m.main(_argv(tmp_path, folder, cmd)) == 0
+    assert len(calls) == 2
+    assert "did not start" in load_source(folder).raw["notes"]
+
+
+def test_a_second_failed_start_writes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    m = _module()
+    calls = _not_starting(m, monkeypatch, 2)
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_ifsub0"
+    assert m.main(_argv(tmp_path, folder, [sys.executable, "-c", "pass"])) != 0
+    assert len(calls) == 2 and not (folder / "source.yaml").exists()
