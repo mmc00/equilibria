@@ -58,8 +58,6 @@ DOCS_TOP = frozenset(
         "archive",
     }
 )
-# What docs/ held before phase 6; each task of the phase removes what it moves.
-DOCS_TOP_TEMPORARY: frozenset[str] = frozenset()
 
 SPANISH_WORDS = frozenset(
     [
@@ -210,12 +208,7 @@ def violations(paths: list[str]) -> list[str]:
                 f"{path}: new folder {top}/ at the root (see data/README.md for where things go)"
             )
 
-        if (
-            top == "docs"
-            and len(parts) > 1
-            and parts[1] not in DOCS_TOP
-            and parts[1] not in DOCS_TOP_TEMPORARY
-        ):
+        if top == "docs" and len(parts) > 1 and parts[1] not in DOCS_TOP:
             bad.append(
                 f"{path}: docs/{parts[1]} is not in the docs layout (docs/readme.md)"
             )

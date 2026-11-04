@@ -9,9 +9,10 @@ of stale pointer behind:
   ``test_relative_links_resolve`` catches in every tracked ``*.md``;
 - a path written as text (a docstring, a comment, a backticked path in prose),
   which ``test_no_mention_of_moved_paths`` catches with one pattern per moved
-  family. ``MENTION_ALLOWANCE`` holds the hits that existed when the test was
-  written; each task of the phase shrinks it, and an entry that no longer hits
-  fails, so the allowance can only go down.
+  family.
+
+Both started with an allowance of the hits that existed when they were written;
+each task of the phase shrank it, and the last task deleted it once empty.
 
 The changes under ``specs/**/changes/`` (proposals, designs, plans) and
 ``docs/archive/`` are history, written then and not maintained, so neither test
@@ -67,15 +68,6 @@ MOVED = {
     ),
 }
 
-# "file: target" links already broken when the test was written (most sit in
-# documents bound for docs/archive/). Each task removes the ones it fixes or
-# archives; Task 6 deletes the set.
-LINK_ALLOWANCE: set[str] = set()
-
-# (file, family) pairs that hit when the test was written. Each task removes
-# the pairs it fixes; Task 6 deletes the dict.
-MENTION_ALLOWANCE: set[tuple[str, str]] = set()
-
 
 def _tracked(pattern: str) -> list[str]:
     out = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "-z", pattern])
@@ -117,11 +109,8 @@ def _broken_links() -> set[str]:
 
 
 def test_relative_links_resolve() -> None:
-    broken = _broken_links()
-    new = sorted(broken - LINK_ALLOWANCE)
-    stale = sorted(LINK_ALLOWANCE - broken)
-    assert new == [], "broken relative links:\n" + "\n".join(new)
-    assert stale == [], f"allowance entries no longer broken; remove them: {stale}"
+    broken = sorted(_broken_links())
+    assert broken == [], "broken relative links:\n" + "\n".join(broken)
 
 
 def _mentions() -> set[tuple[str, str]]:
@@ -146,11 +135,8 @@ def _mentions() -> set[tuple[str, str]]:
 
 
 def test_no_mention_of_moved_paths() -> None:
-    hits = _mentions()
-    new = sorted(hits - MENTION_ALLOWANCE)
-    stale = sorted(MENTION_ALLOWANCE - hits)
-    assert new == [], f"text points at a moved path: {new}"
-    assert stale == [], f"allowance entries no longer hit; remove them: {stale}"
+    hits = sorted(_mentions())
+    assert hits == [], f"text points at a moved path: {hits}"
 
 
 def test_link_parser_sees_relative_and_skips_urls_and_code() -> None:
