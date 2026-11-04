@@ -53,7 +53,7 @@ AOREG_GEMPACK = {"USA": 31.9376, "ROW": 42.3080}
 
 
 def register_me9a_hooks() -> None:
-    """Los hooks del notebook ``burfisher_exec_me9a.ipynb``."""
+    """Los hooks del notebook ``examples/notebooks/gtap7/burfisher/me9a.ipynb``."""
     from pyomo.environ import value
 
     from equilibria.blocks.gtap import ClosureBlock, ShockBlock, overwrite

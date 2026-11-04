@@ -1,7 +1,7 @@
 """Los hooks del cierre de desempleo (TBL65B/ME3C), comunes a sus tests y a los de
 ``@overwrite``. Datos y cierre: ``_nus333``.
 
-Los dos hooks son los del notebook ``notebooks/gtap7/burfisher_exec_tbl65b.ipynb``.
+Los dos hooks son los del notebook ``examples/notebooks/gtap7/burfisher/tbl65b.ipynb``.
 """
 
 from __future__ import annotations

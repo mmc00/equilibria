@@ -68,7 +68,7 @@ SHADOW_TAX_POWER = 2.249523
 
 
 def register_tbl94_hooks() -> None:
-    """Los hooks del notebook ``burfisher_exec_tbl94.ipynb``."""
+    """Los hooks del notebook ``examples/notebooks/gtap7/burfisher/tbl94.ipynb``."""
     from equilibria.blocks.gtap import ShockBlock, overwrite
 
     @overwrite(ShockBlock, period="shock")
