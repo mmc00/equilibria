@@ -43,6 +43,10 @@ TRANSLATED = {
     "docs/guides/simple_open_parity_contract.md": "docs/notes/guides/simple_open_parity_contract.md",
     "docs/guides/simple_open_stdcge_mapping.md": "docs/notes/guides/simple_open_stdcge_mapping.md",
     "docs/guides/simulations_api.md": "docs/notes/guides/simulations_api.md",
+    "examples/readme.md": "examples/readme.md",
+    "examples/sam/readme.md": "examples/sam/readme.md",
+    "examples/cge/readme.md": "examples/cge/readme.md",
+    "examples/pep/readme.md": "examples/pep/readme.md",
 }
 
 _FENCE = re.compile(r"^(```|~~~)[^\n]*\n.*?^\1[ \t]*$", re.MULTILINE | re.DOTALL)

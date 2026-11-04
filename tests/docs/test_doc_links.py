@@ -75,7 +75,6 @@ LINK_ALLOWANCE: set[str] = set()
 # (file, family) pairs that hit when the test was written. Each task removes
 # the pairs it fixes; Task 6 deletes the dict.
 MENTION_ALLOWANCE: set[tuple[str, str]] = {
-    ("docs/readme.md", "renamed-doc"),
     ("scripts/dev/check_layout.py", "renamed-test"),
     ("scripts/gtap/run_burfisher.py", "renamed-test"),
     ("scripts/paper/run_tables.py", "renamed-test"),
@@ -137,10 +136,15 @@ def test_relative_links_resolve() -> None:
 
 
 def _mentions() -> set[tuple[str, str]]:
-    this = Path(__file__).resolve().relative_to(ROOT).as_posix()
+    # These two name the old paths on purpose: the patterns here, and the
+    # Spanish originals that the translation test reads from git.
+    exempt = {
+        Path(__file__).resolve().relative_to(ROOT).as_posix(),
+        "tests/docs/test_translations_keep_code.py",
+    }
     hits = set()
     for rel in _tracked("*"):
-        if rel == this or not rel.endswith(TEXT) or rel.startswith(FINGERPRINTED):
+        if rel in exempt or not rel.endswith(TEXT) or rel.startswith(FINGERPRINTED):
             continue
         try:
             text = (ROOT / rel).read_text(encoding="utf-8")

@@ -1,13 +1,13 @@
-# pep examples
+# PEP examples
 
-Ejemplos enfocados en PEP:
+Examples focused on PEP:
 
 - `example_09_pep_model.py`
 - `example_10_pep_comparison.py`
 - `example_11_pep_gdp_sam_comparison.py`
 - `example_pep_static_clean.py`
 
-Ejecutar desde la raíz del repo:
+Run from the repository root:
 
 ```bash
 uv run python examples/pep/example_11_pep_gdp_sam_comparison.py
