@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -40,7 +41,7 @@ import sys
 import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePath, PureWindowsPath
 
 from equilibria.sources import DATA_ROOT, SOURCE_FILE, SourceError, load_source
 
@@ -102,11 +103,27 @@ class Job:
 class Paths:
     root: Path
     work: Path
-    gtapdir: Path
-    gp: Path
+    gtapdir: PurePath
+    gp: PurePath
 
-    def exe(self, name: str) -> Path:
-        return (self.gtapdir if name.startswith("gtap") else self.gp) / name
+    def exe(self, name: str) -> PurePath:
+        return _join(self.gtapdir if name.startswith("gtap") else self.gp, name)
+
+
+_WINDOWS_PATH = re.compile(r"^[A-Za-z]:[\\/]|\\")
+
+
+def _join(folder: PurePath, name: str) -> PurePath:
+    """``folder / name``, kept a Windows path when ``folder`` is one.
+
+    RunGTAP and GEMPACK live on Windows, but the job list is also built on
+    Linux/macOS (tests, CI, --dry-run), where Path(r"C:\\runGTAP375") is a
+    relative POSIX path and ``/`` would give C:\\runGTAP375/gtapuv7.exe.
+    """
+    text = str(folder)
+    if _WINDOWS_PATH.search(text):
+        return PureWindowsPath(text) / name
+    return Path(text) / name
 
 
 def _default_work() -> Path:
@@ -124,8 +141,8 @@ def jobs(
     *,
     root: Path = DATA_ROOT,
     work: Path | None = None,
-    gtapdir: Path = Path(r"C:\runGTAP375"),
-    gp: Path = Path(r"C:\GP"),
+    gtapdir: PurePath = PureWindowsPath(r"C:\runGTAP375"),
+    gp: PurePath = PureWindowsPath(r"C:\GP"),
 ) -> list[Job]:
     """Every job of ``groups``, in the order of GROUPS."""
     p = Paths(root, (work or _default_work()).resolve(), gtapdir, gp)
@@ -410,8 +427,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--data-root", type=Path, default=DATA_ROOT)
     ap.add_argument("--work", type=Path, default=None,
                     help="scratch for the compiled TABs (never under data/)")
-    ap.add_argument("--gtapdir", type=Path, default=Path(r"C:\runGTAP375"))
-    ap.add_argument("--gp", type=Path, default=Path(r"C:\GP"))
+    ap.add_argument("--gtapdir", type=Path, default=PureWindowsPath(r"C:\runGTAP375"))
+    ap.add_argument("--gp", type=Path, default=PureWindowsPath(r"C:\GP"))
     ap.add_argument("--dry-run", action="store_true", help="print the commands only")
     args = ap.parse_args(argv)  # fmt: skip
 
@@ -440,7 +457,7 @@ def main(argv: list[str] | None = None) -> int:
 
     exes = {path for j in selected for name, path in j.externals.items()
             if name.endswith(".exe")}  # fmt: skip
-    missing = sorted(str(e) for e in exes if not e.exists())
+    missing = sorted(str(e) for e in exes if not Path(str(e)).exists())
     if missing:
         print(f"not found: {missing} (pass --gtapdir / --gp)", file=sys.stderr)
         return 2

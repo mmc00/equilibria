@@ -9,7 +9,7 @@ from __future__ import annotations
 import importlib.util
 import shutil
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 import pytest
@@ -127,6 +127,12 @@ def test_no_compiled_gempack_files_in_data(tmp_path: Path) -> None:
         assert j.folder.resolve().is_relative_to(DATA_ROOT)
 
 
+def _absolute_one_separator(value: str) -> bool:
+    """Absolute on this OS or as a Windows path, with one kind of separator."""
+    one = "\\" not in value or "/" not in value
+    return one and (Path(value).is_absolute() or PureWindowsPath(value).is_absolute())
+
+
 def test_command_paths_are_absolute(tmp_path: Path) -> None:
     m = _module()
     for j in m.jobs(list(COUNTS), work=tmp_path / "work"):
@@ -134,7 +140,20 @@ def test_command_paths_are_absolute(tmp_path: Path) -> None:
         for arg in cmd:
             value = arg.split("=", 1)[-1].split("@", 1)[0]
             if "/" in value or "\\" in value:
-                assert Path(value).is_absolute(), (j.folder.name, arg)
+                assert _absolute_one_separator(value), (j.folder.name, arg)
+
+
+def test_windows_exe_paths_off_windows() -> None:
+    """On Linux/macOS Path(r"C:\runGTAP375") is a relative POSIX path, and
+    joining it gives C:\runGTAP375/gtapuv7.exe. PurePosixPath reproduces that here."""
+    m = _module()
+    js = m.jobs(list(COUNTS), gtapdir=PurePosixPath(r"C:\runGTAP375"),
+                gp=PurePosixPath(r"C:\GP"))  # fmt: skip
+    exes = {str(v) for j in js for k, v in j.externals.items() if k.endswith(".exe")}
+    assert exes == {
+        r"C:\runGTAP375\gtapv7.exe", r"C:\runGTAP375\gtapuv7.exe",
+        r"C:\GP\tablo.exe", r"C:\GP\gemsim.exe", r"C:\GP\sltoht.exe",
+    }  # fmt: skip
 
 
 def test_release_flags_are_required() -> None:
