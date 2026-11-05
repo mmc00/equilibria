@@ -50,6 +50,7 @@ def _solve_shock(
     savf_flag: str = "capFlex",
     solve_nlp: bool = False,
     residual_region: str | None = None,
+    backend: str | None = None,
 ):
     """Build + seed + solve base→check→shock (gtap pure MCP) and return the model.
 
@@ -66,8 +67,17 @@ def _solve_shock(
 
     ``residual_region`` defaults to the last region; "auto" (capFix only) lets the model
     pick the one with the largest base investment (see resolve_residual_region).
+
+    ``backend`` "pyomo" (the default) builds the Pyomo model; "family" runs the array
+    driver (equilibria.family.driver) and returns ``(FamilyResult, code)`` instead of
+    ``(m, code)``. ``EQUILIBRIA_GTAP_BACKEND=family`` sets the default; an unsupported
+    configuration raises before any work.
     """
     import os as _os
+
+    backend = backend or _os.environ.get("EQUILIBRIA_GTAP_BACKEND", "pyomo")
+    if backend not in ("pyomo", "family"):
+        raise ValueError(f"backend must be 'pyomo' or 'family', got {backend!r}")
 
     # NLP mode (maximize walras, IPOPT — read per-call inside run_gtap._run_path_capi_
     # nonlinear_full, which solve_multiperiod lazy-loads) is toggled by this env var. Set it
@@ -80,6 +90,21 @@ def _solve_shock(
     else:
         _os.environ.pop("EQUILIBRIA_GTAP_SOLVE_NLP", None)
     try:
+        if backend == "family":
+            from equilibria.family.driver import check_supported, solve_gtap_family
+
+            # The solve_multiperiod arguments below are the ones this function passes.
+            check_supported(
+                if_sub=bool(ifsub),
+                savf_flag=savf_flag,
+                mode="gtap",
+                skip_base_solve=True,
+                mute_welfare=True,
+                seed_from_prior=False,
+                solve_check=True,
+                shock_steps=None,
+                shock_method="nonlinear",
+            )
         from equilibria.templates.gtap import GTAPParameters
         from equilibria.templates.gtap.gtap_block_model import build_block_model
         from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
@@ -123,6 +148,9 @@ def _solve_shock(
             dataset, "gams", form="nlp", mode="gtap", ifsub=ifsub, fbep="header"
         )
         gdx = None if _ref is None else _ref / "out.gdx"
+        if backend == "family":
+            fres = solve_gtap_family(p, ac, rr, ref_gdx=gdx)
+            return fres, int(fres.results["shock"]["code"])
         m, mp = build_block_model(p, p.sets, ac, rr, base_calibrated=True, ref_gdx=gdx)
         res = solve_multiperiod(
             m,
