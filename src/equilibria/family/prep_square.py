@@ -39,10 +39,9 @@ import itertools
 from typing import Any
 
 import numpy as np
-from scipy.sparse import csr_matrix
-from scipy.sparse.csgraph import maximum_bipartite_matching
 
 from equilibria.family.mp_arrays import MPArrays, RowArr, Squared, VarArr
+from equilibria.solver._matching import match_rows
 
 _PRICE_LB_FACTOR = 1e-3
 _GAMS_HARD_PAIR_EQS = ("eq_pfeq", "eq_pfyeq", "eq_pdeq")
@@ -473,86 +472,29 @@ def gams_pairs(
     return out
 
 
-def _edges(
+def _adjacency(
     row_names: list[str], col_names: list[str], incidence: dict[str, Any]
-) -> tuple[np.ndarray, np.ndarray]:
-    """(rows, cols) of the incidence restricted to the free columns."""
-    try:
-        lists = [incidence[r] for r in row_names]
-    except KeyError as e:
-        raise KeyError(f"no incidence for row {e.args[0]!r}") from None
-    counts = np.fromiter(map(len, lists), dtype=np.int64, count=len(lists))
-    flat = np.array(list(itertools.chain.from_iterable(lists)), dtype=str)
-    rows = np.repeat(np.arange(len(lists)), counts)
-    cols = np.array(col_names, dtype=str)  # sorted by name, like the rows
-    if not len(flat) or not len(cols):
-        return rows[:0], rows[:0]
-    pos = np.minimum(np.searchsorted(cols, flat), len(cols) - 1)
-    ok = cols[pos] == flat
-    return rows[ok], pos[ok].astype(np.int64)
+) -> list[list[int]]:
+    """Per row, the free columns of its incidence in the order given, duplicates once.
 
-
-def _match(
-    n: int,
-    rows: np.ndarray,
-    cols: np.ndarray,
-    pair_rows: np.ndarray,
-    pair_cols: np.ndarray,
-    pair_hard: np.ndarray,
-) -> np.ndarray:
-    """Column of each row: hard pairs locked, soft pairs a starting point, a maximum
-    matching on the rest, leftover columns to the rows left unmatched.
-
-    The semantics of ``structural_matching``; not its exact pairs."""
-    nc = n
-    code = np.sort(rows * nc + cols)
-    adjacent = np.isin(pair_rows * nc + pair_cols, code)
-    valid = pair_hard | adjacent
-
-    def first(r: np.ndarray, c: np.ndarray) -> np.ndarray:
-        """The pairs that claim a still free row and a still free column, first wins."""
-        keep = np.zeros(len(r), dtype=bool)
-        if len(r):
-            i = np.sort(np.unique(r, return_index=True)[1])
-            keep[i[np.unique(c[i], return_index=True)[1]]] = True
-        return keep
-
-    left = np.full(n, -1, dtype=np.int64)
-    taken = np.zeros(nc, dtype=bool)
-    locked = np.zeros(n, dtype=bool)
-
-    h = np.flatnonzero(valid & pair_hard)
-    h = h[first(pair_rows[h], pair_cols[h])]
-    left[pair_rows[h]] = pair_cols[h]
-    taken[pair_cols[h]] = True
-    locked[pair_rows[h]] = True
-
-    s = np.flatnonzero(valid & ~pair_hard)
-    s = s[~locked[pair_rows[s]] & ~taken[pair_cols[s]]]
-    s = s[first(pair_rows[s], pair_cols[s])]
-    seed = left.copy()
-    seed[pair_rows[s]] = pair_cols[s]
-    seeded_cols = taken.copy()
-    seeded_cols[pair_cols[s]] = True
-
-    def maximum(free_r: np.ndarray, free_c: np.ndarray) -> np.ndarray:
-        """Maximum matching over the edges between the given free rows and columns."""
-        sel = free_r[rows] & free_c[cols]
-        g = csr_matrix((np.ones(int(sel.sum())), (rows[sel], cols[sel])), shape=(n, nc))
-        return maximum_bipartite_matching(g, perm_type="column")
-
-    # starting point: hard + soft pairs, completed on the rest
-    rest = maximum(seed < 0, ~seeded_cols)
-    start = np.where(seed >= 0, seed, rest)
-    # the optimum of the unlocked sub-problem; the starting point stands if it reaches it
-    best = maximum(~locked, ~taken)
-    best = np.where(locked, left, best)
-    left = start if (start >= 0).sum() >= (best >= 0).sum() else best
-
-    free_cols = np.flatnonzero(np.bincount(left[left >= 0], minlength=nc) == 0)
-    unmatched = np.flatnonzero(left < 0)
-    left[unmatched] = free_cols[: len(unmatched)]
-    return left
+    Pyomo lists a row's variables in ``identify_variables`` order, skipping fixed ones
+    and repeats; with the incidence in that order this is its adjacency."""
+    col = {c: j for j, c in enumerate(col_names)}
+    out: list[list[int]] = []
+    for r in row_names:
+        try:
+            names = incidence[r]
+        except KeyError:
+            raise KeyError(f"no incidence for row {r!r}") from None
+        seen: set[int] = set()
+        cols: list[int] = []
+        for name in names:
+            j = col.get(name)
+            if j is not None and j not in seen:
+                seen.add(j)
+                cols.append(j)
+        out.append(cols)
+    return out
 
 
 # ── The system ──────────────────────────────────────────────────────────────
@@ -594,7 +536,9 @@ def square(
     """The squared system of ``period`` from the arrays after the recipe.
 
     ``incidence`` maps each active row's name to the names of the variables in its
-    body (those not free are ignored). ``exogenous`` are the registered ShockBlock
+    body, in Pyomo's ``identify_variables`` order (those not free are ignored, repeats
+    count once): the pairs are those of ``structural_matching`` only if the incidence
+    has Pyomo's columns and order. ``exogenous`` are the registered ShockBlock
     instruments (``SPRef.exogenous``), which ``apply_closure`` does not overwrite when
     fixed (the numeraire); no default, the model owns them. ``masks`` are the data-flag
     cell masks (``ConditionalMasks.from_params``), built once per run for all periods.
@@ -633,7 +577,7 @@ def square(
             f"not square: {len(rnames)} active rows, {len(cnames)} free variables"
         )
 
-    rows, cols = _edges(rnames, cnames, incidence)
+    adjacency = _adjacency(rnames, cnames, incidence)
     r_index = {r: i for i, r in enumerate(rnames)}
     c_index = {c: i for i, c in enumerate(cnames)}
     pairs = [
@@ -641,9 +585,5 @@ def square(
         for e, v, h in gams_pairs(mp, params=params, mode=mode)
         if e in r_index and v in c_index
     ]
-    pr, pc, ph = (
-        np.array([p[k] for p in pairs], dtype=t)
-        for k, t in ((0, np.int64), (1, np.int64), (2, bool))
-    )
-    paired = _match(len(rnames), rows, cols, pr, pc, ph)
+    paired = match_rows(len(rnames), adjacency, pairs)
     return Squared(rnames, [cnames[j] for j in paired], _cells(mp, period))

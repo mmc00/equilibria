@@ -24,6 +24,8 @@ from typing import Any
 from pyomo.core.expr.visitor import identify_variables
 from pyomo.environ import Constraint, Var, value
 
+from equilibria.solver._matching import match_rows
+
 
 def fix_sluggish_pft(model, params, *, label: str = "") -> int:
     """Fix `pft(r,f)` for factors that are dangling (no eq references them).
@@ -501,15 +503,9 @@ def structural_matching(constraints, free_vars, *, forced_pairs=None, label: str
             cols.append(col)
         adjacency.append(cols)
 
-    pair_left = [-1] * n
-    pair_right = [-1] * n
-    distance = [0] * n
-    INF = 10**9
-
     eq_name_to_row = {c.name: i for i, c in enumerate(constraints)}
     var_name_to_col = {v.name: j for j, v in enumerate(free_vars)}
-    # Filas de parejas duras: ningun camino de aumento las reasigna.
-    locked: set[int] = set()
+    forced: list[tuple[int, int, bool]] = []
     if forced_pairs:
         for _fp in forced_pairs:
             # A forced pair is (eq_name, var_name) or (eq_name, var_name, hard).
@@ -535,61 +531,9 @@ def structural_matching(constraints, free_vars, *, forced_pairs=None, label: str
                         f"[{label}] matching WARN: forced pair {eq_name}<->{var_name} not in adjacency"
                     )
                 continue
-            pair_left[r] = c
-            pair_right[c] = r
-            if hard:
-                locked.add(r)
+            forced.append((r, c, hard))
 
-    def bfs() -> bool:
-        q: deque[int] = deque()
-        found = False
-        for u in range(n):
-            if pair_left[u] == -1:
-                distance[u] = 0
-                q.append(u)
-            else:
-                distance[u] = INF
-        while q:
-            u = q.popleft()
-            for v in adjacency[u]:
-                m = pair_right[v]
-                if m in locked:
-                    continue
-                if m == -1:
-                    found = True
-                elif distance[m] == INF:
-                    distance[m] = distance[u] + 1
-                    q.append(m)
-        return found
-
-    def dfs(u: int) -> bool:
-        for v in adjacency[u]:
-            m = pair_right[v]
-            if m in locked:
-                continue
-            if m == -1 or (distance[m] == distance[u] + 1 and dfs(m)):
-                pair_left[u] = v
-                pair_right[v] = u
-                return True
-        distance[u] = INF
-        return False
-
-    while bfs():
-        for u in range(n):
-            if pair_left[u] == -1:
-                dfs(u)
-
-    leftover = [j for j, m in enumerate(pair_right) if m == -1]
-    li = 0
-    for u in range(n):
-        if pair_left[u] == -1:
-            if li < len(leftover):
-                pair_left[u] = leftover[li]
-                li += 1
-
-    if label:
-        n_natural = sum(1 for u in range(n) if pair_left[u] != -1)
-        print(f"[{label}] structural matching: {n_natural}/{n} pairs assigned")
+    pair_left = match_rows(n, adjacency, forced, label)
 
     # Over-determined (n > nv): pair_left has n entries but free_vars has nv.
     # Return only the first nv matched entries (caller will trim constraints to match).

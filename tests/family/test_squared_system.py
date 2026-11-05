@@ -544,3 +544,50 @@ def test_column_outside_backend_needs_a_proxy_row(inc, systems):
             inc.backend, inc.state, MPArrays.from_photo(a), "check", bad
         )
     print(f"paired with family row {row}: raises")
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="period_incidence lists the J pattern in layout-column order and lacks "
+    "structural-zero columns (sigma=0, zero margins) that Pyomo's identify_variables "
+    "keeps; 81 rows/call pair differently (58 with B's order on the pattern's set).",
+)
+def test_pairs_equal_pyomo_with_period_incidence(inc):
+    """The real path's incidence (``period_incidence`` over B's for cross-period rows)
+    gives Pyomo's pairs: 0 differing rows per call."""
+    from equilibria.family.mp_arrays import MPArrays
+    from equilibria.family.prep_recipe import run_recipe, sp_reference_arrays
+    from equilibria.family.prep_square import ConditionalMasks, square
+    from tests.family.test_prep_recipe import ROUTE
+
+    p = _params(DATASET)
+    closure = _closure()
+    ref = sp_reference_arrays(p, closure, list(p.sets.r)[-1])
+    masks = None
+    for a, b in _calls():
+        mp = run_recipe(
+            MPArrays.from_photo(a),
+            a.period,
+            params=p,
+            closure=closure,
+            sp_ref=ref,
+            mode="gtap",
+            **ROUTE,
+        )
+        masks = masks or ConditionalMasks.from_params(p, mp)
+        merged = {r: list(c) for r, c in zip(b.con_names, b.incidence, strict=True)}
+        merged.update(inc(a.period))
+        got = square(
+            mp,
+            a.period,
+            params=p,
+            closure=closure,
+            incidence=merged,
+            exogenous=ref.exogenous,
+            masks=masks,
+        )
+        want = dict(zip(b.con_names, b.var_names, strict=True))
+        differ = [
+            r for r, c in zip(got.row_names, got.col_names, strict=True) if want[r] != c
+        ]
+        assert differ == [], f"call {b.n}: {len(differ)} rows differ, e.g. {differ[:5]}"

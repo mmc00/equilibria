@@ -222,3 +222,20 @@ def _mp_of(calls):
     from equilibria.family.mp_arrays import MPArrays
 
     return MPArrays.from_photo(calls[0][0])
+
+
+def _pairs_differing(got, b):
+    """Rows of ``got`` whose column is not the one Pyomo paired (photo B's pairs)."""
+    assert sorted(got.row_names) == sorted(b.con_names)
+    want = dict(zip(b.con_names, b.var_names, strict=True))
+    return [
+        r for r, c in zip(got.row_names, got.col_names, strict=True) if want[r] != c
+    ]
+
+
+def test_pairs_equal_pyomo_with_b_incidence(case):
+    """Same rows, same columns, same pairs as Pyomo's ``structural_matching``."""
+    _, p, ref, calls, masks = case
+    for a, b in calls:
+        got = _square(_recipe(a, p, ref), a, p, b, ref, masks)
+        assert _pairs_differing(got, b) == []
