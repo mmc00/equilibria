@@ -68,6 +68,7 @@ From the repo root, in PowerShell:
 git fetch origin
 git switch main
 git pull
+git switch -c data/gempack-matrix  # never commit to main; open a PR from this branch
 uv sync --frozen
 
 # 1. the GEMPACK version gtapv7.exe prints in its banner ("GEMPACK Release 12.1.003 ...");
@@ -90,7 +91,7 @@ uv run python data/gtap7/gempack/tools/regenerate_gempack.py --tool-version $v
 # 5. send the results back
 git add data/gtap7
 git commit -m "data(gempack): regenerate the GEMPACK matrix on Windows"
-git push
+git push -u origin data/gempack-matrix
 ```
 
 Paths default to `C:\runGTAP375\gtapv7.exe` and `C:\GP\sltoht.exe`; pass
@@ -117,7 +118,8 @@ this disk, and committing them would break their records everywhere else.
 ```powershell
 cd C:\Documentos\proyectos\equilibria
 git switch main
-git pull                      # brings data/.gitattributes; do not run GEMPACK again
+git pull                      # do not run GEMPACK again
+git switch -c data/gempack-crlf   # never commit to main; open a PR from this branch
 
 # re-add the GEMPACK results and tools as they are on disk, CRLF included
 git add --renormalize data/gtap7/gempack/tools (Get-ChildItem -Directory data\gtap7\*\gempack_*).FullName
@@ -127,7 +129,7 @@ git diff --cached --stat      # expect 66 x 3 text outputs and the tools; nothin
 uv run python -c "from equilibria.sources import check_tree; print([e for e in check_tree() if 'gempack' in e])"
 
 git commit -m "data(gempack): keep the Windows line endings the records hashed"
-git push
+git push -u origin data/gempack-crlf
 git restore data              # the rest of data/ back to the exact repository bytes
 ```
 
@@ -171,6 +173,7 @@ From the repo root:
 ```powershell
 git switch main
 git pull
+git switch -c data/gempack-paper   # never commit to main; open a PR from this branch
 uv sync --frozen
 $r = @("--gempack-release", "12.1.003", "--gp-release", "11.3.004")
 
@@ -197,7 +200,7 @@ uv run python data/gtap7/gempack/tools/regenerate_paper.py @r
 uv run python -c "from equilibria.sources import check_tree; print(check_tree())"   # must print []
 git add data
 git commit -m "data(gempack): phase 3a-2 on Windows"
-git push
+git push -u origin data/gempack-paper
 ```
 
 What to expect:
