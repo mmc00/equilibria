@@ -193,15 +193,24 @@ def _run(impl, st, p, snap):
     return err, n, _snapshot(st)
 
 
-def _compare_paths(monkeypatch, seeds, break_labels=False):
+def _compare_paths(monkeypatch, seeds, break_labels=False, calls=None):
     import copy
 
+    import equilibria.family.ifsub_arrays as ia
     import equilibria.templates.gtap.gtap_block_model as gbm
 
     p = load_params("gtap7_3x3")
     rr = list(p.sets.r)[-1]
     real = gbm._apply_ifsub_closure
     bad = []
+    broken = {"on": False}
+    real_fix = ia.fix_report_var
+
+    def spy(state, params, var_name, *args):
+        out = real_fix(state, params, var_name, *args)
+        if calls is not None and broken["on"]:
+            calls.append((var_name, out))
+        return out
 
     def grab(st, params=None):
         base = _snapshot(st)
@@ -214,7 +223,9 @@ def _compare_paths(monkeypatch, seeds, break_labels=False):
                 st._components["tmarg"]._labels = [list(reversed(lab[0])), *lab[1:]]
             pert = _snapshot(st)
             a = _run(gbm._apply_ifsub_closure_cells, st, p, pert)
+            broken["on"] = break_labels
             b = _run(real, st, p, pert)
+            broken["on"] = False
             if break_labels:
                 st._components["tmarg"]._labels = lab
             if a[:2] != b[:2]:
@@ -230,6 +241,7 @@ def _compare_paths(monkeypatch, seeds, break_labels=False):
 
     with monkeypatch.context() as mp:
         mp.setattr(gbm, "_apply_ifsub_closure", grab)
+        mp.setattr(ia, "fix_report_var", spy)
         gbm.compose_block_state(p, p.sets, closure(), rr)
     assert not bad, bad[:10]
 
@@ -239,4 +251,9 @@ def test_perturbed_states_cell_path_equals_array_path(monkeypatch):
 
 
 def test_perturbed_states_with_unaligned_operand(monkeypatch):
-    _compare_paths(monkeypatch, range(3), break_labels=True)
+    calls: list = []
+    _compare_paths(monkeypatch, range(3), break_labels=True, calls=calls)
+    # The fallback ran: with tmarg's labels reversed, the vectorised path declines
+    # the variables that read it (it returns False and touches nothing).
+    declined = {name for name, ok in calls if not ok}
+    assert {"pmcif", "pm", "xwmg", "xmgm"} <= declined, calls
