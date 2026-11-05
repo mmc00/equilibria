@@ -23,15 +23,26 @@ data/
   gtap7/
     gams_jgea/                the official JGEA supplementary files, untouched
     gams/                     the GAMS GTAP v7 model that runs (derived_from gams_jgea)
-    gempack/tools/            the scripts that drive GEMPACK (gtapv7.exe); every GEMPACK result hashes gempack/
+    gempack/tools/            the scripts that drive GEMPACK; every GEMPACK result hashes gempack/
+    gempack_rungtap375/       RunGTAP 3.75's gtapv7.tab 7.0 and .sti, unchanged (the source of its gtapv7.exe)
+    gempack_rungtap375_levels/  that TAB patched for six more levels (derived_from gempack_rungtap375)
     gtap7_3x3/
       basedata.har sets.har default.prm ...   + source.yaml (kind: data)
       gams_nl_altertax_ifsub0_fbep-zero/     .nl per phase + source.yaml (kind: result)
       gams_nlp_gtap_ifsub1_fbep-header/      GDX
       gams_mcp_gtap_ifsub1_fbep-header/      GDX
       gempack_tm10_s8-16-32_capflex/         updated.har, sl4dump.har, run.cmf
+      sltoht_tm10_s8-16-32_capflex/          step 2: solution.sl4, sl4levels.har
+      gemsim_levels6_tm10_s8-16-32_capflex/  step 4: six more levels
     gtap7_10x7/ ...
-    nus333/ ...
+    nus333/
+      gempack_burfisher/<exp>/               Burfisher's book experiments (gtapuv7.exe)
+      sltoht_burfisher/<exp>/                their sl4dump (+ levels for tbl45a, me9c, gtapv7)
+      gemsim_burfisher_gragg/<exp>/          the same with Gragg 2-4-6 on the levels TAB
+      sltoht_burfisher_gragg/<exp>/          their sl4dump and levels
+      gempack_tm<k>_s8-16-32_dpsaveswap/     tm 1-10 with the retired swap closure
+    9x10/ ...
+  horridge_simple/            Horridge's SIMPLE (kind: model) and its gemsim_<experiment>/ results
   gtap6/ ...
   pep/ ...
   gdx_tests/                  GDX format specimens for the reader tests
@@ -149,6 +160,45 @@ says `PATH` while `solver.name` says CONOPT. `SUBPAR` of CHE sits at the GTAP
 floor (1e-6), which puts `zcons(CHE)` near 1e-10, below the solvers'
 tolerances; these runs scale `zcons` and `zconseq` by their calibrated level
 (`--scale-zcons`), and `notes` says so.
+
+## GEMPACK results
+
+Made on the Windows machine (`scripts/windows/README.md`): the matrix by
+`gempack/tools/regenerate_gempack.py` (phase 3a-1), the rest by
+`gempack/tools/regenerate_paper.py` (phase 3a-2). A folder is named
+`<tool>_<variant>`, and `tool` is the program that made its primary output:
+
+| tool | program | release on that machine |
+|---|---|---|
+| `gempack` | RunGTAP's compiled `gtapv7.exe` / `gtapuv7.exe` | 12.1.003 |
+| `gemsim` | GEMSIM on a TAB `tablo` compiled (the levels TABs, Horridge's SIMPLE) | 11.3.004 |
+| `sltoht` | `sltoht` on a solution, and `export_sl4_levels.py` for its levels | 11.3.004 |
+
+- **`tool_version` is the release of the program that made the primary output.**
+  The 66 matrix records (`gtap7_*/gempack_tm*_cap*`) say 12.1.003, the release
+  of `gtapv7.exe`, but their `sl4dump.har` was made by `sltoht` 11.3.004; their
+  `sltoht_console.txt` shows it. They are not re-recorded (maintainer,
+  2026-11-03). From phase 3a-2 on, a record lists every other program it ran
+  under `external`, with its path, sha256 and release.
+- **`external`** records files that are never put in the repository: RunGTAP's
+  `.exe`, the `C:\GP` programs, and what `tablo` compiles (`.gss`, `.gst`).
+  `check_tree()` does not read it.
+- **`notes`** says when Windows did not start a program and the job retried it.
+- **Variant keys**: `shock` (percent), `steps` (`"8-16-32"`), `closure`
+  (`capFlex`, `capFix`, or `dpsaveSwap`, the retired `swap dpsave = del_tbalry`
+  of `runs/`), `experiment` and `method` (`book` or `gragg`) for Burfisher's
+  exercises. The 20x41 `dpsaveSwap` folder adds `outcome: abort`: GEMPACK stops
+  there, and that stop is the result.
+- **Not recorded**: ME4A and ME4B with Gragg 2-4-6 (GEMSIM: "Accuracy too
+  low"), and `levels.txt`, the `sltoht` text the levels are parsed from (60 MB
+  for 20x41; `sltoht` rebuilds it from `solution.sl4`).
+
+```python
+reference("gtap7_3x3", "gempack", shock=10, steps="8-16-32", closure="capFlex")
+reference("nus333", "gemsim", experiment="me9c", method="gragg")
+reference("gtap7_20x41", "gemsim", shock=10, steps="8-16-32", closure="capFix",
+          tab="gtapv7_levels")
+```
 
 ## Using a reference in a test
 
