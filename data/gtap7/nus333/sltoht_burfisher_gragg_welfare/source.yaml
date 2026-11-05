@@ -1,7 +1,7 @@
 kind: result
 model: gtap7
 dataset: nus333
-tool: gempack
+tool: sltoht
 variant:
   method: gragg
   output: welfare
@@ -739,14 +739,14 @@ generated_from:
       volume.har: 5dc1ae78ebcfd34eaed34fa39d0110a8cf912c6353668398ae8f0037ac4de56c
 command: uv run python /Users/marmol/proyectos/equilibria-3b/scripts/gtap/welfare_gempack_fixture.py
   --out welfare.json.gz
-equilibria_commit: 24e43cd4
+equilibria_commit: ca3d0bf6
 exit:
   code: 0
 outputs:
   welfare.json.gz: b6f7b89445aa4a01a48659ded9698bd3c6c028e635419a89e41e0ad8ba041654
 run:
-  date: '2026-11-05T09:06:25-06:00'
-  duration_s: 12.245
+  date: '2026-11-05T09:58:12-06:00'
+  duration_s: 1.59
   machine:
     os: macOS 26.2 (Darwin 25.2.0)
     cpu: Apple M3 Pro

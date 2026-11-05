@@ -47,7 +47,7 @@ def test_scanner_flags_a_short_matrix_request() -> None:
         'reference("gtap7_3x3", "gempack", shock=10, closure="capFix")\n'
         'reference("gtap7_3x3", "gempack", shock=10, steps="8-16-32", closure="capFix")\n'
         'reference("nus333", "gemsim", experiment="me9c", method="gragg")\n'
-        'reference("nus333", "gempack", method="gragg", output="welfare")\n'
+        'reference("nus333", "sltoht", method="gragg", output="welfare")\n'
         'reference("gtap7_3x3", "gams", form="mcp")\n'
         "find_reference(ds, tool, **variant)\n"
     )

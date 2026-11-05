@@ -1,7 +1,7 @@
 """EV del hogar regional (la definicion de GTAP) contra GEMPACK.
 
 Oraculo: ``EV`` y ``WEV`` de las corridas Gragg de GEMPACK
-(``data/gtap7/nus333/gempack_burfisher_welfare/welfare.json.gz``, de
+(``data/gtap7/nus333/sltoht_burfisher_gragg_welfare/welfare.json.gz``, de
 ``scripts/gtap/welfare_gempack_fixture.py``). En ``gtapv7.tab`` (seccion 11) el EV es
 el ingreso que, con los precios de antes del shock fijos, alcanza la utilidad ``u``
 de despues, menos el ingreso de antes: ``EV(r) = INCOMEEV(r)/100 * yev(r)``.
@@ -25,7 +25,7 @@ from equilibria.sources import reference
 pytestmark = pytest.mark.integration
 
 FIXTURE = (
-    reference("nus333", "gempack", method="gragg", output="welfare") / "welfare.json.gz"
+    reference("nus333", "sltoht", method="gragg", output="welfare") / "welfare.json.gz"
 )
 # TBL45C: utilidad Cobb-Douglas (eq_uh usa las cantidades del hogar).
 EXERCISES = ("TBL62A", "TBL45A", "TBL45C", "TBL63A", "ME7A")

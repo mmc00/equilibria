@@ -103,8 +103,9 @@ name, the new one through `equilibria.sources.reference(...)`.
   kept only if `gemsim_burfisher_gragg/<exp>/gemsim_console.txt` says "completed
   without error"), all 41 old entries are equal after `json.load` (exact); from
   the book, none of 36 is. The record
-  `data/gtap7/nus333/gempack_burfisher_welfare/` (`method: gragg`,
-  `output: welfare`) hashes the 86 Gragg folders it reads as inputs.
+  `data/gtap7/nus333/sltoht_burfisher_gragg_welfare/` (`tool: sltoht`,
+  `method: gragg`, `output: welfare`; renamed from `gempack_burfisher_welfare/`
+  at the Task 7 checkpoint, maintainer 2026-11-05) hashes the 86 Gragg folders it reads as inputs.
 - **Two new entries.** The Gragg records also hold GTAPV7 and TBL53, so the JSON
   has 43 exercises. Consumers index it by exercise name; no test changes.
 - `test_reference_keys_are_complete` also accepts a call that names `method=`

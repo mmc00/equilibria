@@ -12,11 +12,11 @@ without error". ME4A/B with Gragg 2-4-6 ended in "Accuracy too low" and have no
 Gragg record (D1, phase 3b).
 
 Recorded with ``scripts/dev/write_source.py`` in
-``data/gtap7/nus333/gempack_burfisher_welfare/``::
+``data/gtap7/nus333/sltoht_burfisher_gragg_welfare/``::
 
     uv run python scripts/dev/write_source.py \
-        --folder data/gtap7/nus333/gempack_burfisher_welfare --kind result \
-        --model gtap7 --dataset nus333 --tool gempack \
+        --folder data/gtap7/nus333/sltoht_burfisher_gragg_welfare --kind result \
+        --model gtap7 --dataset nus333 --tool sltoht \
         --variant method=gragg --variant output=welfare \
         --input dump_<exp>=data/gtap7/nus333/sltoht_burfisher_gragg/<exp> ... \
         --input run_<exp>=data/gtap7/nus333/gemsim_burfisher_gragg/<exp> ... \
@@ -71,6 +71,7 @@ def gragg_records() -> dict[str, tuple[Path, Path]]:
             and r.dataset == "nus333"
             and r.tool in ("sltoht", "gemsim")
             and r.variant.get("method") == "gragg"
+            and "experiment" in r.variant  # not the welfare record itself
         ):
             found.setdefault(r.variant["experiment"], {})[r.tool] = r.path
     return {e: (t["sltoht"], t["gemsim"]) for e, t in sorted(found.items())}
