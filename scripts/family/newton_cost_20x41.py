@@ -49,7 +49,14 @@ def _sibling(name: str):
 VARIANTS = ("pairing", "pairing_explicit_zeros", "matching", "mumps_auto")
 # Order/pattern diagnostic (``measure(orderings=True)``): all with ICNTL(6)=0 and
 # today's other ICNTL, the matrix handed over already in the order named.
-ORDERINGS = ("pairing", "pyomo_order", "pyomo_J", "pyomo_order_pyomo_pattern")
+ORDERINGS = (
+    "pairing",
+    "pyomo_order",
+    "pyomo_J",
+    "pyomo_order_pyomo_pattern",
+    "weighted",
+    "weighted_free",
+)
 
 
 def _missing_diagonal(J):
@@ -92,6 +99,65 @@ def _matching_perm(J):
     diag_in = ~_missing_diagonal(J)
     moved = perm != np.arange(n)
     return perm, int(moved.sum()), int((moved & diag_in).sum())
+
+
+def _weighted_perm(J, locked: dict[int, int]):
+    """Column order from a maximum-product weighted matching on J's values.
+
+    MC64 option 5 style: minimise the sum of ``c_ij = log(max_i |a_ij|) - log|a_ij|``
+    (column maxima over the rows being matched), shifted by 1 so every weight is
+    strictly positive (all perfect matchings have the same number of entries, so
+    the optimum is unchanged). Exact zeros are dropped. ``locked`` maps row -> column
+    (the hard GAMS pairs) and those rows/columns are left out of the matching.
+    Returns ``(perm, report)``: new column k is old column ``perm[k]``; ``perm`` is
+    None, with the reason in ``report["error"]``, if the rest has no perfect matching.
+    """
+    import numpy as np
+    from scipy.sparse import csr_matrix
+    from scipy.sparse.csgraph import min_weight_full_bipartite_matching
+
+    n = J.shape[0]
+    rows = np.array(sorted(set(range(n)) - set(locked)), dtype=int)
+    cols = np.array(sorted(set(range(n)) - set(locked.values())), dtype=int)
+    rep: dict = {"locked": len(locked), "matched": int(rows.size), "error": None}
+    if rows.size != cols.size:
+        rep["error"] = f"locked rows {len(locked)} != locked columns"
+        return None, rep
+    sub = J.tocsr()[rows][:, cols].tocoo()
+    keep = sub.data != 0
+    r, c, a = sub.row[keep], sub.col[keep], np.abs(sub.data[keep])
+    perm = np.empty(n, dtype=int)
+    for i, j in locked.items():
+        perm[i] = j
+    if rows.size:
+        cmax = np.zeros(cols.size)
+        np.maximum.at(cmax, c, a)
+        w = np.log(cmax[c]) - np.log(a) + 1.0
+        # A free row whose paired diagonal has no nonzero value would make the
+        # nonzero part infeasible; the diagonal is offered at a prohibitive weight,
+        # so as few rows as possible keep a zero pivot (counted in ``zero_pivots``).
+        pos_r = {int(x): k for k, x in enumerate(rows)}
+        pos_c = {int(x): k for k, x in enumerate(cols)}
+        has = set(zip(r.tolist(), c.tolist(), strict=True))
+        dr = [pos_r[i] for i in pos_r if i in pos_c and (pos_r[i], pos_c[i]) not in has]
+        dc = [pos_c[rows[k]] for k in dr]
+        big = float(w.sum()) + 1.0
+        r = np.concatenate([r, np.array(dr, dtype=int)])
+        c = np.concatenate([c, np.array(dc, dtype=int)])
+        w = np.concatenate([w, np.full(len(dr), big)])
+        try:
+            mr, mc = min_weight_full_bipartite_matching(
+                csr_matrix((w, (r, c)), shape=(rows.size, cols.size))
+            )
+        except ValueError as exc:
+            rep["error"] = f"no perfect matching on the free part: {exc}"
+            return None, rep
+        perm[rows[mr]] = cols[mc]
+        zero = set(zip(dr, dc, strict=True))
+        rep["zero_pivots"] = int(
+            sum((i, j) in zero for i, j in zip(mr.tolist(), mc.tolist(), strict=True))
+        )
+    return perm, rep
 
 
 def icntl_for(variant: str) -> dict[int, int]:
@@ -302,6 +368,23 @@ def _bijection(names: list[str], pos: dict[str, int], want: list[str], what: str
     return (np.array([pos[w] for w in want], dtype=np.int64) if ok else None), rep
 
 
+def _hard_rows(mp, sq, params) -> dict[int, int]:
+    """Row -> column (family indices) of the hard GAMS pairs present in ``sq``.
+
+    ``mp`` is the recipe output ``square`` was given. ``sq.col_names[k]`` is the
+    variable paired with row k, so a hard pair (e, v) sits at ``(i, i)`` with
+    ``i`` the row of e; ``match_rows`` locks it, which is checked."""
+    from equilibria.family.prep_square import gams_pairs
+
+    r = {n: i for i, n in enumerate(sq.row_names)}
+    out: dict[int, int] = {}
+    for e, v, h in gams_pairs(mp, params=params):
+        if h and e in r:
+            assert sq.col_names[r[e]] == v, f"hard pair {e} -> {v} not kept"
+            out[r[e]] = r[e]
+    return out
+
+
 def _same_step(sol, ref) -> dict:
     import numpy as np
 
@@ -312,7 +395,7 @@ def _same_step(sol, ref) -> dict:
     }
 
 
-def _orderings(ss, sq, b, nlp) -> dict:
+def _orderings(ss, sq, b, nlp, hard: dict[int, int] | None = None) -> dict:
     """Factor the squared system in the four orders/patterns of ``ORDERINGS``.
 
     * ``pairing``: ``ss.J`` as is (the family's row/column pairing).
@@ -354,6 +437,35 @@ def _orderings(ss, sq, b, nlp) -> dict:
         "bijection": rperm is not None and cperm is not None,
     }
     out["bijection"] = bij
+    # Column Pyomo's order gives each family row (None where there is no mapping).
+    pyomo_col = None
+    if bij["bijection"]:
+        pyomo_col = np.empty(len(rperm), dtype=np.int64)
+        pyomo_col[rperm] = cperm
+    for name, locked in (("weighted", dict(hard or {})), ("weighted_free", {})):
+        t = time.perf_counter()
+        wperm, wrep = _weighted_perm(J, locked)
+        match_s = time.perf_counter() - t
+        if wperm is None:
+            out[name] = {"skipped": "matching failed", "match_s": match_s, **wrep}
+            continue
+        Jw = J[:, wperm].tocsr()
+        Jw.sort_indices()
+        res = _mumps_step(Jw, F, name, keep_solution=True)
+        sol = res.pop("solution", None)
+        if sol is not None and ref is not None:
+            full = np.empty_like(sol)
+            full[wperm] = sol  # column k of Jw is family column wperm[k]
+            res.update(_same_step(full, ref))
+        ident = np.arange(len(wperm))
+        res.update(wrep)
+        res["match_s"] = match_s
+        res["perm"] = wperm.tolist()
+        res["rows_differ_pairing"] = int((wperm != ident).sum())
+        res["rows_differ_pyomo"] = (
+            None if pyomo_col is None else int((wperm != pyomo_col).sum())
+        )
+        out[name] = res
     if bij["bijection"]:
         Jb = J[rperm][:, cperm].tocsr()
         Jb.sort_indices()
@@ -544,7 +656,7 @@ def measure(
             nlp = None
             if pyomo_model is not None:
                 nlp = pyomo_nlp_at_b(pyomo_model, capture, a, b)
-            m["orderings"] = _orderings(ss, sq, b, nlp)
+            m["orderings"] = _orderings(ss, sq, b, nlp, _hard_rows(mp, sq, p))
         calls.append(
             {
                 "period": a.period,

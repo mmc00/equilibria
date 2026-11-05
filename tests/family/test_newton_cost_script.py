@@ -121,3 +121,52 @@ def test_newton_cost_orderings_on_3x3():
             "bijection:",
             o["bijection"]["bijection"],
         )
+
+
+@pytest.mark.slow
+def test_newton_cost_weighted_on_3x3():
+    """The weighted-matching order: a bijection, hard GAMS pairs kept, same step."""
+    import math
+
+    import numpy as np
+
+    s = _script()
+    out = s.measure("gtap7_3x3", capture_dir(), orderings=True, pyomo=False)
+    for c in out["calls"]:
+        o = c["orderings"]
+        for name in ("weighted", "weighted_free"):
+            v = o[name]
+            assert "skipped" not in v, (name, v)
+            assert v["variant"] == name and v["icntl"] == o["pairing"]["icntl"]
+            assert v["mumps_ok"] and v["residual"] < 1e-8
+            for k in ("symbolic_s", "factor_s", "solve_s", "match_s"):
+                assert math.isfinite(v[k]) and v[k] > 0, (name, k)
+            for k in ("infog9", "infog29", "infog13", "nnz"):
+                assert isinstance(v[k], int), (name, k)
+            perm = np.array(v["perm"])
+            assert sorted(perm.tolist()) == list(range(c["n"]))  # bijection
+            assert v["step_rel_diff"] < 1e-6, (name, v["step_rel_diff"])
+            assert 0 <= v["rows_differ_pairing"] <= c["n"]
+        w = o["weighted"]
+        assert w["locked"] > 0  # the 3x3 has hard GAMS pairs
+        assert w["matched"] == c["n"] - w["locked"]
+        locked_rows = [i for i in range(c["n"]) if w["perm"][i] == i]
+        assert len(locked_rows) >= w["locked"]
+        assert o["weighted_free"]["locked"] == 0
+        print(
+            c["period"],
+            {
+                n: (
+                    round(o[n]["factor_s"], 4),
+                    o[n]["infog29"],
+                    o[n]["infog13"],
+                    round(o[n]["match_s"], 4),
+                    o[n]["rows_differ_pairing"],
+                )
+                for n in ("weighted", "weighted_free")
+            },
+            "pairing:",
+            o["pairing"]["factor_s"],
+            o["pairing"]["infog29"],
+            o["pairing"]["infog13"],
+        )
