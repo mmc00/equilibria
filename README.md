@@ -47,8 +47,11 @@ Templates today: **GTAP Standard 7** (multi-period, both `ifSUB` modes),
 ## Installation
 
 ```bash
-pip install "equilibria[path]"
+pip install --pre "equilibria[path]"
 ```
+
+The release on PyPI is an **early alpha** (`0.6.2a1`): the API can still change
+before 0.6.2.
 
 The `path` extra installs [`path-capi-python`](https://pypi.org/project/path-capi-python/),
 which MCP solves use. The PATH solver itself is not on PyPI; get it from its authors:

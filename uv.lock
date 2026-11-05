@@ -541,7 +541,7 @@ wheels = [
 
 [[package]]
 name = "equilibria"
-version = "0.6.1"
+version = "0.6.2a1"
 source = { editable = "." }
 dependencies = [
     { name = "certifi" },
@@ -564,6 +564,7 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
+    { name = "path-capi-python" },
     { name = "pyomo" },
 ]
 dev = [
@@ -599,6 +600,9 @@ ipopt = [
 modelcache = [
     { name = "cloudpickle" },
 ]
+path = [
+    { name = "path-capi-python" },
+]
 poi = [
     { name = "pyoptinterface" },
 ]
@@ -628,7 +632,7 @@ requires-dist = [
     { name = "click", specifier = ">=8.4.1" },
     { name = "cloudpickle", marker = "extra == 'modelcache'", specifier = ">=3.0" },
     { name = "cyipopt", marker = "extra == 'ipopt'", specifier = ">=1.6.1" },
-    { name = "equilibria", extras = ["pyomo"], marker = "extra == 'all'" },
+    { name = "equilibria", extras = ["pyomo", "path"], marker = "extra == 'all'" },
     { name = "matplotlib", marker = "extra == 'docs'", specifier = ">=3.7" },
     { name = "matplotlib", marker = "extra == 'viz'", specifier = ">=3.7" },
     { name = "myst-parser", marker = "extra == 'docs'", specifier = ">=2.0" },
@@ -638,6 +642,7 @@ requires-dist = [
     { name = "packaging", specifier = ">=23.0" },
     { name = "pandas", specifier = ">=2.0" },
     { name = "pandas", marker = "extra == 'docs'", specifier = ">=2.0" },
+    { name = "path-capi-python", marker = "extra == 'path'", specifier = ">=0.1.0" },
     { name = "plotly", marker = "extra == 'viz'", specifier = ">=5.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "pydantic", specifier = ">=2.0" },
@@ -658,7 +663,7 @@ requires-dist = [
     { name = "xlrd", specifier = ">=2.0.2" },
     { name = "xlrd", marker = "extra == 'excel'", specifier = ">=2.0" },
 ]
-provides-extras = ["pyomo", "poi", "ipopt", "excel", "viz", "modelcache", "dev", "docs", "all"]
+provides-extras = ["pyomo", "poi", "ipopt", "path", "excel", "viz", "modelcache", "dev", "docs", "all"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1706,6 +1711,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/34/a0/ed160a00fb4f37d806406bc0a79a8b62fe67f29d00950f8d16203ff3409b/pandas-3.0.0-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:125eb901e233f155b268bbef9abd9afb5819db74f0e677e89a61b246228c71ac", size = 11799386, upload-time = "2026-01-21T15:51:57.457Z" },
     { url = "https://files.pythonhosted.org/packages/36/c8/2ac00d7255252c5e3cf61b35ca92ca25704b0188f7454ca4aec08a33cece/pandas-3.0.0-cp314-cp314t-win_amd64.whl", hash = "sha256:b86d113b6c109df3ce0ad5abbc259fe86a1bd4adfd4a31a89da42f84f65509bb", size = 10873041, upload-time = "2026-01-21T15:52:00.034Z" },
     { url = "https://files.pythonhosted.org/packages/e6/3f/a80ac00acbc6b35166b42850e98a4f466e2c0d9c64054161ba9620f95680/pandas-3.0.0-cp314-cp314t-win_arm64.whl", hash = "sha256:1c39eab3ad38f2d7a249095f0a3d8f8c22cc0f847e98ccf5bbe732b272e2d9fa", size = 9441003, upload-time = "2026-01-21T15:52:02.281Z" },
+]
+
+[[package]]
+name = "path-capi-python"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f3/c1/7ba7212f7518cff958d2a1097a57eb4f4357c992f90c4dd3fc60b786d30f/path_capi_python-0.1.0.tar.gz", hash = "sha256:a9b849d1eec2d936899fdfee31d7ee70dba7a6679de88bee350f6d2b3102d4cb", size = 24564, upload-time = "2026-11-05T23:08:43.778Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/27/22/b6cc8c1388ec2f5042dac480ff1aff748bc175e05decbdfbf4c81433a8d4/path_capi_python-0.1.0-py3-none-any.whl", hash = "sha256:0167672c50007c1385369490c034b5b8c39a511e162b11d159775d51e5792fc7", size = 20670, upload-time = "2026-11-05T23:08:42.468Z" },
 ]
 
 [[package]]

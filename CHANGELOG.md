@@ -9,6 +9,24 @@ commit log.
 
 ## [Unreleased]
 
+## [0.6.2a1] — 2026-11-05 (pre-release)
+
+First release on PyPI, an early alpha: the API can still change before
+0.6.2. `pip install "equilibria[path]"` now solves the README quickstart in a
+clean environment.
+
+### Fixed
+- The GTAP PATH solve finds the PATH libraries by platform (it assumed the
+  macOS-arm64 file names) and treats LUSOL as optional.
+- Without PyNumero's ASL library, which pip does not install, the Jacobian
+  defaults to `reverse_numeric`. Before, the callbacks failed to build and the
+  quickstart returned code 0 with an EV of ~1e-6 instead of -0.108.
+
+### Changed
+- New `path` extra (`path-capi-python`); the sdist ships only the data files
+  the wheel bundles (78 MB → 2.2 MB).
+
+
 ### Fixed
 - GTAP7 pure 5x5 ifSUB=1 MCP shock parity closed: 92.35% → **100%** (MCP
   gate 18/18 rows green, floor restored 92 → 99). The "multi-root pet/pe
