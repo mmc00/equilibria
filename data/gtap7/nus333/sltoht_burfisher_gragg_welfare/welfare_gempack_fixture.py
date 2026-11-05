@@ -4,15 +4,14 @@ Reads the ``sl4dump.har`` of each Gragg record
 (``data/gtap7/nus333/sltoht_burfisher_gragg/<exp>/``) and writes, per exercise,
 ``EV`` and ``WEV`` (ordinary change, $ US million), ``u``, ``y``, ``psave`` and
 ``pinv`` (% change) to a gzipped JSON, by default ``welfare.json.gz`` in the
-current folder.
+current folder. It lives in its own record, so the record hashes it.
 
 Only runs that finished well enter: their console
 (``gemsim_burfisher_gragg/<exp>/gemsim_console.txt``) has to say "completed
 without error". ME4A/B with Gragg 2-4-6 ended in "Accuracy too low" and have no
 Gragg record (D1, phase 3b).
 
-Recorded with ``scripts/dev/write_source.py`` in
-``data/gtap7/nus333/sltoht_burfisher_gragg_welfare/``::
+Recorded with ``scripts/dev/write_source.py``, which runs it in this folder::
 
     uv run python scripts/dev/write_source.py \
         --folder data/gtap7/nus333/sltoht_burfisher_gragg_welfare --kind result \
@@ -20,8 +19,7 @@ Recorded with ``scripts/dev/write_source.py`` in
         --variant method=gragg --variant output=welfare \
         --input dump_<exp>=data/gtap7/nus333/sltoht_burfisher_gragg/<exp> ... \
         --input run_<exp>=data/gtap7/nus333/gemsim_burfisher_gragg/<exp> ... \
-        -- uv run python <repo>/scripts/gtap/welfare_gempack_fixture.py \
-        --out welfare.json.gz
+        -- uv run python welfare_gempack_fixture.py --out welfare.json.gz
 """
 
 from __future__ import annotations

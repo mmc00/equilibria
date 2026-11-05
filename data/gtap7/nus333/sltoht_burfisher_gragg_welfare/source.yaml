@@ -737,16 +737,16 @@ generated_from:
       summary.har: 38918940f57525dc57e2a51aeda462ba96be432842ed4e6bf5c69c1e5dddb45d
       updated.har: ed2bcb11fb2d404d54816dff890244ba646b1e6d18a7eb3fe6785a10a7d7d0de
       volume.har: 5dc1ae78ebcfd34eaed34fa39d0110a8cf912c6353668398ae8f0037ac4de56c
-command: uv run python /Users/marmol/proyectos/equilibria-3b/scripts/gtap/welfare_gempack_fixture.py
-  --out welfare.json.gz
-equilibria_commit: ca3d0bf6
+command: uv run python welfare_gempack_fixture.py --out welfare.json.gz
+equilibria_commit: 7f613f6c
 exit:
   code: 0
 outputs:
   welfare.json.gz: b6f7b89445aa4a01a48659ded9698bd3c6c028e635419a89e41e0ad8ba041654
+  welfare_gempack_fixture.py: ab56e2f5489774f12d8d5a9978d9ee6f6478c21e41abcda18f5fc9095f80752e
 run:
-  date: '2026-11-05T09:58:12-06:00'
-  duration_s: 1.59
+  date: '2026-11-05T14:03:04-06:00'
+  duration_s: 1.665
   machine:
     os: macOS 26.2 (Darwin 25.2.0)
     cpu: Apple M3 Pro

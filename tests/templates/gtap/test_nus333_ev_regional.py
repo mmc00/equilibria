@@ -2,7 +2,7 @@
 
 Oraculo: ``EV`` y ``WEV`` de las corridas Gragg de GEMPACK
 (``data/gtap7/nus333/sltoht_burfisher_gragg_welfare/welfare.json.gz``, de
-``scripts/gtap/welfare_gempack_fixture.py``). En ``gtapv7.tab`` (seccion 11) el EV es
+``welfare_gempack_fixture.py``, en la misma carpeta). En ``gtapv7.tab`` (seccion 11) el EV es
 el ingreso que, con los precios de antes del shock fijos, alcanza la utilidad ``u``
 de despues, menos el ingreso de antes: ``EV(r) = INCOMEEV(r)/100 * yev(r)``.
 

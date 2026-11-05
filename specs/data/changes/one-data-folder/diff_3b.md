@@ -172,3 +172,9 @@ Every tracked file of `runs/` (39) either has a byte-identical copy in `data/`
 - `scripts/windows/corridas_paper.ps1` is removed (maintainer, 2026-11-05);
   `scripts/windows/README.md` now opens with the `regenerate_paper.py` group of
   each of its steps.
+- **The welfare script lives in its record** (maintainer, before merge):
+  `scripts/gtap/welfare_gempack_fixture.py` → `sltoht_burfisher_gragg_welfare/`,
+  like phase 4's `equilibria_levels/make_eq_gtap7_levels.py`. The record was
+  regenerated: the script is now one of its hashed outputs, the command names it
+  relative to the folder, and `welfare.json.gz` is byte-identical (sha256
+  `b6f7b894…`).
