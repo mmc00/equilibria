@@ -522,6 +522,39 @@ def _cells(mp: MPArrays, period: str) -> dict[str, tuple[float, bool, float, flo
     return out
 
 
+def _check_permutation(
+    paired: list[int],
+    rnames: list[str],
+    cnames: list[str],
+    pairs: list[tuple[int, int, bool]],
+) -> None:
+    """Raise ``ValueError`` unless ``paired`` gives every row its own column.
+
+    Two forced pairs on one column (the later overwrites the column's owner, leaving
+    the earlier row pointing at it) or a row left unmatched would otherwise yield a
+    silently wrong system. The pairing itself is not altered.
+    """
+    owners: dict[int, list[int]] = {}
+    for r, c in enumerate(paired):
+        owners.setdefault(c, []).append(r)
+    problems = []
+    for r in owners.get(-1, []):
+        problems.append(f"row {rnames[r]} has no column")
+    for c, rows in owners.items():
+        if c >= 0 and len(rows) > 1:
+            forced = [
+                f"{rnames[fr]} -> {cnames[fc]}{' (hard)' if h else ''}"
+                for fr, fc, h in pairs
+                if fc == c
+            ]
+            problems.append(
+                f"rows {', '.join(rnames[r] for r in rows)} share column "
+                f"{cnames[c]} (forced pairs on it: {'; '.join(forced) or 'none'})"
+            )
+    if problems:
+        raise ValueError("the matching is not a permutation: " + " | ".join(problems))
+
+
 def square(
     mp: MPArrays,
     period: str,
@@ -586,4 +619,5 @@ def square(
         if e in r_index and v in c_index
     ]
     paired = match_rows(len(rnames), adjacency, pairs)
+    _check_permutation(paired, rnames, cnames, pairs)
     return Squared(rnames, [cnames[j] for j in paired], _cells(mp, period))

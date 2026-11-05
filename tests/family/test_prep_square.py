@@ -239,3 +239,24 @@ def test_pairs_equal_pyomo_with_b_incidence(case):
     for a, b in calls:
         got = _square(_recipe(a, p, ref), a, p, b, ref, masks)
         assert _pairs_differing(got, b) == []
+
+
+def test_pairing_must_be_a_permutation():
+    from equilibria.family.prep_square import _check_permutation
+    from equilibria.solver._matching import match_rows
+
+    rnames, cnames = ["r0", "r1", "r2"], ["c0", "c1", "c2"]
+    adjacency = [[0, 1], [1, 2], [2]]
+    # Two active forced pairs on the same column: the later overwrites pair_right, so
+    # both rows end up paired with c1.
+    pairs = [(0, 1, False), (1, 1, False)]
+    paired = match_rows(3, adjacency, pairs)
+    assert len(set(paired)) < 3
+    with pytest.raises(ValueError, match=r"r0.*r1.*c1|c1.*r0.*r1"):
+        _check_permutation(paired, rnames, cnames, pairs)
+
+    ok = match_rows(3, adjacency, [(0, 0, False)])
+    _check_permutation(ok, rnames, cnames, [(0, 0, False)])
+
+    with pytest.raises(ValueError, match="r2"):
+        _check_permutation([0, 1, -1], rnames, cnames, [])
