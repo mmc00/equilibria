@@ -1,7 +1,7 @@
 """Budget of the no-Pyomo path on a GTAP dataset (ifSUB=1, capFix, gtap mode).
 
-Times every piece of the future path that already exists, adds today's measured
-Newton-TR + MUMPS time and projects the total against the 2-minute goal
+Times every piece of the future path that already exists, adds the measured
+family Newton + prep times and projects the total against the 2-minute goal
 (spec 2026-11-04-family-backend-multiperiod-design.md). Pieces not built yet are
 listed in ``not_measured``.
 
@@ -23,13 +23,21 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-# Today's 3 Newton solves (settle, check, shock) on 20x41, plans/paper/mediciones/
-# fases_20x41_d44692d.json ("Newton-TR + MUMPS").
+# Pyomo's 3 Newton solves (settle, check, shock) on 20x41, plans/paper/mediciones/
+# fases_20x41_d44692d.json ("Newton-TR + MUMPS"). Reported as a reference only;
+# it is not part of projected_s.
 NEWTON_TODAY_S = 48.0
+# The 3 Newton solves on the family squared system (MUMPS ICNTL(6)=7, iterations
+# 3/3/22, 25 factorizations), plans/research/mediciones/
+# family_newton_20x41_8c48f12_mumps_auto_quiet.json ("newton_projected_s").
+NEWTON_FAMILY_S = 32.3
 # The period prep on arrays (recipe + squaring) of the 3 solve calls on 20x41,
-# plans/research/mediciones/family_prep_20x41_833cbdf.json ("prep_per_call_total_s").
+# plans/research/mediciones/family_prep_20x41_30d400b.json ("prep_per_call_total_s").
 # Its single-period reference is compose_block_state, already timed here.
-PERIOD_PREP_ON_ARRAYS_S = 28.8
+PERIOD_PREP_ON_ARRAYS_S = 11.3
+# Once per run: the period incidence from the J pattern (9.63) plus the conditional
+# masks (2.49), same file, "incidence_once_s" + "masks_once_s".
+PREP_ONCE_S = 12.1
 # Today's Pyomo cost of each piece not measured yet (fases_20x41_d44692d.json): an
 # upper bound for the arrays version, not a forecast.
 TODAY_COST_OF_NOT_MEASURED = {
@@ -41,9 +49,6 @@ NOT_MEASURED = {
     "cross_period_rows": "Fisher/Tornqvist rows are not block equations yet",
     "calibration_rest": "calibrate_base bookkeeping outside its settle solve",
     "outside_phases": "imports, reference GDX, post-processing",
-    # The prep measured squares with Pyomo's string incidence (photo B); the real
-    # path needs each squared row's columns from the J pattern, per call.
-    "incidence_from_pattern": "squared-row incidence from the J pattern, per call",
 }
 
 
@@ -182,8 +187,9 @@ def measure(dataset: str, cache_root: Path) -> dict:
         + pc["cache_key"]
         + pc["cache_load"]
         + 3 * per_period
-        + NEWTON_TODAY_S
+        + NEWTON_FAMILY_S
         + PERIOD_PREP_ON_ARRAYS_S
+        + PREP_ONCE_S
     )
     verdict = "go" if projected <= 100 else "tight" if projected <= 120 else "no"
     pessimistic = projected + sum(TODAY_COST_OF_NOT_MEASURED.values())
@@ -196,8 +202,10 @@ def measure(dataset: str, cache_root: Path) -> dict:
         "nnz": int(J.nnz),
         "unmatched_rows": int(np.count_nonzero(match < 0)),
         "pieces": {k: float(v) for k, v in pc.items() if v is not None},
-        "newton_today_s": NEWTON_TODAY_S,
+        "newton_family_s": NEWTON_FAMILY_S,
+        "newton_today_s": NEWTON_TODAY_S,  # reference, not in projected_s
         "period_prep_on_arrays_s": PERIOD_PREP_ON_ARRAYS_S,
+        "prep_once_s": PREP_ONCE_S,
         "projected_s": float(projected),
         "verdict": verdict,
         # The verdict holds only if the unmeasured pieces fit in the margin.

@@ -50,10 +50,15 @@ def test_budget_runs_on_3x3(tmp_path):
             + pieces["names"]
             + pieces["matching"]
         )
-        + out["newton_today_s"]
+        + out["newton_family_s"]
         + out["period_prep_on_arrays_s"]
+        + out["prep_once_s"]
     )
-    assert out["period_prep_on_arrays_s"] > 0
+    assert out["newton_family_s"] == 32.3
+    assert out["period_prep_on_arrays_s"] == 11.3
+    assert out["prep_once_s"] == 12.1
+    # Pyomo's Newton stays as a reported reference, outside projected_s.
+    assert out["newton_today_s"] == 48.0
     assert out["projected_s"] == pytest.approx(want)
     assert out["verdict"] in {"go", "tight", "no"}
     # The unmeasured pieces at today's Pyomo cost: an upper bound, not a forecast.
@@ -62,9 +67,11 @@ def test_budget_runs_on_3x3(tmp_path):
     )
     assert out["verdict_conditional"] is True
     assert out["if_sub"] == 1
-    assert {"cross_period_rows", "calibration_rest", "incidence_from_pattern"} <= set(
+    assert {"cross_period_rows", "calibration_rest", "outside_phases"} <= set(
         out["not_measured"]
     )
+    # Measured now (family_prep_20x41_30d400b.json: incidence_once_s + masks_once_s).
+    assert "incidence_from_pattern" not in out["not_measured"]
     # Measured now (prep_cost_20x41.py): neither unmeasured nor in the upper bound.
     assert "period_prep_on_arrays" not in out["not_measured"]
     assert "period_prep_on_arrays" not in out["today_cost_of_not_measured"]
