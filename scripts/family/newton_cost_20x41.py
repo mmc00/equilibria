@@ -47,6 +47,9 @@ def _sibling(name: str):
 
 
 VARIANTS = ("pairing", "pairing_explicit_zeros", "matching", "mumps_auto")
+# Order/pattern diagnostic (``measure(orderings=True)``): all with ICNTL(6)=0 and
+# today's other ICNTL, the matrix handed over already in the order named.
+ORDERINGS = ("pairing", "pyomo_order", "pyomo_J", "pyomo_order_pyomo_pattern")
 
 
 def _missing_diagonal(J):
@@ -93,7 +96,7 @@ def _matching_perm(J):
 
 def icntl_for(variant: str) -> dict[int, int]:
     """The ICNTL handed to MUMPS for ``variant`` (``mumps_auto``: ICNTL(6)=7)."""
-    if variant not in VARIANTS:
+    if variant not in VARIANTS + ORDERINGS:
         raise ValueError(f"unknown colperm {variant!r}; use one of {VARIANTS}")
     icntl = dict(ICNTL)
     if variant == "mumps_auto":
@@ -101,11 +104,13 @@ def icntl_for(variant: str) -> dict[int, int]:
     return icntl
 
 
-def _mumps_step(J, F, variant: str = "pairing"):
+def _mumps_step(J, F, variant: str = "pairing", keep_solution: bool = False):
     """Symbolic, numeric, solve of ``J dx = -F``; times, MUMPS codes and residual.
 
     A failing job is recorded (``mumps_ok`` False) with the codes, not worked around.
-    ``variant`` picks the column order / ICNTL(6) (see ``VARIANTS``).
+    ``variant`` picks the column order / ICNTL(6) (see ``VARIANTS``); an ``ORDERINGS``
+    name factors ``J`` as given with ICNTL(6)=0. ``keep_solution`` adds the step
+    (in ``J``'s column order) as ``solution``.
     """
     import mumps
     import numpy as np
@@ -126,6 +131,7 @@ def _mumps_step(J, F, variant: str = "pairing"):
         "infog12": None,
         "infog13": None,
         "residual": None,
+        "nnz": int(J.nnz),
         "missing_diag": int(_missing_diagonal(J).sum()),
         "pairs_moved": 0,
         "in_pattern_pairs_dropped": 0,
@@ -182,9 +188,236 @@ def _mumps_step(J, F, variant: str = "pairing"):
             x[perm] = sol
             sol = x
         out["residual"] = float(np.abs(J @ sol - rhs0).max())
+        if keep_solution:
+            out["solution"] = sol
         out["mumps_ok"] = True
     finally:
         ctx.destroy()
+    return out
+
+
+def build_pyomo_model(dataset: str):
+    """The capture route's Pyomo multiperiod model, built as ``_solve_shock`` builds it
+    (route closure, ``base_calibrated=True``, reference GDX, NLP mode env) and never
+    solved: each call's state is loaded from the photos (``pyomo_nlp_at_b``)."""
+    import os
+
+    from equilibria.sources import find_reference
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+
+    p = _sibling("prep_cost_20x41")._params(dataset)
+    ref = find_reference(
+        dataset, "gams", form="mcp", mode="gtap", ifsub=1, fbep="header"
+    ) or find_reference(
+        dataset, "gams", form="nlp", mode="gtap", ifsub=1, fbep="header"
+    )
+    prev = os.environ.get("EQUILIBRIA_GTAP_SOLVE_NLP")
+    os.environ["EQUILIBRIA_GTAP_SOLVE_NLP"] = "1"  # the capture runs solve_nlp=True
+    try:
+        m, _ = build_block_model(
+            p,
+            p.sets,
+            _sibling("budget_20x41")._closure(),
+            list(p.sets.r)[-1],
+            base_calibrated=True,
+            ref_gdx=None if ref is None else ref / "out.gdx",
+        )
+    finally:
+        if prev is None:
+            os.environ.pop("EQUILIBRIA_GTAP_SOLVE_NLP", None)
+        else:
+            os.environ["EQUILIBRIA_GTAP_SOLVE_NLP"] = prev
+    return m
+
+
+def pyomo_nlp_at_b(m, capture: Path, a, b):
+    """PyomoNLP of ``m`` in photo B's state: every cell at A2's level (A if no A2),
+    B's active period on top; free cells exactly B's, active rows exactly B's."""
+    from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP
+    from pyomo.environ import Constraint, Objective, Var
+
+    from equilibria.family.prep_capture import _key, load_a2
+
+    base = load_a2(capture, a) or a
+    n_free = 0
+    for comp in m.component_objects(Var, descend_into=True):
+        cells = {}
+        for photo in (base, b):
+            vc = photo.vars.get(comp.name)
+            if vc is not None:
+                cells.update(
+                    zip(vc.keys, zip(vc.value, vc.fixed, strict=True), strict=True)
+                )
+        for idx in comp:
+            vd = comp[idx]
+            val, fixed = cells.get(_key(idx), (None, True))
+            if val is not None:
+                vd.set_value(None if val != val else float(val), skip_validation=True)
+            free = (not fixed) and _key(idx)[-1:] == (b.period,)
+            if free:
+                vd.unfix()
+                n_free += 1
+            else:
+                vd.fix()
+    assert n_free == len(b.var_names), (n_free, len(b.var_names))
+    active = set(b.con_names)
+    for comp in m.component_objects(Constraint, descend_into=True):
+        comp.activate()
+        for idx in comp:
+            cd = comp[idx]
+            (cd.activate if cd.name in active else cd.deactivate)()
+    for o in m.component_objects(Objective, descend_into=True):
+        o.deactivate()
+    if hasattr(m, "_family_cmp_obj"):
+        m.del_component(m._family_cmp_obj)
+    m._family_cmp_obj = Objective(expr=0.0)
+    nlp = PyomoNLP(m)
+    cons = [c.name for c in nlp.get_pyomo_equality_constraints()]
+    assert sorted(cons) == sorted(b.con_names)
+    return nlp
+
+
+def _bijection(names: list[str], pos: dict[str, int], want: list[str], what: str):
+    """Index of each of ``want`` in ``names``, or a report of why it cannot be done.
+
+    Returns ``(index array | None, report)``; the report says how many names of
+    ``want`` are missing from ``names``, how many of ``names`` are not in ``want``,
+    duplicates, with examples. The mapping is a bijection iff both counts are 0.
+    """
+    import numpy as np
+
+    missing = [w for w in want if w not in pos]
+    extra = sorted(set(names) - set(want))
+    dup = len(want) - len(set(want))
+    rep = {
+        "what": what,
+        "n": len(want),
+        "unmapped": len(missing),
+        "not_in_other": len(extra),
+        "duplicates": dup,
+        "examples": (missing[:5], extra[:5]),
+    }
+    ok = not missing and not extra and not dup and len(want) == len(names)
+    rep["bijection"] = ok
+    return (np.array([pos[w] for w in want], dtype=np.int64) if ok else None), rep
+
+
+def _same_step(sol, ref) -> dict:
+    import numpy as np
+
+    d = float(np.abs(sol - ref).max())
+    return {
+        "step_max_abs_diff": d,
+        "step_rel_diff": d / max(1.0, float(np.abs(ref).max())),
+    }
+
+
+def _orderings(ss, sq, b, nlp) -> dict:
+    """Factor the squared system in the four orders/patterns of ``ORDERINGS``.
+
+    * ``pairing``: ``ss.J`` as is (the family's row/column pairing).
+    * ``pyomo_order``: the same J with row k = family row of ``b.con_names[k]`` and
+      column k = family column of ``b.var_names[k]`` (Pyomo's paired order).
+    * ``pyomo_J``: PyomoNLP's own J (over-included zero entries kept), native order;
+      needs ``nlp``.
+    * ``pyomo_order_pyomo_pattern``: family values on the union of Pyomo's pattern
+      (explicit zeros kept) and the family's, in Pyomo's native order; needs ``nlp``.
+
+    Everything is evaluated at photo B's point when ``nlp`` is given (else ``ss.x0``).
+    The cross-period rows are unit proxy rows in the family but real rows in Pyomo,
+    so ``pyomo_J`` solves a different linear system: its step is reported, not equal.
+    """
+    import numpy as np
+    from scipy.sparse import csr_matrix
+
+    rpos = {r: k for k, r in enumerate(sq.row_names)}
+    cpos = {c: k for k, c in enumerate(sq.col_names)}
+    x = ss.x0
+    if nlp is not None:
+        cols = [v.name for v in nlp.get_pyomo_variables()]
+        bval = dict(zip(cols, nlp.get_primals(), strict=True))
+        x = np.array([bval.get(c, ss.x0[k]) for k, c in enumerate(sq.col_names)])
+    F = ss.F(x)
+    J = ss.J(x).tocsr()
+    J.sort_indices()
+
+    out: dict = {}
+    base = _mumps_step(J, F, "pairing", keep_solution=True)
+    ref = base.pop("solution", None)
+    out["pairing"] = base
+
+    rperm, rrep = _bijection(sq.row_names, rpos, list(b.con_names), "rows")
+    cperm, crep = _bijection(sq.col_names, cpos, list(b.var_names), "cols")
+    bij = {
+        "rows": rrep,
+        "cols": crep,
+        "bijection": rperm is not None and cperm is not None,
+    }
+    out["bijection"] = bij
+    if bij["bijection"]:
+        Jb = J[rperm][:, cperm].tocsr()
+        Jb.sort_indices()
+        res = _mumps_step(Jb, F[rperm], "pyomo_order", keep_solution=True)
+        sol = res.pop("solution", None)
+        if sol is not None and ref is not None:
+            full = np.empty_like(sol)
+            full[cperm] = sol  # column k of Jb is family column cperm[k]
+            res.update(_same_step(full, ref))
+        out["pyomo_order"] = res
+        # Pairs of the family that differ from Pyomo's, as a diagnostic.
+        out["pairs_not_pyomo"] = int(
+            sum(sq.col_names[k] != c for k, c in zip(rperm, b.var_names, strict=True))
+        )
+    else:
+        out["pyomo_order"] = {"skipped": "name mapping is not a bijection", **bij}
+
+    skip = {"skipped": "no PyomoNLP (pyomo=False)"}
+    if nlp is None:
+        out["pyomo_J"] = dict(skip)
+        out["pyomo_order_pyomo_pattern"] = dict(skip)
+        return out
+    prow = [c.name for c in nlp.get_pyomo_equality_constraints()]
+    pcol = [v.name for v in nlp.get_pyomo_variables()]
+    Jp = nlp.evaluate_jacobian_eq().tocoo()
+    Fp = np.asarray(nlp.evaluate_eq_constraints(), dtype=float)
+    # Pyomo native index -> family index (every Pyomo row/col must be in sq).
+    pr, prr = _bijection(sq.row_names, rpos, prow, "pyomo rows")
+    pc, pcr = _bijection(sq.col_names, cpos, pcol, "pyomo cols")
+    if pr is None or pc is None:
+        why = {
+            "skipped": "Pyomo rows/cols are not a bijection with sq",
+            "rows": prr,
+            "cols": pcr,
+        }
+        out["pyomo_J"] = dict(why)
+        out["pyomo_order_pyomo_pattern"] = dict(why)
+        return out
+    JP = csr_matrix((Jp.data, (Jp.row, Jp.col)), shape=Jp.shape)
+    JP.sort_indices()
+    res = _mumps_step(JP, Fp, "pyomo_J", keep_solution=True)
+    sol = res.pop("solution", None)
+    res["explicit_zero_entries"] = int((JP.data == 0).sum())
+    if sol is not None and ref is not None:
+        full = np.empty_like(sol)
+        full[pc] = sol
+        res.update(_same_step(full, ref))
+    out["pyomo_J"] = res
+
+    # Family values in Pyomo's order, on Pyomo's pattern plus the family's entries.
+    Jf = J[pr][:, pc].tocoo()
+    rows = np.concatenate([Jf.row, Jp.row])
+    colsj = np.concatenate([Jf.col, Jp.col])
+    data = np.concatenate([Jf.data, np.zeros(Jp.nnz)])
+    Jd = csr_matrix((data, (rows, colsj)), shape=Jp.shape)  # sums duplicates, keeps 0s
+    Jd.sort_indices()
+    res = _mumps_step(Jd, F[pr], "pyomo_order_pyomo_pattern", keep_solution=True)
+    sol = res.pop("solution", None)
+    res["pyomo_only_entries"] = int(Jd.nnz - Jf.nnz)
+    if sol is not None and ref is not None:
+        full = np.empty_like(sol)
+        full[pc] = sol
+        res.update(_same_step(full, ref))
+    out["pyomo_order_pyomo_pattern"] = res
     return out
 
 
@@ -219,6 +452,8 @@ def measure(
     capture: Path,
     cache_root: Path | None = None,
     colperm: str = "pairing",
+    orderings: bool = False,
+    pyomo: bool = True,
 ) -> dict:
     from equilibria.backends.family_backend import FamilyBackend
     from equilibria.family.disk_cache import cache_key, enable_jax_cache
@@ -253,6 +488,7 @@ def measure(
     backend = FamilyBackend.load(path)
     backend_load_s = time.perf_counter() - t
 
+    pyomo_model = build_pyomo_model(dataset) if orderings and pyomo else None
     masks = None
     inc_cache: dict[str, tuple[dict, float]] = {}
     calls, prev_J = [], None
@@ -304,6 +540,11 @@ def measure(
         J.sort_indices()
 
         m = _mumps_step(J, F, colperm)
+        if orderings:
+            nlp = None
+            if pyomo_model is not None:
+                nlp = pyomo_nlp_at_b(pyomo_model, capture, a, b)
+            m["orderings"] = _orderings(ss, sq, b, nlp)
         calls.append(
             {
                 "period": a.period,
@@ -350,10 +591,28 @@ if __name__ == "__main__":
     ap.add_argument("--capture", type=Path)
     ap.add_argument("--cache-root", type=Path)
     ap.add_argument("--colperm", choices=VARIANTS, default="pairing")
+    ap.add_argument(
+        "--orderings",
+        action="store_true",
+        help="also factor pyomo_order / pyomo_J / pyomo_order_pyomo_pattern per call",
+    )
+    ap.add_argument(
+        "--no-pyomo", action="store_true", help="with --orderings: skip PyomoNLP"
+    )
     ap.add_argument("--out", type=Path)
     a = ap.parse_args()
     cap = a.capture or Path.home() / ".cache/equilibria/family/prep_capture" / a.dataset
-    result = {"sha": _sha(), **measure(a.dataset, cap, a.cache_root, a.colperm)}
+    result = {
+        "sha": _sha(),
+        **measure(
+            a.dataset,
+            cap,
+            a.cache_root,
+            a.colperm,
+            orderings=a.orderings,
+            pyomo=not a.no_pyomo,
+        ),
+    }
     text = json.dumps(result, indent=1)
     if a.out:
         a.out.write_text(text)
