@@ -1,12 +1,11 @@
 """Nothing is left under tests/**/fixtures/ or runs/ (ADR-0010, phases 4 and 3b).
 
-Phase 4 moved the reader, solver and snapshot fixtures to data/; phase 3b
-moves the GEMPACK ones, one family at a time, and empties PENDING_3B.
+Phase 4 moved the reader, solver and snapshot fixtures to data/; phase 3b moved
+the GEMPACK ones and deleted tests/fixtures/ and runs/.
 """
 
 from __future__ import annotations
 
-import fnmatch
 import io
 import re
 import subprocess
@@ -14,11 +13,6 @@ import tokenize
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-
-# GEMPACK results and what is computed from them: regenerated on Windows (3a-2),
-# moved in phase 3b one family at a time. Each glob names the task of
-# plan-phase-3b.md that removes it; an empty dict means 3b is done.
-PENDING_3B: dict[str, str] = {}
 
 
 def _tracked(*pathspecs: str) -> set[str]:
@@ -36,50 +30,15 @@ def _tracked_fixtures() -> set[str]:
     return _tracked("tests/**/fixtures/**", "tests/fixtures/**")
 
 
-def _pending(path: str) -> bool:
-    return any(fnmatch.fnmatchcase(path, glob) for glob in PENDING_3B)
-
-
-def _names_pending(text: str) -> bool:
-    """True if ``text`` writes fixture paths and every one is still pending.
-
-    A path may be one string or ``Path`` segments (``"tests" / "fixtures" /
-    ...``), and an f-string may cut it: a path that stops before the file name
-    (the folder, or ``sl4levels6_`` before ``{ds}``) is pending while any glob
-    under it is.
-    """
-    unquoted = re.sub(r"[\\\"']", "", re.sub(r"\b[rbfRBF]{1,2}(?=[\"'])", "", text))
-    flat = re.sub(r"\s*/\s*", "/", unquoted)
-    # "tests/" may sit on a line before the window that starts at "fixtures".
-    paths = re.findall(r"(?:tests/(?:[A-Za-z0-9_]+/)*)?fixtures[A-Za-z0-9_./*-]*", flat)
-    if not paths:
-        return False
-    for path in paths:
-        path = path.rstrip(".")
-        if not path.startswith("tests/"):
-            path = "tests/" + path
-        if not any(
-            fnmatch.fnmatchcase(path, glob) or glob.split("*")[0].startswith(path)
-            for glob in PENDING_3B
-        ):
-            return False
-    return True
-
-
 def test_no_files_under_tests_fixtures() -> None:
-    extra = sorted(p for p in _tracked_fixtures() if not _pending(p))
+    extra = sorted(_tracked_fixtures())
     assert not extra, f"move these to data/ (ADR-0010): {extra}"
 
 
-def test_pending_globs_match_something() -> None:
-    """A glob whose files are gone is stale: drop it from PENDING_3B."""
-    tracked = _tracked("tests/fixtures/**", "runs/**")
-    stale = sorted(
-        f"{glob} ({task})"
-        for glob, task in PENDING_3B.items()
-        if not any(fnmatch.fnmatchcase(p, glob) for p in tracked)
-    )
-    assert not stale, f"moved already; drop them from PENDING_3B: {stale}"
+def test_tests_fixtures_is_gone() -> None:
+    """Phase 3b deleted tests/fixtures/ and runs/: neither has a tracked file."""
+    left = sorted(_tracked("tests/fixtures", "runs"))
+    assert not left, f"phase 3b removed these folders: {left}"
 
 
 # A path into any tests/**/fixtures folder, as text or as two Path segments.
@@ -118,12 +77,8 @@ def _grep_code(pattern: str) -> list[str]:
 
 
 def test_no_code_points_into_tests_fixtures() -> None:
-    """Code and user docs read fixtures from data/, except the families pending in 3b."""
-    hits = [
-        line
-        for line in _grep_code(_FIXTURE_REF)
-        if not _names_pending(line.split(":", 2)[2])
-    ]
+    """Code and user docs read fixtures from data/."""
+    hits = _grep_code(_FIXTURE_REF)
     assert not hits, "\n".join(hits)
 
 
@@ -138,8 +93,6 @@ _RUNS_HISTORY = ("tests/scripts/test_swap_job.py",)
 
 def test_no_code_reads_runs() -> None:
     """Nothing reads runs/, which leaves the repository in phase 3b (Task 8)."""
-    if "runs/**" in PENDING_3B:
-        return
     hits = [
         line
         # not \b: git grep -E on macOS does not know it and would match nothing
@@ -186,7 +139,5 @@ def test_no_python_path_segment_into_tests_fixtures() -> None:
             continue
         lines = (ROOT / rel).read_text().splitlines()
         for n in _fixtures_segments(ROOT / rel):
-            window = "\n".join(lines[n - 1 : n + 3])
-            if not _names_pending(window):
-                hits.append(f"{rel}:{n}: {lines[n - 1].strip()}")
+            hits.append(f"{rel}:{n}: {lines[n - 1].strip()}")
     assert not hits, "\n".join(hits)
