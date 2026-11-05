@@ -54,9 +54,9 @@ def test_budget_runs_on_3x3(tmp_path):
         + out["period_prep_on_arrays_s"]
         + out["prep_once_s"]
     )
-    assert out["newton_family_s"] == 32.3
-    assert out["period_prep_on_arrays_s"] == 11.3
-    assert out["prep_once_s"] == 12.1
+    assert out["newton_family_s"] == 23.2
+    assert out["period_prep_on_arrays_s"] == 9.3
+    assert out["prep_once_s"] == 11.3
     # Pyomo's Newton stays as a reported reference, outside projected_s.
     assert out["newton_today_s"] == 48.0
     assert out["projected_s"] == pytest.approx(want)

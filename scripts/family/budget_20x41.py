@@ -29,15 +29,15 @@ ROOT = Path(__file__).resolve().parents[2]
 NEWTON_TODAY_S = 48.0
 # The 3 Newton solves on the family squared system (MUMPS ICNTL(6)=7, iterations
 # 3/3/22, 25 factorizations), plans/research/mediciones/
-# family_newton_20x41_8c48f12_mumps_auto_quiet.json ("newton_projected_s").
-NEWTON_FAMILY_S = 32.3
+# family_newton_20x41_79260a63_mumps_auto_quiet.json ("newton_projected_s").
+NEWTON_FAMILY_S = 23.2
 # The period prep on arrays (recipe + squaring) of the 3 solve calls on 20x41,
-# plans/research/mediciones/family_prep_20x41_30d400b.json ("prep_per_call_total_s").
+# plans/research/mediciones/family_prep_20x41_7e99669c.json ("prep_per_call_total_s").
 # Its single-period reference is compose_block_state, already timed here.
-PERIOD_PREP_ON_ARRAYS_S = 11.3
-# Once per run: the period incidence from the J pattern (9.63) plus the conditional
-# masks (2.49), same file, "incidence_once_s" + "masks_once_s".
-PREP_ONCE_S = 12.1
+PERIOD_PREP_ON_ARRAYS_S = 9.3
+# Once per run: the period incidence from the J pattern (8.82) plus the conditional
+# masks (2.43), same file, "incidence_once_s" + "masks_once_s".
+PREP_ONCE_S = 11.3
 # Today's Pyomo cost of each piece not measured yet (fases_20x41_d44692d.json): an
 # upper bound for the arrays version, not a forecast.
 TODAY_COST_OF_NOT_MEASURED = {
