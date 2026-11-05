@@ -180,3 +180,109 @@ def test_square_with_pattern_incidence(inc):
         )
         print(f"call {a.n}: hard pairs {len(hard)}, outside the pattern {len(outside)}")
         assert compare(got, squared_from_photo(b), inc_sets, hard) == []
+
+
+# ---------------------------------------------------------------------------
+# SquaredSystem: the squared system of one call on the backend
+# ---------------------------------------------------------------------------
+
+# Review Focus 1: rows with no family function for the multiperiod row (the
+# cross-period families, plus the ``eq_mq_*`` prefix). Everything else must be a
+# backend row.
+PROXY_FAMILIES = CROSS = {
+    "eq_rgdpmp",
+    "eq_pgdpmp",
+    "eq_pabs",
+    "eq_pabs_base",
+    "eq_pfact",
+    "eq_pfact_base",
+    "eq_pwfact",
+    "eq_chisave",
+}
+
+
+# Families whose rows lose J entries when a fixed-at-0 cell zeroes a term (3x3 calls).
+FOLDED_BY_FIXED_ZERO = {"eq_ytax"}
+
+
+@pytest.fixture(scope="module")
+def systems(inc):
+    """(call, SquaredSystem, incidence used, sq) for every 3x3 solve call."""
+    from equilibria.family.mp_arrays import MPArrays
+    from equilibria.family.prep_recipe import sp_reference_arrays
+    from equilibria.family.prep_square import square
+    from equilibria.family.squared_system import SquaredSystem
+
+    p = _params(DATASET)
+    ref = sp_reference_arrays(p, _closure(), list(p.sets.r)[-1])
+    out = []
+    for a, b in _calls():
+        mp = _recipe(a, p, ref)
+        merged = {r: list(c) for r, c in zip(b.con_names, b.incidence, strict=True)}
+        merged.update(inc(b.period))
+        sq = square(
+            mp,
+            a.period,
+            params=p,
+            closure=_closure(),
+            incidence=merged,
+            exogenous=ref.exogenous,
+        )
+        ss = SquaredSystem.build(inc.backend, inc.state, mp, a.period, sq)
+        out.append((b, ss, merged, sq))
+    assert out
+    return out
+
+
+def test_squared_system_shapes_3x3(inc, systems):
+    for b, ss, merged, sq in systems:
+        n = len(sq.row_names)
+        assert n == len(sq.col_names)
+        assert ss.x0.shape == (n,)
+        assert ss.F(ss.x0).shape == (n,)
+        J = ss.J(ss.x0)
+        assert J.shape == (n, n)
+        fams = {_fam(r) for r in ss.proxy_rows}
+        assert {f for f in fams if not f.startswith("eq_mq_")} <= PROXY_FAMILIES
+        assert len(ss.proxy_rows) > 0
+        # J pattern of the non-proxy rows is the incidence of Task 1 on sq's columns,
+        # except where the recorder folds a term that touches a cell FIXED at 0 in
+        # this call's layout (the all-free incidence keeps it): never a new column.
+        col_pos = {c: k for k, c in enumerate(sq.col_names)}
+        proxy, folded = set(ss.proxy_rows), set()
+        pat = inc(b.period)
+        Jc = J.tocsr()
+        for k, r in enumerate(sq.row_names):
+            got = set(Jc.indices[Jc.indptr[k] : Jc.indptr[k + 1]])
+            if r in proxy:
+                assert got == {k}, r
+                continue
+            want = {col_pos[c] for c in pat[r] if c in col_pos}
+            assert got <= want, r
+            if got != want:
+                folded.add(_fam(r))
+        assert folded <= FOLDED_BY_FIXED_ZERO
+
+
+def test_jacobian_matches_finite_difference(systems):
+    import numpy as np
+
+    rng = np.random.default_rng(1)
+    eps = 1e-7
+    for _, ss, _, _ in systems:
+        d = rng.standard_normal(ss.x0.size)
+        Jd = ss.J(ss.x0) @ d
+        fd = (ss.F(ss.x0 + eps * d) - ss.F(ss.x0 - eps * d)) / (2 * eps)
+        assert np.abs(Jd - fd).max() <= 1e-6 * max(1.0, np.abs(Jd).max())
+
+
+def test_proxy_rows_residual(systems):
+    import numpy as np
+
+    for _, ss, _, sq in systems:
+        x = ss.x0 + 0.5
+        F = ss.F(x)
+        for r in ss.proxy_rows:
+            k = sq.row_names.index(r)
+            assert F[k] == pytest.approx(0.5)
+        assert np.isfinite(F).all()

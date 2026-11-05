@@ -7,11 +7,14 @@ backend's recorded rows, so the period prep needs no Pyomo model.
 
 from __future__ import annotations
 
+import itertools
 from typing import Any
 
 import numpy as np
+import scipy.sparse as sp
 
 from equilibria.family.layout import VarLayout
+from equilibria.family.mp_arrays import MPArrays, Squared
 
 # Cross-period rows (the Fisher/Tornqvist block of ``build_equations_fisher``): the
 # backend records them in their single-period form, which is not the multiperiod row,
@@ -80,4 +83,109 @@ def period_incidence(backend: Any, state: Any, period: str) -> dict[str, list[st
     return out
 
 
-__all__ = ["period_incidence"]
+def _cell_name(var: str, idx: tuple, period: str) -> str:
+    return f"{var}[{','.join((*idx, period))}]"
+
+
+class SquaredSystem:
+    """The squared system of one solve call, evaluated by the family backend.
+
+    Rows are ``sq.row_names``, columns ``sq.col_names`` (paired order: row k's
+    paired column is column k). Rows with no family function (``proxy_rows``: the
+    cross-period families and rows the backend does not record) are a timing
+    placeholder only: ``F = x[k] - x0[k]`` and a unit J entry on the paired column.
+    """
+
+    def __init__(self, x0, family_rows, family_k, zperm, system, row_names, proxy_k):
+        self.x0 = x0
+        self._n = len(x0)
+        self._system = system
+        self._fam_rows = family_rows  # system row index of each family row
+        self._fam_k = family_k  # squared row index of each family row
+        self._zperm = zperm  # layout column -> squared column
+        self._proxy_k = proxy_k
+        self.proxy_rows = [row_names[k] for k in proxy_k]
+        self._z0 = x0[zperm]
+
+    @classmethod
+    def build(
+        cls, backend: Any, state: Any, mp: MPArrays, period: str, sq: Squared
+    ) -> SquaredSystem:
+        """Layout of ``period`` (free cells are ``sq.col_names``), then the backend
+        system. Cell values are the post-squaring ones in ``sq.cells``; ``mp`` backs
+        a cell ``sq`` lacks. Raises ``KeyError`` for a free column of a family
+        variable that ``mp`` does not hold."""
+        col_pos = {c: k for k, c in enumerate(sq.col_names)}
+        if len(col_pos) != len(sq.col_names) or len(sq.row_names) != len(sq.col_names):
+            raise ValueError("sq is not a square system of distinct columns")
+        values, free = {}, {}
+        for v, doms in backend.var_domains.items():
+            shape = tuple(len(state.sets[d]) for d in doms)
+            vals = np.empty(shape)
+            mask = np.zeros(shape, dtype=bool)
+            var = mp.vars.get(v)
+            for k, idx in enumerate(itertools.product(*(state.sets[d] for d in doms))):
+                name = _cell_name(v, idx, period)
+                if name in sq.cells:
+                    vals.flat[k] = sq.cells[name][0]
+                elif var is not None:
+                    vals.flat[k] = var.value[var.pos((*idx, period))]
+                else:  # SP-only variable: a fixed slot at the state's level
+                    vals.flat[k] = np.asarray(state.values[v], dtype=float).flat[k]
+                mask.flat[k] = name in col_pos
+            values[v], free[v] = vals, mask
+        for p in backend.param_domains:
+            values[p] = state.find_component(p).data
+            free[p] = np.zeros(values[p].shape, dtype=bool)
+        layout = VarLayout.from_state(
+            state.sets, {**backend.var_domains, **backend.param_domains}, values, free
+        )
+        system = backend.system(layout)
+
+        zperm = np.array(
+            [col_pos[_with_period(n, period)] for n in layout.col_names], dtype=np.int64
+        )
+        x0 = np.empty(len(sq.col_names))
+        for name, k in col_pos.items():
+            if name not in sq.cells:
+                raise KeyError(f"{name}: free column missing from sq.cells")
+            x0[k] = sq.cells[name][0]
+
+        row_pos = {r: k for k, r in enumerate(sq.row_names)}
+        fam_rows, fam_k = [], []
+        for i, name in enumerate(system.row_names):
+            full = _with_period(name, period)
+            k = row_pos.get(full)
+            if k is None or is_cross_period(name.partition("[")[0]):
+                continue  # row inactive in this call, or not the multiperiod row
+            fam_rows.append(i)
+            fam_k.append(k)
+        fam_rows, fam_k = np.array(fam_rows, dtype=np.int64), np.array(fam_k, np.int64)
+        proxy_k = np.setdiff1d(np.arange(len(sq.row_names)), fam_k)
+        return cls(x0, fam_rows, fam_k, zperm, system, sq.row_names, proxy_k)
+
+    def F(self, x: np.ndarray) -> np.ndarray:
+        out = np.empty(self._n)
+        out[self._fam_k] = self._system.F(x[self._zperm])[self._fam_rows]
+        out[self._proxy_k] = x[self._proxy_k] - self.x0[self._proxy_k]
+        return out
+
+    def J(self, x: np.ndarray) -> sp.csr_matrix:
+        Jf = self._system.jac(x[self._zperm])
+        # system row index -> squared row index (-1: dropped)
+        row_of = np.full(self._system.n_rows, -1, dtype=np.int64)
+        row_of[self._fam_rows] = self._fam_k
+        r = row_of[Jf.row]
+        keep = r >= 0
+        rows = np.concatenate([r[keep], self._proxy_k])
+        cols = np.concatenate([self._zperm[Jf.col[keep]], self._proxy_k])
+        data = np.concatenate([Jf.data[keep], np.ones(len(self._proxy_k))])
+        return sp.csr_matrix((data, (rows, cols)), shape=(self._n, self._n))
+
+
+__all__ = [
+    "CROSS_PERIOD_FAMILIES",
+    "SquaredSystem",
+    "is_cross_period",
+    "period_incidence",
+]
