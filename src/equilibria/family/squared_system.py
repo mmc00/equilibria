@@ -19,8 +19,9 @@ from equilibria.family.mp_arrays import MPArrays, Squared
 # Cross-period rows (the Fisher/Tornqvist block of ``build_equations_fisher``): the
 # backend records them in their single-period form, which is not the multiperiod row,
 # so they are left out and the caller supplies them. Component names as defined in
-# gtap_model_multiperiod.py (``eq_pabs_base``, ``eq_pfact_base`` are the base-period twins; ``eq_mq_*`` are
-# matched by prefix, no such component exists today).
+# gtap_model_multiperiod.py (``eq_pabs_base``, ``eq_pfact_base`` are the base-period
+# twins). The ``eq_mq_*`` rows (the Fisher aggregates' own equations, e.g. 13 such
+# proxy families on 20x41) are matched by prefix.
 CROSS_PERIOD_FAMILIES = frozenset(
     {
         "eq_rgdpmp",
@@ -100,9 +101,13 @@ class SquaredSystem:
     paired column is column k). Rows with no family function (``proxy_rows``: the
     cross-period families and rows the backend does not record) are a timing
     placeholder only: ``F = x[k] - x0[k]`` and a unit J entry on the paired column.
+    A squared column the backend has no cell for must be paired with a proxy row
+    (``build`` raises otherwise); ``proxy_cols_outside_backend`` counts them.
     """
 
-    def __init__(self, x0, family_rows, family_k, zperm, system, row_names, proxy_k):
+    def __init__(
+        self, x0, family_rows, family_k, zperm, system, row_names, proxy_k, n_outside=0
+    ):
         self.x0 = x0
         self._n = len(x0)
         self._system = system
@@ -111,6 +116,8 @@ class SquaredSystem:
         self._zperm = zperm  # layout column -> squared column
         self._proxy_k = proxy_k
         self.proxy_rows = [row_names[k] for k in proxy_k]
+        # Squared columns with no backend cell (each paired with a proxy row).
+        self.proxy_cols_outside_backend = int(n_outside)
         self.proxy_families: dict[str, int] = {}
         for r in self.proxy_rows:
             f = r.partition("[")[0]
@@ -184,7 +191,22 @@ class SquaredSystem:
         )
         if bad:
             raise ValueError(f"active rows with no family and not cross-period: {bad}")
-        return cls(x0, fam_rows, fam_k, zperm, system, sq.row_names, proxy_k)
+        # A squared column the backend has no cell for gets J entries only from a
+        # proxy row's unit entry, so it must be the paired column of a proxy row.
+        backend_cols = np.zeros(len(sq.col_names), dtype=bool)
+        backend_cols[zperm] = True
+        outside = np.flatnonzero(~backend_cols)
+        unpaired = sorted(
+            sq.col_names[k] for k in np.setdiff1d(outside, proxy_k, assume_unique=True)
+        )
+        if unpaired:
+            raise ValueError(
+                f"{len(unpaired)} squared columns are not backend cells and not paired "
+                f"with a proxy row: {unpaired[:5]}"
+            )
+        return cls(
+            x0, fam_rows, fam_k, zperm, system, sq.row_names, proxy_k, len(outside)
+        )
 
     def F(self, x: np.ndarray) -> np.ndarray:
         out = np.empty(self._n)

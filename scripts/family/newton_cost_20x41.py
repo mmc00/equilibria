@@ -68,7 +68,7 @@ def _matching_perm(J):
     Keeping every in-pattern pair and re-matching only the off-pattern rows is not
     always perfect (3x3: 22 of 58 unmatched), so this is a min-weight full matching
     (weight 1 on the paired diagonal, 2 elsewhere): it keeps as many in-pattern
-    pairs as a perfect matching allows. Returns ``(perm, dropped, dropped_in_pattern)``:
+    pairs as a perfect matching allows. Returns ``(perm, moved, moved_in_pattern)``:
     new column k is old column ``perm[k]``. Raises if no perfect matching exists.
     """
     import numpy as np
@@ -91,6 +91,16 @@ def _matching_perm(J):
     return perm, int(moved.sum()), int((moved & diag_in).sum())
 
 
+def icntl_for(variant: str) -> dict[int, int]:
+    """The ICNTL handed to MUMPS for ``variant`` (``mumps_auto``: ICNTL(6)=7)."""
+    if variant not in VARIANTS:
+        raise ValueError(f"unknown colperm {variant!r}; use one of {VARIANTS}")
+    icntl = dict(ICNTL)
+    if variant == "mumps_auto":
+        icntl[6] = 7
+    return icntl
+
+
 def _mumps_step(J, F, variant: str = "pairing"):
     """Symbolic, numeric, solve of ``J dx = -F``; times, MUMPS codes and residual.
 
@@ -100,8 +110,7 @@ def _mumps_step(J, F, variant: str = "pairing"):
     import mumps
     import numpy as np
 
-    if variant not in VARIANTS:
-        raise ValueError(f"unknown colperm {variant!r}; use one of {VARIANTS}")
+    icntl = icntl_for(variant)
     rhs0 = -np.asarray(F, dtype=float)
     out: dict = {
         "variant": variant,
@@ -118,10 +127,10 @@ def _mumps_step(J, F, variant: str = "pairing"):
         "infog13": None,
         "residual": None,
         "missing_diag": int(_missing_diagonal(J).sum()),
-        "hard_pairs_dropped": 0,
+        "pairs_moved": 0,
         "in_pattern_pairs_dropped": 0,
+        "icntl": {str(k): v for k, v in icntl.items()},  # as passed to MUMPS
     }
-    icntl = dict(ICNTL)
     A = J.tocoo()
     perm = None
     if variant == "pairing_explicit_zeros":
@@ -137,12 +146,8 @@ def _mumps_step(J, F, variant: str = "pairing"):
             shape=J.shape,
         )
     elif variant == "matching":
-        perm, out["hard_pairs_dropped"], out["in_pattern_pairs_dropped"] = (
-            _matching_perm(J)
-        )
+        perm, out["pairs_moved"], out["in_pattern_pairs_dropped"] = _matching_perm(J)
         A = J.tocsc()[:, perm].tocoo()
-    elif variant == "mumps_auto":
-        icntl[6] = 7
     ctx = mumps.DMumpsContext(sym=0, par=1)
     try:
         ctx.set_silent()
@@ -306,6 +311,7 @@ def measure(
                 "nnz": int(J.nnz),
                 "proxy_rows": len(ss.proxy_rows),
                 "proxy_families": dict(sorted(ss.proxy_families.items())),
+                "proxy_cols_outside_backend": ss.proxy_cols_outside_backend,
                 "incidence_s": incidence_s,
                 "build_s": build_s,
                 "FJ_first_s": fj_first_s,
@@ -320,7 +326,7 @@ def measure(
         "colperm": colperm,
         "NIT": list(NIT),
         "NFACT": list(NFACT),
-        "ICNTL": {str(k): v for k, v in ICNTL.items()},
+        "ICNTL": {str(k): v for k, v in icntl_for(colperm).items()},  # as passed
         "CNTL3": CNTL3,
         "backend_load_s": backend_load_s,
         "calls": calls,

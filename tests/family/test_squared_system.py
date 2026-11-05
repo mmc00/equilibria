@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from tests.family._oracle import comp_stat_closure
 from tests.family._prep import capture_dir
 from tests.family.test_prep_recipe import _closure, _params
 from tests.family.test_prep_square import _recipe
@@ -43,17 +42,35 @@ class _Incidence:
         return self._cache[period]
 
 
+def _script(name: str):
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "scripts" / "family" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _route_closure():
+    """The capture route's closure (``_solve_shock``), as newton_cost_20x41 uses."""
+    return _script("budget_20x41")._closure()
+
+
 @pytest.fixture(scope="module")
 def inc():
+    """The backend as scripts/family/newton_cost_20x41.py builds it: the run's params
+    (gempack basis), the route's closure, ifSUB-skipped families left out."""
     from equilibria.backends.family_backend import FamilyBackend
     from equilibria.templates.gtap.gtap_block_model import compose_block_state
 
-    p = _params(DATASET)  # the run's params (gempack basis)
-    model, state = compose_block_state(
-        p, p.sets, comp_stat_closure(True), list(p.sets.r)[-1]
-    )
+    p = _params(DATASET)
+    model, state = compose_block_state(p, p.sets, _route_closure(), list(p.sets.r)[-1])
     backend = FamilyBackend()
-    backend.build(model)
+    backend.build(model, skip=state.ifsub_skipped)
+    assert state.ifsub_skipped and set(backend.records).isdisjoint(state.ifsub_skipped)
     return _Incidence(backend, state)
 
 
@@ -90,9 +107,11 @@ def _assert_all_rows_found(out, b):
 
 
 def _assert_cross_period_names(inc, calls):
-    """Cross-period families are absent from the incidence, and every name in
-    CROSS_PERIOD_FAMILIES exists in the backend records or in B (no misspelling)."""
+    """Cross-period families are absent from the incidence, every name in
+    CROSS_PERIOD_FAMILIES exists in the backend records or in B (no misspelling),
+    and the ``eq_mq_`` prefix matches some row component of B."""
     from equilibria.family.squared_system import (
+        _CROSS_PERIOD_PREFIX,
         CROSS_PERIOD_FAMILIES,
         is_cross_period,
     )
@@ -101,6 +120,9 @@ def _assert_cross_period_names(inc, calls):
     in_b = {name for _, b in calls for name in b.rows}
     for name in CROSS_PERIOD_FAMILIES:
         assert name in recorded | in_b, f"{name}: not a family of the backend or of B"
+    assert any(n.startswith(_CROSS_PERIOD_PREFIX) for n in in_b), (
+        f"{_CROSS_PERIOD_PREFIX}*: no row component of B has the prefix"
+    )
     assert any(is_cross_period(f) for f in recorded), "no cross-period family recorded"
     for _, b in calls:
         assert not {_fam(r) for r in inc(b.period) if is_cross_period(_fam(r))}
@@ -325,3 +347,200 @@ def test_variable_missing_from_mp_raises(inc, systems):
     del mp.vars[drop]
     with pytest.raises(KeyError, match=drop):
         SquaredSystem.build(inc.backend, inc.state, mp, a.period, sq2)
+
+
+# ---------------------------------------------------------------------------
+# SquaredSystem against Pyomo's squared system at photo B's point
+# ---------------------------------------------------------------------------
+
+F_RTOL = J_RTOL = 1e-9
+J_ZERO = 1e-12
+
+
+@pytest.fixture(scope="module")
+def pyomo_mp():
+    """The capture route's Pyomo multiperiod model, built as ``_solve_shock`` builds
+    it (route closure, ``base_calibrated=True``, reference GDX, NLP mode env), and
+    never solved: each call's state is loaded from the photos."""
+    import os
+
+    from equilibria.sources import find_reference
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+
+    p = _script("prep_cost_20x41")._params(DATASET)
+    ref = find_reference(
+        DATASET, "gams", form="mcp", mode="gtap", ifsub=1, fbep="header"
+    ) or find_reference(
+        DATASET, "gams", form="nlp", mode="gtap", ifsub=1, fbep="header"
+    )
+    prev = os.environ.get("EQUILIBRIA_GTAP_SOLVE_NLP")
+    os.environ["EQUILIBRIA_GTAP_SOLVE_NLP"] = "1"  # the capture runs solve_nlp=True
+    try:
+        m, _ = build_block_model(
+            p,
+            p.sets,
+            _route_closure(),
+            list(p.sets.r)[-1],
+            base_calibrated=True,
+            ref_gdx=None if ref is None else ref / "out.gdx",
+        )
+    finally:
+        if prev is None:
+            os.environ.pop("EQUILIBRIA_GTAP_SOLVE_NLP", None)
+        else:
+            os.environ["EQUILIBRIA_GTAP_SOLVE_NLP"] = prev
+    return m
+
+
+def _pyomo_at_b(m, a, b):
+    """PyomoNLP of ``m`` in photo B's state: every cell at A2's level (A if no A2),
+    B's active period on top; free cells exactly B's, active rows exactly B's."""
+    from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP
+    from pyomo.environ import Constraint, Objective, Var
+
+    from equilibria.family.prep_capture import _key, load_a2
+
+    base = load_a2(capture_dir(DATASET), a) or a
+    n_free = 0
+    for comp in m.component_objects(Var, descend_into=True):
+        cells = {}
+        for photo in (base, b):
+            vc = photo.vars.get(comp.name)
+            if vc is not None:
+                cells.update(
+                    zip(vc.keys, zip(vc.value, vc.fixed, strict=True), strict=True)
+                )
+        for idx in comp:
+            vd = comp[idx]
+            val, fixed = cells.get(_key(idx), (None, True))
+            if val is not None:
+                vd.set_value(None if val != val else float(val), skip_validation=True)
+            free = (not fixed) and _key(idx)[-1:] == (b.period,)
+            if free:
+                vd.unfix()
+                n_free += 1
+            else:
+                vd.fix()
+    assert n_free == len(b.var_names), (n_free, len(b.var_names))
+    active = set(b.con_names)
+    for comp in m.component_objects(Constraint, descend_into=True):
+        comp.activate()
+        for idx in comp:
+            cd = comp[idx]
+            (cd.activate if cd.name in active else cd.deactivate)()
+    for o in m.component_objects(Objective, descend_into=True):
+        o.deactivate()
+    if hasattr(m, "_family_cmp_obj"):
+        m.del_component(m._family_cmp_obj)
+    m._family_cmp_obj = Objective(expr=0.0)
+    nlp = PyomoNLP(m)
+    cons = [c.name for c in nlp.get_pyomo_equality_constraints()]
+    assert sorted(cons) == sorted(b.con_names)
+    return nlp
+
+
+def _pairs_not_b(sq, b) -> int:
+    """Rows whose paired column differs from Pyomo's pairing (photo B's order)."""
+    pb = dict(zip(b.con_names, b.var_names, strict=True))
+    return sum(pb[r] != c for r, c in zip(sq.row_names, sq.col_names, strict=True))
+
+
+@pytest.mark.slow
+def test_squared_system_matches_pyomo_3x3(systems, pyomo_mp):
+    """F and J of ``SquaredSystem`` equal Pyomo's at photo B's point, on every
+    non-proxy row (PyomoNLP of the capture route's model in B's state: B's values,
+    fixed flags and active rows)."""
+    import numpy as np
+
+    report, bad = [], {}
+    for (a, _), (b, ss, _, sq) in zip(_calls(), systems, strict=True):
+        assert a.n == b.n
+        nlp = _pyomo_at_b(pyomo_mp, a, b)
+        rows = [c.name for c in nlp.get_pyomo_equality_constraints()]
+        cols = [v.name for v in nlp.get_pyomo_variables()]
+        Fp = nlp.evaluate_eq_constraints()
+        Jp = nlp.evaluate_jacobian_eq().tocoo()
+        # Family side at the same point: B's level for every squared column.
+        bval = dict(zip(cols, nlp.get_primals(), strict=True))
+        x = np.array([bval.get(c, ss.x0[k]) for k, c in enumerate(sq.col_names)])
+        Ff, Jf = ss.F(x), ss.J(x).tocoo()
+        proxy = set(ss.proxy_rows)
+        rpos = {r: k for k, r in enumerate(sq.row_names)}
+        cpos = {c: k for k, c in enumerate(sq.col_names)}
+        fp = {r: float(Fp[i]) for i, r in enumerate(rows) if r not in proxy}
+        jp: dict[tuple[int, int], float] = {}
+        for i, j, v in zip(Jp.row, Jp.col, Jp.data, strict=True):
+            if rows[i] not in proxy:
+                key = (rpos[rows[i]], cpos[cols[j]])
+                jp[key] = jp.get(key, 0.0) + float(v)
+        jf: dict[tuple[int, int], float] = {}
+        for i, j, v in zip(Jf.row, Jf.col, Jf.data, strict=True):
+            if sq.row_names[i] not in proxy:
+                jf[(int(i), int(j))] = jf.get((int(i), int(j)), 0.0) + float(v)
+
+        f_rel = {r: abs(Ff[rpos[r]] - v) / max(1.0, abs(v)) for r, v in fp.items()}
+        j_rel = {k: abs(jf.get(k, 0.0) - v) / max(1.0, abs(v)) for k, v in jp.items()}
+        new = set(jf) - set(jp)  # a family entry Pyomo does not have
+        for r, d in f_rel.items():
+            if d > F_RTOL:
+                bad.setdefault((b.n, "F", _fam(r)), []).append((r, d))
+        for (i, j), d in j_rel.items():
+            tol = J_ZERO if (i, j) not in jf else J_RTOL
+            if (d if (i, j) in jf else abs(jp[(i, j)])) > tol:
+                r = sq.row_names[i]
+                bad.setdefault((b.n, "J", _fam(r)), []).append((r, sq.col_names[j], d))
+        for i, j in new:
+            r = sq.row_names[i]
+            bad.setdefault((b.n, "J-new", _fam(r)), []).append((r, sq.col_names[j]))
+        report.append(
+            f"call {b.n} ({b.period}): rows {len(fp)}, J entries {len(jp)}, "
+            f"max rel F {max(f_rel.values()):.3e}, max rel J {max(j_rel.values()):.3e}, "
+            f"Pyomo-only entries {len(set(jp) - set(jf))} "
+            f"(on the diagonal {sum(i == j for i, j in set(jp) - set(jf))}), "
+            f"pairs not B's {_pairs_not_b(sq, b)}"
+        )
+    print("\n".join(report))
+    summary = {
+        k: (len(v), max((e[-1] for e in v if isinstance(e[-1], float)), default=0.0))
+        for k, v in sorted(bad.items())
+    }
+    for k, v in sorted(bad.items()):
+        print(k, len(v), v[:3])
+    assert not bad, f"(call, kind, family) -> (rows, max rel diff): {summary}"
+
+
+def _with_outside_column(sq, proxy, swap: bool):
+    """``sq`` plus a cross-period proxy row and a column with no backend cell. With
+    ``swap`` the new column is paired with a family row instead of the proxy row."""
+    import copy
+
+    out = copy.deepcopy(sq)
+    k = next(i for i, r in enumerate(out.row_names) if r not in proxy)
+    out.row_names.append("eq_mq_fake[x,check]")
+    out.col_names.append("nocell[x,check]")
+    out.cells["nocell[x,check]"] = (1.0, False, 0.0, 1.0)
+    if swap:
+        out.col_names[k], out.col_names[-1] = out.col_names[-1], out.col_names[k]
+    return out, out.row_names[k]
+
+
+def test_column_outside_backend_needs_a_proxy_row(inc, systems):
+    """A squared column the backend has no cell for must be paired with a proxy row."""
+    from equilibria.family.mp_arrays import MPArrays
+    from equilibria.family.squared_system import SquaredSystem
+
+    a = next(a for a, b in _calls() if b.period == "check")
+    b, ss, _, sq = next(s for s in systems if s[0].period == "check")
+    base = ss.proxy_cols_outside_backend
+    print(f"call {b.n}: proxy columns outside the backend {base}")
+    ok, _ = _with_outside_column(sq, set(ss.proxy_rows), swap=False)
+    got = SquaredSystem.build(
+        inc.backend, inc.state, MPArrays.from_photo(a), "check", ok
+    )
+    assert got.proxy_cols_outside_backend == base + 1
+    bad, row = _with_outside_column(sq, set(ss.proxy_rows), swap=True)
+    with pytest.raises(ValueError, match=r"nocell\[x,check\]"):
+        SquaredSystem.build(
+            inc.backend, inc.state, MPArrays.from_photo(a), "check", bad
+        )
+    print(f"paired with family row {row}: raises")

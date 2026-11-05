@@ -54,11 +54,16 @@ def test_newton_cost_colperm_variants_on_3x3(variant):
     s = _script()
     out = s.measure("gtap7_3x3", capture_dir(), colperm=variant)
     assert out["colperm"] == variant
+    # The ICNTL recorded is the one handed to MUMPS (mumps_auto: ICNTL(6)=7).
+    want6 = 7 if variant == "mumps_auto" else 0
+    assert out["ICNTL"]["6"] == want6
     for c in out["calls"]:
         assert c["variant"] == variant
+        assert c["icntl"] == out["ICNTL"]
         assert c["mumps_ok"] and c["residual"] < 1e-8
         for k in ("infog1", "infog28", "infog9", "infog29", "infog12", "infog13"):
             assert isinstance(c[k], int), k
+        assert "hard_pairs_dropped" not in c
         if variant == "matching":
-            assert c["hard_pairs_dropped"] >= 0
+            assert c["pairs_moved"] >= c["in_pattern_pairs_dropped"] >= 0
     assert out["newton_projected_s"] > 0
