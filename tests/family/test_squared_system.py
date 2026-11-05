@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import time
-
 import pytest
 
 from tests.family._oracle import comp_stat_closure
@@ -31,10 +29,23 @@ STRUCTURAL_ZERO_FAMILIES = {
 }
 
 
+class _Incidence:
+    """``period_incidence`` of the 3x3 backend, computed once per period."""
+
+    def __init__(self, backend, state):
+        self.backend, self.state, self._cache = backend, state, {}
+
+    def __call__(self, period: str) -> dict[str, list[str]]:
+        from equilibria.family.squared_system import period_incidence
+
+        if period not in self._cache:
+            self._cache[period] = period_incidence(self.backend, self.state, period)
+        return self._cache[period]
+
+
 @pytest.fixture(scope="module")
 def inc():
     from equilibria.backends.family_backend import FamilyBackend
-    from equilibria.family.squared_system import period_incidence
     from equilibria.templates.gtap.gtap_block_model import compose_block_state
 
     p = _params(DATASET)  # the run's params (gempack basis)
@@ -43,10 +54,7 @@ def inc():
     )
     backend = FamilyBackend()
     backend.build(model)
-    calls = _calls()
-    t = time.perf_counter()
-    out = period_incidence(backend, state, calls[0][1].period)
-    return out, time.perf_counter() - t, state
+    return _Incidence(backend, state)
 
 
 def _calls():
@@ -68,12 +76,43 @@ def _fam(r):
     return r.split("[")[0]
 
 
+def _assert_all_rows_found(out, b):
+    """Every active non-cross-period row of B is in ``out`` (no silent skip)."""
+    from equilibria.family.squared_system import is_cross_period
+
+    want = [r for r in b.con_names if not is_cross_period(_fam(r))]
+    found = [r for r in want if r in out]
+    assert found, f"call {b.n} ({b.period}): no B row is in the incidence"
+    assert len(found) == len(want), (
+        f"call {b.n} ({b.period}): rows of B missing from the incidence: "
+        f"{[r for r in want if r not in out][:5]}"
+    )
+
+
+def _assert_cross_period_names(inc, calls):
+    """Cross-period families are absent from the incidence, and every name in
+    CROSS_PERIOD_FAMILIES exists in the backend records or in B (no misspelling)."""
+    from equilibria.family.squared_system import (
+        CROSS_PERIOD_FAMILIES,
+        is_cross_period,
+    )
+
+    recorded = set(inc.backend.records)
+    in_b = {name for _, b in calls for name in b.rows}
+    for name in CROSS_PERIOD_FAMILIES:
+        assert name in recorded | in_b, f"{name}: not a family of the backend or of B"
+    assert any(is_cross_period(f) for f in recorded), "no cross-period family recorded"
+    for _, b in calls:
+        assert not {_fam(r) for r in inc(b.period) if is_cross_period(_fam(r))}
+
+
 def test_pattern_is_the_true_derivative_subset_of_b(inc):
     from equilibria.family.squared_system import is_cross_period
 
-    out, _, _ = inc
     seen, extra, lacking = set(), [], set()
     for _, b in _calls():
+        out = inc(b.period)
+        _assert_all_rows_found(out, b)
         free = _free(b)
         for r, cols in zip(b.con_names, b.incidence, strict=True):
             if r not in out:
@@ -85,6 +124,7 @@ def test_pattern_is_the_true_derivative_subset_of_b(inc):
                 lacking.add(_fam(r))
     assert len(seen) > 60
     assert not any(is_cross_period(f) for f in seen)
+    _assert_cross_period_names(inc, _calls())
     assert extra == []  # (a) no column B does not have
     assert lacking <= set(STRUCTURAL_ZERO_FAMILIES)  # (b)
     assert lacking == set(STRUCTURAL_ZERO_FAMILIES)  # the constant is not stale
@@ -92,9 +132,9 @@ def test_pattern_is_the_true_derivative_subset_of_b(inc):
 
 def test_incidence_keeps_structural_zeros(inc):
     """A zero-valued variable with a nonzero derivative stays in the pattern."""
-    out, _, _ = inc
     hits = []
     for _, b in _calls():
+        out = inc(b.period)
         free = _free(b)
         zero = {
             f"{c}[{','.join(k)}]" if k else c
@@ -104,10 +144,10 @@ def test_incidence_keeps_structural_zeros(inc):
         }
         for r, cols in zip(b.con_names, b.incidence, strict=True):
             if r in out and _fam(r) not in STRUCTURAL_ZERO_FAMILIES:
-                hits += [(r, c) for c in set(cols) & zero & free]
+                hits += [(out, r, c) for c in set(cols) & zero & free]
     assert hits, "no zero-valued free cell in a B incidence on 3x3"
-    for r, c in hits:
-        assert c in out[r], (r, c)
+    for o, r, c in hits:
+        assert c in o[r], (r, c)
 
 
 def test_square_with_pattern_incidence(inc):
@@ -115,12 +155,13 @@ def test_square_with_pattern_incidence(inc):
     from equilibria.family.prep_recipe import sp_reference_arrays
     from equilibria.family.prep_square import square
 
-    out, _, _ = inc
     p = _params(DATASET)
     ref = sp_reference_arrays(p, _closure(), list(p.sets.r)[-1])
     calls = _calls()
     assert calls
     for a, b in calls:
+        out = inc(b.period)
+        _assert_all_rows_found(out, b)
         # B's incidence only for the rows the pattern does not give (cross-period).
         merged = {r: list(c) for r, c in zip(b.con_names, b.incidence, strict=True)}
         merged.update(out)

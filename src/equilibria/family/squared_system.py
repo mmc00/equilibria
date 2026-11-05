@@ -16,7 +16,7 @@ from equilibria.family.layout import VarLayout
 # Cross-period rows (the Fisher/Tornqvist block of ``build_equations_fisher``): the
 # backend records them in their single-period form, which is not the multiperiod row,
 # so they are left out and the caller supplies them. Component names as defined in
-# gtap_model_multiperiod.py (``eq_*_base`` are the base-period twins; ``eq_mq_*`` are
+# gtap_model_multiperiod.py (``eq_pabs_base``, ``eq_pfact_base`` are the base-period twins; ``eq_mq_*`` are
 # matched by prefix, no such component exists today).
 CROSS_PERIOD_FAMILIES = frozenset(
     {
@@ -27,7 +27,6 @@ CROSS_PERIOD_FAMILIES = frozenset(
         "eq_pfact",
         "eq_pfact_base",
         "eq_pwfact",
-        "eq_pwfact_base",
         "eq_chisave",
     }
 )
