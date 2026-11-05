@@ -36,7 +36,7 @@ def test_all_families_match_pyomo(dataset, point):
 
 
 @pytest.mark.parametrize("point", ["calibrated", "perturbed"])
-@pytest.mark.parametrize("dataset", ["gtap7_3x3", "gtap7_10x7"])
+@pytest.mark.parametrize("dataset", DATASETS)
 def test_all_families_match_pyomo_ifsub1(dataset, point):
     o = oracle(dataset, if_sub=True)
     layout, system = _all_recorded(o, if_sub=True)

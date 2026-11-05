@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 REQUIRED = (
     "load_params",
     "compose_state",
+    "cache_key",
     "cache_load",
     "layout_system",
     "first_FJ",
@@ -40,6 +41,7 @@ def test_budget_runs_on_3x3(tmp_path):
     want = (
         pieces["load_params"]
         + pieces["compose_state"]
+        + pieces["cache_key"]
         + pieces["cache_load"]
         + 3
         * (
@@ -52,6 +54,11 @@ def test_budget_runs_on_3x3(tmp_path):
     )
     assert out["projected_s"] == pytest.approx(want)
     assert out["verdict"] in {"go", "tight", "no"}
+    # The unmeasured pieces at today's Pyomo cost: an upper bound, not a forecast.
+    assert out["pessimistic_s"] == pytest.approx(
+        out["projected_s"] + sum(out["today_cost_of_not_measured"].values())
+    )
+    assert out["verdict_conditional"] is True
     assert out["if_sub"] == 1
     assert {"cross_period_rows", "period_prep_on_arrays", "calibration_rest"} <= set(
         out["not_measured"]

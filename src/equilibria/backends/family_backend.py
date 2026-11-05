@@ -85,15 +85,24 @@ class FamilyBackend:
 
     def save(self, path: Any) -> None:
         """Write the recording (not the compiled code) to ``path`` with pickle."""
+        import os
         import pickle
+        import tempfile
         from pathlib import Path
 
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        with tmp.open("wb") as fh:
-            pickle.dump({k: getattr(self, k) for k in self._SAVED}, fh, protocol=5)
-        tmp.replace(path)  # never leave a half-written cache behind
+        # A temp name of our own: two writers sharing one would write into one inode.
+        fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "wb") as fh:
+                pickle.dump({k: getattr(self, k) for k in self._SAVED}, fh, protocol=5)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, path)  # never leave a half-written cache behind
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
 
     @classmethod
     def load(cls, path: Any) -> FamilyBackend:

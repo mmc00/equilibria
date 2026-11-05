@@ -84,7 +84,7 @@ def test_state_matches_pyomo_after_composer_steps(dataset):
     assert n_mutable > 0 and n_fixed > 0
 
 
-@pytest.mark.parametrize("dataset", ["gtap7_3x3", "gtap7_10x7"])
+@pytest.mark.parametrize("dataset", DATASETS)
 def test_state_matches_pyomo_ifsub1(dataset):
     mismatches, _, _ = _state_mismatches(dataset, if_sub=True)
     assert not mismatches, f"{len(mismatches)} cells differ, e.g. {mismatches[:6]}"
