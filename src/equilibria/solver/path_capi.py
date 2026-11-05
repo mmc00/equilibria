@@ -2130,6 +2130,9 @@ def _run_path_capi_nonlinear_full(
                 os.environ["EQUILIBRIA_GTAP_SOLVER"].split("scipy_", 1)[1] or "krylov"
             )
             _nlp_sr = _PyNLP_sr(_solve_target)
+            from equilibria.family.driver_hook import maybe_wrap as _family_wrap
+
+            _nlp_sr = _family_wrap(_nlp_sr, params, closure_config, _method)
             _n_sr, _ne_sr = _nlp_sr.n_primals(), _nlp_sr.n_eq_constraints()
             print(
                 f"[nlp-square] scipy.root({_method}): n_primals={_n_sr} "
