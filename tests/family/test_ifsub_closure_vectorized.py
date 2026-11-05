@@ -121,3 +121,122 @@ def test_failing_macro_raises_with_cell_names(monkeypatch):
     gbm.compose_block_state(p, p.sets, closure(), rr)
     assert len(seen) == 2 and seen[0] == seen[1]
     assert "macro fallido: xmgm" in seen[0] or "macro fallido: pwmg" in seen[0]
+
+
+# --- perturbed states ---------------------------------------------------------------
+OPS = ("pf", "fctts", "fcttx", "prdtx_rai", "p_rai", "amgm", "ptmg", "lambdamg")
+OPS += ("pe", "tmarg", "imptx", "xw")
+TAX = ("rtxs", "etax", "mtax", "chipm", "kappaf_activity", "kappaf")
+
+
+def _snapshot(st):
+    out = {}
+    for n, c in st._components.items():
+        if hasattr(c, "_vals"):
+            out[n] = tuple(a.copy() for a in (c._vals, c._fx, c._lo, c._hi))
+        else:
+            out[n] = (c.data.copy(),)
+    return out
+
+
+def _restore(st, snap):
+    for n, arrs in snap.items():
+        c = st._components[n]
+        if hasattr(c, "_vals"):
+            for a, s in zip((c._vals, c._fx, c._lo, c._hi), arrs, strict=True):
+                if isinstance(a, np.ndarray):
+                    a[...] = s
+        else:
+            c.data[...] = arrs[0]
+
+
+def _perturb(st, p, rng):
+    """Random operands (zeros, negatives), pre-fixed cells, clamping bounds, taxes."""
+    for name in OPS:
+        c = st._components[name]
+        arr = c.data if hasattr(c, "data") else c._vals
+        arr[...] = rng.uniform(-2, 3, arr.shape) * (rng.random(arr.shape) > 0.2)
+    for v in VARS:
+        c = st._components[v]
+        c._fx[...] = rng.random(c.shape) < 0.2
+        c._lo[...] = np.where(
+            rng.random(c.shape) < 0.3, rng.uniform(-1, 1, c.shape), -np.inf
+        )
+        c._hi[...] = np.where(
+            rng.random(c.shape) < 0.3, rng.uniform(1, 3, c.shape), np.inf
+        )
+    r, i = list(p.sets.r), list(p.sets.i)
+    for attr in TAX:
+        d = getattr(p.taxes, attr, None)
+        if d is None:
+            if attr in ("etax", "mtax"):
+                d = {(a, b): 0.0 for a in r for b in i}
+            else:
+                d = {(a, b, c): 1.0 for a in r for b in i for c in r}
+            setattr(p.taxes, attr, d)
+        for k in list(d):
+            d[k] = float(rng.choice([0.0, rng.uniform(-0.5, 0.5)]))
+        if attr == "chipm":
+            for k in list(d):
+                d[k] = float(rng.choice([0.0, 1e-14, rng.uniform(0.5, 1.5)]))
+            for k in list(d)[:2]:
+                d[k] = None
+
+
+def _run(impl, st, p, snap):
+    _restore(st, snap)
+    try:
+        err = None
+        n = impl(st, p)
+    except RuntimeError as exc:
+        err, n = str(exc), None
+    return err, n, _snapshot(st)
+
+
+def _compare_paths(monkeypatch, seeds, break_labels=False):
+    import copy
+
+    import equilibria.templates.gtap.gtap_block_model as gbm
+
+    p = load_params("gtap7_3x3")
+    rr = list(p.sets.r)[-1]
+    real = gbm._apply_ifsub_closure
+    bad = []
+
+    def grab(st, params=None):
+        base = _snapshot(st)
+        saved = {a: copy.deepcopy(getattr(p.taxes, a, None)) for a in TAX}
+        for seed in seeds:
+            _restore(st, base)
+            _perturb(st, p, np.random.default_rng(seed))
+            if break_labels:
+                lab = st._components["tmarg"]._labels
+                st._components["tmarg"]._labels = [list(reversed(lab[0])), *lab[1:]]
+            pert = _snapshot(st)
+            a = _run(gbm._apply_ifsub_closure_cells, st, p, pert)
+            b = _run(real, st, p, pert)
+            if break_labels:
+                st._components["tmarg"]._labels = lab
+            if a[:2] != b[:2]:
+                bad.append((seed, "error/count", a[:2], b[:2]))
+            for n in a[2]:
+                for x, y in zip(a[2][n], b[2][n], strict=True):
+                    if not np.array_equal(x, y, equal_nan=True):
+                        bad.append((seed, n, int((x != y).sum())))
+        for attr, d in saved.items():
+            setattr(p.taxes, attr, d)
+        _restore(st, base)
+        return real(st, params)
+
+    with monkeypatch.context() as mp:
+        mp.setattr(gbm, "_apply_ifsub_closure", grab)
+        gbm.compose_block_state(p, p.sets, closure(), rr)
+    assert not bad, bad[:10]
+
+
+def test_perturbed_states_cell_path_equals_array_path(monkeypatch):
+    _compare_paths(monkeypatch, range(15))
+
+
+def test_perturbed_states_with_unaligned_operand(monkeypatch):
+    _compare_paths(monkeypatch, range(3), break_labels=True)

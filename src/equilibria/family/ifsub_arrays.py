@@ -6,8 +6,9 @@ through ``_StateVar`` accessors twelve million times on 20x41; here each macro i
 numpy expression over the full grid.
 
 The result is bitwise the one the scalar macros give: operands are combined in the same
-order and with the same constants, ``sum`` over the margin modes is a sequential loop
-that starts from zero (not ``np.sum``), and the tax parameters that live in the
+order and with the same constants, and the ``sum`` over the margin modes mirrors
+CPython's ``sum`` over floats (``_pwmg``): Neumaier compensated summation from 3.12 on,
+plain sequential addition before (never ``np.sum``). The tax parameters that live in the
 ``GTAPParameters`` dicts are densified through the SAME ``_safe`` helpers the macros call
 (so ``float(v or default)`` maps a stored 0.0 or None to the default). No macro reads a
 report variable (they read ``pf``, ``p_rai``, ``pe``, ``xw`` and parameters), so the
@@ -17,6 +18,7 @@ variables do not depend on one another and the order they are fixed in is irrele
 from __future__ import annotations
 
 import itertools
+import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -63,10 +65,21 @@ def _pwmg(model: Any, params: Any, lab: list[list[str]]) -> np.ndarray:
     amgm = _ref(model, "amgm", [modes, *lab])
     ptmg = _ref(model, "ptmg", [modes])
     lam = _ref(model, "lambdamg", [modes, *lab])
-    acc = np.zeros(amgm.shape[1:])
+    # The scalar macro is ``sum(x_m for m in modes)`` over Python floats. CPython >= 3.12
+    # sums floats with Neumaier compensation (Python/bltinmodule.c, builtin_sum_impl),
+    # starting from the int 0 (so the first step is exact) and adding ``c`` at the end
+    # only if it is nonzero and finite; earlier versions add sequentially.
+    s = np.zeros(amgm.shape[1:])
+    c = np.zeros_like(s)
     for i in range(len(modes)):
-        acc = acc + amgm[i] * ptmg[i] / (lam[i] + 1e-12)
-    return acc
+        x = amgm[i] * ptmg[i] / (lam[i] + 1e-12)
+        t = s + x
+        if sys.version_info >= (3, 12):
+            c = c + np.where(np.abs(s) >= np.abs(x), (s - t) + x, (x - t) + s)
+        s = t
+    if sys.version_info >= (3, 12):
+        return np.where((c != 0) & np.isfinite(c), s + c, s)
+    return s
 
 
 def _pefob(model: Any, params: Any, lab: list[list[str]]) -> np.ndarray:
