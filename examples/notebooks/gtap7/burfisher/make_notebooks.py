@@ -36,13 +36,16 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 import run_burfisher as rb  # noqa: E402
 
+from equilibria.sources import find_reference  # noqa: E402
+
 # Solved exactly, neither GEMPACK ("Accuracy too low") nor equilibria reach the shock:
 # these get only the Johansen comparison.
 JOHANSEN_ONLY = ("ME4A", "ME4B")
 # The book solves these with Johansen (its .EXP says Method = Johansen).
 JOHANSEN = ("TBL45A", "TBL45B", "TBL45C", "TBL64", *JOHANSEN_ONLY)
-# The book's own GEMPACK runs, with each .EXP's method.
-GEMPACK_BOOK_DIR = 'ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher"'
+# The book's own GEMPACK runs, with each .EXP's method: compare_burfisher_gempack's
+# "book" source (data/gtap7/nus333/gempack_burfisher/<exp>/).
+GEMPACK_BOOK = '"book"'
 # GEMPACK's Gragg solutions of the book's exercises; TBL53 and GTAPV7 have none yet.
 GEMPACK_DIR = 'ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher_gragg"'
 
@@ -224,14 +227,14 @@ def _compare_johansen(exp: str, model: str) -> str:
         "import compare_burfisher_gempack as cbg\n"
         "import compare_gempack_levels as cg\n\n"
         f'EXP = "{exp}"\n'
-        f"BOOK_DIR = {GEMPACK_BOOK_DIR}\n"
+        f"BOOK = {GEMPACK_BOOK}\n"
         'GOVERNMENT = {"qgd", "qgm"}  # government demand: the open gap of #201\n'
         f"report = cbg.run(EXP, cg.model_levels({model}), dict(xscale_data(p, p.sets)), "
-        "BOOK_DIR, linear=True)\n"
+        "BOOK, linear=True)\n"
         "cells = [c for c in report.cells if c.variable not in GOVERNMENT]\n"
         "gov = max(c.d for c in report.cells if c.variable in GOVERNMENT)\n"
         "print(f\"{len(cells)} cells (pre and post) against the book's GEMPACK run, "
-        'method {cbg.method(EXP, BOOK_DIR)}")\n'
+        'method {cbg.method(EXP, BOOK)}")\n'
         'print(f"largest difference: {100 * max(c.d for c in cells):.3f}%")\n'
         'print(f"government demand qgd/qgm (#201, not checked): up to {100 * gov:.2f}%")\n'
         'print("\\nlargest differences:")\n'
@@ -462,7 +465,7 @@ def exercises() -> list[str]:
     return names + [
         e
         for e in JOHANSEN_ONLY
-        if (gempack / "burfisher" / f"{e.lower()}.sl4.gz").exists()
+        if find_reference("nus333", "gempack", experiment=e.lower(), method="book")
     ]
 
 

@@ -2,10 +2,12 @@
 
 Cada ejercicio de ``run_burfisher.EXERCISES`` (el ``.prm``, los shocks y el cierre de
 la Tabla 3) se resuelve con equilibria y se compara, pre y post, contra la solucion
-GEMPACK del mismo ``.EXP`` (``tests/fixtures/gtap7_gempack/burfisher/``: ``.sl4``
-gzip, ``.upd`` y log) con el mapeo GTAP de ``compare_gempack_levels.py``.
+GEMPACK del mismo ``.EXP`` con el mapeo GTAP de ``compare_gempack_levels.py``. The
+book's runs are the records ``data/gtap7/nus333/gempack_burfisher/<exp>/``
+(``solution.sl4``, ``updated.har``, ``run.cmf``), found with
+``equilibria.sources.reference``.
 
-El metodo de GEMPACK sale del log (``Method = ...``). Seis ejercicios son Johansen de
+El metodo de GEMPACK sale del command file (``Method = ...``; the last one wins). Seis ejercicios son Johansen de
 un paso porque asi los resolvio el libro (TBL45A/B/C, TBL64, ME4A/B): una solucion en
 niveles no tiene por que coincidir con esa extrapolacion lineal, y se reportan
 aparte. Las variables sin nivel en el ``.sl4`` (``rore``, ``y``, ``pinv``, ``qinv``,
@@ -33,7 +35,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, find_reference, reference
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "scripts" / "gtap")]
@@ -43,31 +45,53 @@ import run_burfisher as rb  # noqa: E402
 
 from equilibria.compare import Report  # noqa: E402
 
-FIX = ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher"
 BASEDATA = dataset_dir("nus333") / "basedata.har"
+# A GEMPACK source: "book" (the book's own runs, data/gtap7/nus333/gempack_burfisher/)
+# or a folder of flat <exp>.sl4.gz/.upd/.log.gz files.
+Source = str | Path
+BOOK = "book"
 
 
-def method(exp: str, fix: Path = FIX) -> str:
-    """El metodo de la corrida GEMPACK: la ultima linea ``Method = X;`` del log."""
-    with gzip.open(fix / f"{exp.lower()}.log.gz", "rb") as fh:
-        raw = fh.read()
+def solution(exp: str, source: Source = BOOK) -> Path | None:
+    """The folder of ``exp``'s GEMPACK run in ``source``, or None if it has none."""
+    if isinstance(source, Path):
+        return source if (source / f"{exp.lower()}.sl4.gz").exists() else None
+    return find_reference("nus333", "gempack", experiment=exp.lower(), method=source)
+
+
+def method(exp: str, source: Source = BOOK) -> str:
+    """El metodo de la corrida GEMPACK: la ultima linea ``Method = X;`` que corrio."""
+    if isinstance(source, Path):
+        with gzip.open(source / f"{exp.lower()}.log.gz", "rb") as fh:
+            raw = fh.read()
+    else:
+        rec = reference("nus333", "gempack", experiment=exp.lower(), method=source)
+        raw = (rec / "run.cmf").read_bytes()
     # gemsim en Windows escribe el log en UTF-16 (con BOM)
     utf16 = raw[:2] in (b"\xff\xfe", b"\xfe\xff")
     text = raw.decode("utf-16" if utf16 else "utf-8", errors="replace")
     found = re.findall(r"(?im)^\s*method\s*=\s*(\w+)\s*;", text)
     if not found:
-        raise ValueError(f"{exp}: el log no dice el metodo")
+        raise ValueError(f"{exp}: el command file no dice el metodo")
     return found[-1].capitalize()
 
 
 def run(
-    exp: str, levels: dict, xscale: dict, fix: Path = FIX, *, linear: bool = False
+    exp: str, levels: dict, xscale: dict, source: Source = BOOK, *, linear: bool = False
 ) -> Report:
     """equilibria (``levels``, ``xscale``) contra la solucion GEMPACK de ``exp``.
 
     Los niveles salen de ``sl4levels_<exp>.har`` (sltoht) si existe; si no, del
-    ``.sl4``, que tiene que traer ``PLEV``. ``linear``: ``levels`` is a Johansen
-    solution (see ``compare_gempack_levels.equilibria_side``)."""
+    ``.sl4``, que tiene que traer ``PLEV``. The book's runs are read from their
+    ``.sl4``. ``linear``: ``levels`` is a Johansen solution (see
+    ``compare_gempack_levels.equilibria_side``)."""
+    if not isinstance(source, Path):
+        rec = reference("nus333", "gempack", experiment=exp.lower(), method=source)
+        return cg.run(
+            levels, xscale, rec / "solution.sl4", BASEDATA, rec / "updated.har",
+            linear=linear,
+        )  # fmt: skip
+    fix = source
     upd = fix / f"{exp.lower()}.upd"
     har = fix / f"sl4levels_{exp.lower()}.har"
     if har.exists():
@@ -111,7 +135,10 @@ def main() -> int:
     ap.add_argument("--save-eq-dir", type=Path, help="guardar los niveles resueltos")
     ap.add_argument("--json", type=Path, help="guardar los resultados en JSON")
     ap.add_argument(
-        "--gempack-dir", type=Path, default=FIX, help="carpeta con las corridas GEMPACK"
+        "--gempack-dir",
+        type=lambda v: v if v == BOOK else Path(v),
+        default=BOOK,
+        help='"book" (the book\'s runs, the default) or a folder of GEMPACK runs',
     )
     a = ap.parse_args()
 
@@ -119,7 +146,7 @@ def main() -> int:
     results: dict[str, dict] = {}
     excluded: dict[str, str] = {}
     for exp in todo:
-        if not (a.gempack_dir / f"{exp.lower()}.sl4.gz").exists():
+        if solution(exp, a.gempack_dir) is None:
             print(f"{exp:7s} sin solucion GEMPACK", flush=True)
             continue
         if a.eq_dir:

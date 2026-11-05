@@ -63,7 +63,7 @@ def test_un_log_sin_metodo_es_un_error(tmp_path) -> None:
 
 def test_hay_solucion_gempack_para_los_37_ejercicios() -> None:
     mod = _script()
-    con = {e for e in mod.rb.EXERCISES if (O.EX18_FIX / f"{e.lower()}.sl4.gz").exists()}
+    con = {e for e in mod.rb.EXERCISES if mod.solution(e, O.EX18_FIX) is not None}
     assert set(mod.rb.EXERCISES) - con == {"TBL53"}
     johansen = {e for e in con if mod.method(e, O.EX18_FIX) == "Johansen"}
     assert johansen == {

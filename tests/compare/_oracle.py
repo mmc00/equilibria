@@ -17,10 +17,6 @@ Convenciones del mapeo que estos ejemplos fijan (spec 2026-10-15, Q8/Q9/Q16/Q18)
 
 from __future__ import annotations
 
-import functools
-import gzip
-import shutil
-import tempfile
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 
@@ -671,28 +667,24 @@ EX15_INDEX_EXCLUDED = (
 #    Variables sin nivel: las que el registro lista en NOLV. El .sl4
 #    trae ademas 12 variables que el fixture no tiene (otra version del modelo).
 # 2) Cambio: 100*(post/pre - 1) de cada celda = el volcado de sltoht del mismo .sl4
-#    (burfisher/sl4dump_<exp>.har). Una celda con pre = 0 no tiene %: GEMPACK
+#    (nus333/sltoht_burfisher/<exp>/sl4dump.har). Una celda con pre = 0 no tiene %: GEMPACK
 #    escribe uno igual (qes/qfe, flujo cero), pero en niveles es 0 -> 0.
 # Precision: LEVB/LEVA del .sl4 son REAL*4 (~6e-8 relativo).
 # Medido el 2026-10-19 con un lector de exploracion (scratch, no commiteado): pre
 # rel max 4.8e-8 (qo); cambio max 1.04e-5 pp (TBL45A) y 3.05e-5 pp (ME9C).
 # ---------------------------------------------------------------------------
 _GEMPACK_FIXTURES = ROOT / "tests" / "fixtures" / "gtap7_gempack"
-EX16_DIR = _GEMPACK_FIXTURES / "burfisher"
 
 
-@functools.cache
 def burfisher_sl4(exp: str) -> Path:
-    """El ``.sl4`` de un ejercicio de Burfisher (``burfisher/<exp>.sl4.gz``),
-    descomprimido una vez por proceso en un directorio temporal."""
-    dest = Path(tempfile.mkdtemp(prefix="burfisher_sl4_")) / f"{exp}.sl4"
-    with gzip.open(EX16_DIR / f"{exp}.sl4.gz", "rb") as src, dest.open("wb") as dst:
-        shutil.copyfileobj(src, dst)
-    return dest
+    """El ``.sl4`` del libro de un ejercicio de Burfisher (record
+    ``nus333/gempack_burfisher/<exp>/solution.sl4``, stored raw)."""
+    rec = reference("nus333", "gempack", experiment=exp, method="book")
+    return rec / "solution.sl4"
 
 
 class _Sl4(Mapping[str, Path]):
-    """{ejercicio: .sl4 descomprimido}; descomprime al pedir la clave."""
+    """{ejercicio: .sl4}; finds the record when the key is asked for."""
 
     def __init__(self, exercises: tuple[str, ...]) -> None:
         self._exercises = exercises
@@ -714,7 +706,11 @@ class _Sl4(Mapping[str, Path]):
 # las dos listas coinciden y no distinguen cual se usa.
 EX16_EXERCISES = ("TBL45A", "ME9C", "GTAPV7")
 EX16_SL4 = _Sl4(EX16_EXERCISES)
-EX16_DUMP = {e: EX16_DIR / f"sl4dump_{e.lower()}.har" for e in EX16_EXERCISES}
+EX16_DUMP = {
+    e: reference("nus333", "sltoht", experiment=e.lower(), method="book")
+    / "sl4dump.har"
+    for e in EX16_EXERCISES
+}
 EX16_NUS333_POST = (
     reference("nus333", "sltoht", shock=10, steps="8-16-32", closure="dpsaveSwap")
     / "sl4levels.har"
@@ -767,9 +763,9 @@ EX17_RTOL = 1e-6
 #
 # A = data/gtap7/nus333/equilibria_burfisher_levels/eq_burfisher_<exp>_levels.json.gz
 # (make_eq_burfisher_levels.py: run_burfisher.solve_exercise, el cierre de la Tabla 3);
-# B = el .sl4 de GEMPACK de tests/fixtures/gtap7_gempack/burfisher/ (corrida en Windows
-# el 2026-09-24 con tools/gempack-oracle, GTAPV7 sin parche) + VDFB de basedata.har
-# (pre) y del <exp>.upd (post). A: check -> pre, shock -> post. Calculado el 2026-10-22
+# B = el .sl4 de GEMPACK del libro (nus333/gempack_burfisher/<exp>/; igual, diff_3b.md,
+# a la corrida en Windows del 2026-09-24 con tools/gempack-oracle, GTAPV7 sin parche)
+# + VDFB de basedata.har (pre) y del updated.har del registro (post). A: check -> pre, shock -> post. Calculado el 2026-10-22
 # con tests/compare/oracles/burfisher_levels.py (lee el .sl4 a mano, no importa
 # equilibria.compare).
 #   Las dos: 414 celdas, 26 variables + VDFB. rore, y, pinv, qinv, pva y pe no tienen
@@ -779,7 +775,7 @@ EX17_RTOL = 1e-6
 #   maximo 2.0767e-02 en qxw post (USA, MFG). Una solucion en niveles no reproduce
 #   una extrapolacion lineal.
 # ---------------------------------------------------------------------------
-EX18_FIX = _GEMPACK_FIXTURES / "burfisher"
+EX18_FIX = "book"  # compare_burfisher_gempack's source: the book's runs
 EX18_EQ = {
     e: dataset_dir("nus333_equilibria_burfisher_levels")
     / f"eq_burfisher_{e}_levels.json.gz"

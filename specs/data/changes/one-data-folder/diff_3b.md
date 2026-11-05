@@ -79,3 +79,11 @@ name, the new one through `equilibria.sources.reference(...)`.
   `tests/compare/test_gempack3x3.py` (EX14) reads the new file through `from_har`
   unchanged: its mapping compares post only, and `periods_compared == ["post"]`
   and `unmatched == []` still hold.
+- **Method and shocks from `run.cmf` (Task 4).** The old readers took the method
+  (`Method = …`, last one wins) and ME8/TBL813's shocks from the gzipped GEMPACK
+  logs; the records keep the command file that ran (`run.cmf`). For the 38 book
+  experiments the method read from `run.cmf` equals the one read from the old log
+  in every case; ME8's 63 and TBL813's 1 `Shock` lines are the same in both.
+  `test_mk_exp_directos` pins them to the old logs by sha256
+  (`test_the_cmf_shocks_are_the_2026_09_30_logs`), because `run.cmf` now also
+  equals the `-dir.exp` the script under test writes.
