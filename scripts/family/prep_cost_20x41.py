@@ -39,9 +39,9 @@ SQUARE_STEPS = (
     "check_overdetermined",
     "relative_floors",
     "names",
-    "edges",
+    "adjacency",
     "gams_pairs",
-    "match",
+    "match_rows",
     "cells",
 )
 

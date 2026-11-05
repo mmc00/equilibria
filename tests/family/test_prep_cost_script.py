@@ -16,9 +16,9 @@ SQUARE_STEPS = (
     "deactivate_fixed_quantity_eqs",
     "relative_floors",
     "names",
-    "edges",
+    "adjacency",
     "gams_pairs",
-    "match",
+    "match_rows",
     "cells",
 )
 
