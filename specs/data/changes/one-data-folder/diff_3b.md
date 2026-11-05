@@ -138,3 +138,37 @@ found with `dataset_dir()`, as the phase 4 snapshots next to their dataset):
   because each `<exp>/source.yaml` now says how its run was made.
 - `sl4levels_sample_sic.txt` keeps its header, which names the pre-3b paths
   (`sl4dump_gtap7_3x3_tm10.har`, `runs/...guide.md`); its `source.yaml` says so.
+
+### Task 8 notes
+
+Every tracked file of `runs/` (39) either has a byte-identical copy in `data/`
+(sha256) or moves per D3:
+
+| old | new |
+|---|---|
+| `horridge_simple/` copies of Horridge's files (13) | already `data/horridge_simple/` (identical) |
+| `{nus333,9x10}_compare/rungtap/tm10.cmf`, `gempack_20x41_validation/tm10.cmf` | already `data/gtap7/gempack/tools/cmf/*_tm10_dpsaveswap.cmf` (identical) |
+| `gempack_20x41_validation/tm10-assert-arith-fail.har` | already `data/gtap7/gtap7_20x41/gempack_tm10_s8-16-32_dpsaveswap/assert_arith_fail.har` (identical) |
+| the 8 analysis scripts | `scripts/gtap/rungtap_compare/` (`compare_report.py` → `compare_nus333_report.py`) |
+| `comparison*.md`, `comparison.json`, `trajectory.json`, `equilibria/*.json` | `docs/archive/findings/rungtap_compare/{nus333,9x10}/` |
+| `gempack_20x41_validation/{README,RESULTADO}.md`, `noswap.cmf`, `noswap_console.txt`, `solve_console.txt` | `docs/archive/findings/rungtap_compare/gempack_20x41_validation/` (`readme.md`, `results.md`) |
+| `horridge_simple/readme_equilibria.md` | `docs/archive/findings/rungtap_compare/horridge_simple.md` |
+| `gempack_updated_har_guide.md` | `docs/archive/findings/gempack_updated_har_guide_2026-07-22.md` |
+
+- **Where the scripts read and write.** The RunGTAP `.xls` exports they read
+  were never tracked (git-ignored under `runs/`); the scripts now read them, and
+  write their reports, under the git-ignored `notes/tmp/rungtap_compare/<case>/`,
+  where `compare_{nus333,9x10}_rungtap.py` also write their JSON. The 2026
+  outputs are the archived copies.
+- **`compare_gams_vs_gempack.py`** takes the Horridge records as defaults
+  (`--experiment fixcap`): run on the Mac it gives GAMS/MCP vs NLP median
+  4.26e-8, 7.97e-8, 9.64e-9, 3.83e-8 pp and GAMS vs GEMPACK 100 % within 1 pp,
+  the numbers the archived `horridge_simple.md` reports.
+- **Guard.** `test_no_code_reads_runs` used `\bruns/`, which `git grep -E` on
+  macOS does not match: it saw only `"runs" /`. With a portable pattern it found
+  the text mentions too. It exempts the git-ignored work folders of two hashed
+  tools (`runs/gempack_work`, `runs/gempack_matrix`) and `test_swap_job.py`
+  (git bytes of the removed `.cmf`, skips after 3b, as the plan expects).
+- `scripts/windows/corridas_paper.ps1` is removed (maintainer, 2026-11-05);
+  `scripts/windows/README.md` now opens with the `regenerate_paper.py` group of
+  each of its steps.

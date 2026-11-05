@@ -1,7 +1,7 @@
 """GEMPACK con gtapv7_levels.tab: y, qinv, rore, pinv, pva y pe ya tienen nivel.
 
-El .har sale del paso 4 de ``scripts/windows/corridas_paper.ps1`` (gemsim sobre el TAB
-parchado por ``make_levels_tab.py`` + ``export_sl4_levels.py``). Dos comprobaciones:
+El .har sale del grupo ``levels6`` de ``data/gtap7/gempack/tools/regenerate_paper.py``
+(gemsim sobre el TAB parchado por ``make_levels_tab.py`` + ``export_sl4_levels.py``). Dos comprobaciones:
 
 1. Nivel PRE contra el oraculo hecho a mano desde basedata.har,
    ``tests/compare/oracles/levb_six_vars.py``, commiteado antes que el parche.

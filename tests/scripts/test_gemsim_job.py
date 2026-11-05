@@ -1,6 +1,6 @@
 """gemsim_job.py (gragg) and target_shocks.py: Burfisher with Gragg on the levels TABs.
 
-Step 5 of corridas_paper.ps1 in data/: each .exp of data/gtap7/nus333 runs under
+regenerate_paper.py's ``gragg`` group: each .exp of data/gtap7/nus333 runs under
 GEMSIM on a TAB compiled from data/gtap7/gempack_rungtap375_levels. Johansen
 1-step experiments become Gragg 2-4-6, and TBL53's ``target%`` shocks (which
 only the RunGTAP GUI solves) become plain shocks (maintainer, 2026-11-03).

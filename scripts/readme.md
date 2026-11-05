@@ -276,10 +276,4 @@ cada script y quién lo nombra (CI, tests, docs u otro código). Un script con
 | `create_cri_labor_tax_mapping.py` | Create a CRI mapping variant where social contributions map to taxes. | — |
 | `fix_cri_sam_for_pep.py` | Transform and rebalance a CRI SAM into a PEP-compatible structure. | — |
 | `run_manual_sam_pipeline.py` | Utility script that executes the manual IEEM->PEP pipeline step by step. | docs |
-
-### `windows/` (1)
-
-| Script | Qué hace | Lo nombra |
-|---|---|---|
-| `corridas_paper.ps1` | Corridas del paper que solo se pueden hacer en Windows (GEMPACK y sltoht). | tests, código |
 <!-- MAPA:FIN -->

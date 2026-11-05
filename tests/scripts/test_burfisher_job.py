@@ -1,7 +1,7 @@
 """burfisher_job.py: Burfisher's book experiments solved by RunGTAP's gtapuv7.exe.
 
-The input of corridas_paper.ps1 steps 1 and 6a, regenerated into
-data/gtap7/nus333/gempack_burfisher/<exp>/ (phase 3a-2 Task 3). As
+regenerate_paper.py's ``book`` group, the input of its ``book-sltoht`` group,
+recorded into data/gtap7/nus333/gempack_burfisher/<exp>/ (phase 3a-2 Task 3). As
 tools/gempack-oracle/01-run-all.bat did: a header (aux files, sets, base data,
 output files) plus the .exp verbatim, run from the package folder, and the
 book's method kept (Johansen stays Johansen).

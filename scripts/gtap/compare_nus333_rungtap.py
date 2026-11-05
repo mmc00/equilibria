@@ -4,8 +4,12 @@ Runs the same 10% uniform shock to the import tariff power (tm) on the NUS333
 dataset using the local equilibria template, computes Huff/McDougall welfare
 decomposition, and dumps both percent-change macro variables and welfare
 components to JSON so they can be compared against the RunGTAP output produced
-by `runs/nus333_compare/rungtap/tm10.cmf` (gtapv7.exe).
+by `data/gtap7/gempack/tools/cmf/nus333_tm10_dpsaveswap.cmf` (gtapv7.exe). The JSON
+goes to `notes/tmp/rungtap_compare/nus333/equilibria/` (git-ignored), read by
+`rungtap_compare/compare_nus333_report.py`; the 2026 run is archived in
+`docs/archive/findings/rungtap_compare/nus333/`.
 """
+
 from __future__ import annotations
 
 import json
@@ -43,7 +47,7 @@ if not os.environ.get("PATH_LICENSE_STRING"):
     )
 
 NUS333 = dataset_dir("nus333")
-OUT_DIR = ROOT / "runs" / "nus333_compare" / "equilibria"
+OUT_DIR = ROOT / "notes" / "tmp" / "rungtap_compare" / "nus333" / "equilibria"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Use the proven helpers from compare_nus333_vs_neos so we hit the same solver path.
@@ -76,6 +80,7 @@ def _augment_snapshot(model, snap: dict) -> None:
     decomposition, since the stock `_collect_key_quantities` omits them.
     """
     from pyomo.environ import Var, value
+
     for vname in ("uh", "ug", "us", "u", "cv", "ev", "pop"):
         comp = getattr(model, vname, None)
         if comp is None:
@@ -83,7 +88,11 @@ def _augment_snapshot(model, snap: dict) -> None:
         data: dict[str, float] = {}
         try:
             for idx in comp:
-                key = "|".join(str(v) for v in idx) if isinstance(idx, tuple) else str(idx)
+                key = (
+                    "|".join(str(v) for v in idx)
+                    if isinstance(idx, tuple)
+                    else str(idx)
+                )
                 try:
                     data[key] = float(value(comp[idx]))
                 except (ValueError, TypeError):
@@ -131,12 +140,14 @@ def main() -> int:
     # No se arregla acá a proposito: pasar `closure=closure` cambiaria el cierre
     # Y el orden efectivos de una comparacion contra RunGTAP/GEMPACK que no
     # tengo forma de verificar en esta maquina (necesita gtapv7.exe y el .cmf de
-    # runs/nus333_compare/). Cambiar el resultado de un head-to-head sin poder
+    # tools/cmf/nus333_tm10_dpsaveswap.cmf). Cambiar el resultado de un head-to-head sin poder
     # re-medirlo seria peor que dejarlo anotado.
     closure = GTAPClosureConfig(if_sub=False, savf_flag="capFix")
 
     # Baseline
-    builder_b = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)
+    builder_b = GTAPModelEquations(
+        params.sets, params, residual_region="ROW", closure=closure
+    )
     model_b = builder_b.build_model()
     _solve(model_b, params, label="base")
     base_macro = _extract_key(model_b, params)
@@ -144,7 +155,9 @@ def main() -> int:
     _augment_snapshot(model_b, base_snap)
 
     # Check (warm-start, no shock) — needed for the iterloop convergence pattern
-    builder_c = GTAPModelEquations(params.sets, params, residual_region="ROW", closure=closure)
+    builder_c = GTAPModelEquations(
+        params.sets, params, residual_region="ROW", closure=closure
+    )
     model_c = builder_c.build_model()
     _copy_var_levels(model_b, model_c)
     _solve(model_c, params, label="check")
@@ -172,8 +185,11 @@ def main() -> int:
         _apply_tariff_shock(step_params, factor=cumulative_factor)
 
         builder_k = GTAPModelEquations(
-            step_params.sets, step_params, residual_region="ROW",
-            closure=closure, t0_snapshot=model_b,
+            step_params.sets,
+            step_params,
+            residual_region="ROW",
+            closure=closure,
+            t0_snapshot=model_b,
         )
         model_k = builder_k.build_model()
         _copy_var_levels(prev_model, model_k)
@@ -185,8 +201,10 @@ def main() -> int:
         step_snaps.append(snap_k)
         prev_model = model_k
 
-    model_s = prev_model           # final shocked model
-    params = step_params_list[-1]  # final shocked params (kept as `params` for downstream)
+    model_s = prev_model  # final shocked model
+    params = step_params_list[
+        -1
+    ]  # final shocked params (kept as `params` for downstream)
     shock_macro = _extract_key(model_s, params)
     shock_snap = step_snaps[-1]
 
@@ -205,8 +223,11 @@ def main() -> int:
         "shock": shock_macro,
         "pct": {
             v: {
-                r: ((shock_macro[v][r] / base_macro[v][r] - 1.0) * 100.0
-                    if base_macro[v][r] else float("nan"))
+                r: (
+                    (shock_macro[v][r] / base_macro[v][r] - 1.0) * 100.0
+                    if base_macro[v][r]
+                    else float("nan")
+                )
                 for r in regions
             }
             for v in base_macro
@@ -219,7 +240,7 @@ def main() -> int:
         welfare_table[r] = {
             "EV_USDm": w.EV,
             "EV_priv": w.EV_priv,
-            "EV_gov":  w.EV_gov,
+            "EV_gov": w.EV_gov,
             "EV_save": w.EV_save,
             "A_total": w.A_total,
             "T_terms_of_trade": w.T,
@@ -228,7 +249,9 @@ def main() -> int:
             "TECH": w.TECH,
             "total_recon": w.total,
             "residual": w.residual,
-            "residual_pct_of_EV": (100.0 * w.residual / w.EV) if abs(w.EV) > 1e-9 else 0.0,
+            "residual_pct_of_EV": (100.0 * w.residual / w.EV)
+            if abs(w.EV) > 1e-9
+            else 0.0,
         }
 
     out = {
@@ -244,16 +267,21 @@ def main() -> int:
     print(f"{'var':<8}{'region':<8}{'base':>14}{'shock':>14}{'Δ %':>10}")
     for v in ("gdpmp", "regy", "u"):
         for r in regions:
-            b = base_macro[v][r]; s = shock_macro[v][r]
+            b = base_macro[v][r]
+            s = shock_macro[v][r]
             d = (s / b - 1.0) * 100 if b else float("nan")
             print(f"{v:<8}{r:<8}{b:>14.4f}{s:>14.4f}{d:>+9.4f}%")
 
     print("\n=== Equilibria welfare (Huff decomposition, USD millions) ===")
-    print(f"{'region':<8}{'EV':>14}{'A_tot':>14}{'T (ToT)':>12}{'IS':>12}{'resid%':>10}")
+    print(
+        f"{'region':<8}{'EV':>14}{'A_tot':>14}{'T (ToT)':>12}{'IS':>12}{'resid%':>10}"
+    )
     for r in regions:
         w = welfare[r]
         rp = (100.0 * w.residual / w.EV) if abs(w.EV) > 1e-9 else 0.0
-        print(f"{r:<8}{w.EV:>14.2f}{w.A_total:>14.2f}{w.T:>12.2f}{w.IS:>12.2f}{rp:>+9.2f}%")
+        print(
+            f"{r:<8}{w.EV:>14.2f}{w.A_total:>14.2f}{w.T:>12.2f}{w.IS:>12.2f}{rp:>+9.2f}%"
+        )
 
     return 0
 

@@ -1,4 +1,4 @@
-"""regenerate_paper.py: the phase 3a-2 jobs (corridas_paper steps 1-7 and runs/).
+"""regenerate_paper.py: the phase 3a-2 jobs (the old corridas_paper steps 1-7 and runs folder).
 
 Each job is recorded by write_source.py, as in 3a-1. The groups and their
 counts are those of specs/data/changes/one-data-folder/plan-phase-3a2.md.

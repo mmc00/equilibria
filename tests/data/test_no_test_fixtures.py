@@ -18,9 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # GEMPACK results and what is computed from them: regenerated on Windows (3a-2),
 # moved in phase 3b one family at a time. Each glob names the task of
 # plan-phase-3b.md that removes it; an empty dict means 3b is done.
-PENDING_3B: dict[str, str] = {
-    "runs/**": "Task 8",
-}
+PENDING_3B: dict[str, str] = {}
 
 
 def _tracked(*pathspecs: str) -> set[str]:
@@ -129,14 +127,35 @@ def test_no_code_points_into_tests_fixtures() -> None:
     assert not hits, "\n".join(hits)
 
 
+# The git-ignored work folders of two hashed tools, which stay (plan-phase-3b
+# Task 8): regenerate_paper.py runs its programs in runs/gempack_work and
+# run_gempack_matrix.py writes under runs/gempack_matrix. Naming them is not
+# reading the removed runs/.
+_RUNS_WORK = re.compile(r'runs/gempack_(work|matrix)|"runs" / "gempack_work"')
+# Reads git's bytes of the removed runs/ .cmf and skips once they are gone (Task 8).
+_RUNS_HISTORY = ("tests/scripts/test_swap_job.py",)
+
+
 def test_no_code_reads_runs() -> None:
     """Nothing reads runs/, which leaves the repository in phase 3b (Task 8)."""
     if "runs/**" in PENDING_3B:
         return
     hits = [
-        line for line in _grep_code(r'\bruns/|"runs" /') if not line.startswith("runs/")
+        line
+        # not \b: git grep -E on macOS does not know it and would match nothing
+        for line in _grep_code(r'(^|[^[:alnum:]_])runs/|"runs" /')
+        if not line.startswith(("runs/", *_RUNS_HISTORY))
+        and re.search(
+            r'(^|\W)runs/|"runs" /', _RUNS_WORK.sub("", line.split(":", 2)[2])
+        )
     ]
     assert not hits, "\n".join(hits)
+
+
+def test_runs_work_folders_are_the_only_exemption() -> None:
+    """The exemption hides the two work folders and nothing else."""
+    assert not _RUNS_WORK.sub("", 'ROOT / "runs" / "gempack_work"').count("runs")
+    assert "runs/nus333_compare" in _RUNS_WORK.sub("", "runs/nus333_compare/x.py")
 
 
 # Folders named "fixtures" that are not tests/**/fixtures (a tmp_path subfolder).

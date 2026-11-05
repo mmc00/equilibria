@@ -23,6 +23,9 @@ WORKFLOW (Windows, needs GEMPACK + GAMS):
   3. Compare:  python compare_gams_vs_gempack.py \
                    --gempack sl4dump.har --mcp ResultsMCP.gdx [--nlp ResultsNLP.gdx]
 
+Without files it compares the recorded runs of ``--experiment`` (default fixcap):
+data/horridge_simple/gemsim_<exp>/sl4dump.har and gams_{mcp,nlp}_<exp>/results.gdx.
+
 On macOS (no GEMPACK) you can still run the GAMS side and the MCP-vs-NLP levels
 cross-check (both should agree to ~8 digits), which this script also reports.
 """
@@ -57,8 +60,11 @@ def _find_gdxdump() -> str:
     candidates = [
         "/Library/Frameworks/GAMS.framework/Versions/Current/Resources/gdxdump",
     ]
-    candidates += [str(p / "gdxdump.exe") for p in sorted(
-        Path(r"C:/GAMS").glob("*"), reverse=True) if p.is_dir()]
+    candidates += [
+        str(p / "gdxdump.exe")
+        for p in sorted(Path(r"C:/GAMS").glob("*"), reverse=True)
+        if p.is_dir()
+    ]
     for c in candidates:
         if Path(c).exists():
             return c
@@ -71,8 +77,9 @@ GDXDUMP = _find_gdxdump()
 def read_gams_ch(gdx: Path, sym: str) -> dict[tuple[str, ...], float]:
     """Read a CH_* parameter from a GAMS results gdx as {key: pct}."""
     out: dict[tuple[str, ...], float] = {}
-    proc = subprocess.run([GDXDUMP, str(gdx), f"symb={sym}", "format=csv"],
-                          capture_output=True, text=True)
+    proc = subprocess.run(
+        [GDXDUMP, str(gdx), f"symb={sym}", "format=csv"], capture_output=True, text=True
+    )
     lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
     for ln in lines[1:]:  # skip header row
         parts = [p.strip('"') for p in ln.split(",")]
@@ -86,8 +93,8 @@ def read_gams_ch(gdx: Path, sym: str) -> dict[tuple[str, ...], float]:
 
 def read_gempack_ch(har: Path, gvar: str) -> dict[tuple[str, ...], float]:
     """Read a variable's %-change cells from an sltoht SL4 HAR, by name."""
-    # repo src, relative to this script (runs/horridge_simple/…): parents[2] == root
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+    # repo src, relative to this script (scripts/gtap/rungtap_compare/): parents[3] == root
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
     from equilibria.babel.har.reader import read_har
 
     headers = read_har(str(har))
@@ -101,6 +108,7 @@ def read_gempack_ch(har: Path, gvar: str) -> dict[tuple[str, ...], float]:
         raise KeyError(f"{gvar!r} not in SL4 dump {har}")
     ha = headers[hid]
     import numpy as np
+
     dims = [list(e) for e in ha.set_elements]
     out = {}
     for idx in np.ndindex(*ha.array.shape):
@@ -124,13 +132,35 @@ def match_pp(a: dict, b: dict, tol_pp: float = 1.0) -> tuple[float, float, int]:
     return within, statistics.median(diffs), len(diffs)
 
 
+def _recorded_defaults(args: argparse.Namespace) -> None:
+    """Fill the files not given with the records of ``args.experiment`` in data/."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
+    from equilibria.sources import find_reference, reference
+
+    exp = args.experiment
+    if args.gempack is None:
+        rec = find_reference("horridge_simple", "gemsim", experiment=exp)
+        args.gempack = rec / "sl4dump.har" if rec else None
+    if args.mcp is None:
+        args.mcp = (
+            reference("horridge_simple", "gams", form="mcp", experiment=exp)
+            / "results.gdx"
+        )
+    if args.nlp is None:
+        rec = find_reference("horridge_simple", "gams", form="nlp", experiment=exp)
+        args.nlp = rec / "results.gdx" if rec else None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--experiment", default="fixcap",
+                    help="recorded experiment whose files are the defaults below")  # fmt: skip
     ap.add_argument("--gempack", type=Path, help="sl4dump.har from GEMPACK (sltoht)")
-    ap.add_argument("--mcp", type=Path, required=True, help="ResultsMCP.gdx (GAMS levels)")
+    ap.add_argument("--mcp", type=Path, help="ResultsMCP.gdx (GAMS levels)")
     ap.add_argument("--nlp", type=Path, help="ResultsNLP.gdx (GAMS levels, optional)")
     ap.add_argument("--tol-pp", type=float, default=1.0)
     args = ap.parse_args()
+    _recorded_defaults(args)
 
     # Windows consoles default to cp1252 and choke on the Δ in the output; force UTF-8.
     try:
@@ -141,17 +171,23 @@ def main() -> int:
     print(f"SIMPLE model — GAMS(levels) vs GEMPACK(linearized), tol {args.tol_pp}pp\n")
 
     if args.nlp and args.nlp.exists():
-        print("=== sanity: GAMS/MCP vs GAMS/NLP (both levels — should be ~8 digits) ===")
+        print(
+            "=== sanity: GAMS/MCP vs GAMS/NLP (both levels — should be ~8 digits) ==="
+        )
         for gv, ch in G2C.items():
             m = read_gams_ch(args.mcp, ch)
             n = read_gams_ch(args.nlp, ch)
             w, med, cnt = match_pp(m, n, args.tol_pp)
-            print(f"  {ch:10s} within {args.tol_pp}pp={w * 100:5.1f}%  median|Δ|={med:.2e}pp  (n={cnt})")
+            print(
+                f"  {ch:10s} within {args.tol_pp}pp={w * 100:5.1f}%  median|Δ|={med:.2e}pp  (n={cnt})"
+            )
         print()
 
     if not args.gempack or not args.gempack.exists():
-        print("No --gempack SL4 dump given (or missing) — run on Windows with GEMPACK.\n"
-              "The GAMS-vs-GAMS cross-check above already shows levels≡levels agreement.")
+        print(
+            "No --gempack SL4 dump given (or missing) — run on Windows with GEMPACK.\n"
+            "The GAMS-vs-GAMS cross-check above already shows levels≡levels agreement."
+        )
         return 0
 
     print("=== GAMS(levels) vs GEMPACK(linearized) — the key comparison ===")
@@ -165,13 +201,19 @@ def main() -> int:
         gams = read_gams_ch(args.mcp, ch)
         w, med, cnt = match_pp(gams, gem, args.tol_pp)
         all_within.append((w, cnt))
-        print(f"  {ch:10s} within {args.tol_pp}pp={w * 100:5.1f}%  median|Δ|={med:.2f}pp  (n={cnt})")
+        print(
+            f"  {ch:10s} within {args.tol_pp}pp={w * 100:5.1f}%  median|Δ|={med:.2f}pp  (n={cnt})"
+        )
     if all_within:
         tot = sum(c for _, c in all_within)
         wavg = sum(w * c for w, c in all_within) / tot
         print(f"\n  OVERALL within {args.tol_pp}pp = {wavg * 100:.1f}%")
-        print("  (Horridge's small localized shock should give ~99–100% — vs our matrix's")
-        print("   ~52% at a +10% global bilateral tariff = the shock-size linearization gap.)")
+        print(
+            "  (Horridge's small localized shock should give ~99–100% — vs our matrix's"
+        )
+        print(
+            "   ~52% at a +10% global bilateral tariff = the shock-size linearization gap.)"
+        )
     return 0
 
 
