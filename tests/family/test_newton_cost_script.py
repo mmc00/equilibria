@@ -83,6 +83,7 @@ def test_newton_cost_orderings_on_3x3():
     infog = ("infog9", "infog29", "infog13")
     for c in out["calls"]:
         o = c["orderings"]
+        assert not {"weighted", "weighted_free"} & set(o)  # opt-in only
         bij = o["bijection"]
         assert bij["bijection"], bij  # every name maps, none dropped
         assert bij["rows"]["unmapped"] == bij["cols"]["unmapped"] == 0
@@ -131,7 +132,9 @@ def test_newton_cost_weighted_on_3x3():
     import numpy as np
 
     s = _script()
-    out = s.measure("gtap7_3x3", capture_dir(), orderings=True, pyomo=False)
+    out = s.measure(
+        "gtap7_3x3", capture_dir(), orderings=True, pyomo=False, weighted=True
+    )
     for c in out["calls"]:
         o = c["orderings"]
         for name in ("weighted", "weighted_free"):

@@ -54,9 +54,11 @@ ORDERINGS = (
     "pyomo_order",
     "pyomo_J",
     "pyomo_order_pyomo_pattern",
-    "weighted",
-    "weighted_free",
 )
+# Opt-in extras of ``orderings`` (``measure(..., weighted=True)``, ``--weighted``): scipy's
+# ``min_weight_full_bipartite_matching`` on the Jacobian values, which takes over 30 minutes
+# per call on 20x41.
+WEIGHTED = ("weighted", "weighted_free")
 
 
 def _missing_diagonal(J):
@@ -162,8 +164,10 @@ def _weighted_perm(J, locked: dict[int, int]):
 
 def icntl_for(variant: str) -> dict[int, int]:
     """The ICNTL handed to MUMPS for ``variant`` (``mumps_auto``: ICNTL(6)=7)."""
-    if variant not in VARIANTS + ORDERINGS:
-        raise ValueError(f"unknown colperm {variant!r}; use one of {VARIANTS}")
+    if variant not in VARIANTS + ORDERINGS + WEIGHTED:
+        raise ValueError(
+            f"unknown colperm {variant!r}; use one of {VARIANTS + ORDERINGS + WEIGHTED}"
+        )
     icntl = dict(ICNTL)
     if variant == "mumps_auto":
         icntl[6] = 7
@@ -395,8 +399,10 @@ def _same_step(sol, ref) -> dict:
     }
 
 
-def _orderings(ss, sq, b, nlp, hard: dict[int, int] | None = None) -> dict:
-    """Factor the squared system in the four orders/patterns of ``ORDERINGS``.
+def _orderings(
+    ss, sq, b, nlp, hard: dict[int, int] | None = None, weighted: bool = False
+) -> dict:
+    """Factor the squared system in the orders/patterns of ``ORDERINGS``.
 
     * ``pairing``: ``ss.J`` as is (the family's row/column pairing).
     * ``pyomo_order``: the same J with row k = family row of ``b.con_names[k]`` and
@@ -405,6 +411,10 @@ def _orderings(ss, sq, b, nlp, hard: dict[int, int] | None = None) -> dict:
       needs ``nlp``.
     * ``pyomo_order_pyomo_pattern``: family values on the union of Pyomo's pattern
       (explicit zeros kept) and the family's, in Pyomo's native order; needs ``nlp``.
+
+    With ``weighted`` it also factors the two ``WEIGHTED`` orders (maximum-product
+    matching on the Jacobian values, hard GAMS pairs locked / free); the matching alone
+    takes over 30 minutes per call on 20x41.
 
     Everything is evaluated at photo B's point when ``nlp`` is given (else ``ss.x0``).
     The cross-period rows are unit proxy rows in the family but real rows in Pyomo,
@@ -442,7 +452,10 @@ def _orderings(ss, sq, b, nlp, hard: dict[int, int] | None = None) -> dict:
     if bij["bijection"]:
         pyomo_col = np.empty(len(rperm), dtype=np.int64)
         pyomo_col[rperm] = cperm
-    for name, locked in (("weighted", dict(hard or {})), ("weighted_free", {})):
+    weighted_runs = (
+        (("weighted", dict(hard or {})), ("weighted_free", {})) if weighted else ()
+    )
+    for name, locked in weighted_runs:
         t = time.perf_counter()
         wperm, wrep = _weighted_perm(J, locked)
         match_s = time.perf_counter() - t
@@ -566,6 +579,7 @@ def measure(
     colperm: str = "pairing",
     orderings: bool = False,
     pyomo: bool = True,
+    weighted: bool = False,
 ) -> dict:
     from equilibria.backends.family_backend import FamilyBackend
     from equilibria.family.disk_cache import cache_key, enable_jax_cache
@@ -656,7 +670,7 @@ def measure(
             nlp = None
             if pyomo_model is not None:
                 nlp = pyomo_nlp_at_b(pyomo_model, capture, a, b)
-            m["orderings"] = _orderings(ss, sq, b, nlp, _hard_rows(mp, sq, p))
+            m["orderings"] = _orderings(ss, sq, b, nlp, _hard_rows(mp, sq, p), weighted)
         calls.append(
             {
                 "period": a.period,
@@ -706,13 +720,22 @@ if __name__ == "__main__":
     ap.add_argument(
         "--orderings",
         action="store_true",
-        help="also factor pyomo_order / pyomo_J / pyomo_order_pyomo_pattern per call",
+        help="also factor the ORDERINGS (pyomo_order / pyomo_J / "
+        "pyomo_order_pyomo_pattern) per call; needs PyomoNLP unless --no-pyomo",
+    )
+    ap.add_argument(
+        "--weighted",
+        action="store_true",
+        help="with --orderings: also the weighted / weighted_free orders (scipy "
+        "min_weight_full_bipartite_matching; SLOW: over 30 min per call on 20x41)",
     )
     ap.add_argument(
         "--no-pyomo", action="store_true", help="with --orderings: skip PyomoNLP"
     )
     ap.add_argument("--out", type=Path)
     a = ap.parse_args()
+    if a.weighted and not a.orderings:
+        ap.error("--weighted needs --orderings")
     cap = a.capture or Path.home() / ".cache/equilibria/family/prep_capture" / a.dataset
     result = {
         "sha": _sha(),
@@ -722,6 +745,7 @@ if __name__ == "__main__":
             a.cache_root,
             a.colperm,
             orderings=a.orderings,
+            weighted=a.weighted,
             pyomo=not a.no_pyomo,
         ),
     }

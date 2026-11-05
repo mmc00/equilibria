@@ -212,6 +212,9 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
     from equilibria.family.ifsub_arrays import fix_report_var
 
     macros = _ifsub_macro_map()
+    # Deactivation only. A family StateModel has no constraint components, so this loop
+    # is nine lookups returning 0; the fallback call below repeats it for the same cost.
+    # Kept (rather than skipped) so a model that does carry the equations stays correct.
     n = _apply_ifsub_closure_cells(pm, params, ())  # deactivation only
     macro_fallos: list[str] = []
     rest: list[str] = []
