@@ -44,3 +44,21 @@ def test_newton_cost_on_3x3():
         for k, c in enumerate(calls)
     )
     assert out["newton_projected_s"] == pytest.approx(want)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "variant", ["pairing", "pairing_explicit_zeros", "matching", "mumps_auto"]
+)
+def test_newton_cost_colperm_variants_on_3x3(variant):
+    s = _script()
+    out = s.measure("gtap7_3x3", capture_dir(), colperm=variant)
+    assert out["colperm"] == variant
+    for c in out["calls"]:
+        assert c["variant"] == variant
+        assert c["mumps_ok"] and c["residual"] < 1e-8
+        for k in ("infog1", "infog28", "infog9", "infog29", "infog12", "infog13"):
+            assert isinstance(c[k], int), k
+        if variant == "matching":
+            assert c["hard_pairs_dropped"] >= 0
+    assert out["newton_projected_s"] > 0

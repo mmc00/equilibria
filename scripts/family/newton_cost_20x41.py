@@ -46,16 +46,65 @@ def _sibling(name: str):
     return mod
 
 
-def _mumps_step(J, F):
+VARIANTS = ("pairing", "pairing_explicit_zeros", "matching", "mumps_auto")
+
+
+def _missing_diagonal(J):
+    """Boolean mask of the rows whose paired diagonal (k, k) is not stored in J."""
+    import numpy as np
+
+    Jc = J.tocsr()
+    return np.array(
+        [
+            k not in Jc.indices[Jc.indptr[k] : Jc.indptr[k + 1]]
+            for k in range(Jc.shape[0])
+        ]
+    )
+
+
+def _matching_perm(J):
+    """Column order from a perfect bipartite matching on the true J pattern.
+
+    Keeping every in-pattern pair and re-matching only the off-pattern rows is not
+    always perfect (3x3: 22 of 58 unmatched), so this is a min-weight full matching
+    (weight 1 on the paired diagonal, 2 elsewhere): it keeps as many in-pattern
+    pairs as a perfect matching allows. Returns ``(perm, dropped, dropped_in_pattern)``:
+    new column k is old column ``perm[k]``. Raises if no perfect matching exists.
+    """
+    import numpy as np
+    from scipy.sparse import csr_matrix
+    from scipy.sparse.csgraph import min_weight_full_bipartite_matching
+
+    n = J.shape[0]
+    C = J.tocoo()
+    w = np.where(C.row == C.col, 1.0, 2.0)
+    try:
+        r, c = min_weight_full_bipartite_matching(
+            csr_matrix((w, (C.row, C.col)), shape=J.shape)
+        )
+    except ValueError as exc:
+        raise RuntimeError(f"matching not perfect: {exc}") from exc
+    perm = np.empty(n, dtype=int)
+    perm[r] = c
+    diag_in = ~_missing_diagonal(J)
+    moved = perm != np.arange(n)
+    return perm, int(moved.sum()), int((moved & diag_in).sum())
+
+
+def _mumps_step(J, F, variant: str = "pairing"):
     """Symbolic, numeric, solve of ``J dx = -F``; times, MUMPS codes and residual.
 
     A failing job is recorded (``mumps_ok`` False) with the codes, not worked around.
+    ``variant`` picks the column order / ICNTL(6) (see ``VARIANTS``).
     """
     import mumps
     import numpy as np
 
+    if variant not in VARIANTS:
+        raise ValueError(f"unknown colperm {variant!r}; use one of {VARIANTS}")
     rhs0 = -np.asarray(F, dtype=float)
     out: dict = {
+        "variant": variant,
         "symbolic_s": None,
         "factor_s": None,
         "solve_s": None,
@@ -63,15 +112,44 @@ def _mumps_step(J, F):
         "error": None,
         "infog1": None,
         "infog28": None,
+        "infog9": None,
+        "infog29": None,
+        "infog12": None,
+        "infog13": None,
         "residual": None,
+        "missing_diag": int(_missing_diagonal(J).sum()),
+        "hard_pairs_dropped": 0,
+        "in_pattern_pairs_dropped": 0,
     }
+    icntl = dict(ICNTL)
+    A = J.tocoo()
+    perm = None
+    if variant == "pairing_explicit_zeros":
+        miss = np.flatnonzero(_missing_diagonal(J))
+        A = J.tocoo()
+        from scipy.sparse import coo_matrix
+
+        A = coo_matrix(
+            (
+                np.concatenate([A.data, np.zeros(miss.size)]),
+                (np.concatenate([A.row, miss]), np.concatenate([A.col, miss])),
+            ),
+            shape=J.shape,
+        )
+    elif variant == "matching":
+        perm, out["hard_pairs_dropped"], out["in_pattern_pairs_dropped"] = (
+            _matching_perm(J)
+        )
+        A = J.tocsc()[:, perm].tocoo()
+    elif variant == "mumps_auto":
+        icntl[6] = 7
     ctx = mumps.DMumpsContext(sym=0, par=1)
     try:
         ctx.set_silent()
-        for k, v in ICNTL.items():
+        for k, v in icntl.items():
             ctx.set_icntl(k, v)
         ctx.set_cntl(3, CNTL3)
-        ctx.set_centralized_sparse(J.tocoo())
+        ctx.set_centralized_sparse(A)
         for job, key in ((1, "symbolic_s"), (2, "factor_s"), (3, "solve_s")):
             if job == 3:
                 rhs = rhs0.copy()
@@ -86,9 +164,19 @@ def _mumps_step(J, F):
                 return out
             out[key] = time.perf_counter() - t
             out["infog1"] = int(ctx.get_infog(1))
+            if job == 1:
+                out["infog9"] = int(ctx.get_infog(9))  # estimated factor entries
             if job == 2:
                 out["infog28"] = int(ctx.get_infog(28))
-        out["residual"] = float(np.abs(J @ rhs - rhs0).max())
+                out["infog29"] = int(ctx.get_infog(29))  # effective factor entries
+                out["infog12"] = int(ctx.get_infog(12))  # off-diagonal pivots
+                out["infog13"] = int(ctx.get_infog(13))  # delayed pivots
+        sol = rhs
+        if perm is not None:  # column k of the permuted system is old column perm[k]
+            x = np.empty_like(sol)
+            x[perm] = sol
+            sol = x
+        out["residual"] = float(np.abs(J @ sol - rhs0).max())
         out["mumps_ok"] = True
     finally:
         ctx.destroy()
@@ -101,7 +189,8 @@ def _same_pattern(J, prev) -> bool:
     import numpy as np
 
     return bool(
-        np.array_equal(J.indptr, prev.indptr) and np.array_equal(J.indices, prev.indices)
+        np.array_equal(J.indptr, prev.indptr)
+        and np.array_equal(J.indices, prev.indices)
     )
 
 
@@ -120,7 +209,12 @@ def projected(calls: list[dict]) -> float | None:
     )
 
 
-def measure(dataset: str, capture: Path, cache_root: Path | None = None) -> dict:
+def measure(
+    dataset: str,
+    capture: Path,
+    cache_root: Path | None = None,
+    colperm: str = "pairing",
+) -> dict:
     from equilibria.backends.family_backend import FamilyBackend
     from equilibria.family.disk_cache import cache_key, enable_jax_cache
     from equilibria.family.mp_arrays import MPArrays
@@ -204,7 +298,7 @@ def measure(dataset: str, capture: Path, cache_root: Path | None = None) -> dict
         fj_s = time.perf_counter() - t
         J.sort_indices()
 
-        m = _mumps_step(J, F)
+        m = _mumps_step(J, F, colperm)
         calls.append(
             {
                 "period": a.period,
@@ -223,6 +317,7 @@ def measure(dataset: str, capture: Path, cache_root: Path | None = None) -> dict
         prev_J = J
     return {
         "dataset": dataset,
+        "colperm": colperm,
         "NIT": list(NIT),
         "NFACT": list(NFACT),
         "ICNTL": {str(k): v for k, v in ICNTL.items()},
@@ -248,10 +343,11 @@ if __name__ == "__main__":
     ap.add_argument("--dataset", default="gtap7_20x41")
     ap.add_argument("--capture", type=Path)
     ap.add_argument("--cache-root", type=Path)
+    ap.add_argument("--colperm", choices=VARIANTS, default="pairing")
     ap.add_argument("--out", type=Path)
     a = ap.parse_args()
     cap = a.capture or Path.home() / ".cache/equilibria/family/prep_capture" / a.dataset
-    result = {"sha": _sha(), **measure(a.dataset, cap, a.cache_root)}
+    result = {"sha": _sha(), **measure(a.dataset, cap, a.cache_root, a.colperm)}
     text = json.dumps(result, indent=1)
     if a.out:
         a.out.write_text(text)
