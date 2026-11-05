@@ -16,6 +16,7 @@ byte-identical to the hand-made file (``diff_3b.md``).
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import shutil
 import sys
@@ -42,6 +43,10 @@ ORACLE = (
     )
     / "default_rdlt0.prm"
 )
+# sha256 of the hand-made default_gtap7_20x41_rdlt0_windows.prm (the old test
+# fixture, as committed at d333cf63): it keeps the oracle independent of
+# _force_rdlt, which wrote the record's copy.
+HAND_MADE_SHA256 = "be5f541d8a473a2a4f764b30d8fa5f5754b46a22d46f739148e21b639a0e7dd8"
 
 pytestmark = pytest.mark.skipif(not PRM.exists(), reason="falta data/gtap7/gtap7_20x41")
 
@@ -53,6 +58,11 @@ def _load_module() -> Any:
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def test_oracle_is_the_hand_made_prm() -> None:
+    """The record's .prm is the hand-made Windows one, not just _force_rdlt's output."""
+    assert hashlib.sha256(ORACLE.read_bytes()).hexdigest() == HAND_MADE_SHA256
 
 
 def test_capfix_es_byte_a_byte_el_prm_que_corrio_en_windows(tmp_path: Path) -> None:
