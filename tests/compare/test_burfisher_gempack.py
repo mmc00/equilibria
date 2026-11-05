@@ -76,6 +76,17 @@ def test_con_dos_lineas_method_vale_la_ultima(tmp_path) -> None:
     assert _script().method("X", tmp_path) == "Johansen"
 
 
+def test_a_run_folder_compares_exactly_one_exercise(tmp_path) -> None:
+    """A folder is one run: without --only naming one exercise, every exercise would
+    be compared against that same run and the tables would look plausible."""
+    mod = _script()
+    assert mod.exercises("TBL46A", tmp_path) == ["TBL46A"]
+    assert mod.exercises("", "gragg") == list(mod.rb.EXERCISES)
+    for only in ("", "TBL46A,ME9C"):
+        with pytest.raises(ValueError, match="one run"):
+            mod.exercises(only, tmp_path)
+
+
 GRAGG = "gragg"  # compare_burfisher_gempack's source: nus333/gemsim_burfisher_gragg/
 
 

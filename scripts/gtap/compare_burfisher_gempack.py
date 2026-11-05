@@ -115,6 +115,19 @@ def solve(exp: str) -> tuple[dict, dict]:
     return cg.model_levels(m), dict(xscale_data(p, p.sets))
 
 
+def exercises(only: str, source: Source) -> list[str]:
+    """The exercises to compare: ``--only``'s, or every one of Table 3.
+
+    A folder is one run, so it needs ``--only`` with exactly one exercise; else
+    every exercise would be compared against that one run."""
+    todo = [e for e in only.split(",") if e] or list(rb.EXERCISES)
+    if isinstance(source, Path) and len(todo) != 1:
+        raise ValueError(
+            f"--gempack-dir {source} is one run: name its exercise with --only EXP"
+        )
+    return todo
+
+
 def _line(exp: str, meth: str, r: Report) -> str:
     o = r.overall
     w = o["pct_within"]
@@ -135,11 +148,15 @@ def main() -> int:
         "--gempack-dir",
         type=lambda v: v if v in _TOOL else Path(v),
         default=BOOK,
-        help='"book" (the book\'s runs, the default), "gragg", or one run\'s folder',
+        help='"book" (the book\'s runs, the default), "gragg", or one run\'s folder '
+        "(with --only EXP)",
     )
     a = ap.parse_args()
 
-    todo = [e for e in a.only.split(",") if e] or list(rb.EXERCISES)
+    try:
+        todo = exercises(a.only, a.gempack_dir)
+    except ValueError as err:
+        ap.error(str(err))
     results: dict[str, dict] = {}
     excluded: dict[str, str] = {}
     for exp in todo:
