@@ -18,7 +18,7 @@ ajuste se queda corto cuando el shock mueve el reparto de la inversion: TBL45A
 psave/pinv da -0,218 % contra -0,251 %; TBL65A, de 21 % a 29 % (+1,49 % contra +1,87 %).
 
 Oraculos: ``psave``, ``pinv`` y ``u`` de GEMPACK Gragg
-(``tests/fixtures/nus333_bienestar_gempack.json.gz``).
+(``data/gtap7/nus333/sltoht_burfisher_gragg_welfare/welfare.json.gz``).
 
 LOCAL-only: SKIP si falta nus333.
 """
@@ -28,11 +28,15 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from tests.templates.gtap._nus333 import ROOT, nus333_params, run_burfisher
+from tests.templates.gtap._nus333 import nus333_params, run_burfisher
+
+from equilibria.sources import reference
 
 pytestmark = pytest.mark.integration
 
-FIXTURE = ROOT / "tests" / "fixtures" / "nus333_bienestar_gempack.json.gz"
+FIXTURE = (
+    reference("nus333", "sltoht", method="gragg", output="welfare") / "welfare.json.gz"
+)
 
 
 def _solve(exp: str) -> Any:

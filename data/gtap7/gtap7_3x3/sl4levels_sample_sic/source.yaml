@@ -1,0 +1,13 @@
+kind: data
+model: gtap7
+dataset: gtap7_3x3_sl4levels_sample_sic
+source: 'Hand-written sample of sltoht -SHL -SIC text output (issue #127), not a real
+  sltoht run: the oracle of export_sl4_levels.py --from-text, committed before its
+  parser (ba76874a). Its values follow the gtap7_3x3 tm10 capFlex run (gempack_tm10_s8-16-32_capflex/sl4dump.har
+  and sltoht_tm10_s8-16-32_capflex/sl4levels.har). Moved byte for byte from tests/fixtures/gtap7_gempack
+  at 40a2abc6 (phase 3b); its header still names the pre-3b paths'
+license: test specimen written for equilibria
+outputs:
+  sl4levels_sample_sic.txt: 3cf1bfd4aafaecbec3e691801346ed4f6f9a305fefa06e605e709345f2be067c
+status: verified
+notes: ''

@@ -10,7 +10,7 @@ derivative of the solution path at the check point, times the full shock. Each
 variable then sits at ``check × (1 + %change)``, or at ``check + change`` when its
 level is not positive.
 
-Oracle: the book's GEMPACK Johansen runs (``tests/fixtures/gtap7_gempack/burfisher``),
+Oracle: the book's GEMPACK Johansen runs (``data/gtap7/nus333/gempack_burfisher``),
 compared with the comparator's linear mode. In a Johansen solution a product is
 the sum of the % changes of its factors, not the product of the new levels.
 

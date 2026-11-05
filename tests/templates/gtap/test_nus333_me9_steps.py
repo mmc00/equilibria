@@ -6,7 +6,7 @@ solver segun el caso). GEMPACK nunca aplica el shock de una vez: lo parte en pas
 (Gragg). El driver hace lo mismo con los shocks del ShockBlock: sube el shock en
 fracciones y cada solve arranca del anterior.
 
-Oraculo: las soluciones GEMPACK de ``tests/fixtures/gtap7_gempack/burfisher`` (post).
+Oraculo: las soluciones GEMPACK de ``data/gtap7/nus333/gempack_burfisher`` (post).
 """
 
 from __future__ import annotations

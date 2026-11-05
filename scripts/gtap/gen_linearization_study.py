@@ -1,24 +1,27 @@
 """Generate the against-GEMPACK linearization-study page from whatever grid
-fixtures are present.
+records are present.
 
 The page always builds: absent (dataset, config) cells read "—" (pending the
 Windows GEMPACK run). It documents the two study axes (shock-size sweep + Gragg
 refinement), lists the compared quantity variables, reports the measured Python↔
-GEMPACK within-1pp match per (dataset, config) where the fixtures exist, and
+GEMPACK within-1pp match per (dataset, config) where the records exist, and
 carries the welfare diagnostic + provenance.
 
-Import-light: build_page(fixtures_dir, out_md) works on an empty dir WITHOUT
-importing Pyomo — the per-shock Python solve is guarded behind "fixtures present".
+Import-light: build_page(data_root, out_md) works on an empty dir WITHOUT
+importing Pyomo — the per-shock Python solve is guarded behind "record present".
+The GEMPACK solutions are the capFlex matrix records
+``data/gtap7/<ds>/gempack_tm<shock>_s<steps>_capflex/`` (``sl4dump.har``).
 
 Usage:
     uv run python scripts/gtap/gen_linearization_study.py
 """
 from __future__ import annotations
 
-from equilibria.sources import dataset_dir, find_reference
 import sys
 from pathlib import Path
+
 from equilibria._local_refs import path_capi_src
+from equilibria.sources import dataset_dir, find_reference
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -27,7 +30,7 @@ sys.path.insert(0, str(ROOT / "scripts/gtap"))
 DATASETS = ["gtap7_3x3", "gtap7_3x4", "gtap7_5x5", "gtap7_10x7", "gtap7_15x10"]
 SWEEP_SHOCKS = ["10", "3", "1", "0.3", "0.1"]
 GRAGG_STEPS = ["4", "8", "16", "32", "64"]
-DEFAULT_FIXTURES = ROOT / "tests/fixtures/gtap7_gempack"
+DEFAULT_DATA_ROOT = ROOT / "data"
 DEFAULT_OUT = ROOT / "docs/site/guide/gtap7_gempack_linearization_study.md"
 
 
@@ -38,21 +41,18 @@ def _config_tag(shock_pct: str, steps: str) -> str:
     return f"tm{s}_s{st}"
 
 
-def _sl4_fixture(fixtures_dir: Path, dataset: str, tag: str) -> Path | None:
-    """The SL4 dump fixture for (dataset, tag), or None if absent.
-
-    Recognizes the pre-grid legacy name `sl4dump_<ds>_tm10.har` as the baseline
-    `tm10_s8-16-32` config (the old runner emitted exactly that: 10% shock,
-    Steps 8 16 32), so the 10%/default column uses the fixtures that already exist.
-    """
-    cand = fixtures_dir / f"sl4dump_{dataset}_{tag}.har"
-    if cand.exists():
-        return cand
-    if tag == "tm10_s8-16-32":
-        legacy = fixtures_dir / f"sl4dump_{dataset}_tm10.har"
-        if legacy.exists():
-            return legacy
-    return None
+def _sl4_fixture(data_root: Path, dataset: str, shock_pct: str, steps: str) -> Path | None:
+    """The capFlex SL4 dump recorded for (dataset, shock, steps), or None if absent."""
+    shock = float(shock_pct)
+    folder = find_reference(
+        dataset,
+        "gempack",
+        root=data_root,
+        shock=int(shock) if shock.is_integer() else shock,
+        steps=steps.replace(" ", "-"),
+        closure="capFlex",
+    )
+    return None if folder is None else folder / "sl4dump.har"
 
 
 def _var_list_rows() -> list[str]:
@@ -72,15 +72,15 @@ def _seed_gdx(dataset: str) -> Path | None:
     return None if folder is None else folder / "out.gdx"
 
 
-def _match_cell(fixtures_dir: Path, dataset: str, tag: str) -> str:
-    """within-1pp match% for (dataset, tag), or '—' if the fixture is absent.
+def _match_cell(data_root: Path, dataset: str, shock_pct: str, steps: str) -> str:
+    """within-1pp match% for (dataset, shock, steps), or '—' if the record is absent.
 
     The Python solve is only invoked when the GEMPACK fixture exists (import-light
     otherwise). Python is solved at the study's 10% baseline; non-10% shock columns
     are marked '— (py-shock pending)' rather than fabricated, since driving the
     multiperiod solve at an arbitrary shock magnitude is not yet wired.
     """
-    sl4 = _sl4_fixture(fixtures_dir, dataset, tag)
+    sl4 = _sl4_fixture(data_root, dataset, shock_pct, steps)
     if sl4 is None:
         return "—"
     # Python needs the shock GDX to seed the multiperiod solve; without it the
@@ -88,7 +88,7 @@ def _match_cell(fixtures_dir: Path, dataset: str, tag: str) -> str:
     if _seed_gdx(dataset) is None:
         return "— (no seed GDX)"
     # A fixture exists; measure Python (10% baseline) vs this GEMPACK solution.
-    if not tag.startswith("tm10"):
+    if not _config_tag(shock_pct, steps).startswith("tm10"):
         return "— (py-shock pending)"
     try:
         return _measure_within_pp(dataset, sl4)
@@ -178,9 +178,9 @@ def _solve_shock_10(dataset: str):
     return m
 
 
-def build_page(fixtures_dir: Path, out_md: Path) -> str:
+def build_page(data_root: Path, out_md: Path) -> str:
     """Build the study page markdown, write it to out_md, and return the text."""
-    fixtures_dir = Path(fixtures_dir)
+    data_root = Path(data_root)
 
     # --- shock-sweep table ---
     sweep_header = "| dataset | " + " | ".join(f"{s}%" for s in SWEEP_SHOCKS) \
@@ -188,7 +188,7 @@ def build_page(fixtures_dir: Path, out_md: Path) -> str:
     sweep_sep = "|" + "---|" * (len(SWEEP_SHOCKS) + 2)
     sweep_rows = []
     for ds in DATASETS:
-        cells = [_match_cell(fixtures_dir, ds, _config_tag(s, "8 16 32"))
+        cells = [_match_cell(data_root, ds, s, "8 16 32")
                  for s in SWEEP_SHOCKS]
         # non-linearity = |match(10%) − match(0.1%)| when both are numeric
         nl = "—"
@@ -205,7 +205,7 @@ def build_page(fixtures_dir: Path, out_md: Path) -> str:
     gragg_sep = "|" + "---|" * (len(GRAGG_STEPS) + 1)
     gragg_rows = []
     for ds in DATASETS:
-        cells = [_match_cell(fixtures_dir, ds, _config_tag("10", s))
+        cells = [_match_cell(data_root, ds, "10", s)
                  for s in GRAGG_STEPS]
         gragg_rows.append(f"| `{ds}` | " + " | ".join(cells) + " |")
 
@@ -249,7 +249,7 @@ rises with Steps isolates GEMPACK's numerical method as the source, not the mode
 
 {gragg_header}
 {gragg_sep}
-""" + "\n".join(gragg_rows) + f"""
+""" + "\n".join(gragg_rows) + """
 
 ## Variables compared
 
@@ -292,7 +292,7 @@ modes on 16,424 cells). See
 
 
 def main() -> int:
-    md = build_page(DEFAULT_FIXTURES, DEFAULT_OUT)
+    md = build_page(DEFAULT_DATA_ROOT, DEFAULT_OUT)
     n_pending = md.count("—")
     print(f"wrote {DEFAULT_OUT} ({len(md)} chars, {n_pending} pending cells)")
     return 0

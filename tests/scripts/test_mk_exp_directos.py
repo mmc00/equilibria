@@ -1,14 +1,16 @@
 """mk_exp_directos.py: traduce el ``rate% N from file X.shk`` de la GUI de RunGTAP a
 shocks directos, celda por celda (ME8, TBL813).
 
-Oraculo: los logs de GEMPACK de la corrida en Windows (2026-09-30,
-tests/fixtures/gtap7_gempack/burfisher/<exp>.log.gz), que repiten el command file
-que corrio. No salen de este script.
+Oraculo: los logs de GEMPACK de la corrida en Windows (2026-09-30), que repiten el
+command file que corrio. No salen de este script. Since phase 3b the shocks are read
+from the command file of the book's records (``nus333/gempack_burfisher/<exp>/run.cmf``);
+OLD_LOG_SHOCKS_SHA256 pins them to the 2026-09-30 logs, so the oracle stays
+independent of the ``-dir.exp`` this script writes.
 """
 
 from __future__ import annotations
 
-import gzip
+import hashlib
 import importlib.util
 import shutil
 from pathlib import Path
@@ -16,12 +18,22 @@ from typing import Any
 
 import pytest
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, reference
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "gtap" / "mk_exp_directos.py"
 PKG = dataset_dir("nus333")
-LOGS = ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher"
+# sha256 of the sorted "Shock" lines of the 2026-09-30 logs (<exp>.log.gz, d333cf63).
+OLD_LOG_SHOCKS_SHA256 = {
+    "me8": "1fff7dcb50c9ceb5edbafbc63d1ec5a872f9b91ecf44e947a0fcd712621b0c65",
+    "tbl813": "b737f40b186c5b4805cfb4398a39071df2ecf5fc792c4541ca99b0242a9c1a65",
+}
+
+
+def _ran(exp: str) -> str:
+    """The command file of the book's Windows run of ``exp``."""
+    rec = reference("nus333", "gempack", experiment=exp, method="book")
+    return (rec / "run.cmf").read_text(errors="replace")
 
 
 def _load() -> Any:
@@ -52,11 +64,16 @@ def generados(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @pytest.mark.parametrize("exp", ["me8", "tbl813"])
 def test_los_shocks_son_los_que_corrieron_en_windows(generados: Path, exp: str) -> None:
-    with gzip.open(LOGS / f"{exp}.log.gz", "rt", errors="replace") as fh:
-        want = _shocks(fh.read())
+    want = _shocks(_ran(exp))
     got = _shocks((generados / f"{exp}-dir.exp").read_text())
     assert got == want
     assert len(got) == {"me8": 63, "tbl813": 1}[exp]
+
+
+@pytest.mark.parametrize("exp", ["me8", "tbl813"])
+def test_the_cmf_shocks_are_the_2026_09_30_logs(exp: str) -> None:
+    digest = hashlib.sha256("\n".join(_shocks(_ran(exp))).encode()).hexdigest()
+    assert digest == OLD_LOG_SHOCKS_SHA256[exp]
 
 
 def test_los_dir_del_paquete_son_los_que_genera_el_script(generados: Path) -> None:

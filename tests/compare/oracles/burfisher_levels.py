@@ -6,10 +6,10 @@ el libro: no tiene por que coincidir con una solucion en niveles).
 equilibria resuelto contra GEMPACK en NIVELES, pre y post, con las mismas formulas
 del ejemplo 15 (``gtap7_map_3x3.py``). A = ``data/gtap7/nus333/equilibria_burfisher_levels/
 eq_burfisher_<exp>_levels.json.gz`` (``make_eq_burfisher_levels.py``); B = el ``.sl4``
-de GEMPACK (``tests/fixtures/gtap7_gempack/burfisher/<exp>.sl4.gz``),
+de GEMPACK (``data/gtap7/nus333/gempack_burfisher/<exp>/solution.sl4``),
 leido aca a mano: VARS/PLEV/VNCP dan donde empieza cada variable en LEVB (pre) y
 LEVA (post); VCSP/VCNI/VCSN/STNM/SSZ/STEL, sus sets; orden Fortran. VDFB de
-basedata.har (pre) y de ``<exp>.upd`` (post).
+basedata.har (pre) y del ``updated.har`` del registro (post).
 
 Estos ``.sl4`` son del GTAPV7 sin parche: ``rore``, ``y``, ``pinv``, ``qinv``, ``pva`` y
 ``pe`` no tienen nivel (PLEV = 0), asi que no se miden.
@@ -19,20 +19,16 @@ Uso (desde la raiz): ``uv run python tests/compare/oracles/burfisher_levels.py``
 
 from __future__ import annotations
 
-import gzip
 import itertools
-import shutil
 import sys
-import tempfile
 from pathlib import Path
 
 import numpy as np
 from gtap7_map_3x3 import GEMPACK_VARS, ROOT, _add_vdfb, load_eq, report, rows_of
 
 from equilibria.babel.har.reader import read_har
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, reference
 
-FIX = ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher"
 EQ = ROOT / "data" / "gtap7" / "nus333" / "equilibria_burfisher_levels"
 
 
@@ -67,12 +63,9 @@ def sl4_levels(path: Path) -> dict[str, dict[tuple[str, tuple[str, ...]], float]
 
 
 def run(exp: str) -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        sl4 = Path(tmp) / f"{exp}.sl4"
-        with gzip.open(FIX / f"{exp}.sl4.gz", "rb") as src, sl4.open("wb") as dst:
-            shutil.copyfileobj(src, dst)
-        B = sl4_levels(sl4)
-    _add_vdfb(B, dataset_dir("nus333") / "basedata.har", FIX / f"{exp}.upd")
+    rec = reference("nus333", "gempack", experiment=exp, method="book")
+    B = sl4_levels(rec / "solution.sl4")
+    _add_vdfb(B, dataset_dir("nus333") / "basedata.har", rec / "updated.har")
     print(f"== {exp}: variables de B con nivel: {len(B) - 1} (+ VDFB)")
     print(f"  sin nivel: {sorted(set(GEMPACK_VARS) - set(B))}")
     eq, xs = load_eq(EQ / f"eq_burfisher_{exp}_levels.json.gz")

@@ -2,10 +2,13 @@
 
 Cada ejercicio de ``run_burfisher.EXERCISES`` (el ``.prm``, los shocks y el cierre de
 la Tabla 3) se resuelve con equilibria y se compara, pre y post, contra la solucion
-GEMPACK del mismo ``.EXP`` (``tests/fixtures/gtap7_gempack/burfisher/``: ``.sl4``
-gzip, ``.upd`` y log) con el mapeo GTAP de ``compare_gempack_levels.py``.
+GEMPACK del mismo ``.EXP`` con el mapeo GTAP de ``compare_gempack_levels.py``. The
+book's runs are the records ``data/gtap7/nus333/gempack_burfisher/<exp>/``
+(``solution.sl4``, ``updated.har``, ``run.cmf``) and, with ``--gempack-dir gragg``,
+their Gragg 2-4-6 reruns ``gemsim_burfisher_gragg/<exp>/``; both are found with
+``equilibria.sources.reference``.
 
-El metodo de GEMPACK sale del log (``Method = ...``). Seis ejercicios son Johansen de
+El metodo de GEMPACK sale del command file (``Method = ...``; the last one wins). Seis ejercicios son Johansen de
 un paso porque asi los resolvio el libro (TBL45A/B/C, TBL64, ME4A/B): una solucion en
 niveles no tiene por que coincidir con esa extrapolacion lineal, y se reportan
 aparte. Las variables sin nivel en el ``.sl4`` (``rore``, ``y``, ``pinv``, ``qinv``,
@@ -25,15 +28,12 @@ o, sin resolver, con niveles ya guardados (``--save-eq-dir`` o
 from __future__ import annotations
 
 import argparse
-import gzip
 import json
 import re
-import shutil
 import sys
-import tempfile
 from pathlib import Path
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, find_reference, reference
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "scripts" / "gtap")]
@@ -43,43 +43,64 @@ import run_burfisher as rb  # noqa: E402
 
 from equilibria.compare import Report  # noqa: E402
 
-FIX = ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher"
 BASEDATA = dataset_dir("nus333") / "basedata.har"
+# Where GEMPACK solved each exercise: "book" (the book's own runs,
+# data/gtap7/nus333/gempack_burfisher/) or "gragg" (Gragg 2-4-6 on the levels TAB,
+# gemsim_burfisher_gragg/ with their levels in sltoht_burfisher_gragg/). A Path is
+# one run's folder (run.cmf, solution.sl4, updated.har, maybe sl4levels.har).
+Source = str | Path
+BOOK, GRAGG = "book", "gragg"
+_TOOL = {BOOK: "gempack", GRAGG: "gemsim"}
 
 
-def method(exp: str, fix: Path = FIX) -> str:
-    """El metodo de la corrida GEMPACK: la ultima linea ``Method = X;`` del log."""
-    with gzip.open(fix / f"{exp.lower()}.log.gz", "rb") as fh:
-        raw = fh.read()
+def solution(exp: str, source: Source = BOOK) -> Path | None:
+    """The folder of ``exp``'s GEMPACK run in ``source``, or None if it has none."""
+    if isinstance(source, Path):
+        return source if (source / "solution.sl4").exists() else None
+    return find_reference(
+        "nus333", _TOOL[source], experiment=exp.lower(), method=source
+    )
+
+
+def _run_dir(exp: str, source: Source) -> Path:
+    if isinstance(source, Path):
+        return source
+    return reference("nus333", _TOOL[source], experiment=exp.lower(), method=source)
+
+
+def _levels_har(exp: str, source: Source) -> Path | None:
+    """sltoht's levels .har of the run, if it has one (the book's runs: none used)."""
+    if source == GRAGG:
+        rec = reference("nus333", "sltoht", experiment=exp.lower(), method=GRAGG)
+        return rec / "sl4levels.har"
+    if isinstance(source, Path) and (source / "sl4levels.har").exists():
+        return source / "sl4levels.har"
+    return None
+
+
+def method(exp: str, source: Source = BOOK) -> str:
+    """El metodo de la corrida GEMPACK: la ultima linea ``Method = X;`` que corrio."""
+    raw = (_run_dir(exp, source) / "run.cmf").read_bytes()
     # gemsim en Windows escribe el log en UTF-16 (con BOM)
     utf16 = raw[:2] in (b"\xff\xfe", b"\xfe\xff")
     text = raw.decode("utf-16" if utf16 else "utf-8", errors="replace")
     found = re.findall(r"(?im)^\s*method\s*=\s*(\w+)\s*;", text)
     if not found:
-        raise ValueError(f"{exp}: el log no dice el metodo")
+        raise ValueError(f"{exp}: el command file no dice el metodo")
     return found[-1].capitalize()
 
 
 def run(
-    exp: str, levels: dict, xscale: dict, fix: Path = FIX, *, linear: bool = False
+    exp: str, levels: dict, xscale: dict, source: Source = BOOK, *, linear: bool = False
 ) -> Report:
     """equilibria (``levels``, ``xscale``) contra la solucion GEMPACK de ``exp``.
 
-    Los niveles salen de ``sl4levels_<exp>.har`` (sltoht) si existe; si no, del
-    ``.sl4``, que tiene que traer ``PLEV``. ``linear``: ``levels`` is a Johansen
+    Los niveles salen del ``sl4levels.har`` (sltoht) de la corrida si existe; si no,
+    del ``.sl4``, que tiene que traer ``PLEV``. ``linear``: ``levels`` is a Johansen
     solution (see ``compare_gempack_levels.equilibria_side``)."""
-    upd = fix / f"{exp.lower()}.upd"
-    har = fix / f"sl4levels_{exp.lower()}.har"
-    if har.exists():
-        return cg.run(levels, xscale, har, BASEDATA, upd, linear=linear)
-    with tempfile.TemporaryDirectory() as tmp:
-        sl4 = Path(tmp) / f"{exp.lower()}.sl4"
-        with (
-            gzip.open(fix / f"{exp.lower()}.sl4.gz", "rb") as src,
-            sl4.open("wb") as dst,
-        ):
-            shutil.copyfileobj(src, dst)
-        return cg.run(levels, xscale, sl4, BASEDATA, upd, linear=linear)
+    d = _run_dir(exp, source)
+    har = _levels_har(exp, source) or d / "solution.sl4"
+    return cg.run(levels, xscale, har, BASEDATA, d / "updated.har", linear=linear)
 
 
 def solve(exp: str) -> tuple[dict, dict]:
@@ -92,6 +113,19 @@ def solve(exp: str) -> tuple[dict, dict]:
     if set(codes.values()) != {1}:
         print(f"{exp:7s} equilibria no resolvio: {codes}", flush=True)
     return cg.model_levels(m), dict(xscale_data(p, p.sets))
+
+
+def exercises(only: str, source: Source) -> list[str]:
+    """The exercises to compare: ``--only``'s, or every one of Table 3.
+
+    A folder is one run, so it needs ``--only`` with exactly one exercise; else
+    every exercise would be compared against that one run."""
+    todo = [e for e in only.split(",") if e] or list(rb.EXERCISES)
+    if isinstance(source, Path) and len(todo) != 1:
+        raise ValueError(
+            f"--gempack-dir {source} is one run: name its exercise with --only EXP"
+        )
+    return todo
 
 
 def _line(exp: str, meth: str, r: Report) -> str:
@@ -111,15 +145,22 @@ def main() -> int:
     ap.add_argument("--save-eq-dir", type=Path, help="guardar los niveles resueltos")
     ap.add_argument("--json", type=Path, help="guardar los resultados en JSON")
     ap.add_argument(
-        "--gempack-dir", type=Path, default=FIX, help="carpeta con las corridas GEMPACK"
+        "--gempack-dir",
+        type=lambda v: v if v in _TOOL else Path(v),
+        default=BOOK,
+        help='"book" (the book\'s runs, the default), "gragg", or one run\'s folder '
+        "(with --only EXP)",
     )
     a = ap.parse_args()
 
-    todo = [e for e in a.only.split(",") if e] or list(rb.EXERCISES)
+    try:
+        todo = exercises(a.only, a.gempack_dir)
+    except ValueError as err:
+        ap.error(str(err))
     results: dict[str, dict] = {}
     excluded: dict[str, str] = {}
     for exp in todo:
-        if not (a.gempack_dir / f"{exp.lower()}.sl4.gz").exists():
+        if solution(exp, a.gempack_dir) is None:
             print(f"{exp:7s} sin solucion GEMPACK", flush=True)
             continue
         if a.eq_dir:

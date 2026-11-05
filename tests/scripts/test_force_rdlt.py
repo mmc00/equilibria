@@ -9,10 +9,14 @@ Oraculo: ``default_gtap7_20x41_rdlt0_windows.prm``, hecho a mano en Windows el
 2026-10-19 (``4_niveles/a_mano/patch_rdlt.py`` en la rama de datos
 windows/corridas-paper-2026-10-19_1928) y
 con el que GEMSIM 11.3 resolvio el 20x41 capFix (max residual ratio 1.05e-7).
+Since phase 3b it is read from the record
+``gtap7_20x41/gemsim_levels6_tm10_s8-16-32_capfix/default_rdlt0.prm``, which is
+byte-identical to the hand-made file (``diff_3b.md``).
 """
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import shutil
 import sys
@@ -23,18 +27,26 @@ import numpy as np
 import pytest
 
 from equilibria.babel.har.reader import read_har
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, reference
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "data" / "gtap7" / "gempack" / "tools" / "run_gempack_matrix.py"
 PRM = dataset_dir("gtap7_20x41") / "default.prm"
 ORACLE = (
-    ROOT
-    / "tests"
-    / "fixtures"
-    / "gtap7_gempack"
-    / "default_gtap7_20x41_rdlt0_windows.prm"
+    reference(
+        "gtap7_20x41",
+        "gemsim",
+        tab="gtapv7_levels",
+        shock=10,
+        steps="8-16-32",
+        closure="capFix",
+    )
+    / "default_rdlt0.prm"
 )
+# sha256 of the hand-made default_gtap7_20x41_rdlt0_windows.prm (the old test
+# fixture, as committed at d333cf63): it keeps the oracle independent of
+# _force_rdlt, which wrote the record's copy.
+HAND_MADE_SHA256 = "be5f541d8a473a2a4f764b30d8fa5f5754b46a22d46f739148e21b639a0e7dd8"
 
 pytestmark = pytest.mark.skipif(not PRM.exists(), reason="falta data/gtap7/gtap7_20x41")
 
@@ -46,6 +58,11 @@ def _load_module() -> Any:
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def test_oracle_is_the_hand_made_prm() -> None:
+    """The record's .prm is the hand-made Windows one, not just _force_rdlt's output."""
+    assert hashlib.sha256(ORACLE.read_bytes()).hexdigest() == HAND_MADE_SHA256
 
 
 def test_capfix_es_byte_a_byte_el_prm_que_corrio_en_windows(tmp_path: Path) -> None:

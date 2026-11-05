@@ -1,7 +1,7 @@
-"""Nothing is left under tests/**/fixtures/ (ADR-0010, phase 4).
+"""Nothing is left under tests/**/fixtures/ or runs/ (ADR-0010, phases 4 and 3b).
 
-Phase 4 moved the reader, solver and snapshot fixtures to data/; phase 3b
-moves the GEMPACK ones and empties the allowance.
+Phase 4 moved the reader, solver and snapshot fixtures to data/; phase 3b moved
+the GEMPACK ones and deleted tests/fixtures/ and runs/.
 """
 
 from __future__ import annotations
@@ -14,15 +14,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# GEMPACK results and what is computed from them: regenerated on Windows (3a-2),
-# moved in phase 3b.
-ALLOWED_UNTIL_PHASE_3B_PREFIX = "tests/fixtures/gtap7_gempack/"
-ALLOWED_UNTIL_PHASE_3B = frozenset({"tests/fixtures/nus333_bienestar_gempack.json.gz"})
 
-
-def _tracked_fixtures() -> set[str]:
+def _tracked(*pathspecs: str) -> set[str]:
     out = subprocess.run(
-        ["git", "ls-files", "tests/**/fixtures/**", "tests/fixtures/**"],
+        ["git", "ls-files", *pathspecs],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -31,41 +26,37 @@ def _tracked_fixtures() -> set[str]:
     return {p for p in out.splitlines() if p}
 
 
-def _allowed(path: str) -> bool:
-    return (
-        path.startswith(ALLOWED_UNTIL_PHASE_3B_PREFIX) or path in ALLOWED_UNTIL_PHASE_3B
-    )
+def _tracked_fixtures() -> set[str]:
+    return _tracked("tests/**/fixtures/**", "tests/fixtures/**")
 
 
 def test_no_files_under_tests_fixtures() -> None:
-    extra = sorted(p for p in _tracked_fixtures() if not _allowed(p))
+    extra = sorted(_tracked_fixtures())
     assert not extra, f"move these to data/ (ADR-0010): {extra}"
 
 
-def test_allowance_has_no_stale_entries() -> None:
-    tracked = _tracked_fixtures()
-    stale = sorted(ALLOWED_UNTIL_PHASE_3B - tracked)
-    assert not stale, f"moved already; drop them from the allowance: {stale}"
+def test_tests_fixtures_is_gone() -> None:
+    """Phase 3b deleted tests/fixtures/ and runs/: neither has a tracked file."""
+    left = sorted(_tracked("tests/fixtures", "runs"))
+    assert not left, f"phase 3b removed these folders: {left}"
 
 
 # A path into any tests/**/fixtures folder, as text or as two Path segments.
 _FIXTURE_REF = r'tests/([A-Za-z0-9_/]+/)?fixtures|"tests" / "fixtures"'
 _CODE = ("*.py", "*.toml", "*.yml", "*.yaml", "*.cfg", "*.ps1", "*.sh", "*.ipynb")
-# The GEMPACK results and their tools move in phase 3b; a source.yaml says where
-# a file came from, which is history, not a path anything reads.
-_UNTIL_PHASE_3B = ("gtap7_gempack", "nus333_bienestar_gempack")
+# A source.yaml says where a file came from, which is history, not a path
+# anything reads.
 _EXEMPT_FILES = ("data/gtap7/gempack/", "scripts/windows/", "specs/")
 
 
-def test_no_code_points_into_tests_fixtures() -> None:
-    """Code and user docs read fixtures from data/, except the GEMPACK ones (3b)."""
+def _grep_code(pattern: str) -> list[str]:
     out = subprocess.run(
         [
             "git",
             "grep",
             "-n",
             "-E",
-            _FIXTURE_REF,
+            pattern,
             "--",
             *_CODE,
             "docs/site",
@@ -76,15 +67,48 @@ def test_no_code_points_into_tests_fixtures() -> None:
         capture_output=True,
         text=True,
     ).stdout
-    hits = [
+    return [
         line
         for line in out.splitlines()
         if not line.startswith(_EXEMPT_FILES)
         and not line.startswith("tests/data/test_no_test_fixtures.py")
         and not re.match(r"data/.*source\.yaml:", line)
-        and not any(k in line for k in _UNTIL_PHASE_3B)
+    ]
+
+
+def test_no_code_points_into_tests_fixtures() -> None:
+    """Code and user docs read fixtures from data/."""
+    hits = _grep_code(_FIXTURE_REF)
+    assert not hits, "\n".join(hits)
+
+
+# The git-ignored work folders of two hashed tools, which stay (plan-phase-3b
+# Task 8): regenerate_paper.py runs its programs in runs/gempack_work and
+# run_gempack_matrix.py writes under runs/gempack_matrix. Naming them is not
+# reading the removed runs/.
+_RUNS_WORK = re.compile(r'runs/gempack_(work|matrix)|"runs" / "gempack_work"')
+# Reads git's bytes of the removed runs/ .cmf and skips once they are gone (Task 8).
+_RUNS_HISTORY = ("tests/scripts/test_swap_job.py",)
+
+
+def test_no_code_reads_runs() -> None:
+    """Nothing reads runs/, which leaves the repository in phase 3b (Task 8)."""
+    hits = [
+        line
+        # not \b: git grep -E on macOS does not know it and would match nothing
+        for line in _grep_code(r'(^|[^[:alnum:]_])runs/|"runs" /')
+        if not line.startswith(("runs/", *_RUNS_HISTORY))
+        and re.search(
+            r'(^|\W)runs/|"runs" /', _RUNS_WORK.sub("", line.split(":", 2)[2])
+        )
     ]
     assert not hits, "\n".join(hits)
+
+
+def test_runs_work_folders_are_the_only_exemption() -> None:
+    """The exemption hides the two work folders and nothing else."""
+    assert not _RUNS_WORK.sub("", 'ROOT / "runs" / "gempack_work"').count("runs")
+    assert "runs/nus333_compare" in _RUNS_WORK.sub("", "runs/nus333_compare/x.py")
 
 
 # Folders named "fixtures" that are not tests/**/fixtures (a tmp_path subfolder).
@@ -108,20 +132,12 @@ def _fixtures_segments(path: Path) -> list[int]:
 
 def test_no_python_path_segment_into_tests_fixtures() -> None:
     """Catches ``parent / "fixtures" / ...`` however it is split over lines."""
-    files = subprocess.run(
-        ["git", "ls-files", "*.py"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.split()
+    files = _tracked("*.py")
     hits = []
-    for rel in files:
+    for rel in sorted(files):
         if rel.startswith(_EXEMPT_FILES) or rel in _NOT_TESTS_FIXTURES:
             continue
         lines = (ROOT / rel).read_text().splitlines()
         for n in _fixtures_segments(ROOT / rel):
-            window = "\n".join(lines[n - 1 : n + 3])
-            if not any(k in window for k in _UNTIL_PHASE_3B):
-                hits.append(f"{rel}:{n}: {lines[n - 1].strip()}")
+            hits.append(f"{rel}:{n}: {lines[n - 1].strip()}")
     assert not hits, "\n".join(hits)

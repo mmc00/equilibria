@@ -16,7 +16,7 @@ las participaciones crudas: GDX ME9C, ROW, betaP base 0,6130 / check 0,6322.
 Oraculo: los valores esperados salen de la formula de GTAP aplicada al phiP y a
 yc/yg/rsav/regY del periodo base del GDX de GAMS de ME9C (2026-10-22, a mano). La
 prueba de comportamiento (el check reproduce el dato) usa las soluciones GEMPACK de
-``tests/fixtures/gtap7_gempack/burfisher``, donde pre = dato.
+``data/gtap7/nus333/gempack_burfisher``, donde pre = dato.
 """
 
 from __future__ import annotations

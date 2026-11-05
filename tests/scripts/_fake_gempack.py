@@ -55,7 +55,8 @@ class FakeGempack:
         text = cmf.read_text(encoding="latin-1")
         if self.abort:
             (cwd / f"{stem}-assert-arith-fail.har").write_bytes(b"dump")
-            # the lines of runs/gempack_20x41_validation/solve_console.txt (2725-2730)
+            # the lines 2725-2730 of the console archived in
+            # docs/archive/findings/rungtap_compare/gempack_20x41_validation/solve_console.txt
             console.write_text(banner + '     in equation "E_u".\n\n'
                                "    Attempt to take LOGE of zero or of a negative number.\n"
                                "    value of LOGE argument is -0.2668599\n"

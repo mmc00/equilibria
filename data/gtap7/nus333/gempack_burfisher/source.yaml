@@ -1,0 +1,11 @@
+kind: data
+model: gtap7
+dataset: nus333_gempack_burfisher
+source: readme.md describing the book's runs of Burfisher's exercises (the gempack_burfisher/<exp>/
+  records). Moved from tests/fixtures/gtap7_gempack/burfisher/readme.md at 40a2abc6
+  and rewritten for the record layout (phase 3b)
+license: equilibria documentation (MIT, as the package)
+outputs:
+  readme.md: 1475b6350bb835de9dae451e4c9664a39d9db9975dea38a73224faa44963e241
+status: verified
+notes: ''

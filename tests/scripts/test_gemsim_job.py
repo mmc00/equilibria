@@ -1,6 +1,6 @@
 """gemsim_job.py (gragg) and target_shocks.py: Burfisher with Gragg on the levels TABs.
 
-Step 5 of corridas_paper.ps1 in data/: each .exp of data/gtap7/nus333 runs under
+regenerate_paper.py's ``gragg`` group: each .exp of data/gtap7/nus333 runs under
 GEMSIM on a TAB compiled from data/gtap7/gempack_rungtap375_levels. Johansen
 1-step experiments become Gragg 2-4-6, and TBL53's ``target%`` shocks (which
 only the RunGTAP GUI solves) become plain shocks (maintainer, 2026-11-03).
@@ -313,7 +313,7 @@ def test_levels6_runs_the_patched_tab(tmp_path: Path, fake) -> None:
 
 
 def test_levels6_capfix_keeps_its_prm(tmp_path: Path, fake) -> None:
-    """default_rdlt0.prm replaces tests/fixtures/gtap7_gempack/default_gtap7_20x41_rdlt0_windows.prm."""
+    """default_rdlt0.prm is _force_rdlt's .prm (it replaced the hand-made Windows one in 3b)."""
     sys.path.insert(0, str(GEMPACK_MODEL_DIR / "tools"))
     from run_gempack_matrix import _force_rdlt  # ty: ignore[unresolved-import]
 

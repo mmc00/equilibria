@@ -1,7 +1,7 @@
 """GEMPACK con gtapv7_levels.tab: y, qinv, rore, pinv, pva y pe ya tienen nivel.
 
-El .har sale del paso 4 de ``scripts/windows/corridas_paper.ps1`` (gemsim sobre el TAB
-parchado por ``make_levels_tab.py`` + ``export_sl4_levels.py``). Dos comprobaciones:
+El .har sale del grupo ``levels6`` de ``data/gtap7/gempack/tools/regenerate_paper.py``
+(gemsim sobre el TAB parchado por ``make_levels_tab.py`` + ``export_sl4_levels.py``). Dos comprobaciones:
 
 1. Nivel PRE contra el oraculo hecho a mano desde basedata.har,
    ``tests/compare/oracles/levb_six_vars.py``, commiteado antes que el parche.
@@ -28,25 +28,16 @@ import pytest
 
 from equilibria.babel.har.reader import read_har
 from equilibria.compare import from_har
+from equilibria.sources import reference
 
 ROOT = Path(__file__).resolve().parents[2]
-FIX = ROOT / "tests" / "fixtures" / "gtap7_gempack"
-# caso -> (dataset, .har de niveles parchado, sl4dump (% de cambio) de la corrida SIN
-# parche, gtapv7.exe). El sl4dump del 3x3 capFlex es identico (252/252 cabeceras) al
-# de la corrida tm10_s8-16-32 que se parcho. Los capFix son las filas de la Tabla 2
-# (corrida de Windows del 2026-10-21, paso 4).
+# case -> (dataset, closure). The patched levels .har is the gemsim_levels6 record;
+# the % changes come from the sl4dump of the UNPATCHED gtapv7.exe run, the gempack
+# matrix record of the same closure. The capFix cases are the Table 2 rows.
 CASES = {
-    "gtap7_3x3": (
-        "gtap7_3x3",
-        "sl4levels6_gtap7_3x3_tm10.har",
-        "sl4dump_gtap7_3x3_tm10.har",
-    ),
+    "gtap7_3x3": ("gtap7_3x3", "capFlex"),
     **{
-        f"{ds}_capfix": (
-            ds,
-            f"sl4levels6_{ds}_tm10_s8-16-32_capfix.har",
-            f"sl4dump_{ds}_tm10_s8-16-32_capfix.har",
-        )
+        f"{ds}_capfix": (ds, "capFix")
         for ds in (
             "gtap7_3x3",
             "gtap7_3x4",
@@ -57,6 +48,27 @@ CASES = {
         )
     },
 }
+
+
+def _levels_har(case: str) -> Path:
+    dataset, closure = CASES[case]
+    rec = reference(
+        dataset,
+        "gemsim",
+        tab="gtapv7_levels",
+        shock=10,
+        steps="8-16-32",
+        closure=closure,
+    )
+    return rec / "sl4levels.har"
+
+
+def _sl4dump(case: str) -> Path:
+    dataset, closure = CASES[case]
+    rec = reference(dataset, "gempack", shock=10, steps="8-16-32", closure=closure)
+    return rec / "sl4dump.har"
+
+
 SIX = ("y", "qinv", "rore", "pinv", "pva", "pe")
 RTOL = 1e-6
 PCT_ATOL = 5e-5
@@ -73,11 +85,8 @@ def _oracle() -> Any:
 
 @pytest.mark.parametrize("case", sorted(CASES))
 def test_levb_de_las_seis_variables(case: str) -> None:
-    dataset, name, _ = CASES[case]
-    har = FIX / name
-    if not har.exists():
-        pytest.skip(f"falta {har.name} (paso 4 de corridas_paper.ps1, Windows)")
-    sol = from_har(har)
+    dataset, _ = CASES[case]
+    sol = from_har(_levels_har(case))
     assert not set(SIX) & set(sol.no_level), sorted(set(SIX) & set(sol.no_level))
     assert sol.periods() == ["pre", "post"]
 
@@ -95,12 +104,8 @@ def test_levb_de_las_seis_variables(case: str) -> None:
 
 @pytest.mark.parametrize("case", sorted(CASES))
 def test_el_parche_no_cambia_la_solucion(case: str) -> None:
-    _, name, dump_name = CASES[case]
-    har = FIX / name
-    if not har.exists():
-        pytest.skip(f"falta {har.name} (paso 4 de corridas_paper.ps1, Windows)")
-    sol = from_har(har)
-    dump = read_har(str(FIX / dump_name))
+    sol = from_har(_levels_har(case))
+    dump = read_har(str(_sl4dump(case)))
     by_name = {(h.long_name or "").split("#", 1)[0].strip(): h for h in dump.values()}
     for var in SIX:
         ref = by_name[var]
