@@ -1,0 +1,236 @@
+"""Budget of the no-Pyomo path on a GTAP dataset (ifSUB=1, capFix, gtap mode).
+
+Times every piece of the future path that already exists, adds today's measured
+Newton-TR + MUMPS time and projects the total against the 2-minute goal
+(spec 2026-11-04-family-backend-multiperiod-design.md). Pieces not built yet are
+listed in ``not_measured``.
+
+    <python with pymumps> scripts/family/budget_20x41.py [--dataset gtap7_20x41]
+        [--cache-root DIR] [--out FILE]
+
+Run it twice: the first (cold) run fills the record and JAX caches, the second
+(warm) one is the measurement.
+"""
+
+from __future__ import annotations
+
+import argparse
+import gc
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+# Today's 3 Newton solves (settle, check, shock) on 20x41, plans/paper/mediciones/
+# fases_20x41_d44692d.json ("Newton-TR + MUMPS").
+NEWTON_TODAY_S = 48.0
+NOT_MEASURED = {
+    "cross_period_rows": "Fisher/Tornqvist rows are not block equations yet",
+    "period_prep_on_arrays": "freeze/seed/closure/squaring steps not ported yet",
+    "calibration_rest": "calibrate_base bookkeeping outside its settle solve",
+}
+
+
+def _closure():
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+
+    # The closure tests/templates/gtap/test_gtap7_gempack_parity.py::_solve_shock uses.
+    return GTAPClosureConfig(
+        name="base",
+        closure_type="MCP",
+        capital_mobility="sluggish",
+        fix_endowments=False,
+        fix_taxes=False,
+        fix_technology=False,
+        if_sub=True,
+        savf_flag="capFix",
+        numeraire="pnum",
+        va_subsidy_basis="gempack",
+    )
+
+
+class _Timer:
+    def __init__(self) -> None:
+        self.pieces: dict[str, float | None] = {}
+
+    def __call__(self, name: str, fn):
+        t = time.perf_counter()
+        try:
+            out = fn()
+        except Exception as exc:
+            raise RuntimeError(f"piece {name!r} failed: {exc!r}") from exc
+        self.pieces[name] = time.perf_counter() - t
+        return out
+
+
+def measure(dataset: str, cache_root: Path) -> dict:
+    """Time the pieces in this process; any failing piece raises ``RuntimeError``."""
+    import numpy as np
+    import scipy.sparse as sp
+    from scipy.sparse.csgraph import maximum_bipartite_matching
+
+    import equilibria.templates.gtap.gtap_block_model as gbm
+    from equilibria.backends.family_backend import FamilyBackend
+    from equilibria.family.disk_cache import cache_key, enable_jax_cache
+    from equilibria.sources import dataset_dir
+    from equilibria.templates.gtap import GTAPParameters
+
+    cache_root = Path(cache_root)
+    enable_jax_cache(cache_root)
+    tm = _Timer()
+    closure = _closure()
+
+    def load_params():
+        d = dataset_dir(dataset)
+        p = GTAPParameters()
+        p.load_from_har(
+            basedata_path=d / "basedata.har",
+            sets_path=d / "sets.har",
+            default_path=d / "default.prm",
+            baserate_path=d / "baserate.har",
+        )
+        return p
+
+    p = tm("load_params", load_params)
+    rr = list(p.sets.r)[-1]
+    model, state = tm(
+        "compose_state", lambda: gbm.compose_block_state(p, p.sets, closure, rr)
+    )
+
+    path = cache_root / cache_key(dataset, closure, rr) / "records.pkl"
+    cold = not path.exists()
+    if cold:
+
+        def record():
+            b = FamilyBackend()
+            b.build(model, skip=state.ifsub_skipped)
+            b.save(path)
+            return b
+
+        tm("record_and_save", record)
+    backend = tm("cache_load", lambda: FamilyBackend.load(path))
+
+    def layout_system():
+        layout = backend.layout(state)
+        return layout, backend.system(layout)
+
+    layout, system = tm("layout_system", layout_system)
+    z = layout.free_values
+
+    def fj():
+        F = system.F(z)
+        J = system.jac(z)
+        return F, J
+
+    _, J = tm("first_FJ", fj)
+    tm("warm_FJ", fj)
+
+    def names():
+        rows = np.array(system.row_names)
+        cols = np.array(layout.col_names)
+        return np.argsort(rows), np.argsort(cols)
+
+    tm("names", names)
+    Jc = sp.csr_matrix((np.ones(J.nnz), (J.row, J.col)), shape=J.shape)
+    match = tm(
+        "matching", lambda: maximum_bipartite_matching(Jc, perm_type="column")
+    )
+
+    not_measured = dict(NOT_MEASURED)
+    if J.shape[0] != J.shape[1]:
+        not_measured["mumps_factor"] = f"single-period J is not square {J.shape}"
+    else:
+        try:
+            import mumps
+        except ImportError:
+            not_measured["mumps_factor"] = "pymumps not importable"
+        else:
+
+            def factor():
+                ctx = mumps.DMumpsContext()
+                ctx.set_silent()
+                ctx.set_centralized_sparse(J.tocoo())
+                rhs = np.ones(J.shape[0])
+                ctx.set_rhs(rhs)
+                ctx.run(job=6)
+                ctx.destroy()
+
+            tm("mumps_factor", factor)
+
+    pc = tm.pieces
+    per_period = pc["layout_system"] + pc["first_FJ"] + pc["names"] + pc["matching"]
+    projected = (
+        pc["load_params"]
+        + pc["compose_state"]
+        + pc["cache_load"]
+        + 3 * per_period
+        + NEWTON_TODAY_S
+    )
+    verdict = "go" if projected <= 100 else "tight" if projected <= 120 else "no"
+    return {
+        "dataset": dataset,
+        "if_sub": 1,
+        "cold": cold,
+        "rows": int(J.shape[0]),
+        "cols": int(J.shape[1]),
+        "nnz": int(J.nnz),
+        "unmatched_rows": int(np.count_nonzero(match < 0)),
+        "pieces": {k: float(v) for k, v in pc.items() if v is not None},
+        "newton_today_s": NEWTON_TODAY_S,
+        "projected_s": float(projected),
+        "verdict": verdict,
+        "not_measured": not_measured,
+    }
+
+
+_CHILD = """
+import gc, json, sys
+gc.disable()
+sys.path[:0] = [{src!r}, {here!r}]
+from budget_20x41 import measure
+print("RESULT " + json.dumps(measure({dataset!r}, {root!r})))
+"""
+
+
+def run(dataset: str, cache_root: Path, warm: bool) -> dict:
+    """``measure`` in a clean child process with GC off; ``warm`` is recorded only."""
+    code = _CHILD.format(
+        src=str(ROOT / "src"),
+        here=str(Path(__file__).resolve().parent),
+        dataset=dataset,
+        root=str(cache_root),
+    )
+    p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    line = next((s for s in p.stdout.splitlines() if s.startswith("RESULT ")), None)
+    if line is None:
+        raise RuntimeError(p.stderr[-4000:])
+    out = json.loads(line[len("RESULT ") :])
+    out["warm_requested"] = warm
+    return out
+
+
+def _sha() -> str:
+    return subprocess.run(
+        ["git", "rev-parse", "--short=7", "HEAD"],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+    ).stdout.strip()
+
+
+if __name__ == "__main__":
+    gc.disable()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dataset", default="gtap7_20x41")
+    ap.add_argument("--cache-root", type=Path, default=Path.home() / ".cache" / "equilibria" / "family")
+    ap.add_argument("--out", type=Path)
+    a = ap.parse_args()
+    cold = run(a.dataset, a.cache_root, warm=False)
+    warm = run(a.dataset, a.cache_root, warm=True)
+    result = {"sha": _sha(), "cold": cold, "warm": warm}
+    text = json.dumps(result, indent=1)
+    if a.out:
+        a.out.write_text(text)
+    print(text)
