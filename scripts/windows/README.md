@@ -66,7 +66,9 @@ From the repo root, in PowerShell:
 
 ```powershell
 git fetch origin
-git switch data/phase-3-gempack
+git switch main
+git pull
+git switch -c data/gempack-matrix  # never commit to main; open a PR from this branch
 uv sync --frozen
 
 # 1. the GEMPACK version gtapv7.exe prints in its banner ("GEMPACK Release 12.1.003 ...");
@@ -89,7 +91,7 @@ uv run python data/gtap7/gempack/tools/regenerate_gempack.py --tool-version $v
 # 5. send the results back
 git add data/gtap7
 git commit -m "data(gempack): regenerate the GEMPACK matrix on Windows"
-git push
+git push -u origin data/gempack-matrix
 ```
 
 Paths default to `C:\runGTAP375\gtapv7.exe` and `C:\GP\sltoht.exe`; pass
@@ -115,8 +117,9 @@ this disk, and committing them would break their records everywhere else.
 
 ```powershell
 cd C:\Documentos\proyectos\equilibria
-git switch data/phase-3-gempack
-git pull                      # brings data/.gitattributes; do not run GEMPACK again
+git switch main
+git pull                      # do not run GEMPACK again
+git switch -c data/gempack-crlf   # never commit to main; open a PR from this branch
 
 # re-add the GEMPACK results and tools as they are on disk, CRLF included
 git add --renormalize data/gtap7/gempack/tools (Get-ChildItem -Directory data\gtap7\*\gempack_*).FullName
@@ -126,6 +129,96 @@ git diff --cached --stat      # expect 66 x 3 text outputs and the tools; nothin
 uv run python -c "from equilibria.sources import check_tree; print([e for e in check_tree() if 'gempack' in e])"
 
 git commit -m "data(gempack): keep the Windows line endings the records hashed"
-git push
+git push -u origin data/gempack-crlf
 git restore data              # the rest of data/ back to the exact repository bytes
 ```
+
+## Phase 3a-2: the `corridas_paper.ps1` runs and `runs/` into `data/`
+
+`data/gtap7/gempack/tools/regenerate_paper.py` does what `corridas_paper.ps1`
+(steps 1-7) and the tracked `runs/` folders did, straight into `data/`: 203 jobs
+in ten groups, each recorded by `write_source.py` like the 3a-1 matrix. Plan:
+`specs/data/changes/one-data-folder/plan-phase-3a2.md`. `corridas_paper.ps1`
+is superseded; it stays until phase 3b.
+
+| group | what | jobs | tool |
+|---|---|---|---|
+| `book` | Burfisher's book experiments, `gtapuv7.exe` (`gtapv7.exe` for `gtapv7.exp`) | 39 | gempack |
+| `book-sltoht` | steps 1 and 6a: `sltoht` on them | 39 | sltoht |
+| `levels` | step 2: levels of matrix solutions, re-solved | 6 | sltoht |
+| `horridge` | step 3: Horridge's SIMPLE, GEMPACK side | 3 | gemsim |
+| `levels6` | step 4: six more levels, RunGTAP's 7.0 TAB patched | 12 | gemsim |
+| `gragg` | step 5: Burfisher with Gragg 2-4-6, `gtapv7` and `tbl53` included | 45 | gemsim |
+| `gragg-sltoht` | steps 6b and 7: `sltoht` on them | 45 | sltoht |
+| `swap` | `runs/{nus333,9x10}_compare`, swap closure (nus333 tm 1-10) | 11 | gempack |
+| `swap-sltoht` | levels of the two tm10 swap runs | 2 | sltoht |
+| `validation` | `runs/gempack_20x41_validation`: the recorded abort | 1 | gempack |
+
+Two releases are given, because they differ on this machine: `gtapv7.exe` and
+`gtapuv7.exe` (RunGTAP) print 12.1.003; `tablo`, `gemsim` and `sltoht` in `C:\GP`
+print 11.3.004. Every job checks the banner of each program it runs against them.
+
+Before running:
+
+- RunGTAP in `C:\runGTAP375` and GEMPACK in `C:\GP` (else `--gtapdir` / `--gp`).
+- Programs run in `runs/gempack_work/` (git-ignored), never in `data/` or
+  `%TEMP%`: GEMPACK writes its current folder into consoles and `.sl4` files,
+  and `%TEMP%` names the Windows user.
+- Every record hashes every file of `data/gtap7/gempack/tools/`: a change there
+  makes every recorded result stale. Change `tools/` in one batch, then run
+  everything once.
+
+From the repo root:
+
+```powershell
+git switch main
+git pull
+git switch -c data/gempack-paper   # never commit to main; open a PR from this branch
+uv sync --frozen
+$r = @("--gempack-release", "12.1.003", "--gp-release", "11.3.004")
+
+# 1. what would run (203 jobs), nothing is solved
+uv run python data/gtap7/gempack/tools/regenerate_paper.py @r --dry-run
+
+# 2. one small job per group, in this order (a group that reads another refuses
+#    a job whose prerequisite is not recorded yet)
+uv run python data/gtap7/gempack/tools/regenerate_paper.py @r --group book --only me9c
+uv run python data/gtap7/gempack/tools/regenerate_paper.py @r --group book-sltoht --only me9c
+uv run python data/gtap7/gempack/tools/regenerate_paper.py @r --group levels --datasets gtap7_3x3 --only sltoht_tm10_s8-16-32_capflex
+uv run python data/gtap7/gempack/tools/regenerate_paper.py @r --group horridge --only gemsim_fixcap
+uv run python data/gtap7/gempack/tools/regenerate_paper.py @r --group levels6 --datasets gtap7_3x3 --only gemsim_levels6_tm10_s8-16-32_capflex
+uv run python data/gtap7/gempack/tools/regenerate_paper.py @r --group gragg --only me9c
+uv run python data/gtap7/gempack/tools/regenerate_paper.py @r --group gragg-sltoht --only me9c
+uv run python data/gtap7/gempack/tools/regenerate_paper.py @r --group swap --datasets nus333 --only gempack_tm10_s8-16-32_dpsaveswap
+uv run python data/gtap7/gempack/tools/regenerate_paper.py @r --group swap-sltoht --datasets nus333 --only sltoht_tm10_s8-16-32_dpsaveswap
+uv run python data/gtap7/gempack/tools/regenerate_paper.py @r --group validation
+
+# 3. everything (about 3 hours); rerun it until only ME4A and ME4B fail
+uv run python data/gtap7/gempack/tools/regenerate_paper.py @r
+
+# 4. commit only with a clean tree
+uv run python -c "from equilibria.sources import check_tree; print(check_tree())"   # must print []
+git add data
+git commit -m "data(gempack): phase 3a-2 on Windows"
+git push -u origin data/gempack-paper
+```
+
+What to expect:
+
+- **ME4A and ME4B never record in `gragg`** (and so not in `gragg-sltoht`):
+  GEMSIM stops with "Accuracy too low" under Gragg 2-4-6, as in October. These
+  are the four failures that stay.
+- **Windows sometimes does not start a program** (exit 0xC0000142,
+  `STATUS_DLL_INIT_FAILED`; a GEMPACK console with no banner). `write_source.py`
+  and the jobs wait 15 s and retry once, and the record's `notes` says so. If
+  the retry fails too, the job leaves no folder; rerunning step 3 fills it.
+- Run step 3 in a console as it is, or from Git Bash with `> file`. With
+  PowerShell's `*>` redirection, Python sometimes could not write its last
+  line (`OSError: [Errno 9] Bad file descriptor`, exit 120) and the job counted
+  as failed.
+- TBL53 records only if the updated data has the target tax rates (1.05, 1.10,
+  1.02 in its nine cells): its `target%` shocks are written out as plain shocks.
+- `levels6` names the variables the cross-check drops in `export_console.txt`
+  (`CNTendwr`, `CNTendw` in October); the run still counts. `levels` and
+  `swap-sltoht` must match the recorded `sl4dump.har` exactly, or nothing is
+  recorded.
