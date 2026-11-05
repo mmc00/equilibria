@@ -109,3 +109,31 @@ name, the new one through `equilibria.sources.reference(...)`.
   has 43 exercises. Consumers index it by exercise name; no test changes.
 - `test_reference_keys_are_complete` also accepts a call that names `method=`
   (a Burfisher record), as it did `experiment=`.
+
+### Task 7 notes
+
+Moved byte for byte, each with a `write_source.py --no-run` record (`kind: data`,
+found with `dataset_dir()`, as the phase 4 snapshots next to their dataset):
+
+| old (`tests/fixtures/gtap7_gempack/`) | new | `dataset_dir(...)` |
+|---|---|---|
+| `sl4levels_sample_sic.txt` | `data/gtap7/gtap7_3x3/sl4levels_sample_sic/` | `gtap7_3x3_sl4levels_sample_sic` |
+| `table1_levels_v061_gtap7_3x3.json.gz` | `data/gtap7/gtap7_3x3/equilibria_table1_v061/` | `gtap7_3x3_equilibria_table1_v061` |
+| `updated_synthetic.har`, `make_synthetic_updated_har.py` | `data/gtap7/synthetic_updated/` | `gtap7_synthetic_updated` (the test puts the folder on `sys.path`) |
+| `burfisher/readme.md`, `burfisher_gragg/readme.md` | `data/gtap7/nus333/{gempack_burfisher,gemsim_burfisher_gragg}/readme.md` | records `nus333_gempack_burfisher`, `nus333_gemsim_burfisher_gragg` |
+
+- **`updated_synthetic.har`.** Regenerated with its generator: same values (max
+  abs 0), one header byte differs (offset 315; the HAR writer changed since
+  2026-07). The committed bytes are kept; no test reads them (the tests build
+  their own copy in `tmp_path`). The generator's only change is its default
+  output, now its own folder.
+- **The two `readme.md`.** A `README.md` is exempt from hashing only at the
+  root of `data/`; inside `nus333/` it would become a file of the `nus333`
+  record and make every result that hashes that dataset stale. So each parent
+  folder gets its own `--no-run` record, and the name stays lowercase (layout
+  rule; `nus333/readme.md` is the precedent). Both were rewritten in English
+  for the record layout (`solution.sl4`, `run.cmf`, ...); the facts are the old
+  ones, and the old provenance lines (2026-09-24, `01-run-all.bat`) are dropped
+  because each `<exp>/source.yaml` now says how its run was made.
+- `sl4levels_sample_sic.txt` keeps its header, which names the pre-3b paths
+  (`sl4dump_gtap7_3x3_tm10.har`, `runs/...guide.md`); its `source.yaml` says so.

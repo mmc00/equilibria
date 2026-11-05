@@ -30,9 +30,10 @@ def build_synthetic_updated_har(path: str) -> None:
 
 if __name__ == "__main__":
     import sys
+    from pathlib import Path
 
     build_synthetic_updated_har(
         sys.argv[1]
         if len(sys.argv) > 1
-        else "tests/fixtures/gtap7_gempack/updated_synthetic.har"
+        else str(Path(__file__).with_name("updated_synthetic.har"))
     )

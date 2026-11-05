@@ -29,12 +29,11 @@ import numpy as np
 import pytest
 
 from equilibria.babel.har.reader import read_har
-from equilibria.sources import reference
+from equilibria.sources import dataset_dir, reference
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "data" / "gtap7" / "gempack" / "tools" / "export_sl4_levels.py"
-FIXTURES = ROOT / "tests" / "fixtures" / "gtap7_gempack"
-SAMPLE = FIXTURES / "sl4levels_sample_sic.txt"
+SAMPLE = dataset_dir("gtap7_3x3_sl4levels_sample_sic") / "sl4levels_sample_sic.txt"
 SL4DUMP_3X3 = (
     reference("gtap7_3x3", "gempack", shock=10, steps="8-16-32", closure="capFlex")
     / "sl4dump.har"

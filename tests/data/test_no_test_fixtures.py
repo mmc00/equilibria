@@ -18,14 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # GEMPACK results and what is computed from them: regenerated on Windows (3a-2),
 # moved in phase 3b one family at a time. Each glob names the task of
 # plan-phase-3b.md that removes it; an empty dict means 3b is done.
-_GG = "tests/fixtures/gtap7_gempack/"
 PENDING_3B: dict[str, str] = {
-    _GG + "sl4levels_sample_sic.txt": "Task 7",
-    _GG + "updated_synthetic.har": "Task 7",
-    _GG + "make_synthetic_updated_har.py": "Task 7",
-    _GG + "table1_levels_v061_gtap7_3x3.json.gz": "Task 7",
-    _GG + "burfisher/readme.md": "Task 7",
-    _GG + "burfisher_gragg/readme.md": "Task 7",
     "runs/**": "Task 8",
 }
 

@@ -654,6 +654,7 @@ EX15_INDEX_EXCLUDED = (
     "tot",
 )
 
+
 # ---------------------------------------------------------------------------
 # Ejemplo 16 — niveles leidos DIRECTO del .sl4, sin sltoht (issue #148).
 #
@@ -673,9 +674,6 @@ EX15_INDEX_EXCLUDED = (
 # Medido el 2026-10-19 con un lector de exploracion (scratch, no commiteado): pre
 # rel max 4.8e-8 (qo); cambio max 1.04e-5 pp (TBL45A) y 3.05e-5 pp (ME9C).
 # ---------------------------------------------------------------------------
-_GEMPACK_FIXTURES = ROOT / "tests" / "fixtures" / "gtap7_gempack"
-
-
 def burfisher_sl4(exp: str) -> Path:
     """El ``.sl4`` del libro de un ejercicio de Burfisher (record
     ``nus333/gempack_burfisher/<exp>/solution.sl4``, stored raw)."""

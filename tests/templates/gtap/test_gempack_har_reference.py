@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT / "tests/fixtures/gtap7_gempack"))
+sys.path.insert(0, str(ROOT / "data/gtap7/synthetic_updated"))
 
 
 def test_synthetic_updated_har_roundtrips(tmp_path):

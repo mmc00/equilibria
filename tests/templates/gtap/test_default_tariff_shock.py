@@ -194,7 +194,8 @@ def test_altertax_moves_xw_as_gams_does(solved):
 # medidos desde el zip de replicacion (fuente en el propio fixture). El camino
 # viejo los reproduce bit a bit; el nuevo tiene que dar la misma solucion.
 TABLE1_ORACLE = (
-    ROOT / "tests/fixtures/gtap7_gempack/table1_levels_v061_gtap7_3x3.json.gz"
+    dataset_dir("gtap7_3x3_equilibria_table1_v061")
+    / "table1_levels_v061_gtap7_3x3.json.gz"
 )
 
 
