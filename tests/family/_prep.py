@@ -21,13 +21,17 @@ def _newton_mumps() -> dict:
 @cache
 def capture_dir(dataset: str = "gtap7_3x3") -> Path:
     """Capture ``dataset`` once per session into a temp dir (in-process solve)."""
+    import atexit
     import os
+    import shutil
     import tempfile
 
     from equilibria.family import prep_capture
     from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
 
     out = Path(tempfile.mkdtemp(prefix=f"prep_{dataset}_"))
+    # Photos run to hundreds of MB on 15x10: never leave them behind.
+    atexit.register(shutil.rmtree, out, True)
     env = {
         **_newton_mumps(),
         "EQUILIBRIA_GTAP_TR_LINSOLVE": "direct",
