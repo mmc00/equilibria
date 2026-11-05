@@ -496,9 +496,13 @@ class PeriodPreparer:
             raise ValueError(f"no recipe for period {period!r}") from None
 
     def prepare(self, m, period: str, params) -> Any:
+        from equilibria.family.prep_capture import capture_state
+
+        capture_state(m, period)  # opt-in oracle for the array port; no-op by default
         recipe = self.recipe(period)
         closure = None if recipe.closure is None else self._closures[recipe.closure]
         ctx = _Ctx(m=m, period=period, params=params, prep=self, closure=closure)
         for step in recipe.steps:
             step(ctx)
+        capture_state(m, period, tag="A2")
         return closure

@@ -1543,6 +1543,10 @@ def _run_path_capi_nonlinear_full(
             f"fixed {_n_fixed} extra vars (matching the real squared system)",
             file=sys.stderr,
         )
+        from equilibria.family.prep_capture import capture_squared
+
+        # Opt-in oracle for the array port of this prep; no-op by default.
+        capture_squared(model, constraints, free_variables, _n_deact, _n_fixed)
         _eq_walras_sq = getattr(model, "eq_walras", None)
         _walras_var_sq = getattr(model, "walras", None)
         if _eq_walras_sq is None or _walras_var_sq is None:
