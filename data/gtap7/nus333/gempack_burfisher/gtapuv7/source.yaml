@@ -12,17 +12,20 @@ generated_from:
   model:
     path: gtap7/gempack
     sha256:
-      tools/_job_cli.py: 5cd1ef864b79364b03329857de37fa8b8b3f2d96fef474416a1c0290ff6478e5
-      tools/burfisher_job.py: 11d34dcc22a4a6fad0b3f93cf507d5ac9abf7f0860cf372fed9cd031c69748d7
+      tools/_job_cli.py: e7f25cc85890c54cc879fae36c6e2e132bdfc5b8f8d3a9b307a772b449f7dd5d
+      tools/burfisher_job.py: 653c50361576302a9a1f55ab704d607b60b9800594cf5bc5c2db5fe906425ed4
+      tools/cmf/9x10_tm10_dpsaveswap.cmf: 97842333032392ea8e0e543b9520465829a33488c1dab68657176f72a6032a1f
+      tools/cmf/gtap7_20x41_tm10_dpsaveswap.cmf: fba601626927290a341865a55e99e52320135180286fe34fcc72a277aebc8154
+      tools/cmf/nus333_tm10_dpsaveswap.cmf: ac916d48f03c5c02db91be028377765e9e6672c0c89c627f88465076053e8d0b
       tools/export_sl4_levels.py: d3fe47958ee23e21c778b467a650007edcfe0b08390fec1af0a5ce97f3ea1c45
-      tools/gemsim_job.py: a3502d03819576c5fbc74e0d667f6a8f9d604a138cf406a0ad85cee198ea445a
-      tools/levels_job.py: 9571e957a91fd4fb469fcbbd0f8606504c4560048e4c64151b395e5c756002fb
+      tools/gemsim_job.py: 5feb9074e7e0fda993dbe0b9ac6a3553be42e9301dc959b10889a0467bee65c5
+      tools/levels_job.py: aa4073da35de5ab1504cb3bc3e555b2f0c05bf9f80eed1f88d6be3f77d733d5d
       tools/make_levels_tab.py: 52e58f847f0033b2dcc3c223cbdf99993638633d4a524057adf71d1c583bb80a
       tools/regenerate_gempack.py: ecb1099c39fb686315c0b5a2e7935d6a7481578475688980aa84f6345d5b94a6
-      tools/regenerate_paper.py: 382f9f47d8e61eee3b8f16decaa6768be45dd2a496f2a560cd8fe9dfa805c351
+      tools/regenerate_paper.py: 80f057d8c274ee06d1d34a09b369eedc2e54b05f341a8bd1e9b23f53553222b6
       tools/release_check.py: 7ef240328c439d32ff203b6a30d4a84f39266c6a4b082d314977c34866241b5e
       tools/run_gempack_matrix.py: dad828823ecafc5b55022454e35d83e0a0d5e200ee6e5e5d4ca1acc16af0ff6d
-      tools/swap_job.py: 24d6c441a880666c7cb58b0f7d94f695c7ac5862ba6ca4ceb4b48c8e5ab8509c
+      tools/swap_job.py: 850f58385cceba171d9451ac5d89b75f6d1d2e32c455e93a423a990357a33902
       tools/target_shocks.py: 983253cd6adac881107450837959cde36a371a1d2e2ec819f967c61fa015f4cc
   data:
     path: gtap7/nus333
@@ -144,23 +147,23 @@ solver:
   name: gtapuv7
 command: '''C:\Documentos\proyectos\equilibria\.venv\Scripts\python.exe'' ''C:\Documentos\proyectos\equilibria\data\gtap7\gempack\tools\burfisher_job.py''
   --experiment gtapuv7 --package ''C:\Documentos\proyectos\equilibria\data\gtap7\nus333''
-  --exe ''C:\runGTAP375\gtapuv7.exe'' --work ''C:\Documentos\proyectos\equilibria\runs\gempack_work''
-  --out ''C:\Documentos\proyectos\equilibria\data\gtap7\nus333\gempack_burfisher\gtapuv7''
-  --expect-release 12.1.003'
-equilibria_commit: a252c2de
+  --exe ''C:\runGTAP375\gtapuv7.exe'' --out ''C:\Documentos\proyectos\equilibria\data\gtap7\nus333\gempack_burfisher\gtapuv7''
+  --expect-release 12.1.003 --work ''C:\Documentos\proyectos\equilibria\runs\gempack_work''
+  --release gtapuv7.exe=12.1.003'
+equilibria_commit: fd9d7696
 exit:
   code: 0
 outputs:
-  decomp.har: 5770a552629bf8fbcf0fd59b1f45428d4fe2a370c6c697111295c0197698a68f
+  decomp.har: 735a174ef648df40a920532eda3fa2cedb7a85f1307da08a5c8ac2f170e9d6b7
   run.cmf: 74c525bb02d0faf069cbe29e1837eaa3538068e6ff9b5b4ae247fe7ce3c495ca
-  solution.sl4: 6e3b0afeb316ecab2e4e3fa9b3d2a396a420267ccb024a95e2e955385da2ac4f
-  solve_console.txt: cbdf639d62e2ff90f1965d2d6b7b1bc7fb27224fa24f3ada9051031ecf5f4e67
-  summary.har: 00a04f5b6b918c4ce5cfefe4f585d6f3ccf7479939c9c3c2ec8eae83fec71dbc
-  updated.har: 2717083661c817462b3fc292f828c691fd0b4741fcabd9a101f6b17b5ddb0dc2
-  volume.har: 30659e7e6e0bbe5f872a1fc013ffc0650a2cb0aeb120e3933f774e972f7ed0b3
+  solution.sl4: 36f2e5190b9f6850d517ed51eda3e01658adf929c3d83ccf5264c36e16d66c0c
+  solve_console.txt: cc1034e49ecabb272bcafde47ab27cc0da422e2cb2977daa5d3e1ec8bc6f03b3
+  summary.har: 41b5dcb1a1f02fcb55bdd14b855136799e448313e3121bf097076d8ba74ac282
+  updated.har: 4260060820be00406de2419e534bf6a9f88d903628d9aceb7335a6c2a1667e78
+  volume.har: fb9bdbd4ae6c8ba5c83f009707d6ab3791998107e509a7b144a14995fd166794
 run:
-  date: '2026-11-03T22:03:18-06:00'
-  duration_s: 13.455
+  date: '2026-11-04T14:56:41-06:00'
+  duration_s: 25.274
   machine:
     os: Windows 11 (10.0.26200)
     cpu: 13th Gen Intel(R) Core(TM) i7-1365U

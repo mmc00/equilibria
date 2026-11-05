@@ -338,7 +338,7 @@ programa o archivo por lotes ejecutable.
  Set 'S@IndTaxes'
    [Set has size 1.]
  'S@IndTaxes' as a subset of 'GDPIN'
- [CPU for reads, formulas etc is 0.05 seconds.]
+ [CPU for reads, formulas etc is 0.03 seconds.]
  Elapsed time for reads, formulas etc is: less than one second.
  
   ------- MODEL REPORT ------
@@ -1023,8 +1023,8 @@ programa o archivo por lotes ejecutable.
   Formula for 'C00460'
   Formula for 'C00461'
   Formula for 'C00462'
- [CPU for reads, formulas etc is 0.19 seconds.]
- Elapsed time for reads, formulas etc is:  1 seconds.
+ [CPU for reads, formulas etc is 0.09 seconds.]
+ Elapsed time for reads, formulas etc is: less than one second.
  
   (Writing the Solution Coefficients (SLC) file.)
  
@@ -2355,10 +2355,10 @@ programa o archivo por lotes ejecutable.
      (Number of nonzeros is 2, all on the LHS.)
      Submatrix for variable 'CNTkb'
      (Number of nonzeros is 2, all on the LHS.)
- [CPU for equations is 0.02 seconds.]
+ [CPU for equations is 0.00 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.25 seconds.]
- Elapsed time for formulas and equations is:  1 seconds.
+ [CPU for formulas and equations is 0.14 seconds.]
+ Elapsed time for formulas and equations is: less than one second.
  
   CUMULATIVELY-RETAINED ENDOGENOUS
   --------------------------------
@@ -2390,13 +2390,13 @@ programa o archivo por lotes ejecutable.
  
   (Calculating the LU decomposition.)
   Karp-Sipser Initialization matched 479 rows corresponding to 99.38%
-   [CPU time for GPLU analysis is 0.02 seconds.]
+   [CPU time for GPLU analysis is 0.00 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 5010.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.00 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
@@ -2409,7 +2409,8 @@ programa o archivo por lotes ejecutable.
   (Third cumulative solution obtained.)
  [CPU for simulation is 0.02 seconds.]
  Elapsed time for simulation is: less than one second.
- Elapsed time to do up to first solve (this subinterval) is  1 seconds.
+ Elapsed time to do up to first solve (this subinterval) is
+   less than one second.
  
   (Beginning the backsolve after pass 1 of this 3-pass calculation.)
   Backsolving for variable 'aint using equation 'E_aint'
@@ -2481,7 +2482,7 @@ programa o archivo por lotes ejecutable.
   Backsolving for variable 'CNTqfd using equation 'E_CNTqfd'
   Backsolving for variable 'CNTqpm using equation 'E_CNTqpm'
   Backsolving for variable 'pfactreal using equation 'E_pfactreal'
-  [CPU for backsolve is 0.00 seconds.]
+  [CPU for backsolve is 0.02 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 1 of this 3-pass calculation.)
@@ -2532,9 +2533,9 @@ programa o archivo por lotes ejecutable.
  
   (Writing the Data Work file.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 1 is 0.27 seconds.]
+  [CPU for step 1 is 0.17 seconds.]
   Elapsed time for update is: less than one second.
-  Elapsed time for step 1 is:  1 seconds.
+  Elapsed time for step 1 is: less than one second.
  
   --->  Beginning pass number 2 of 3-pass calculation.
   [Copying all updated values for use in this pass.]
@@ -2574,12 +2575,12 @@ programa o archivo por lotes ejecutable.
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 2 of this 3-pass calculation.)
-  [CPU for backsolve is 0.02 seconds.]
+  [CPU for backsolve is 0.00 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 2 of this 3-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 2 is 0.02 seconds.]
+  [CPU for step 2 is 0.00 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 2 is: less than one second.
  
@@ -2606,18 +2607,18 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 5010.)
-  [CPU time for LU decomposition is 0.00 seconds.]
+  [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.00 seconds.]
+ [CPU for simulation is 0.02 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 3 of this 3-pass calculation.)
@@ -2633,8 +2634,8 @@ programa o archivo por lotes ejecutable.
   Elapsed time for step 3 is: less than one second.
  Elapsed time to do after-first-LU-decomp part
   of this 3-pass calculation is: less than one second.
- [CPU for all of this 2-step calculation is 0.38 seconds.]
- Elapsed time for all this 2-step calculation is:  1 seconds.
+ [CPU for all of this 2-step calculation is 0.23 seconds.]
+ Elapsed time for all this 2-step calculation is: less than one second.
  
   --->  Beginning pass number 1 of 5-pass calculation.
  [CPU for simulation is 0.00 seconds.]
@@ -2643,12 +2644,12 @@ programa o archivo por lotes ejecutable.
   (Beginning the backsolve after pass 1 of this 5-pass calculation.)
  
   (Reading pre-sim values from the current SLC file.)
-  [CPU for backsolve is 0.16 seconds.]
+  [CPU for backsolve is 0.09 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 1 of this 5-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 1 is 0.16 seconds.]
+  [CPU for step 1 is 0.09 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 1 is: less than one second.
  
@@ -2658,9 +2659,9 @@ programa o archivo por lotes ejecutable.
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
- [CPU for equations is 0.00 seconds.]
+ [CPU for equations is 0.02 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.00 seconds.]
+ [CPU for formulas and equations is 0.02 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 2505 nonzeros in those parts of
       the equations calculated for this step.)
@@ -2690,7 +2691,7 @@ programa o archivo por lotes ejecutable.
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 2 of this 5-pass calculation.)
-  [CPU for backsolve is 0.02 seconds.]
+  [CPU for backsolve is 0.00 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 2 of this 5-pass calculation.)
@@ -2737,7 +2738,7 @@ programa o archivo por lotes ejecutable.
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 3 of this 5-pass calculation.)
-  [CPU for backsolve is 0.02 seconds.]
+  [CPU for backsolve is 0.00 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 3 of this 5-pass calculation.)
@@ -2789,19 +2790,19 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 4 of this 5-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 4 is 0.02 seconds.]
+  [CPU for step 4 is 0.00 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 4 is: less than one second.
  
   --->  Beginning pass number 5 of 5-pass calculation.
   [Copying all updated values for use in this pass.]
- [CPU for reads, formulas etc is 0.02 seconds.]
+ [CPU for reads, formulas etc is 0.00 seconds.]
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
  [CPU for equations is 0.00 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.02 seconds.]
+ [CPU for formulas and equations is 0.00 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 2505 nonzeros in those parts of
       the equations calculated for this step.)
@@ -2837,13 +2838,13 @@ programa o archivo por lotes ejecutable.
   (Beginning the update after pass 5 of this 5-pass calculation.)
  
   (Writing the UC5/6/7 file.)
-  [CPU for update is 0.03 seconds.]
-  [CPU for step 5 is 0.05 seconds.]
+  [CPU for update is 0.02 seconds.]
+  [CPU for step 5 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 5 is: less than one second.
  Elapsed time to do after-first-LU-decomp part
   of this 5-pass calculation is: less than one second.
- [CPU for all of this 4-step calculation is 0.25 seconds.]
+ [CPU for all of this 4-step calculation is 0.16 seconds.]
  Elapsed time for all this 4-step calculation is: less than one second.
  
   --->  Beginning pass number 1 of 7-pass calculation.
@@ -2853,14 +2854,14 @@ programa o archivo por lotes ejecutable.
   (Beginning the backsolve after pass 1 of this 7-pass calculation.)
  
   (Reading pre-sim values from the current SLC file.)
-  [CPU for backsolve is 0.12 seconds.]
-  Elapsed time for backsolve is: less than one second.
+  [CPU for backsolve is 0.09 seconds.]
+  Elapsed time for backsolve is:  1 seconds.
  
   (Beginning the update after pass 1 of this 7-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 1 is 0.14 seconds.]
-  Elapsed time for update is: less than one second.
-  Elapsed time for step 1 is: less than one second.
+  [CPU for step 1 is 0.11 seconds.]
+  Elapsed time for update is:  1 seconds.
+  Elapsed time for step 1 is:  1 seconds.
  
   --->  Beginning pass number 2 of 7-pass calculation.
   [Copying all updated values for use in this pass.]
@@ -2868,9 +2869,9 @@ programa o archivo por lotes ejecutable.
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
- [CPU for equations is 0.00 seconds.]
+ [CPU for equations is 0.02 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.00 seconds.]
+ [CPU for formulas and equations is 0.02 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 2505 nonzeros in those parts of
       the equations calculated for this step.)
@@ -2932,18 +2933,18 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 5010.)
-  [CPU time for LU decomposition is 0.00 seconds.]
+  [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.00 seconds.]
+ [CPU for simulation is 0.02 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 3 of this 7-pass calculation.)
@@ -2962,9 +2963,9 @@ programa o archivo por lotes ejecutable.
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
- [CPU for equations is 0.02 seconds.]
+ [CPU for equations is 0.00 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.02 seconds.]
+ [CPU for formulas and equations is 0.00 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 2505 nonzeros in those parts of
       the equations calculated for this step.)
@@ -3009,10 +3010,10 @@ programa o archivo por lotes ejecutable.
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
- [CPU for equations is 0.02 seconds.]
- Elapsed time for equations is:  1 seconds.
- [CPU for formulas and equations is 0.02 seconds.]
- Elapsed time for formulas and equations is:  1 seconds.
+ [CPU for equations is 0.00 seconds.]
+ Elapsed time for equations is: less than one second.
+ [CPU for formulas and equations is 0.00 seconds.]
+ Elapsed time for formulas and equations is: less than one second.
   (There are now 2505 nonzeros in those parts of
       the equations calculated for this step.)
   
@@ -3046,9 +3047,9 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 5 of this 7-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 5 is 0.03 seconds.]
+  [CPU for step 5 is 0.02 seconds.]
   Elapsed time for update is: less than one second.
-  Elapsed time for step 5 is:  1 seconds.
+  Elapsed time for step 5 is: less than one second.
  
   --->  Beginning pass number 6 of 7-pass calculation.
   [Copying all updated values for use in this pass.]
@@ -3092,7 +3093,7 @@ programa o archivo por lotes ejecutable.
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 6 of this 7-pass calculation.)
-  [CPU for update is 0.02 seconds.]
+  [CPU for update is 0.00 seconds.]
   [CPU for step 6 is 0.02 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 6 is: less than one second.
@@ -3141,13 +3142,13 @@ programa o archivo por lotes ejecutable.
   (Beginning the update after pass 7 of this 7-pass calculation.)
  
   (Writing the UC5/6/7 file.)
-  [CPU for update is 0.02 seconds.]
-  [CPU for step 7 is 0.03 seconds.]
+  [CPU for update is 0.03 seconds.]
+  [CPU for step 7 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 7 is: less than one second.
  Elapsed time to do after-first-LU-decomp part
   of this 7-pass calculation is:  1 seconds.
- [CPU for all of this 6-step calculation is 0.27 seconds.]
+ [CPU for all of this 6-step calculation is 0.23 seconds.]
  Elapsed time for all this 6-step calculation is:  1 seconds.
  
   ---> Beginning the extrapolation.
@@ -3197,7 +3198,7 @@ programa o archivo por lotes ejecutable.
  [Deallocated MMNZ memory before TGCMST call (TGGSBS1).]
  
   (Final cumulative solution written to Solution file.)
- [CPU for extrapolation is 0.03 seconds.]
+ [CPU for extrapolation is 0.00 seconds.]
  Elapsed time for extrapolation is: less than one second.
  
   NEXT SUMMARY IS FOR ALL UPDATED DATA
@@ -3646,14 +3647,14 @@ programa o archivo por lotes ejecutable.
  (Written real array, size 3x2, header "MPCQ".)
  Writing VOSCHK(COMM,ACTS,REG)
  (Written real array, size 3x3x2, header "VOCQ".)
- [CPU for reads, formulas etc is 0.05 seconds.]
- Elapsed time for reads, formulas etc is:  1 seconds.
+ [CPU for reads, formulas etc is 0.03 seconds.]
+ Elapsed time for reads, formulas etc is: less than one second.
  
   (Completing the Solution Coefficients (SLC) file.)
  
   [Finished the Post-sim Job.]
   
-  [Total CPU is 1.66 seconds.]
+  [Total CPU is 1.23 seconds.]
  
   (Minimum values for successful completion seem to be:
     MMNZ=5010, MMNZ1=5010, MMNZ2=5010.)
@@ -3680,4 +3681,4 @@ programa o archivo por lotes ejecutable.
   (The program has completed without error.)
   (The program has completed without warnings.)
   
-  Total elapsed time is:  5 seconds.
+  Total elapsed time is:  2 seconds.

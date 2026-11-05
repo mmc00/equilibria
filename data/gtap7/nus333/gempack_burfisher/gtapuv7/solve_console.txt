@@ -335,7 +335,7 @@ programa o archivo por lotes ejecutable.
  Set 'S@IndTaxes'
    [Set has size 1.]
  'S@IndTaxes' as a subset of 'GDPIN'
- [CPU for reads, formulas etc is 0.02 seconds.]
+ [CPU for reads, formulas etc is 0.03 seconds.]
  Elapsed time for reads, formulas etc is: less than one second.
  
   ------- MODEL REPORT ------
@@ -1020,7 +1020,7 @@ programa o archivo por lotes ejecutable.
   Formula for 'C00461'
   Formula for 'C00462'
  [CPU for reads, formulas etc is 0.17 seconds.]
- Elapsed time for reads, formulas etc is: less than one second.
+ Elapsed time for reads, formulas etc is:  1 seconds.
  
   (Writing the Solution Coefficients (SLC) file.)
  
@@ -2353,7 +2353,7 @@ programa o archivo por lotes ejecutable.
      (Number of nonzeros is 2, all on the LHS.)
  [CPU for equations is 0.00 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.28 seconds.]
+ [CPU for formulas and equations is 0.23 seconds.]
  Elapsed time for formulas and equations is:  1 seconds.
  
   CUMULATIVELY-RETAINED ENDOGENOUS
@@ -2391,7 +2391,7 @@ programa o archivo por lotes ejecutable.
   [CPU time for LU decomposition is 0.00 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
-  [CPU time for solution accuracy check is 0.02 seconds.]
+  [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
  [CPU for simulation is 0.05 seconds.]
  Elapsed time for simulation is: less than one second.
@@ -2519,13 +2519,13 @@ programa o archivo por lotes ejecutable.
    'C:\Documentos\proyectos\equilibria\data\gtap7\nus333\gempack_burfisher\gtapuv7\run-1-1.uc5'.)
  
   (Writing the UC5/6/7 file.)
-  [CPU for update is 0.03 seconds.]
-  [CPU for step 1 is 0.36 seconds.]
+  [CPU for update is 0.02 seconds.]
+  [CPU for step 1 is 0.30 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 1 is:  1 seconds.
  Elapsed time to do after-first-LU-decomp part
   of this 1-pass calculation is: less than one second.
- [CPU for all of this 1-step calculation is 0.39 seconds.]
+ [CPU for all of this 1-step calculation is 0.38 seconds.]
  Elapsed time for all this 1-step calculation is:  1 seconds.
  
   Total memory currently used for all arrays is approximately 0.90 megabytes.
@@ -3016,14 +3016,14 @@ programa o archivo por lotes ejecutable.
  (Written real array, size 3x2, header "MPCQ".)
  Writing VOSCHK(COMM,ACTS,REG)
  (Written real array, size 3x3x2, header "VOCQ".)
- [CPU for reads, formulas etc is 0.06 seconds.]
- Elapsed time for reads, formulas etc is: less than one second.
+ [CPU for reads, formulas etc is 0.03 seconds.]
+ Elapsed time for reads, formulas etc is:  1 seconds.
  
   (Completing the Solution Coefficients (SLC) file.)
  
   [Finished the Post-sim Job.]
   
-  [Total CPU is 0.92 seconds.]
+  [Total CPU is 0.75 seconds.]
  
   (Minimum values for successful completion seem to be:
     MMNZ=5010, MMNZ1=5010, MMNZ2=5010.)
@@ -3050,4 +3050,4 @@ programa o archivo por lotes ejecutable.
   (The program has completed without error.)
   (The program has completed without warnings.)
   
-  Total elapsed time is:  2 seconds.
+  Total elapsed time is:  6 seconds.

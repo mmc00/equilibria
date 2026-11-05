@@ -1,0 +1,1 @@
+  levels vars=50 (LEVB+LEVA)  no-level=200 (NOLV)  (xcheck-mismatch=2 [CNTendwr, CNTendw])  -> C:\Documentos\proyectos\equilibria\runs\gempack_work\levels6\gtap7_5x5_rdlt0\gtap7_5x5\sl4levels.har
