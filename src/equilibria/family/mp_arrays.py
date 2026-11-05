@@ -81,7 +81,23 @@ class MPArrays:
         )
 
     def copy(self) -> MPArrays:
-        return copy.deepcopy(self)
+        """Independent arrays; the (immutable) keys and their lookup caches are shared."""
+        vars_ = {}
+        for n, v in self.vars.items():
+            c = copy.copy(v)
+            c.value, c.fixed, c.lb, c.ub = (
+                v.value.copy(),
+                v.fixed.copy(),
+                v.lb.copy(),
+                v.ub.copy(),
+            )
+            vars_[n] = c
+        rows = {}
+        for n, r in self.rows.items():
+            c = copy.copy(r)
+            c.active = r.active.copy()
+            rows[n] = c
+        return MPArrays(vars_, rows)
 
     def var(self, name: str) -> VarArr:
         """The component, or ``KeyError``: a step must never skip a missing one."""
