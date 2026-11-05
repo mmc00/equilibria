@@ -81,6 +81,31 @@ class FamilyBackend:
                 if cells:
                     self.records[name] = cells
 
+    _SAVED = ("records", "var_domains", "param_domains", "sets")
+
+    def save(self, path: Any) -> None:
+        """Write the recording (not the compiled code) to ``path`` with pickle."""
+        import pickle
+        from pathlib import Path
+
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        with tmp.open("wb") as fh:
+            pickle.dump({k: getattr(self, k) for k in self._SAVED}, fh, protocol=5)
+        tmp.replace(path)  # never leave a half-written cache behind
+
+    @classmethod
+    def load(cls, path: Any) -> FamilyBackend:
+        import pickle
+
+        with open(path, "rb") as fh:
+            data = pickle.load(fh)
+        backend = cls()
+        for k in cls._SAVED:
+            setattr(backend, k, data[k])
+        return backend
+
     def layout(self, state: Any) -> Any:
         """Variable layout from a ``StateModel``: free cells are columns; fixed cells and
         mutable Parameters are fixed slots carrying their current values."""
