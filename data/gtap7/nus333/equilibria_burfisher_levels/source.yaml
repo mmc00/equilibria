@@ -1,0 +1,16 @@
+kind: data
+model: gtap7
+dataset: nus333_equilibria_burfisher_levels
+source: 'equilibria levels of the Burfisher exercises TBL45A and TBL46A on nus333,
+  written by make_eq_burfisher_levels.py (in this folder). Moved byte for byte from
+  tests/compare/fixtures at 4e91d12a. Regenerated on that commit: 780 values each,
+  max relative difference 1.0e-7 (TBL45A, xda) and 1.3e-7 (TBL46A, pf), PATH convergence,
+  against a comparator tolerance of 1e-3; the committed bytes are kept so the tests
+  read the same numbers'
+license: equilibria output (MIT, as the package)
+outputs:
+  eq_burfisher_tbl45a_levels.json.gz: ccf7e4cab75c9e69d104bc537bbbaf9121daa1f1bbf6a2fab2c7bf3ef9412ef3
+  eq_burfisher_tbl46a_levels.json.gz: 4de71eb46c932f3663f23d07686e7e171fd730725a9ba9212ef803556bca16c4
+  make_eq_burfisher_levels.py: 5fa3ecbb0f60e63ec7f7d63552739b3e3d813c1b05b030f2c3bdf02600aa3a97
+status: verified
+notes: ''

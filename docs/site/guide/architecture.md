@@ -4,7 +4,7 @@
 reusable **blocks**, and checks every model against its reference
 implementation in GAMS and GEMPACK. This page explains how the pieces fit,
 first with a picture and then with the real code. The words in **bold** are
-the ones the code uses; they are defined in `GLOSSARY.md`.
+the ones the code uses; they are defined in `docs/glossary.md`.
 
 ## A model is a stack of bricks
 

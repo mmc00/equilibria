@@ -29,8 +29,6 @@ ROOT_FILES = frozenset(
         "README.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",
-        "ROADMAP.md",
-        "GLOSSARY.md",
         "LICENSE",
         "NOTICE",
         "CITATION.cff",
@@ -44,8 +42,21 @@ ROOT_FILES = frozenset(
 )
 # Emptied by later phases of specs/data/changes/one-data-folder; each phase
 # removes its entry.
-ROOT_DIRS_TEMPORARY = frozenset(
-    {"notebooks", "output", "reports", "results", "runs"}
+ROOT_DIRS_TEMPORARY = frozenset({"results", "runs"})
+
+# The top level of docs/ (phase 6 of specs/data/changes/one-data-folder).
+DOCS_TOP = frozenset(
+    {
+        "readme.md",
+        "glossary.md",
+        "roadmap.md",
+        "adr",
+        "agents",
+        "assets",
+        "site",
+        "notes",
+        "archive",
+    }
 )
 
 SPANISH_WORDS = frozenset(
@@ -120,34 +131,15 @@ _TOKEN_SPLIT = re.compile(r"[_\-.\s]+")
 # or renames each one removes it from here.
 SPANISH_LEGACY = frozenset(
     {
-        "docs/architecture/monolito_vs_bloques.md",
-        "docs/architecture/registro_de_bloques.md",
         "runs/gempack_20x41_validation/RESULTADO.md",
         "scripts/windows/corridas_paper.ps1",
-        "tests/babel/gdx/test_gdxdump_sin_rutas_fijas.py",
-        "tests/blocks/test_sin_registro_de_bloques.py",
-        "tests/fixtures/gtap7_3x3_punto_sin_shock_3f3fe5f.json.gz",
-        "tests/fixtures/gtap7_3x3_residuos_sin_shock_3f3fe5f.json.gz",
-        "tests/fixtures/nus333_bienestar_gams_levels.json.gz",
         "tests/fixtures/nus333_bienestar_gempack.json.gz",
-        "tests/fixtures/nus333_desempleo_gams_levels.json.gz",
-        "tests/templates/gtap/_desempleo.py",
-        "tests/templates/gtap/test_driver_default_es_bloques.py",
-        "tests/templates/gtap/test_nus333_bienestar.py",
-        "tests/templates/gtap/test_nus333_me9_pasos.py",
-        "tests/templates/gtap/test_nus333_tbl65b_desempleo.py",
     }
 )
 
 ALLOWED_EXACT: set[str] = {
     "CHANGELOG.md",
     "CONTRIBUTING.md",
-    # Mismo convenio de raiz que CHANGELOG/CONTRIBUTING: GitHub y los lectores
-    # esperan ROADMAP.md en mayusculas junto a README.md.
-    "ROADMAP.md",
-    # Root domain glossary: same root convention, and the domain-modeling format
-    # names it GLOSSARY.md.
-    "GLOSSARY.md",
     "Makefile",
     "NOTICE",
     "README.md",
@@ -160,7 +152,7 @@ ALLOWED_EXACT: set[str] = {
     "src/equilibria/templates/gtap/README.md",
     "runs/gempack_20x41_validation/README.md",
     "scripts/windows/README.md",
-    "tests/babel/gdx/fixtures/SAM-V2_0.gdx",
+    "data/gdx_tests/sam_v2_0/SAM-V2_0.gdx",
     # Sphinx documentation site:
     #   - Makefile is the GNU Make / Sphinx convention; renaming would
     #     break the standard `make html` workflow developers expect.
@@ -216,6 +208,11 @@ def violations(paths: list[str]) -> list[str]:
         elif top not in ROOT_DIRS and top not in ROOT_DIRS_TEMPORARY:
             bad.append(
                 f"{path}: new folder {top}/ at the root (see data/README.md for where things go)"
+            )
+
+        if top == "docs" and len(parts) > 1 and parts[1] not in DOCS_TOP:
+            bad.append(
+                f"{path}: docs/{parts[1]} is not in the docs layout (docs/readme.md)"
             )
 
         name = parts[-1]

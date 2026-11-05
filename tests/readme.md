@@ -10,4 +10,4 @@ estructura principal:
 - `tests/scripts/`: pruebas de pipelines y scripts operativos.
 - `tests/babel/`: pruebas de lectura/escritura GDX y utilidades de datos.
 - `tests/backends/`: pruebas de backends de modelado/solucion.
-- `tests/fixtures/`: artefactos de prueba.
+- Test data lives in `data/` (ADR-0010); `tests/fixtures/` keeps only the GEMPACK files until phase 3b.

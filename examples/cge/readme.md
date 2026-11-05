@@ -1,6 +1,6 @@
-# cge examples
+# CGE examples
 
-Ejemplos generales de uso del framework:
+General examples of using the framework:
 
 - `example_01_basic_setup.py`
 - `example_02_sets_parameters.py`

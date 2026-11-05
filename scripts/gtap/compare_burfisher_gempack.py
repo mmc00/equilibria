@@ -17,9 +17,9 @@ Uso (desde la raiz, con PATH; el paquete del libro es ``data/gtap7/nus333``)::
     PYTHONPATH=src:. python scripts/gtap/compare_burfisher_gempack.py [--only TBL46A]
 
 o, sin resolver, con niveles ya guardados (``--save-eq-dir`` o
-``tests/compare/fixtures/make_eq_burfisher_levels.py``)::
+``data/gtap7/nus333/equilibria_burfisher_levels/make_eq_burfisher_levels.py``)::
 
-    uv run python scripts/gtap/compare_burfisher_gempack.py --eq-dir tests/compare/fixtures
+    uv run python scripts/gtap/compare_burfisher_gempack.py --eq-dir data/gtap7/nus333/equilibria_burfisher_levels
 """
 
 from __future__ import annotations
@@ -60,15 +60,18 @@ def method(exp: str, fix: Path = FIX) -> str:
     return found[-1].capitalize()
 
 
-def run(exp: str, levels: dict, xscale: dict, fix: Path = FIX) -> Report:
+def run(
+    exp: str, levels: dict, xscale: dict, fix: Path = FIX, *, linear: bool = False
+) -> Report:
     """equilibria (``levels``, ``xscale``) contra la solucion GEMPACK de ``exp``.
 
     Los niveles salen de ``sl4levels_<exp>.har`` (sltoht) si existe; si no, del
-    ``.sl4``, que tiene que traer ``PLEV``."""
+    ``.sl4``, que tiene que traer ``PLEV``. ``linear``: ``levels`` is a Johansen
+    solution (see ``compare_gempack_levels.equilibria_side``)."""
     upd = fix / f"{exp.lower()}.upd"
     har = fix / f"sl4levels_{exp.lower()}.har"
     if har.exists():
-        return cg.run(levels, xscale, har, BASEDATA, upd)
+        return cg.run(levels, xscale, har, BASEDATA, upd, linear=linear)
     with tempfile.TemporaryDirectory() as tmp:
         sl4 = Path(tmp) / f"{exp.lower()}.sl4"
         with (
@@ -76,7 +79,7 @@ def run(exp: str, levels: dict, xscale: dict, fix: Path = FIX) -> Report:
             sl4.open("wb") as dst,
         ):
             shutil.copyfileobj(src, dst)
-        return cg.run(levels, xscale, sl4, BASEDATA, upd)
+        return cg.run(levels, xscale, sl4, BASEDATA, upd, linear=linear)
 
 
 def solve(exp: str) -> tuple[dict, dict]:

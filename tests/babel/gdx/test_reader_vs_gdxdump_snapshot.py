@@ -37,7 +37,7 @@ ROOT = Path(__file__).resolve().parents[3]
 # Format specimens next to their gdxdump snapshots (data/gdx_tests, ADR-0010).
 SPECIMENS = ROOT / "data" / "gdx_tests"
 GDX = SPECIMENS / "gtap7_3x3_out_gtap_shock_ifsub0.gdx"
-SNAP_DIR = ROOT / "tests" / "fixtures" / "gdxdump"
+SNAP_DIR = SPECIMENS
 REF = ROOT / "src" / "equilibria" / "templates" / "reference"
 CASES = {
     "gtap7_3x3_ifsub0": (GDX, GDX.with_name(GDX.name + ".gdxdump.json.gz")),

@@ -30,6 +30,6 @@ cells that fail, not the percentages.
 
 ## Sources
 
-- `ROADMAP.md`, "Convenciones que conviene no reaprender por las malas"
-- `docs/architecture/monolito_vs_bloques.md` ("Por qué se pudo migrar" and the
+- `docs/roadmap.md`, "Conventions not worth relearning the hard way"
+- `docs/notes/architecture/monolith_vs_blocks.md` ("Why the migration was possible" and the
   2026-09-21 correction)

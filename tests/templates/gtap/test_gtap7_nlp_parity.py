@@ -144,7 +144,7 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
 
     # El gate mide el modelo de BLOQUES (la implementacion viva) contra GAMS.
     # El monolito ya no se ejercita aqui: queda como referencia manual, ver
-    # docs/architecture/monolito_vs_bloques.md.
+    # docs/notes/architecture/monolith_vs_blocks.md.
     from equilibria.templates.gtap.gtap_block_model import (
         GTAPBlockMultiPeriodModel,
     )

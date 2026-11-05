@@ -2,16 +2,15 @@
 Test reading multi-dimensional parameters from GDX files.
 """
 
-from pathlib import Path
-
 import pytest
 
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
+from tests.babel.gdx._specimens import specimen
 
 
 def test_read_3d_sparse_parameter():
     """Test reading a 3D sparse parameter."""
-    gdx_file = Path(__file__).parent.parent.parent / "fixtures" / "multidim_test.gdx"
+    gdx_file = specimen("multidim_test.gdx")
 
     if not gdx_file.exists():
         pytest.skip("Test file not found - run generate_multidim_test.gms first")
@@ -39,7 +38,7 @@ def test_read_3d_sparse_parameter():
 
 def test_read_4d_sparse_parameter():
     """Test reading a 4D sparse parameter."""
-    gdx_file = Path(__file__).parent.parent.parent / "fixtures" / "multidim_test.gdx"
+    gdx_file = specimen("multidim_test.gdx")
 
     if not gdx_file.exists():
         pytest.skip("Test file not found - run generate_multidim_test.gms first")
@@ -68,7 +67,7 @@ def test_read_4d_sparse_parameter():
 
 def test_read_3d_dense_parameter():
     """Test reading a 3D dense parameter (currently partial support)."""
-    gdx_file = Path(__file__).parent.parent.parent / "fixtures" / "multidim_test.gdx"
+    gdx_file = specimen("multidim_test.gdx")
 
     if not gdx_file.exists():
         pytest.skip("Test file not found - run generate_multidim_test.gms first")
@@ -88,7 +87,7 @@ def test_read_3d_dense_parameter():
 
 def test_read_4d_dense_parameter():
     """Test reading a 4D dense parameter (currently partial support)."""
-    gdx_file = Path(__file__).parent.parent.parent / "fixtures" / "multidim_test.gdx"
+    gdx_file = specimen("multidim_test.gdx")
 
     if not gdx_file.exists():
         pytest.skip("Test file not found - run generate_multidim_test.gms first")

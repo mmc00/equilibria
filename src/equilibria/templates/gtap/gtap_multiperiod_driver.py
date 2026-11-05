@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -2072,6 +2073,104 @@ def _solve_shock_in_steps(m, steps, solve) -> dict[str, Any]:
     return r
 
 
+# Steps of the Johansen derivative, as fractions of the shock. Measured on the
+# Burfisher Johansen exercises (2026-11-03): at 0.001 the solver's own noise
+# (~1e-10) breaks the slope of the tiny self-trade flows (qxs ~1e-5); at 0.03 the
+# curvature of ME4A (land productivity -81%) does. 0.01 and 0.02, combined by
+# Richardson, cancel the O(h^2) term and keep both away.
+JOHANSEN_STEP = 0.01
+
+
+def _solve_shock_johansen(m, solve, *, after=None) -> dict[str, Any]:
+    """The shock as one linear step from check, as GEMPACK's Johansen method.
+
+    Johansen moves every variable by its first-order response to the shock:
+    ``d x / d λ`` at λ = 0, where the shocked cells go from check to shock as
+    ``check + λ·(shock − check)``. The derivative is taken from four solves of the
+    same system PATH solves, at λ = ±h and ±2h (h = JOHANSEN_STEP), close to check
+    so each converges at once, and combined by Richardson:
+    ``(8·(x(h) − x(−h)) − (x(2h) − x(−2h))) / 12h``. With the solver itself, not a
+    Jacobian rebuilt beside it, it is the slope of the system that is solved.
+
+    ``after`` runs after each solve: the period's post-solve recomputations
+    (report and welfare vars), so they get their slope too.
+
+    A positive variable gets the slope of its log, so it ends at
+    ``check × (1 + %change)``, as GEMPACK reports a Johansen result; any other at
+    ``check + change``. The shocked cells end at the shock. The resulting point
+    does not satisfy the nonlinear equations: that is the method.
+    """
+    from pyomo.environ import Var, value
+
+    from equilibria.blocks.gtap.periods import CHECK, SHOCK
+    from equilibria.templates.gtap.instruments import period_key
+    from equilibria.templates.gtap.shocks import _shocked_cells
+
+    cells = []
+    for name in sorted(getattr(m, "_exogenous_instruments", ())):
+        var = getattr(m, name)
+        for k in list(_shocked_cells(m, name)):
+            kt = k if isinstance(k, tuple) else (k,)
+            chk = float(value(var[period_key(kt[:-1], CHECK)]))
+            cells.append((var[k], chk, float(value(var[k]))))
+    shocked = {id(cell) for cell, _, _ in cells}
+    # Every shock-period var but the shocked cells: the solved ones and those that
+    # ``after`` recomputes from them (report and welfare vars, fixed in the solve).
+    free = [
+        v[i]
+        for v in m.component_objects(Var, descend_into=True)
+        for i in v
+        if isinstance(i, tuple) and i[-1] == SHOCK and id(v[i]) not in shocked
+    ]
+    start = [value(x, exception=False) for x in free]
+    h = JOHANSEN_STEP
+    at: dict[float, list[float]] = {}
+    worst = 0.0
+    try:
+        for lam in (h, -h, 2 * h, -2 * h):
+            for x, x0 in zip(free, start, strict=True):
+                if x0 is not None:
+                    x.set_value(x0)
+            for cell, chk, full in cells:
+                cell.fix(chk + lam * (full - chk))
+            r = solve()
+            code = int(r.get("termination_code") or 0)
+            if code != 1:
+                return {"termination_code": code, "residual": r.get("residual")}
+            worst = max(worst, float(r.get("residual") or 0.0))
+            if after is not None:
+                after()
+            at[lam] = [value(x, exception=False) for x in free]
+    finally:
+        for cell, _, full in cells:
+            cell.fix(full)
+    n = 0
+    for j, x in enumerate(free):
+        x0 = value(x.parent_component()[(*x.index()[:-1], CHECK)], exception=False)
+        pts = [at[h][j], at[-h][j], at[2 * h][j], at[-2 * h][j]]
+        if x0 is None or any(y is None or math.isnan(y) for y in pts):
+            continue  # never had a value (an unused cell) or undefined there
+        if x.fixed and all(y == start[j] for y in pts):
+            continue  # fixed and untouched by the shock: keeps its own value
+        n += 1
+        if x0 > 0.0 and min(pts) > 0.0:
+            f = [math.log(y) for y in pts]
+            x.set_value(x0 * (1.0 + _richardson(f, h)))
+        else:
+            x.set_value(x0 + _richardson(pts, h))
+    print(
+        f"[johansen] {n} variables, one linear step "
+        f"(slope from λ = ±{h:g}, ±{2 * h:g}; worst residual {worst:.1e})",
+        file=sys.stderr,
+    )
+    return {"termination_code": 1, "residual": worst}
+
+
+def _richardson(f: list[float], h: float) -> float:
+    """d/dλ at 0 from f(h), f(−h), f(2h), f(−2h): central differences, O(h⁴)."""
+    return (8.0 * (f[0] - f[1]) - (f[2] - f[3])) / (12.0 * h)
+
+
 def _solve_multiperiod_inner(
     m,
     params,
@@ -2085,6 +2184,7 @@ def _solve_multiperiod_inner(
     solve_check: bool = False,
     settle_only: bool = False,
     shock_steps: tuple[float, ...] | None = None,
+    shock_method: str = "nonlinear",
 ) -> dict[str, dict[str, Any]]:
     """Replicate GAMS loop(tsim): solve base → check → shock on the FULL model m.
 
@@ -2131,6 +2231,10 @@ def _solve_multiperiod_inner(
     default +10% import tariff is written there (``shocks.apply_default_tariff``).
     ``shock_steps`` (fractions λ, e.g. (0.25, 0.5, 0.75, 1.0)): solve that
     ShockBlock shock in steps, each from the previous one (_solve_shock_in_steps).
+    ``shock_method="johansen"``: instead of solving the shock, take one linear step
+    from check, as GEMPACK's Johansen method does (_solve_shock_johansen). The
+    shock period then holds ``check × (1 + %change)``, the first-order response;
+    it does not satisfy the nonlinear equations.
 
     Returns
     -------
@@ -2139,6 +2243,15 @@ def _solve_multiperiod_inner(
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
+    if shock_method not in ("nonlinear", "johansen"):
+        raise ValueError(
+            f"shock_method must be 'nonlinear' or 'johansen', got {shock_method!r}"
+        )
+    if shock_method == "johansen" and shock_steps:
+        raise ValueError(
+            "shock_method='johansen' is one linear step from check: it takes no "
+            "shock_steps"
+        )
     if mode not in ("altertax", "gtap"):
         raise ValueError(f"mode must be 'altertax' or 'gtap', got {mode!r}")
     _gtap_mode = mode == "gtap"
@@ -2155,7 +2268,7 @@ def _solve_multiperiod_inner(
     # EQUILIBRIA_GTAP_SHOCK_CONTINUATION="0.25,0.5,0.75,1.0": el viejo gancho que
     # caminaba el arancel; ahora son los pasos de _solve_shock_in_steps.
     _cont_env = os.environ.get("EQUILIBRIA_GTAP_SHOCK_CONTINUATION")
-    if _cont_env and not shock_steps:
+    if _cont_env and not shock_steps and shock_method == "nonlinear":
         shock_steps = tuple(float(x) for x in _cont_env.split(",") if x.strip())
 
     run_gtap = _load_run_gtap()
@@ -2387,31 +2500,38 @@ def _solve_multiperiod_inner(
             solution_hint=None,
         )
 
-    if shock_steps:
+    def _after_shock() -> None:
+        # Under ifSUB the report-only margin/price vars are not solved (their eqs
+        # are deactivated, the real eqs use the _m_* macros): recompute them
+        # post-solve from the solved values, as GAMS postsim does.
+        if _if_sub:
+            _n_rep = _recompute_ifsub_report_vars(m, params_shock, "shock")
+            if _n_rep:
+                _logging.getLogger(__name__).info(
+                    "shock period: recomputed %d ifSUB report-var cells (pfa/pfy/pp/pwmg/pefob/pmcif/pm)",
+                    _n_rep,
+                )
+        _solve_welfare_tail(m, "shock")
+
+    if shock_method == "johansen":
+        # The report and welfare vars are recomputed at each point of the slope,
+        # so they move linearly too.
+        r_shk = _solve_shock_johansen(m, _solve_shock, after=_after_shock)
+    elif shock_steps:
         r_shk = _solve_shock_in_steps(m, shock_steps, _solve_shock)
     else:
         r_shk = _solve_shock()
     code_shk = int(r_shk.get("termination_code") or 0)
     res_shk = float(r_shk.get("residual") or float("inf"))
     results["shock"] = {"code": code_shk, "residual": res_shk}
-
-    # Under ifSUB the report-only margin/price vars are not solved (their eqs are
-    # deactivated, the real eqs use the _m_* macros): recompute them post-solve
-    # from the solved values, as GAMS postsim does.
-    if _if_sub:
-        _n_rep = _recompute_ifsub_report_vars(m, params_shock, "shock")
-        if _n_rep:
-            _logging.getLogger(__name__).info(
-                "shock period: recomputed %d ifSUB report-var cells (pfa/pfy/pp/pwmg/pefob/pmcif/pm)",
-                _n_rep,
-            )
+    if shock_method != "johansen":
+        _after_shock()
 
     # An endowment shock must reach the solution: code=1 alone does not say so.
     if results["shock"]["code"] == 1:
         check_endowment_shock_entered(m)
 
     # Freeze shock as well (for completeness / report purposes).
-    _solve_welfare_tail(m, "shock")
     freeze_period(m, "shock")
 
     return results
@@ -2430,6 +2550,7 @@ def solve_multiperiod(
     solve_check: bool = False,
     settle_only: bool = False,
     shock_steps: tuple[float, ...] | None = None,
+    shock_method: str = "nonlinear",
 ) -> dict[str, dict[str, Any]]:
     """Solve base → check → shock, with the built model hidden from the GC.
 
@@ -2476,4 +2597,5 @@ def solve_multiperiod(
             solve_check=solve_check,
             settle_only=settle_only,
             shock_steps=shock_steps,
+            shock_method=shock_method,
         )

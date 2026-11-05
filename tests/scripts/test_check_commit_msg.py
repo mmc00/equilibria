@@ -34,7 +34,7 @@ def test_accent_fails() -> None:
 
 def test_trailer_and_backticks_are_ignored() -> None:
     msg = (
-        "test: rename `test_sin_registro_de_bloques`\n\n"
+        "test: rename `test_sin_shock`\n\n"
         "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\n"
     )
     assert _module().spanish_words(msg) == []

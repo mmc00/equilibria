@@ -1,0 +1,12 @@
+kind: data
+model: gtap7
+dataset: gtap7_10x7_equilibria_settled_seed
+source: equilibria settled_seed of gtap7_10x7 (calibrate_base), recaptured at ef799fe7
+  after pefob base = cal.gms. Moved byte for byte from tests/fixtures at 4e91d12a;
+  tests/blocks/gtap/test_calibrate_no_double_solve.py passing on that commit is the
+  check
+license: equilibria output (MIT, as the package)
+outputs:
+  settled_seed.json.gz: 03f02cd79977a2f86fd9b2ea185ef2c8976e0b36e13b5bdd58b84bb540634bb2
+status: verified
+notes: ''

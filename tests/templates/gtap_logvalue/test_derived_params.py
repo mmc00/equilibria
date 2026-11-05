@@ -15,7 +15,7 @@ from equilibria.templates.gtap_julia.calibration import load_calibrated
 
 ROOT = Path(__file__).resolve().parents[3]
 DS = dataset_dir("gtap7_3x3")
-FIX = ROOT / "tests" / "fixtures" / "gtap_logvalue" / "julia_3x3_calibrated.csv"
+FIX = dataset_dir("gtap7_3x3_julia_logvalue") / "julia_3x3_calibrated.csv"
 
 
 def _params():

@@ -91,7 +91,7 @@ dev = [
 # Documentation
 docs = [
     "sphinx>=7.2",
-    "furo>=2024.1",
+    "pydata-sphinx-theme>=0.16",
     "myst-parser>=2.0",
     "sphinx-copybutton>=0.5",
     "sphinx-design>=0.5",
@@ -245,7 +245,9 @@ markers = [
 
 [tool.coverage.run]
 source = ["src/equilibria"]
-branch = true
+# Lines only: sys.monitoring (COVERAGE_CORE=sysmon, coverage.yml) traces branches
+# only from Python 3.14 on; with branches CI coverage cost 2-3x the test time.
+branch = false
 
 [tool.coverage.report]
 exclude_lines = [

@@ -16,8 +16,9 @@ from equilibria.sam_tools.mip_to_sam_transforms import (
     normalize_mip_accounts,
 )
 
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
-SIMPLE_MIP = FIXTURES_DIR / "simple_mip.xlsx"
+SIMPLE_MIP = (
+    Path(__file__).resolve().parents[2] / "data" / "sam_tests" / "simple_mip.xlsx"
+)
 
 
 class TestMIPParser:

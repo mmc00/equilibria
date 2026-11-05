@@ -99,7 +99,7 @@ parameters, the path ADR-0003 removed.
 `compute_welfare_decomposition(base_params, shock_params, base_levels,
 shock_levels)` and its homotopy variant take snapshots of levels, which today
 only that script builds. Moving the decomposition onto the block model is
-tracked with the monolith's retirement (`R-MONOLITH` in `ROADMAP.md`). Until
+tracked with the monolith's retirement (`R-MONOLITH` in `docs/roadmap.md`). Until
 then, use `regional_ev` for the EV itself.
 
 ### Why a residual?

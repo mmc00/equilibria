@@ -36,7 +36,7 @@ from equilibria.sam_tools import run_mip_to_sam
 
 # A 3-sector MIP shipped with the tests; point this at your own file.
 result = run_mip_to_sam(
-    Path("tests/sam_tools/fixtures/simple_mip.xlsx"),
+    Path("data/sam_tests/simple_mip.xlsx"),
     va_factor_shares={"L": 0.65, "K": 0.35},
     ras_max_iter=200,
     output_path=Path("out/my_sam.xlsx"),
@@ -64,7 +64,7 @@ from equilibria.sam_tools.mip_to_sam_transforms import (
     create_factor_income_distribution,
 )
 
-sam = MIPRawSAM.from_mip_excel("tests/sam_tools/fixtures/simple_mip.xlsx")
+sam = MIPRawSAM.from_mip_excel("data/sam_tests/simple_mip.xlsx")
 
 normalize_mip_accounts(sam, {})
 disaggregate_va_to_factors(sam, {"va_factor_shares": {"L": 0.65, "K": 0.35}})

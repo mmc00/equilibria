@@ -3,7 +3,7 @@
 Lee, con ``gdxdump`` (``_diff_core.gams_levels``), los niveles de ``ev``, ``cv``, ``u``,
 ``ug``, ``us`` y ``uh`` de cada ``<EXP>_capFlex.gdx`` que escribe
 ``gen_burfisher_gams.py`` y los guarda en
-``tests/fixtures/nus333_bienestar_gams_levels.json.gz``, con el formato de los otros
+``data/gtap7/nus333/gams_burfisher_levels/welfare.json.gz``, con el formato de los otros
 fixtures de niveles GAMS (``{exp: {var: [[clave, nivel], ...]}}``).
 
 En GAMS estas variables son parte del MCP (``model.gms``: ``eveq``, ``cveq``, ``ueq``,
@@ -28,7 +28,7 @@ sys.path[:0] = [str(ROOT / "scripts" / "gtap")]
 from _diff_core import gams_levels  # noqa: E402
 
 VARS = ("ev", "cv", "u", "ug", "us", "uh")
-OUT = ROOT / "tests" / "fixtures" / "nus333_bienestar_gams_levels.json.gz"
+OUT = ROOT / "data" / "gtap7" / "nus333" / "gams_burfisher_levels" / "welfare.json.gz"
 
 
 def main() -> int:

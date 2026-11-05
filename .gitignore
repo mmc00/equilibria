@@ -360,7 +360,6 @@ runs/gempack_matrix/job_*/
 
 examples/gtap/
 docs/GTAP_*.md
-docs/findings/gams_formulation_analysis.md
 
 # Local agent state and in-progress plans
 .claude/

@@ -10,6 +10,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Documentation](https://img.shields.io/badge/docs-sphinx-blue.svg)](https://equilibria.readthedocs.io/)
 [![DOI](https://zenodo.org/badge/1143895755.svg)](https://doi.org/10.5281/zenodo.23675339)
+[![Coverage](https://codecov.io/gh/mmc00/equilibria/branch/main/graph/badge.svg)](https://codecov.io/gh/mmc00/equilibria)
 
 *Build CGE models from modular blocks — like LEGO for economists — and check them against GAMS and GEMPACK.*
 
@@ -18,7 +19,7 @@
 [Installation](#installation) •
 [Quick Start](#quick-start) •
 [Documentation](https://equilibria.readthedocs.io/) •
-[Roadmap](ROADMAP.md) •
+[Roadmap](docs/roadmap.md) •
 [Contributing](#contributing)
 
 </div>
@@ -159,7 +160,7 @@ What matches what, measured: the
 [GTAP coverage matrix against GAMS](https://equilibria.readthedocs.io/en/latest/guide/gtap7_coverage_matrix.html),
 the [one against GEMPACK](https://equilibria.readthedocs.io/en/latest/guide/gtap7_coverage_matrix_gempack.html),
 and the [PEP coverage matrix](https://equilibria.readthedocs.io/en/latest/guide/pep_coverage_matrix.html).
-What comes next: [ROADMAP.md](ROADMAP.md).
+What comes next: [docs/roadmap.md](docs/roadmap.md).
 
 ## Examples
 

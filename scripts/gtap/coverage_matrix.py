@@ -280,7 +280,7 @@ _MCP_ROWS: list[Row] = [
     # ONE tariff shock and is ifSUB-agnostic — ifSUB 0 and 1 measure identically (the
     # quantities don't depend on the subsidy convention), so both are listed with the
     # same floor. Welfare (u/EV) is NOT here — it is sign-flipping/second-order and
-    # lives in the separate EV track (see docs/findings/gempack_welfare_not_cellwise).
+    # lives in the separate EV track (see docs/archive/findings/gempack_welfare_not_cellwise).
     # SUBSIDY BASIS: the gate runs va_subsidy_basis="gempack" (the data's factor wedge,
     # EVFP = EVFB + FTRV + FBEP — the gtap7_gempack basis). Measured within 1pp vs the
     # capFix fixtures, shock/CHECK denominator (2026-10-05, ifsub 0 = ifsub 1; median pp):

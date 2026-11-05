@@ -1,93 +1,92 @@
-# Documentación de equilibria
+# equilibria documentation
 
-Índice de los ~117 documentos de este árbol. Empieza por aquí antes de buscar a ciegas.
+The map of this tree. Start here before searching blind.
 
-## Por dónde empezar
+## Where to start
 
-| Si quieres… | Lee |
+| If you want to… | Read |
 |---|---|
-| Entender qué es el proyecto y cómo se usa | `../README.md` |
-| Saber en qué estado está y qué falta | `../ROADMAP.md` |
-| Entender la arquitectura (bloques, driver, shock) | `site/guide/architecture.md` y las decisiones en `adr/` |
-| Saber por qué el monolito de GTAP sigue existiendo | `architecture/monolito_vs_bloques.md` |
-| Saber por qué un número no coincide con GAMS o GEMPACK | `findings/` (ordenado por fecha) |
+| Understand what the project is and how to use it | [`../README.md`](../README.md) |
+| Know where it stands and what is missing | [`roadmap.md`](roadmap.md) |
+| Know what a domain word means | [`glossary.md`](glossary.md) |
+| Understand the architecture (blocks, driver, shock) | [`site/guide/architecture.md`](site/guide/architecture.md) and the decisions in [`adr/`](adr/) |
+| Know why the GTAP monolith still exists | [`notes/architecture/monolith_vs_blocks.md`](notes/architecture/monolith_vs_blocks.md) |
+| Know why a number does not match GAMS or GEMPACK | [`archive/findings/`](archive/findings/) (dated), then the parity notes in [`site/guide/`](site/guide/) |
 
-## Los directorios
+## Layout
 
-### `adr/` — decisiones de arquitectura
+```
+docs/
+  readme.md        this map
+  glossary.md      domain vocabulary
+  roadmap.md       measured state and what comes next
+  adr/             architecture decisions, one per file
+  agents/          context for coding agents
+  notes/           living notes: architecture, gdx, sam, guides, pep
+  archive/         historical documents, as written
+  site/            source of the published site (Sphinx + MyST)
+  assets/          logos and images
+```
 
-Una decisión por archivo (0001–0009): qué se decidió, por qué y qué se descartó. Son
-inmutables: cuando una decisión cambia, un ADR nuevo reemplaza al viejo. Se crean con
+`scripts/dev/check_layout.py` enforces this top level: a new entry under `docs/` fails CI.
+
+### `adr/` — architecture decisions
+
+One decision per file: what was decided, why, and what was ruled out. They are
+immutable: when a decision changes, a new ADR replaces the old one. Create one with
 `python scripts/dev/spec_tools.py new-adr <slug>`.
 
-### `agents/` — contexto para agentes
+### `agents/` — context for agents
 
-El dominio, el tracker de issues y las etiquetas de triage, para quien trabaje con asistentes.
+The domain, the issue tracker and the triage labels, for whoever works with assistants.
 
-### `architecture/` — cómo encaja el sistema
+### `notes/` — living notes, in English
 
-- **`monolito_vs_bloques.md`** — lectura obligada antes de tocar GTAP. Explica por qué el monolito
-  y los bloques no son alternativas intercambiables, y por qué no se puede borrar el primero.
-- `gams_parity_matrix.md` — qué mide cada gate de paridad.
+Maintained: when the code changes, these change with it.
 
-### `findings/` — resultados de investigación, con fecha
+- [`notes/architecture/`](notes/architecture/) — how the system fits together.
+  **[`monolith_vs_blocks.md`](notes/architecture/monolith_vs_blocks.md)** is required reading
+  before touching GTAP: it explains why the monolith and the blocks are not interchangeable
+  alternatives, and why the first cannot be deleted. [`no_block_registry.md`](notes/architecture/no_block_registry.md)
+  explains why there is no block registry.
+- [`notes/gdx/`](notes/gdx/) — the pure-Python GDX reader and its multidimensional parameters.
+- [`notes/sam/`](notes/sam/) — matrix balancing methods (RAS, GRAS, cross-entropy) and what a MIP
+  needs to feed a CGE model.
+- [`notes/guides/`](notes/guides/) — how to do things: MIP → SAM conversion, the simulations API, the
+  Jacobian harness, SimpleOpen parity.
+- [`notes/pep/`](notes/pep/) — the PEP guides and the IEEM → PEP transformations. These stay as
+  written until the PEP rework (`R-PEP`).
 
-El registro de lo que se descubrió y cuándo. **Son documentos históricos: un hallazgo posterior
-puede refutar a uno anterior.** Cuando eso pasa, el documento refutado lleva un aviso al principio;
-si el título y el aviso se contradicen, manda el aviso.
+### `archive/` — historical documents
 
-Ejemplo vivo: `gempack_residual_is_linearization_2026-07-24.md` sostiene en el título que el
-residuo contra GEMPACK es linearización, y abre con un `⚠️ UPDATE 2026-08-19` que lo desmiente —
-la causa real era el *seed* (`base_calibrated=True`). El step-grid de Gragg lo demuestra: GEMPACK
-converge a 0,002 pp, así que la linearización no podía explicar un gap de 0,4 pp.
+Findings, plans, analyses and reports, kept as they were written: not translated, not maintained.
+**A later finding can refute an earlier one.** When that happens the refuted document carries a
+notice at the top; if the title and the notice disagree, the notice wins.
 
-Documentos de cierre destacados: `f3_blocks_done_2026-07-29.md` (GTAP como bloques compuestos),
-`f3_5_base_calibrado_done_2026-07-30.md` (base model-consistent),
-`gempack_fixture_closure_mislabeled_2026-08-02.md` (el cruce de closures).
+A live example: `archive/findings/gempack_residual_is_linearization_2026-07-24.md` claims in its
+title that the residual against GEMPACK is linearization, and opens with a `⚠️ UPDATE 2026-08-19`
+that refutes it — the real cause was the *seed* (`base_calibrated=True`).
 
-### `guides/` — cómo hacer cosas
+[`archive/readme.md`](archive/readme.md) lists every file with its date and a one-line summary.
 
-Conversión MIP → SAM, la API del contrato PEP, el harness del Jacobiano, los gates de escenarios.
+### `site/` — source of the published documentation
 
-### `analysis/` — estudios sobre datos concretos
+What feeds the website (Sphinx + MyST). It includes the coverage matrices generated by the gates,
+`site/guide/gtap7_coverage_matrix.md` and `site/guide/gtap7_coverage_matrix_gempack.md`. They are
+regenerated by the gates — do not edit them by hand.
 
-Sobre todo el caso Bolivia (MIP → SAM). Su subdirectorio `archive/` es material superado.
+### `assets/` — logos and images
 
-### `technical/` — métodos numéricos
+## File names
 
-Balanceo de matrices: GRAS, RAS, SUT-RAS, entropía, y comparación entre variantes.
+- Lowercase and English, by default.
+- The legacy or contractual exceptions are listed in `scripts/dev/check_layout.py`.
+- Check locally: `python scripts/dev/check_layout.py` (CI requires it).
 
-### `reference/` — formatos de archivo
+## Dates
 
-Estructura binaria de GDX, principalmente.
-
-### `plans/` — planes de implementación, con fecha
-
-Histórico de cómo se abordó cada bloque de trabajo. Consúltalos para entender decisiones pasadas,
-no como indicación de lo que está pendiente hoy: para eso está `../ROADMAP.md`.
-
-### `archive/` — material superado
-
-Se conserva por trazabilidad. **Puede contradecir hallazgos posteriores.**
-
-### `site/` — fuente de la documentación publicada
-
-Lo que alimenta la web (Sphinx + MyST). Incluye las matrices de cobertura generadas por los gates:
-`site/guide/gtap7_coverage_matrix.md` y `site/guide/gtap7_coverage_matrix_gempack.md`. Se
-regeneran solas — no se editan a mano.
-
-### `assets/` — logos e imágenes
-
-## Política de nombres de archivo
-
-- Por defecto, nombres en minúsculas.
-- Las excepciones legacy o contractuales están listadas en `scripts/dev/check_layout.py`.
-- Verificación local: `python scripts/dev/check_layout.py` (CI lo exige).
-
-## Convención sobre fechas
-
-Un documento con fecha en el nombre es un registro de ese momento, no una verdad permanente.
-Si necesitas saber qué es cierto **hoy**, mira `../ROADMAP.md` o corre los gates:
+A document with a date in its name is a record of that moment, not a permanent truth.
+To know what is true **today**, read [`roadmap.md`](roadmap.md) or run the gates:
 
 ```bash
 uv run --frozen python scripts/gtap/run_parity_gates.py

@@ -3602,7 +3602,7 @@ def altertax(
                 f"PATH solve did not converge (status={status}, "
                 f"residual={residual:.2e}); refusing to write HAR. The "
                 "altertax closure may need additional eq pairings — see "
-                "docs/plans/gtap_altertax_implementation_plan_2026-05-13.md."
+                "docs/archive/plans/gtap_altertax_implementation_plan_2026-05-13.md."
             )
 
         click.echo(f"[4/4] Writing rebalanced HAR → {output}")

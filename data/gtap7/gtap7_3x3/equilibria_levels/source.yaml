@@ -1,0 +1,14 @@
+kind: data
+model: gtap7
+dataset: gtap7_3x3_equilibria_levels
+source: 'equilibria levels of gtap7_3x3 solved with the default GEMPACK-fixture closure
+  (capFlex, PATH), written by make_eq_gtap7_levels.py (in this folder). Moved byte
+  for byte from tests/compare/fixtures at 4e91d12a. Regenerated on that commit: 1348
+  values, max relative difference 2.9e-7 (xda; PATH convergence), against a comparator
+  tolerance of 1e-3; the committed bytes are kept so the tests read the same numbers'
+license: equilibria output (MIT, as the package)
+outputs:
+  eq_gtap7_3x3_levels.json.gz: 770a652724614af83412c996224dc41f479fc9e59950e3c8a50b71c582cf97ee
+  make_eq_gtap7_levels.py: fb9441fc236b13986e73e2f87a39868eba4d1d2b6b9205496d61cb962e0777f4
+status: verified
+notes: ''

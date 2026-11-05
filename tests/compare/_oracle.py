@@ -24,6 +24,8 @@ import tempfile
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 
+from equilibria.sources import dataset_dir
+
 ROOT = Path(__file__).resolve().parents[2]
 
 # ---------------------------------------------------------------------------
@@ -571,7 +573,7 @@ EX14_MAX_CELL = ("dom_sales", ("post", ("EU_28", "Svces")))
 # GTAP 3x3, en NIVELES, pre y post: las 32 variables del .har de niveles que tienen
 # forma en niveles, mas VDFB.
 #
-# A = tests/compare/fixtures/eq_gtap7_3x3_levels.json.gz (make_eq_gtap7_levels.py:
+# A = data/gtap7/gtap7_3x3/equilibria_levels/eq_gtap7_3x3_levels.json.gz (make_eq_gtap7_levels.py:
 # _solve_shock("gtap7_3x3", 0), capFlex); B = sl4levels6_gtap7_3x3_tm10.har (LEVB/LEVA)
 # + VDFB de basedata.har (pre) y updated_gtap7_3x3_tm10.har (post). A: check -> pre,
 # shock -> post. Calculado el 2026-10-21 con tests/compare/oracles/gtap7_map_3x3.py (no
@@ -581,7 +583,7 @@ EX14_MAX_CELL = ("dom_sales", ("post", ("EU_28", "Svces")))
 #   pe: las 6 celdas NatRes (3 reg x pre/post) no estan en GEMPACK (factor ENDF).
 #   18 variables del .har no se miden: indices encadenados (ver el mapeo).
 # ---------------------------------------------------------------------------
-EX15_EQ = ROOT / "tests" / "compare" / "fixtures" / "eq_gtap7_3x3_levels.json.gz"
+EX15_EQ = dataset_dir("gtap7_3x3_equilibria_levels") / "eq_gtap7_3x3_levels.json.gz"
 EX15_HAR = (
     ROOT / "tests" / "fixtures" / "gtap7_gempack" / "sl4levels6_gtap7_3x3_tm10.har"
 )
@@ -742,7 +744,7 @@ EX17_RTOL = 1e-6
 # Ejemplo 18 — los ejercicios de Burfisher (nus333): equilibria <-> GEMPACK en NIVELES,
 # pre y post, con el mapeo GTAP del ejemplo 15.
 #
-# A = tests/compare/fixtures/eq_burfisher_<exp>_levels.json.gz
+# A = data/gtap7/nus333/equilibria_burfisher_levels/eq_burfisher_<exp>_levels.json.gz
 # (make_eq_burfisher_levels.py: run_burfisher.solve_exercise, el cierre de la Tabla 3);
 # B = el .sl4 de GEMPACK de tests/fixtures/gtap7_gempack/burfisher/ (corrida en Windows
 # el 2026-09-24 con tools/gempack-oracle, GTAPV7 sin parche) + VDFB de basedata.har
@@ -758,7 +760,8 @@ EX17_RTOL = 1e-6
 # ---------------------------------------------------------------------------
 EX18_FIX = _GEMPACK_FIXTURES / "burfisher"
 EX18_EQ = {
-    e: ROOT / "tests" / "compare" / "fixtures" / f"eq_burfisher_{e}_levels.json.gz"
+    e: dataset_dir("nus333_equilibria_burfisher_levels")
+    / f"eq_burfisher_{e}_levels.json.gz"
     for e in ("tbl46a", "tbl45a")
 }
 EX18_CELLS = {

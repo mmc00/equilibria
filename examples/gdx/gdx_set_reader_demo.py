@@ -14,8 +14,13 @@ from pathlib import Path
 
 from equilibria.babel.gdx.reader import get_sets, read_gdx, read_set_elements
 
-# Path to test fixtures
-FIXTURES_DIR = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
+# GDX specimens of the reader tests (data/gdx_tests, ADR-0010), by file name
+SPECIMENS = Path(__file__).resolve().parents[2] / "data" / "gdx_tests" / "specimens"
+GDX = {
+    "variables_equations_test.gdx": SPECIMENS / "gdx_fixtures" / "variables_equations_test.gdx",
+    "multidim_test.gdx": SPECIMENS / "multidim_test" / "multidim_test.gdx",
+    "sparse_test.gdx": SPECIMENS / "gdx_fixtures" / "sparse_test.gdx",
+}
 
 
 def demo_1d_sets():
@@ -25,7 +30,7 @@ def demo_1d_sets():
     print("=" * 70)
 
     # Read GDX file with 1D sets
-    gdx_path = FIXTURES_DIR / "variables_equations_test.gdx"
+    gdx_path = GDX["variables_equations_test.gdx"]
     if not gdx_path.exists():
         print(f"⚠️  File not found: {gdx_path}")
         return
@@ -54,7 +59,7 @@ def demo_multidim_sets():
     print("MULTI-DIMENSIONAL SETS DEMO")
     print("=" * 70)
 
-    gdx_path = FIXTURES_DIR / "multidim_test.gdx"
+    gdx_path = GDX["multidim_test.gdx"]
     if not gdx_path.exists():
         print(f"⚠️  File not found: {gdx_path}")
         return
@@ -78,7 +83,7 @@ def demo_sparse_sets():
     print("SPARSE SETS DEMO")
     print("=" * 70)
 
-    gdx_path = FIXTURES_DIR / "sparse_test.gdx"
+    gdx_path = GDX["sparse_test.gdx"]
     if not gdx_path.exists():
         print(f"⚠️  File not found: {gdx_path}")
         return
@@ -110,7 +115,7 @@ def demo_set_statistics():
     ]
 
     for filename in test_files:
-        gdx_path = FIXTURES_DIR / filename
+        gdx_path = GDX[filename]
         if not gdx_path.exists():
             continue
 

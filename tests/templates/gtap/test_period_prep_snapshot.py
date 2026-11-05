@@ -1,7 +1,7 @@
 """La preparacion de cada periodo del driver no cambia sin que alguien lo decida.
 
 Compara la foto del modelo antes de cada solve (ver ``_period_snapshot.py``)
-contra la guardada en ``tests/fixtures/period_prep_snapshot.json``.  Un cambio
+contra la guardada en ``data/gtap7/gtap7_3x3/equilibria_period_prep/period_prep_snapshot.json``.  Un cambio
 INTENCIONAL en la preparacion se registra regenerando la foto:
 
     EQUILIBRIA_UPDATE_PERIOD_SNAPSHOT=1 uv run pytest tests/templates/gtap/test_period_prep_snapshot.py

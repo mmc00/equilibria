@@ -1,15 +1,14 @@
 """Test reading 5D parameters from GDX files."""
 
-from pathlib import Path
-
 import pytest
 
 from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
+from tests.babel.gdx._specimens import specimen
 
 
 def test_read_5d_sparse_parameter():
     """Test reading a 5D sparse parameter."""
-    gdx_file = Path(__file__).parent.parent.parent / "fixtures" / "test_5d.gdx"
+    gdx_file = specimen("test_5d.gdx")
 
     if not gdx_file.exists():
         pytest.skip("Test file not found - run generate_5d_test.gms first")
@@ -39,7 +38,7 @@ def test_read_5d_sparse_parameter():
 
 def test_read_5d_dense_parameter():
     """Test reading a 5D dense parameter."""
-    gdx_file = Path(__file__).parent.parent.parent / "fixtures" / "test_5d.gdx"
+    gdx_file = specimen("test_5d.gdx")
 
     if not gdx_file.exists():
         pytest.skip("Test file not found - run generate_5d_test.gms first")
@@ -75,7 +74,7 @@ def test_read_5d_dense_parameter():
 
 def test_5d_parameter_slicing():
     """Test slicing operations on 5D parameters."""
-    gdx_file = Path(__file__).parent.parent.parent / "fixtures" / "test_5d.gdx"
+    gdx_file = specimen("test_5d.gdx")
 
     if not gdx_file.exists():
         pytest.skip("Test file not found - run generate_5d_test.gms first")
@@ -100,7 +99,7 @@ def test_5d_parameter_slicing():
 
 def test_5d_parameter_aggregation():
     """Test aggregation operations on 5D parameters."""
-    gdx_file = Path(__file__).parent.parent.parent / "fixtures" / "test_5d.gdx"
+    gdx_file = specimen("test_5d.gdx")
 
     if not gdx_file.exists():
         pytest.skip("Test file not found - run generate_5d_test.gms first")
