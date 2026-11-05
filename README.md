@@ -46,20 +46,42 @@ Templates today: **GTAP Standard 7** (multi-period, both `ifSUB` modes),
 
 ## Installation
 
-equilibria is not on PyPI yet; install it from source:
+```bash
+pip install "equilibria[path]"
+```
+
+The `path` extra installs [`path-capi-python`](https://pypi.org/project/path-capi-python/),
+which MCP solves use. The PATH solver itself is not on PyPI; get it from its authors:
+
+1. Download the PATH libraries for your platform from
+   <https://pages.cs.wisc.edu/~ferris/path/julia/> (macOS arm64:
+   `libpath50.silicon.dylib` and `liblusol.silicon.dylib`; Linux: `.so`;
+   Windows: `.dll`) and point to them:
+   ```bash
+   export PATH_CAPI_LIBPATH=/absolute/path/to/libpath50.silicon.dylib
+   export PATH_CAPI_LIBLUSOL=/absolute/path/to/liblusol.silicon.dylib
+   ```
+2. Without a license PATH stops at 300 variables, which is smaller than the
+   quickstart model. The PATH authors publish a free evaluation license in
+   <https://pages.cs.wisc.edu/~ferris/path/julia/LICENSE>; set it as
+   `PATH_LICENSE_STRING`.
+
+NLP solves use IPOPT through the `ipopt` extra (`cyipopt`), which needs an Ipopt
+installation on the system.
+
+Other extras: `excel`, `viz` (matplotlib, plotly), `poi` (PyOptInterface),
+`modelcache` (cloudpickle), `docs`, `all`.
+
+To work on equilibria itself, install from source:
 
 ```bash
 git clone https://github.com/mmc00/equilibria.git
 cd equilibria
-pip install -e ".[pyomo,ipopt,excel]"
+pip install -e ".[pyomo,path,ipopt,excel]"
 ```
 
-Optional extras: `viz` (matplotlib, plotly), `poi` (PyOptInterface),
-`modelcache` (cloudpickle), `docs`, `all`.
-
-MCP solves use PATH through [`path-capi-python`](https://github.com/mmc00/path-capi-python);
-see [Solving with PATH](https://equilibria.readthedocs.io/en/latest/guide/path_capi.html)
-for where equilibria looks for it and for the PATH libraries.
+See [Solving with PATH](https://equilibria.readthedocs.io/en/latest/guide/path_capi.html)
+for where equilibria looks for the PATH libraries.
 
 ---
 

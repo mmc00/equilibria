@@ -67,6 +67,9 @@ equilibria = "equilibria.cli:main"
 pyomo = ["pyomo>=6.7"]
 poi = ["pyoptinterface>=0.1"]
 ipopt = ["cyipopt>=1.6.1"]
+# MCP solves through PATH's C API. The PATH libraries and license are not
+# included: see the README (Installation).
+path = ["path-capi-python>=0.1.0"]
 
 # Data format support
 excel = ["openpyxl>=3.1", "xlrd>=2.0"]
@@ -102,7 +105,7 @@ docs = [
 
 # All optional dependencies
 all = [
-    "equilibria[pyomo]",
+    "equilibria[pyomo,path]",
 ]
 
 [project.urls]
@@ -134,9 +137,15 @@ include = [
     "/src",
     "/tests",
     "/docs",
-    # the wheel's force-include reads these (load_bundled)
-    "/data/gtap7/9x10",
-    "/data/gtap7/nus333",
+    # only the files the wheel's force-include ships (load_bundled); the rest of
+    # data/<dataset>/ holds the recorded runs (~95 MB) and stays in the repo
+    "/data/gtap7/9x10/basedata.har",
+    "/data/gtap7/9x10/sets.har",
+    "/data/gtap7/9x10/default.prm",
+    "/data/gtap7/nus333/basedata.har",
+    "/data/gtap7/nus333/sets.har",
+    "/data/gtap7/nus333/default.prm",
+    "/data/gtap7/nus333/baserate.har",
 ]
 
 # ============================================================================
