@@ -4,8 +4,9 @@
 that leaves a key out can still match exactly one folder today and silently read
 the wrong variant tomorrow, when a sibling record is added. So a call for a
 GEMPACK-side record (tool ``gempack``, ``sltoht`` or ``gemsim``) names all three
-matrix keys, unless it asks for a book/Gragg experiment (``experiment=``). A call
-that passes ``**variant`` (a record's own variant) is not checked.
+matrix keys, unless it asks for a Burfisher record (``experiment=`` or ``method=``:
+a book/Gragg run, or the welfare computed from them). A call that passes
+``**variant`` (a record's own variant) is not checked.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ def _incomplete_calls(source: str) -> list[int]:
         keys = {k.arg for k in node.keywords}
         if None in keys:  # **variant: a record's own variant, not checkable here
             continue
-        if "experiment" not in keys and not keys >= _MATRIX_KEYS:
+        if not keys & {"experiment", "method"} and not keys >= _MATRIX_KEYS:
             bad.append(node.lineno)
     return bad
 
@@ -46,6 +47,7 @@ def test_scanner_flags_a_short_matrix_request() -> None:
         'reference("gtap7_3x3", "gempack", shock=10, closure="capFix")\n'
         'reference("gtap7_3x3", "gempack", shock=10, steps="8-16-32", closure="capFix")\n'
         'reference("nus333", "gemsim", experiment="me9c", method="gragg")\n'
+        'reference("nus333", "gempack", method="gragg", output="welfare")\n'
         'reference("gtap7_3x3", "gams", form="mcp")\n'
         "find_reference(ds, tool, **variant)\n"
     )

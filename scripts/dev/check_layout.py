@@ -133,7 +133,6 @@ SPANISH_LEGACY = frozenset(
     {
         "runs/gempack_20x41_validation/RESULTADO.md",
         "scripts/windows/corridas_paper.ps1",
-        "tests/fixtures/nus333_bienestar_gempack.json.gz",
     }
 )
 

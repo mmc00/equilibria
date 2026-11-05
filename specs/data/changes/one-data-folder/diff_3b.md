@@ -94,3 +94,18 @@ name, the new one through `equilibria.sources.reference(...)`.
   Gragg records also hold TBL53 and GTAPV7, which the old folder lacked: their
   notebooks (`tbl53.ipynb`, `gtapv7.ipynb`) were generated and added to
   `MATCHED` in `tests/examples/test_burfisher_notebooks.py` (44 → 46 tests).
+
+### Task 6 notes
+
+- **Source: the Gragg records, not the book.** The plan says the welfare JSON is
+  computed from the book solutions; the old script read the step-6 dumps of the
+  Gragg runs. Recomputed from `sltoht_burfisher_gragg/<exp>/sl4dump.har` (runs
+  kept only if `gemsim_burfisher_gragg/<exp>/gemsim_console.txt` says "completed
+  without error"), all 41 old entries are equal after `json.load` (exact); from
+  the book, none of 36 is. The record
+  `data/gtap7/nus333/gempack_burfisher_welfare/` (`method: gragg`,
+  `output: welfare`) hashes the 86 Gragg folders it reads as inputs.
+- **Two new entries.** The Gragg records also hold GTAPV7 and TBL53, so the JSON
+  has 43 exercises. Consumers index it by exercise name; no test changes.
+- `test_reference_keys_are_complete` also accepts a call that names `method=`
+  (a Burfisher record), as it did `experiment=`.
