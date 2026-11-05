@@ -24,7 +24,7 @@ import tempfile
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, reference
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -575,7 +575,7 @@ EX14_MAX_CELL = ("dom_sales", ("post", ("EU_28", "Svces")))
 #
 # A = data/gtap7/gtap7_3x3/equilibria_levels/eq_gtap7_3x3_levels.json.gz (make_eq_gtap7_levels.py:
 # _solve_shock("gtap7_3x3", 0), capFlex); B = sl4levels6_gtap7_3x3_tm10.har (LEVB/LEVA)
-# + VDFB de basedata.har (pre) y updated_gtap7_3x3_tm10.har (post). A: check -> pre,
+# + VDFB de basedata.har (pre) y gtap7_3x3/gempack_tm10_s8-16-32_capflex/updated.har (post). A: check -> pre,
 # shock -> post. Calculado el 2026-10-21 con tests/compare/oracles/gtap7_map_3x3.py (no
 # importa equilibria.compare); las formulas estan en su docstring.
 #   776 celdas, las 776 <= 1e-3; maximo 9.856e-04 en qgd post (EU_28, Mnfcs)
@@ -653,7 +653,7 @@ EX15_INDEX_EXCLUDED = (
 #
 # Dos oraculos, ninguno sale del lector nuevo:
 # 1) Nivel PRE del nus333. Los fixtures de sltoht del nus333 (tm10) dan el post
-#    (sl4levels_nus333_tm10.har, LEVA) y el % (sl4dump_nus333_tm10.har); pre =
+#    (sl4levels_nus333_tm10.har, LEVA) y el % (nus333/gempack_tm10_s8-16-32_dpsaveswap/sl4dump.har); pre =
 #    post / (1 + %/100). El pre depende solo de los datos, que son los mismos en
 #    todo Burfisher, asi que es el pre de TBL45A. Las 44 variables con nivel del
 #    nus333 son de cambio %, ninguna de cambio ordinario.
@@ -705,7 +705,10 @@ EX16_EXERCISES = ("TBL45A", "ME9C", "GTAPV7")
 EX16_SL4 = _Sl4(EX16_EXERCISES)
 EX16_DUMP = {e: EX16_DIR / f"sl4dump_{e.lower()}.har" for e in EX16_EXERCISES}
 EX16_NUS333_POST = _GEMPACK_FIXTURES / "sl4levels_nus333_tm10.har"
-EX16_NUS333_PCT = _GEMPACK_FIXTURES / "sl4dump_nus333_tm10.har"
+EX16_NUS333_PCT = (
+    reference("nus333", "gempack", shock=10, steps="8-16-32", closure="dpsaveSwap")
+    / "sl4dump.har"
+)
 EX16_N_WITH_LEVEL = 44
 EX16_PRE_RTOL = 1e-6
 EX16_PCT_ATOL = 1e-4  # puntos porcentuales

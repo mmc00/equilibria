@@ -29,12 +29,16 @@ import numpy as np
 import pytest
 
 from equilibria.babel.har.reader import read_har
+from equilibria.sources import reference
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "data" / "gtap7" / "gempack" / "tools" / "export_sl4_levels.py"
 FIXTURES = ROOT / "tests" / "fixtures" / "gtap7_gempack"
 SAMPLE = FIXTURES / "sl4levels_sample_sic.txt"
-SL4DUMP_3X3 = FIXTURES / "sl4dump_gtap7_3x3_tm10.har"
+SL4DUMP_3X3 = (
+    reference("gtap7_3x3", "gempack", shock=10, steps="8-16-32", closure="capFlex")
+    / "sl4dump.har"
+)
 
 
 def _load_module() -> Any:
@@ -143,14 +147,20 @@ def _sic_text_from(sl4dump: Path, post_levels: Path | None) -> str:
 LEVA_FIXTURES = sorted(FIXTURES.glob("sl4levels_*_tm10.har"))
 
 
+def _sl4dump_of(leva_fixture: Path) -> Path:
+    """The 10% sl4dump of the run a ``sl4levels_<ds>_tm10.har`` fixture came from."""
+    dataset = leva_fixture.stem.removeprefix("sl4levels_").removesuffix("_tm10")
+    closure = "dpsaveSwap" if dataset in ("nus333", "9x10") else "capFlex"
+    rec = reference(dataset, "gempack", shock=10, steps="8-16-32", closure=closure)
+    return rec / "sl4dump.har"
+
+
 @pytest.mark.parametrize("leva_fixture", LEVA_FIXTURES, ids=lambda p: p.stem)
 def test_los_fixtures_sl4levels_existentes_se_reproducen_igual(
     leva_fixture: Path, tmp_path: Path
 ) -> None:
     mod = _load_module()
-    sl4dump = leva_fixture.with_name(
-        leva_fixture.name.replace("sl4levels_", "sl4dump_")
-    )
+    sl4dump = _sl4dump_of(leva_fixture)
     text = tmp_path / "levels.txt"
     text.write_text(_sic_text_from(sl4dump, leva_fixture))
     out = tmp_path / leva_fixture.name
@@ -187,7 +197,10 @@ def test_los_fixtures_sl4levels_existentes_se_reproducen_igual(
 
 def test_cubre_la_solucion_20x41_capfix(tmp_path: Path) -> None:
     mod = _load_module()
-    sl4dump = FIXTURES / "sl4dump_gtap7_20x41_tm10_s8-16-32_capfix.har"
+    sl4dump = (
+        reference("gtap7_20x41", "gempack", shock=10, steps="8-16-32", closure="capFix")
+        / "sl4dump.har"
+    )
     text = tmp_path / "levels.txt"
     text.write_text(_sic_text_from(sl4dump, None))
 

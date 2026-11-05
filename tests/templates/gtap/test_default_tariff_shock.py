@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 
 from equilibria._local_refs import path_capi_src
-from equilibria.sources import dataset_dir, find_reference
+from equilibria.sources import dataset_dir, find_reference, reference
 
 pytestmark = pytest.mark.integration
 
@@ -219,7 +219,8 @@ def test_table1_3x3_keeps_its_solution():
         xscale,
         GEMPACK / f"sl4levels6_{tag}.har",
         dataset_dir(DATASET) / "basedata.har",
-        GEMPACK / f"updated_{tag}.har",
+        reference(DATASET, "gempack", shock=10, steps="8-16-32", closure="capFlex")
+        / "updated.har",
     )
     got = {
         (c["variable"], c["period"], tuple(c["index"])): c["a"]

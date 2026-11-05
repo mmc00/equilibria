@@ -20,7 +20,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, reference
 
 ROOT = Path(__file__).resolve().parents[2]
 FIX = "tests/fixtures/gtap7_gempack"
@@ -29,6 +29,14 @@ FIX = "tests/fixtures/gtap7_gempack"
 def _rel(dataset: str) -> str:
     """A dataset folder relative to the repo root, as the commands take it."""
     return str(dataset_dir(dataset).relative_to(ROOT))
+
+
+def _updated(dataset: str) -> str:
+    """The 10% capFlex GEMPACK ``updated.har`` of a dataset, relative to the repo root."""
+    rec = reference(dataset, "gempack", shock=10, steps="8-16-32", closure="capFlex")
+    return str((rec / "updated.har").relative_to(ROOT))
+
+
 TABLE2 = {  # dataset -> solver de la Tabla 2
     "3x3": "path",
     "3x4": "path",
@@ -55,7 +63,7 @@ def steps(out: Path) -> list[Step]:
             "--dataset", f"gtap7_{ds}", "--closure", "capFlex", "--solver", solver,
             "--har", f"{FIX}/sl4levels6_gtap7_{ds}_tm10_s8-16-32.har",
             "--basedata", f"{_rel(f'gtap7_{ds}')}/basedata.har",
-            "--updated", f"{FIX}/updated_gtap7_{ds}_tm10_s8-16-32.har",
+            "--updated", _updated(f"gtap7_{ds}"),
             "--save-eq", str(out / f"eq_gtap7_{ds}_capflex.json.gz"),
             "--out", str(out / f"table2_gtap7_{ds}.json"),
         ]
@@ -64,7 +72,7 @@ def steps(out: Path) -> list[Step]:
     t2_files = ["scripts/gtap/compare_gempack_levels.py"] + [
         f for ds in TABLE2 for f in (
             f"{FIX}/sl4levels6_gtap7_{ds}_tm10_s8-16-32.har",
-            f"{FIX}/updated_gtap7_{ds}_tm10_s8-16-32.har",
+            _updated(f"gtap7_{ds}"),
             f"{_rel(f'gtap7_{ds}')}/basedata.har",
         )
     ]  # fmt: skip

@@ -17,12 +17,15 @@ from equilibria.compare import (
     compare,
     from_dict,
 )
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, reference
 from tests.compare import _oracle as O
 
 SCRIPT = O.ROOT / "scripts" / "gtap" / "compare_gempack_levels.py"
 BASEDATA = dataset_dir("gtap7_3x3") / "basedata.har"
-UPDATED = O.ROOT / "tests" / "fixtures" / "gtap7_gempack" / "updated_gtap7_3x3_tm10.har"
+UPDATED = (
+    reference("gtap7_3x3", "gempack", shock=10, steps="8-16-32", closure="capFlex")
+    / "updated.har"
+)
 
 pytestmark = pytest.mark.skipif(
     not (O.EX15_HAR.exists() and BASEDATA.exists()), reason="falta el 3x3 de GEMPACK"

@@ -53,9 +53,12 @@ def test_gempack_qty_pct_reorders_to_python_index():
     sys.path.insert(0, str(ROOT / "scripts/gtap"))
     from gempack_reference import gempack_qty_pct
 
-    sl4 = ROOT / "tests/fixtures/gtap7_gempack/sl4dump_gtap7_3x3_tm10.har"
-    if not sl4.exists():
-        _pt.skip(f"sl4dump fixture missing: {sl4}")
+    from equilibria.sources import reference
+
+    sl4 = (
+        reference("gtap7_3x3", "gempack", shock=10, steps="8-16-32", closure="capFlex")
+        / "sl4dump.har"
+    )
 
     # qfd [COMM,ACTS,REG] -> xda key order (r,c,a); values are fractions (~±0.25)
     qfd = gempack_qty_pct(str(sl4), "qfd")

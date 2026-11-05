@@ -26,7 +26,7 @@ Uso (desde la raiz). Con niveles de equilibria ya guardados::
         --eq data/gtap7/gtap7_3x3/equilibria_levels/eq_gtap7_3x3_levels.json.gz \\
         --har tests/fixtures/gtap7_gempack/sl4levels6_gtap7_3x3_tm10.har \\
         --basedata data/gtap7/gtap7_3x3/basedata.har \\
-        --updated tests/fixtures/gtap7_gempack/updated_gtap7_3x3_tm10.har
+        --updated data/gtap7/gtap7_3x3/gempack_tm10_s8-16-32_capflex/updated.har
 
 o resolviendo equilibria en el momento (necesita PATH; ``--solver newton`` es el
 Newton-TR + MUMPS del 20x41, que necesita pymumps)::
@@ -35,7 +35,7 @@ Newton-TR + MUMPS del 20x41, que necesita pymumps)::
         --dataset gtap7_20x41 --closure capFix --solver newton --save-eq eq.json.gz \\
         --har tests/fixtures/gtap7_gempack/sl4levels6_gtap7_20x41_tm10_s8-16-32_capfix.har \\
         --basedata data/gtap7/gtap7_20x41/basedata.har \\
-        --updated tests/fixtures/gtap7_gempack/updated_gtap7_20x41_tm10_s8-16-32_capfix.har \\
+        --updated data/gtap7/gtap7_20x41/gempack_tm10_s8-16-32_capfix/updated.har \\
         --out reporte.json
 
 ``--eq``/``--save-eq`` tienen la forma de ``data/gtap7/gtap7_3x3/equilibria_levels/make_eq_gtap7_levels.py``.

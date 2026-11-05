@@ -20,13 +20,6 @@ ROOT = Path(__file__).resolve().parents[2]
 # plan-phase-3b.md that removes it; an empty dict means 3b is done.
 _GG = "tests/fixtures/gtap7_gempack/"
 PENDING_3B: dict[str, str] = {
-    _GG + "decomp_*": "Task 2",
-    _GG + "sl4dump_gtap7_*": "Task 2",
-    _GG + "sl4dump_nus333_*": "Task 2",
-    _GG + "sl4dump_9x10_*": "Task 2",
-    _GG + "updated_gtap7_*": "Task 2",
-    _GG + "updated_nus333_*": "Task 2",
-    _GG + "updated_9x10_*": "Task 2",
     _GG + "sl4levels_gtap7_*": "Task 3",
     _GG + "sl4levels_nus333_*": "Task 3",
     _GG + "sl4levels_9x10_*": "Task 3",
