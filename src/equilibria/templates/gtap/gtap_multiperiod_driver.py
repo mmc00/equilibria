@@ -2585,7 +2585,7 @@ def solve_multiperiod(
         _gc_relaxed_threshold(_gc_threshold_from_env()),
         _restored_path_capi_options(),
     ):
-        return _solve_multiperiod_inner(
+        results = _solve_multiperiod_inner(
             m,
             params,
             closure,
@@ -2599,3 +2599,8 @@ def solve_multiperiod(
             shock_steps=shock_steps,
             shock_method=shock_method,
         )
+        if not settle_only:
+            from equilibria.family.prep_capture import capture_final
+
+            capture_final(m)  # opt-in reference for the family port; no-op by default
+        return results

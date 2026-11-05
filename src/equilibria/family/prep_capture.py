@@ -9,6 +9,15 @@ Per solve call of the multiperiod driver:
   its SOLVE_NLP deactivate/fix loop): active rows, free columns in paired order,
   every cell of the active period, and each active row's incidence.
 
+Reference of the solve itself, for the parity gates of the family driver:
+
+* **P** — the active period's Var cells right after the Newton writeback.
+* **S** — ``<n>_S_<period>.json``: code, ``nit``, factorizations, the per-iteration
+  ``‖F‖∞`` / ``‖F/fscale‖∞`` trace, final residual, the ``EQUILIBRIA_GTAP_TR_*``
+  and MUMPS environment, GMIN, ICNTL, null pivots.
+* ``final.pkl`` — every Var cell and row flag after ``solve_multiperiod``;
+  ``settled.pkl`` — the dict ``calibrate_base`` returns.
+
 Opt-in with ``EQUILIBRIA_FAMILY_PREP_CAPTURE=<dir>``; unset, every call returns at
 once. Files are ``<n>_<tag>_<period>.pkl`` with ``n`` counting ``prepare`` calls in
 this process, so the settle's check and the main check do not collide.
@@ -26,7 +35,7 @@ from typing import Any
 import numpy as np
 
 ENV = "EQUILIBRIA_FAMILY_PREP_CAPTURE"
-_state = {"n": 0}
+_state: dict[str, Any] = {"n": 0, "period": None}
 
 
 def _dir() -> Path | None:
@@ -36,6 +45,7 @@ def _dir() -> Path | None:
 
 def reset() -> None:
     _state["n"] = 0
+    _state["period"] = None
 
 
 @dataclass
@@ -147,6 +157,7 @@ def capture_squared(
 
     periods = Counter(_key(c.index())[-1] for c in constraints if c.index() is not None)
     period = periods.most_common(1)[0][0]
+    _state["period"] = period
     _write(
         Photo(
             "B",
@@ -189,3 +200,84 @@ def pairs(d: Path) -> list[tuple[Photo, Photo]]:
 def load_a2(d: Path, a: Photo) -> Photo | None:
     path = Path(d) / f"{a.n:03d}_A2_{a.period}.pkl"
     return load(path) if path.exists() else None
+
+
+def capture_solve(
+    model: Any,
+    *,
+    code: int,
+    nit: int,
+    nfact: int | None,
+    trace: list | None,
+    residual: float,
+    method: str,
+    linsolve: str | None,
+    cfg: dict | None,
+    null_pivots: list | None,
+    converged: bool,
+    wall: float,
+) -> None:
+    """Photo P and stats S of the solve that just wrote its solution back to ``model``."""
+    d = _dir()
+    if d is None:
+        return
+    import json
+
+    period = _state["period"]
+    n = _state["n"]
+    _write(Photo("P", n, period, _vars(model, period), {}))
+    cfg = cfg or {}
+    stats = {
+        "n": n,
+        "period": period,
+        "code": int(code),
+        "converged": bool(converged),
+        "nit": int(nit),
+        "nfact": nfact,
+        "residual": float(residual),
+        "method": method,
+        "linsolve": linsolve,
+        "trace_f_inf": [t[0] for t in trace or []],
+        "trace_f_scaled_inf": [t[1] for t in trace or []],
+        "tr_env": {
+            k: v
+            for k, v in sorted(os.environ.items())
+            if k.startswith("EQUILIBRIA_GTAP_TR_")
+        },
+        "mumps_env": {
+            k: v
+            for k, v in sorted(os.environ.items())
+            if k.startswith("EQUILIBRIA_GTAP_MUMPS_") or k == "EQUILIBRIA_GTAP_GMIN"
+        },
+        "gmin": cfg.get("gmin"),
+        "icntl": cfg.get("icntl"),
+        "null_pivots": list(null_pivots or []),
+        "wall_s": float(wall),
+    }
+    (d / f"{n:03d}_S_{period}.json").write_text(json.dumps(stats, indent=1))
+
+
+def capture_final(model: Any) -> None:
+    """``final.pkl``: every Var cell of every period and every row flag, once the whole
+    ``solve_multiperiod`` is done."""
+    if _dir() is None:
+        return
+    _write_named(
+        "final.pkl",
+        Photo("final", _state["n"], "all", _vars(model, None), _rows(model)),
+    )
+
+
+def capture_settled(settled: dict) -> None:
+    """``settled.pkl``: the dict ``calibrate_base`` returns."""
+    if _dir() is None:
+        return
+    _write_named("settled.pkl", settled)
+
+
+def _write_named(name: str, obj: Any) -> None:
+    d = _dir()
+    assert d is not None
+    d.mkdir(parents=True, exist_ok=True)
+    with (d / name).open("wb") as fh:
+        pickle.dump(obj, fh, protocol=5)

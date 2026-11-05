@@ -2716,8 +2716,24 @@ def _run_path_capi_nonlinear_full(
                     None  # persists cuDSS plan across Newton steps (reuse)
                 )
                 _gmin_pattern_sig = None  # (nnz, hash) of the last gmin-applied pattern
+                # Bookkeeping for the opt-in reference capture (prep_capture.capture_solve);
+                # plain appends/counters, they never feed back into the iteration.
+                _tr_trace: list = []  # (‖F‖∞, ‖F/fscale‖∞ or None) at each loop top
+                _tr_nfact = 0  # numeric factorizations
+                _tr_nullpiv: list = []  # MUMPS INFOG(28) after each numeric factor
+                _tr_cfg: dict = {}  # GMIN / ICNTL actually used
                 for _k_tr in range(_maxit_tr):
                     _rinf_tr = float(_np_sr.linalg.norm(_F_tr, _np_sr.inf))
+                    _tr_trace.append(
+                        (
+                            _rinf_tr,
+                            None
+                            if _fscale_tr is None
+                            else float(
+                                _np_sr.linalg.norm(_F_tr / _fscale_tr, _np_sr.inf)
+                            ),
+                        )
+                    )
                     # absolute-tol convergence (default) OR relative-tol (TR_RELTOL): the
                     # per-equation scaled residual ‖F/fscale‖_inf, so huge-flow cells with a
                     # small RELATIVE residual don't block convergence (see fscale note above).
@@ -3009,6 +3025,15 @@ def _run_path_capi_nonlinear_full(
                                             "EQUILIBRIA_GTAP_MUMPS_ICNTL24", "1"
                                         )
                                     )  # 1=null-pivot detection
+                                    _tr_cfg.update(
+                                        icntl={
+                                            "6": _icntl6,
+                                            "7": _icntl7,
+                                            "8": _icntl8,
+                                            "14": 100,
+                                            "24": _icntl24,
+                                        }
+                                    )
                                     _lu_tr = _Mumps_tr(sym=0)
                                     _lu_tr.set_icntl(14, 100)
                                     _lu_tr.set_icntl(6, _icntl6)
@@ -3044,11 +3069,14 @@ def _run_path_capi_nonlinear_full(
                                     )
                                     _t_m = __import__("time").perf_counter()
                                 _lu_tr.do_numeric_factorization(_Jm_tr)
+                                _tr_nfact += 1
+                                _tr_cfg["gmin"] = _gmin
                                 # INFOG(28) = number of null pivots detected (ICNTL(24)=1). A
                                 # handful is fine (the TR rejects a bad step); many means the
                                 # scaling didn't rescue the ill-conditioned rows.
                                 try:
                                     _nnull = _lu_tr.get_infog(28)
+                                    _tr_nullpiv.append(int(_nnull or 0))
                                     if _nnull:
                                         _plog_m(f"null pivots detected: {_nnull}")
                                         # NAME the null-pivot rows (env EQUILIBRIA_GTAP_MUMPS_
@@ -3326,6 +3354,7 @@ def _run_path_capi_nonlinear_full(
                                 _t_d = __import__("time").perf_counter()
                                 _Jperm_tr = _J_tr[:, _colperm_tr].tocsc()
                                 _lu_tr = _splu_full_tr(_Jperm_tr, permc_spec="COLAMD")
+                                _tr_nfact += 1
                                 _plog_d(
                                     f"splu factor done in "
                                     f"{__import__('time').perf_counter() - _t_d:.1f}s "
@@ -3472,6 +3501,23 @@ def _run_path_capi_nonlinear_full(
             # (res.solver.status / termination_condition) works. Success = converged AND
             # residual within tolerance (fatol was 1e-7; accept ||F||<1e-5).
             _ok_sr = bool(_sol_sr.success) and _rf_sr < 1e-5
+            from equilibria.family.prep_capture import capture_solve
+
+            # Opt-in reference for the family port; no-op by default.
+            capture_solve(
+                model,
+                code=1 if _ok_sr else 2,
+                nit=int(getattr(_sol_sr, "nit", 0)),
+                nfact=locals().get("_tr_nfact"),
+                trace=locals().get("_tr_trace"),
+                residual=_rf_sr,
+                method=_method,
+                linsolve=locals().get("_linsolve_tr"),
+                cfg=locals().get("_tr_cfg"),
+                null_pivots=locals().get("_tr_nullpiv"),
+                converged=bool(_sol_sr.success),
+                wall=_dt_sr,
+            )
 
             class _R:  # minimal Pyomo-results shim
                 class solver:
