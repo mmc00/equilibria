@@ -83,6 +83,12 @@ def period_incidence(backend: Any, state: Any, period: str) -> dict[str, list[st
     return out
 
 
+# Variables of the single-period model that the multiperiod model drops together with
+# their rows (the intra-period Fisher aggregates, see hybrid._pyomo_layout): a fixed
+# slot at the state's level. Any other family variable missing from ``mp`` raises.
+SP_ONLY_VARS = frozenset({"mfr_bs", "mfr_sb", "mfr_ss", "mfw_bs", "mfw_sb", "mfw_ss"})
+
+
 def _cell_name(var: str, idx: tuple, period: str) -> str:
     return f"{var}[{','.join((*idx, period))}]"
 
@@ -105,7 +111,10 @@ class SquaredSystem:
         self._zperm = zperm  # layout column -> squared column
         self._proxy_k = proxy_k
         self.proxy_rows = [row_names[k] for k in proxy_k]
-        self._z0 = x0[zperm]
+        self.proxy_families: dict[str, int] = {}
+        for r in self.proxy_rows:
+            f = r.partition("[")[0]
+            self.proxy_families[f] = self.proxy_families.get(f, 0) + 1
 
     @classmethod
     def build(
@@ -130,8 +139,10 @@ class SquaredSystem:
                     vals.flat[k] = sq.cells[name][0]
                 elif var is not None:
                     vals.flat[k] = var.value[var.pos((*idx, period))]
-                else:  # SP-only variable: a fixed slot at the state's level
+                elif v in SP_ONLY_VARS:  # a fixed slot at the state's level
                     vals.flat[k] = np.asarray(state.values[v], dtype=float).flat[k]
+                else:
+                    raise KeyError(f"variable component {v!r} missing from mp")
                 mask.flat[k] = name in col_pos
             values[v], free[v] = vals, mask
         for p in backend.param_domains:
@@ -162,6 +173,17 @@ class SquaredSystem:
             fam_k.append(k)
         fam_rows, fam_k = np.array(fam_rows, dtype=np.int64), np.array(fam_k, np.int64)
         proxy_k = np.setdiff1d(np.arange(len(sq.row_names)), fam_k)
+        # A proxy row is only legitimate for a cross-period family (the caller supplies
+        # it); an unrecorded or ifSUB-skipped row that is active would be a fake row.
+        bad = sorted(
+            {
+                sq.row_names[k].partition("[")[0]
+                for k in proxy_k
+                if not is_cross_period(sq.row_names[k].partition("[")[0])
+            }
+        )
+        if bad:
+            raise ValueError(f"active rows with no family and not cross-period: {bad}")
         return cls(x0, fam_rows, fam_k, zperm, system, sq.row_names, proxy_k)
 
     def F(self, x: np.ndarray) -> np.ndarray:

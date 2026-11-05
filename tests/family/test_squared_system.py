@@ -186,21 +186,6 @@ def test_square_with_pattern_incidence(inc):
 # SquaredSystem: the squared system of one call on the backend
 # ---------------------------------------------------------------------------
 
-# Review Focus 1: rows with no family function for the multiperiod row (the
-# cross-period families, plus the ``eq_mq_*`` prefix). Everything else must be a
-# backend row.
-PROXY_FAMILIES = CROSS = {
-    "eq_rgdpmp",
-    "eq_pgdpmp",
-    "eq_pabs",
-    "eq_pabs_base",
-    "eq_pfact",
-    "eq_pfact_base",
-    "eq_pwfact",
-    "eq_chisave",
-}
-
-
 # Families whose rows lose J entries when a fixed-at-0 cell zeroes a term (3x3 calls).
 FOLDED_BY_FIXED_ZERO = {"eq_ytax"}
 
@@ -235,6 +220,8 @@ def systems(inc):
 
 
 def test_squared_system_shapes_3x3(inc, systems):
+    from equilibria.family.squared_system import is_cross_period
+
     for b, ss, merged, sq in systems:
         n = len(sq.row_names)
         assert n == len(sq.col_names)
@@ -242,14 +229,15 @@ def test_squared_system_shapes_3x3(inc, systems):
         assert ss.F(ss.x0).shape == (n,)
         J = ss.J(ss.x0)
         assert J.shape == (n, n)
-        fams = {_fam(r) for r in ss.proxy_rows}
-        assert {f for f in fams if not f.startswith("eq_mq_")} <= PROXY_FAMILIES
+        assert ss.proxy_families
+        assert sum(ss.proxy_families.values()) == len(ss.proxy_rows)
+        assert all(is_cross_period(f) for f in ss.proxy_families)
         assert len(ss.proxy_rows) > 0
         # J pattern of the non-proxy rows is the incidence of Task 1 on sq's columns,
         # except where the recorder folds a term that touches a cell FIXED at 0 in
         # this call's layout (the all-free incidence keeps it): never a new column.
         col_pos = {c: k for k, c in enumerate(sq.col_names)}
-        proxy, folded = set(ss.proxy_rows), set()
+        proxy, folded, off_diagonal = set(ss.proxy_rows), set(), []
         pat = inc(b.period)
         Jc = J.tocsr()
         for k, r in enumerate(sq.row_names):
@@ -258,10 +246,16 @@ def test_squared_system_shapes_3x3(inc, systems):
                 assert got == {k}, r
                 continue
             want = {col_pos[c] for c in pat[r] if c in col_pos}
+            if k not in got:
+                # The pairing may put a structural zero on the diagonal (a hard GAMS
+                # pair outside the true pattern), never a pair the pattern has.
+                assert k not in want or _fam(r) in FOLDED_BY_FIXED_ZERO, r
+                off_diagonal.append(r)
             assert got <= want, r
             if got != want:
                 folded.add(_fam(r))
         assert folded <= FOLDED_BY_FIXED_ZERO
+        print(f"call {b.n}: pairs off the J pattern {len(off_diagonal)}")
 
 
 def test_jacobian_matches_finite_difference(systems):
@@ -286,3 +280,44 @@ def test_proxy_rows_residual(systems):
             k = sq.row_names.index(r)
             assert F[k] == pytest.approx(0.5)
         assert np.isfinite(F).all()
+
+
+def test_unknown_family_row_raises(inc, systems):
+    """An active row of no family and not cross-period is not silently proxied."""
+    import copy
+
+    from equilibria.family.squared_system import SquaredSystem
+
+    _, _, _, sq = systems[0]
+    a = next(a for a, b in _calls() if b.period == "check")
+    bad = copy.deepcopy(sq)
+    bad.row_names.append("eq_unknown[x,check]")
+    bad.col_names.append("pf[unknown,check]")
+    bad.cells["pf[unknown,check]"] = (1.0, False, 0.0, 1.0)
+    from equilibria.family.mp_arrays import MPArrays
+
+    with pytest.raises(ValueError, match="eq_unknown"):
+        SquaredSystem.build(
+            inc.backend, inc.state, MPArrays.from_photo(a), "check", bad
+        )
+
+
+def test_variable_missing_from_mp_raises(inc, systems):
+    """Only the SP-only allow-list may be absent from mp (it takes state values)."""
+    from equilibria.family.mp_arrays import MPArrays
+    from equilibria.family.squared_system import SP_ONLY_VARS, SquaredSystem
+
+    a, _ = _calls()[0]
+    _, ss, _, sq = systems[0]
+    # sq with the family variable's cells removed, so only mp could supply them.
+    drop = "pf"
+    assert drop not in SP_ONLY_VARS
+    sq2 = type(sq)(
+        sq.row_names,
+        sq.col_names,
+        {k: v for k, v in sq.cells.items() if k.partition("[")[0] != drop},
+    )
+    mp = MPArrays.from_photo(a)
+    del mp.vars[drop]
+    with pytest.raises(KeyError, match=drop):
+        SquaredSystem.build(inc.backend, inc.state, mp, a.period, sq2)

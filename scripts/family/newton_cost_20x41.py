@@ -56,10 +56,11 @@ def _mumps_step(J, F):
 
     rhs0 = -np.asarray(F, dtype=float)
     out: dict = {
-        "symbolic_s": float("nan"),
-        "factor_s": float("nan"),
-        "solve_s": float("nan"),
+        "symbolic_s": None,
+        "factor_s": None,
+        "solve_s": None,
         "mumps_ok": False,
+        "error": None,
         "infog1": None,
         "infog28": None,
         "residual": None,
@@ -206,6 +207,7 @@ def measure(dataset: str, capture: Path, cache_root: Path | None = None) -> dict
                 "n": len(sq.row_names),
                 "nnz": int(J.nnz),
                 "proxy_rows": len(ss.proxy_rows),
+                "proxy_families": dict(sorted(ss.proxy_families.items())),
                 "incidence_s": incidence_s,
                 "build_s": build_s,
                 "FJ_first_s": fj_first_s,
