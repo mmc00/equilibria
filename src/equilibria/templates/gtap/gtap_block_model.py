@@ -516,13 +516,13 @@ def compose_block_state(
     The Model's own variable values stay at their build-time levels: rules that read
     ``value(var)`` see what they see under ``PyomoBackend``.
 
-    Returns ``(model, state)``. ifSUB=1 is Pyomo-only for now.
+    Returns ``(model, state)``. With ifSUB=1, ``state.ifsub_skipped`` names the
+    report equations a backend must not record.
     """
     from equilibria.blocks.gtap.overwrite import endogenous_cells
     from equilibria.family.state import StateModel
 
-    if bool(getattr(closure, "if_sub", False)):
-        raise NotImplementedError("compose_block_state: ifSUB=1 steps are Pyomo-only")
+    if_sub = bool(getattr(closure, "if_sub", False))
     model, units, targets, residual_region = compose_block_sp(
         params, sets, closure, residual_region
     )
@@ -552,6 +552,12 @@ def compose_block_state(
     _set_param(model, state, "mqfactw_bb", np.array([snap["mqfactw_bb"]]))
     _fisher_reseed(state, agg, regions)
     state.fisher = snap
+
+    # ifSUB=1: the 9 report rows are left out of the recording (the Pyomo path
+    # deactivates them) and their report vars are fixed from the macros.
+    state.ifsub_skipped = _IFSUB_REPORT_EQS if if_sub else ()
+    if if_sub:
+        _apply_ifsub_closure(state, params)
 
     _fix_no_demand_cells(state)
     _fix_cd_welfare(state, params, sets)

@@ -57,17 +57,20 @@ class FamilyBackend:
         self.param_domains: dict[str, tuple[str, ...]] = {}
         self.sets: dict[str, list[str]] = {}
 
-    def build(self, model: Any, only: Iterable[str] | None = None) -> None:
+    def build(
+        self, model: Any, only: Iterable[str] | None = None, skip: Iterable[str] = ()
+    ) -> None:
         model.check_uses()
         rec = RecordingModel.from_model(model)
         self.var_domains = dict(rec.var_domains)
         self.param_domains = dict(rec.param_domains)
         self.sets = rec.sets
         wanted = None if only is None else set(only)
+        skipped = set(skip)
         em = model.equation_manager
         with _recording_intrinsics():
             for name in em.list_equations():
-                if wanted is not None and name not in wanted:
+                if (wanted is not None and name not in wanted) or name in skipped:
                     continue
                 eq = em.get(name)
                 cells = []

@@ -23,7 +23,7 @@ def _pyomo_cell(comp, idx):
     return comp[key] if key in comp else None  # noqa: SIM401 — Pyomo components
 
 
-def _state_mismatches(dataset):
+def _state_mismatches(dataset, if_sub=False):
     from equilibria.templates.gtap.gtap_block_model import (
         _set_elems,
         build_block_single_period,
@@ -32,8 +32,9 @@ def _state_mismatches(dataset):
 
     p = load_params(dataset)
     rr = _set_elems(p.sets)["r"][-1]
-    pm = build_block_single_period(p, p.sets, comp_stat_closure(), rr)
-    _, state = compose_block_state(p, p.sets, comp_stat_closure(), rr)
+    closure = comp_stat_closure(if_sub)
+    pm = build_block_single_period(p, p.sets, closure, rr)
+    _, state = compose_block_state(p, p.sets, closure, rr)
 
     mismatches = []
     for name, doms in state.var_domains.items():
@@ -81,6 +82,12 @@ def test_state_matches_pyomo_after_composer_steps(dataset):
     mismatches, n_mutable, n_fixed = _state_mismatches(dataset)
     assert not mismatches, f"{len(mismatches)} cells differ, e.g. {mismatches[:6]}"
     assert n_mutable > 0 and n_fixed > 0
+
+
+@pytest.mark.parametrize("dataset", ["gtap7_3x3", "gtap7_10x7"])
+def test_state_matches_pyomo_ifsub1(dataset):
+    mismatches, _, _ = _state_mismatches(dataset, if_sub=True)
+    assert not mismatches, f"{len(mismatches)} cells differ, e.g. {mismatches[:6]}"
 
 
 def test_state_check_can_fail(monkeypatch):

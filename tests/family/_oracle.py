@@ -27,7 +27,7 @@ RTOL = 1e-12
 ATOL = 1e-14
 
 
-def comp_stat_closure():
+def comp_stat_closure(if_sub: bool = False):
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
     return GTAPClosureConfig(
@@ -37,7 +37,7 @@ def comp_stat_closure():
         fix_endowments=False,
         fix_taxes=False,
         fix_technology=False,
-        if_sub=False,
+        if_sub=if_sub,
         savf_flag="capFix",
         numeraire="pnum",
     )
@@ -111,11 +111,13 @@ class Oracle:
 
 
 @cache
-def oracle(dataset: str) -> Oracle:
-    return build_oracle(dataset)
+def oracle(dataset: str, if_sub: bool = False) -> Oracle:
+    return build_oracle(dataset, if_sub=if_sub)
 
 
-def build_oracle(dataset: str, prepare: Callable[[Any], None] | None = None) -> Oracle:
+def build_oracle(
+    dataset: str, prepare: Callable[[Any], None] | None = None, if_sub: bool = False
+) -> Oracle:
     """Uncached oracle; ``prepare(pm)`` runs before PyomoNLP, which freezes fixed values."""
     from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP
     from pyomo.environ import Objective
@@ -128,7 +130,7 @@ def build_oracle(dataset: str, prepare: Callable[[Any], None] | None = None) -> 
     p = load_params(dataset)
     sets = _set_elems(p.sets)
     rr = sets["r"][-1]
-    pm = build_block_single_period(p, p.sets, comp_stat_closure(), rr)
+    pm = build_block_single_period(p, p.sets, comp_stat_closure(if_sub), rr)
     if prepare is not None:
         prepare(pm)
     pm._family_phase0_obj = Objective(expr=0.0)
@@ -143,7 +145,7 @@ def build_oracle(dataset: str, prepare: Callable[[Any], None] | None = None) -> 
         con_names=[c.name for c in nlp.get_pyomo_equality_constraints()],
         var_names=[v.name for v in nlp.get_pyomo_variables()],
         x0=np.asarray(nlp.get_primals(), float).copy(),
-        model=compose_block_sp(p, p.sets, comp_stat_closure(), rr)[0],
+        model=compose_block_sp(p, p.sets, comp_stat_closure(if_sub), rr)[0],
     )
 
 
