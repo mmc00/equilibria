@@ -18,8 +18,8 @@ from equilibria.sources import DATA_ROOT, GEMPACK_MODEL_DIR
 
 sys.path.insert(0, str(GEMPACK_MODEL_DIR / "tools"))
 sys.path.insert(0, str(Path(__file__).parent))
-import gemsim_job  # noqa: E402
-import levels_job  # noqa: E402
+import gemsim_job  # noqa: E402  # ty: ignore[unresolved-import]
+import levels_job  # noqa: E402  # ty: ignore[unresolved-import]
 from _fake_gempack import FakeGempack  # noqa: E402
 
 TOOLS = GEMPACK_MODEL_DIR / "tools"
@@ -72,7 +72,9 @@ def test_dump_refuses_another_release(tmp_path: Path, fake: FakeGempack) -> None
     assert levels_job.main(_dump(tmp_path)) == 1
 
 
-def test_dump_retries_a_program_that_did_not_start(tmp_path: Path, fake: FakeGempack) -> None:
+def test_dump_retries_a_program_that_did_not_start(
+    tmp_path: Path, fake: FakeGempack
+) -> None:
     fake.fail_start.add("sltoht.exe")
     assert levels_job.main(_dump(tmp_path)) == 0
     assert "did not start" in (tmp_path / "out" / gemsim_job.NOTE_FILE).read_text()
@@ -99,7 +101,9 @@ def test_resolve_keeps_the_sl4(tmp_path: Path, fake: FakeGempack) -> None:
     assert "Steps  = 8 16 32" in cmf and "Shock tm = uniform 10" in cmf
 
 
-def test_resolve_cross_checks_against_the_recorded_dump(tmp_path: Path, fake: FakeGempack) -> None:
+def test_resolve_cross_checks_against_the_recorded_dump(
+    tmp_path: Path, fake: FakeGempack
+) -> None:
     """A re-solve whose %-changes differ from the recorded sl4dump is not that solution."""
     fake.mismatch = 2
     assert levels_job.main(_resolve(tmp_path)) == 1
@@ -115,4 +119,7 @@ def test_resolve_from_a_swap_template(tmp_path: Path, fake: FakeGempack) -> None
     argv = _resolve(tmp_path, "--template", str(template))
     argv[argv.index("--dataset") + 1] = "nus333"
     assert levels_job.main(argv) == 0
-    assert 'swap dpsave("USA") = del_tbalry("USA")' in (tmp_path / "out" / "run.cmf").read_text()
+    assert (
+        'swap dpsave("USA") = del_tbalry("USA")'
+        in (tmp_path / "out" / "run.cmf").read_text()
+    )
