@@ -51,7 +51,9 @@ def test_budget_runs_on_3x3(tmp_path):
             + pieces["matching"]
         )
         + out["newton_today_s"]
+        + out["period_prep_on_arrays_s"]
     )
+    assert out["period_prep_on_arrays_s"] > 0
     assert out["projected_s"] == pytest.approx(want)
     assert out["verdict"] in {"go", "tight", "no"}
     # The unmeasured pieces at today's Pyomo cost: an upper bound, not a forecast.
@@ -60,9 +62,10 @@ def test_budget_runs_on_3x3(tmp_path):
     )
     assert out["verdict_conditional"] is True
     assert out["if_sub"] == 1
-    assert {"cross_period_rows", "period_prep_on_arrays", "calibration_rest"} <= set(
-        out["not_measured"]
-    )
+    assert {"cross_period_rows", "calibration_rest"} <= set(out["not_measured"])
+    # Measured now (prep_cost_20x41.py): neither unmeasured nor in the upper bound.
+    assert "period_prep_on_arrays" not in out["not_measured"]
+    assert "period_prep_on_arrays" not in out["today_cost_of_not_measured"]
 
 
 def test_a_failing_piece_fails_the_run(tmp_path, monkeypatch):

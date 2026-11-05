@@ -13,11 +13,30 @@ against photo B. ``from_photo`` replaces today's Pyomo model and is reported apa
 from __future__ import annotations
 
 import argparse
+import contextlib
 import copy
+import functools
 import gc
 import json
 import time
 from pathlib import Path
+
+# square()'s sub-steps, timed by wrapping prep_square's module functions.
+SQUARE_STEPS = (
+    "initialize_benchmark",
+    "apply_closure",
+    "conditional_fixing",
+    "check_gap",
+    "fix_sluggish_pft",
+    "deactivate_fixed_quantity_eqs",
+    "check_overdetermined",
+    "relative_floors",
+    "names",
+    "edges",
+    "gams_pairs",
+    "match",
+    "cells",
+)
 
 
 def _closure():
@@ -53,6 +72,39 @@ def _params(dataset: str):
     return p
 
 
+@contextlib.contextmanager
+def _timed_square_steps(steps: dict[str, float]):
+    """Accumulate each sub-step's time into ``steps``; nested calls count once."""
+    import equilibria.family.prep_square as ps
+
+    depth = [0]
+    saved = {}
+
+    def wrap(name, fn):
+        @functools.wraps(fn)
+        def timed(*args, **kwargs):
+            depth[0] += 1
+            t = time.perf_counter()
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                depth[0] -= 1
+                if depth[0] == 0:
+                    steps[name] = steps.get(name, 0.0) + time.perf_counter() - t
+
+        return timed
+
+    for name in SQUARE_STEPS:
+        attr = name if hasattr(ps, name) else f"_{name}"
+        saved[attr] = getattr(ps, attr)
+        setattr(ps, attr, wrap(name, saved[attr]))
+    try:
+        yield
+    finally:
+        for attr, fn in saved.items():
+            setattr(ps, attr, fn)
+
+
 def measure(dataset: str, capture: Path) -> dict:
     from equilibria.family.mp_arrays import MPArrays, compare, squared_from_photo
     from equilibria.family.prep_capture import pairs
@@ -82,8 +134,10 @@ def measure(dataset: str, capture: Path) -> dict:
             mute_welfare=True,
             seed_from_prior=False,
         )
+        steps = {name: 0.0 for name in SQUARE_STEPS}
         t2 = time.perf_counter()
-        sq = square(mp, a.period, params=p, closure=closure, incidence=inc)
+        with _timed_square_steps(steps):
+            sq = square(mp, a.period, params=p, closure=closure, incidence=inc)
         t3 = time.perf_counter()
         diffs = compare(sq, squared_from_photo(b), inc, hard)
         calls.append(
@@ -93,16 +147,20 @@ def measure(dataset: str, capture: Path) -> dict:
                 "from_photo_s": t1 - t0,
                 "run_recipe_s": t2 - t1,
                 "square_s": t3 - t2,
+                "square_steps": steps,
                 "parity": not diffs,
                 "differences": diffs[:10],
             }
         )
-    prep = sp_reference_s + sum(c["run_recipe_s"] + c["square_s"] for c in calls)
+    per_call = sum(c["run_recipe_s"] + c["square_s"] for c in calls)
     return {
         "dataset": dataset,
+        # compose_block_state: the budget already counts it as compose_state.
         "sp_reference_s": sp_reference_s,
         "calls": calls,
-        "prep_total_s": prep,
+        # The prep cost on top of the budget: recipe + square, all calls.
+        "prep_per_call_total_s": per_call,
+        "prep_total_s": sp_reference_s + per_call,
         "parity": all(c["parity"] for c in calls),
     }
 

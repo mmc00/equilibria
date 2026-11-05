@@ -26,17 +26,19 @@ ROOT = Path(__file__).resolve().parents[2]
 # Today's 3 Newton solves (settle, check, shock) on 20x41, plans/paper/mediciones/
 # fases_20x41_d44692d.json ("Newton-TR + MUMPS").
 NEWTON_TODAY_S = 48.0
+# The period prep on arrays (recipe + squaring) of the 3 solve calls on 20x41,
+# plans/research/mediciones/family_prep_20x41_833cbdf.json ("prep_per_call_total_s").
+# Its single-period reference is compose_block_state, already timed here.
+PERIOD_PREP_ON_ARRAYS_S = 28.8
 # Today's Pyomo cost of each piece not measured yet (fases_20x41_d44692d.json): an
 # upper bound for the arrays version, not a forecast.
 TODAY_COST_OF_NOT_MEASURED = {
     "cross_period_rows": 0.0,  # inside "reflejar filas" today; recorded with the SP
-    "period_prep_on_arrays": 28.3 + 9.6 + 66.4,  # preparar/congelar periodo, solve prep
     "calibration_rest": 26.5,  # "calibracion (resto)"
     "outside_phases": 31.3,  # "fuera de las fases": imports, GDX, post-processing
 }
 NOT_MEASURED = {
     "cross_period_rows": "Fisher/Tornqvist rows are not block equations yet",
-    "period_prep_on_arrays": "freeze/seed/closure/squaring steps not ported yet",
     "calibration_rest": "calibrate_base bookkeeping outside its settle solve",
     "outside_phases": "imports, reference GDX, post-processing",
 }
@@ -180,6 +182,7 @@ def measure(dataset: str, cache_root: Path) -> dict:
         + pc["cache_load"]
         + 3 * per_period
         + NEWTON_TODAY_S
+        + PERIOD_PREP_ON_ARRAYS_S
     )
     verdict = "go" if projected <= 100 else "tight" if projected <= 120 else "no"
     pessimistic = projected + sum(TODAY_COST_OF_NOT_MEASURED.values())
@@ -193,6 +196,7 @@ def measure(dataset: str, cache_root: Path) -> dict:
         "unmatched_rows": int(np.count_nonzero(match < 0)),
         "pieces": {k: float(v) for k, v in pc.items() if v is not None},
         "newton_today_s": NEWTON_TODAY_S,
+        "period_prep_on_arrays_s": PERIOD_PREP_ON_ARRAYS_S,
         "projected_s": float(projected),
         "verdict": verdict,
         # The verdict holds only if the unmeasured pieces fit in the margin.
