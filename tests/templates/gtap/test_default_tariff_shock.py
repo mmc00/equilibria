@@ -196,7 +196,6 @@ def test_altertax_moves_xw_as_gams_does(solved):
 TABLE1_ORACLE = (
     ROOT / "tests/fixtures/gtap7_gempack/table1_levels_v061_gtap7_3x3.json.gz"
 )
-GEMPACK = ROOT / "tests/fixtures/gtap7_gempack"
 
 
 @pytest.mark.needs_path
@@ -213,11 +212,18 @@ def test_table1_3x3_keeps_its_solution():
         oracle = json.load(fh)
     want = {(v, t, tuple(i)): a for v, t, i, a in oracle["cells"]}
     levels, xscale = solve(DATASET, "capFlex", "path")
-    tag = f"{DATASET}_tm10_s8-16-32"
     r = run(
         levels,
         xscale,
-        GEMPACK / f"sl4levels6_{tag}.har",
+        reference(
+            DATASET,
+            "gemsim",
+            tab="gtapv7_levels",
+            shock=10,
+            steps="8-16-32",
+            closure="capFlex",
+        )
+        / "sl4levels.har",
         dataset_dir(DATASET) / "basedata.har",
         reference(DATASET, "gempack", shock=10, steps="8-16-32", closure="capFlex")
         / "updated.har",

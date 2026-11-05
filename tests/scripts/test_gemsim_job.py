@@ -313,7 +313,7 @@ def test_levels6_runs_the_patched_tab(tmp_path: Path, fake) -> None:
 
 
 def test_levels6_capfix_keeps_its_prm(tmp_path: Path, fake) -> None:
-    """default_rdlt0.prm replaces tests/fixtures/gtap7_gempack/default_gtap7_20x41_rdlt0_windows.prm."""
+    """default_rdlt0.prm is _force_rdlt's .prm (it replaced the hand-made Windows one in 3b)."""
     sys.path.insert(0, str(GEMPACK_MODEL_DIR / "tools"))
     from run_gempack_matrix import _force_rdlt  # ty: ignore[unresolved-import]
 

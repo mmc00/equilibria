@@ -31,6 +31,19 @@ def _rel(dataset: str) -> str:
     return str(dataset_dir(dataset).relative_to(ROOT))
 
 
+def _levels6(dataset: str) -> str:
+    """The capFlex six-variable levels ``.har`` of a dataset, relative to the repo root."""
+    rec = reference(
+        dataset,
+        "gemsim",
+        tab="gtapv7_levels",
+        shock=10,
+        steps="8-16-32",
+        closure="capFlex",
+    )
+    return str((rec / "sl4levels.har").relative_to(ROOT))
+
+
 def _updated(dataset: str) -> str:
     """The 10% capFlex GEMPACK ``updated.har`` of a dataset, relative to the repo root."""
     rec = reference(dataset, "gempack", shock=10, steps="8-16-32", closure="capFlex")
@@ -61,7 +74,7 @@ def steps(out: Path) -> list[Step]:
         [
             py, "scripts/gtap/compare_gempack_levels.py",
             "--dataset", f"gtap7_{ds}", "--closure", "capFlex", "--solver", solver,
-            "--har", f"{FIX}/sl4levels6_gtap7_{ds}_tm10_s8-16-32.har",
+            "--har", _levels6(f"gtap7_{ds}"),
             "--basedata", f"{_rel(f'gtap7_{ds}')}/basedata.har",
             "--updated", _updated(f"gtap7_{ds}"),
             "--save-eq", str(out / f"eq_gtap7_{ds}_capflex.json.gz"),
@@ -71,7 +84,7 @@ def steps(out: Path) -> list[Step]:
     ]  # fmt: skip
     t2_files = ["scripts/gtap/compare_gempack_levels.py"] + [
         f for ds in TABLE2 for f in (
-            f"{FIX}/sl4levels6_gtap7_{ds}_tm10_s8-16-32.har",
+            _levels6(f"gtap7_{ds}"),
             _updated(f"gtap7_{ds}"),
             f"{_rel(f'gtap7_{ds}')}/basedata.har",
         )

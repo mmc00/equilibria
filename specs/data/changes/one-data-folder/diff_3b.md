@@ -71,3 +71,11 @@ name, the new one through `equilibria.sources.reference(...)`.
   and release banners (100–4474 changed lines for the book, ~12.5k–47k for Gragg,
   which logs every step). They hold no oracle number; the readers that parse them
   are handled in Task 4.
+- **Readers of the old layout (Review Focus 1).** Two oracles read the 1e10
+  sentinel to find the variables without level; both now read `NOLV` instead,
+  and no assertion changed: `tests/compare/test_sl4.py::_oracle_pre` (EX16) and
+  `tests/scripts/test_export_sl4_levels.py` (the synthetic text gives the `NOLV`
+  variables the sentinel back; the parametrize ids stay `sl4levels_<ds>_tm10`).
+  `tests/compare/test_gempack3x3.py` (EX14) reads the new file through `from_har`
+  unchanged: its mapping compares post only, and `periods_compared == ["post"]`
+  and `unmatched == []` still hold.

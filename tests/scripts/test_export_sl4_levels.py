@@ -120,11 +120,19 @@ def _sic_text_from(sl4dump: Path, post_levels: Path | None) -> str:
     Prueba el armado del .har, no es un texto real de sltoht."""
     dump = read_har(str(sl4dump))
     post_har = read_har(str(post_levels)) if post_levels else None
+    # A record lists the variables without level in NOLV instead of giving them
+    # the sentinel in every cell; they get the sentinel back here.
+    no_level_names = (
+        {str(x) for x in post_har["NOLV"].array}
+        if post_har is not None and "NOLV" in post_har
+        else set()
+    )
     lines: list[str] = []
     for hid, ha in dump.items():
         if "#" not in (ha.long_name or ""):
             continue  # cabeceras XX** de metadatos: no son variables
-        if post_har is not None and hid not in post_har:
+        name = ha.long_name.split("#", 1)[0].strip()
+        if post_har is not None and hid not in post_har and name not in no_level_names:
             continue
         lines.append(f"! Variable {ha.long_name.strip()}")
         pct = np.asarray(ha.array, dtype=np.float64).ravel(order="F")
@@ -132,7 +140,12 @@ def _sic_text_from(sl4dump: Path, post_levels: Path | None) -> str:
             pre = np.ones_like(pct)
             post = 1.0 + pct / 100.0
         else:
-            post = np.asarray(post_har[hid].array, dtype=np.float64).ravel(order="F")
+            if hid in post_har:
+                post = np.asarray(post_har[hid].array, dtype=np.float64).ravel(
+                    order="F"
+                )
+            else:
+                post = np.full(pct.shape, np.float32(1e10), dtype=np.float64)
             pre = post / (1.0 + pct / 100.0)
             no_level = post == np.float32(1e10)
             pre[no_level] = post[no_level] = 1e10
@@ -144,40 +157,54 @@ def _sic_text_from(sl4dump: Path, post_levels: Path | None) -> str:
     return "\n".join(lines) + "\n"
 
 
-LEVA_FIXTURES = sorted(FIXTURES.glob("sl4levels_*_tm10.har"))
+# The levels of the 10% runs, written on Windows by the exporter (sltoht records),
+# with the ids of the sl4levels_<ds>_tm10.har files they replaced.
+LEVA_CASES = {
+    f"sl4levels_{ds}_tm10": (
+        ds,
+        "dpsaveSwap" if ds in ("nus333", "9x10") else "capFlex",
+    )
+    for ds in (
+        "9x10",
+        "gtap7_10x7",
+        "gtap7_15x10",
+        "gtap7_3x3",
+        "gtap7_3x4",
+        "gtap7_5x5",
+        "nus333",
+    )
+}
 
 
-def _sl4dump_of(leva_fixture: Path) -> Path:
-    """The 10% sl4dump of the run a ``sl4levels_<ds>_tm10.har`` fixture came from."""
-    dataset = leva_fixture.stem.removeprefix("sl4levels_").removesuffix("_tm10")
-    closure = "dpsaveSwap" if dataset in ("nus333", "9x10") else "capFlex"
-    rec = reference(dataset, "gempack", shock=10, steps="8-16-32", closure=closure)
-    return rec / "sl4dump.har"
+def _record(case: str, tool: str) -> Path:
+    dataset, closure = LEVA_CASES[case]
+    return reference(dataset, tool, shock=10, steps="8-16-32", closure=closure)
 
 
-@pytest.mark.parametrize("leva_fixture", LEVA_FIXTURES, ids=lambda p: p.stem)
+@pytest.mark.parametrize("leva_fixture", sorted(LEVA_CASES))
 def test_los_fixtures_sl4levels_existentes_se_reproducen_igual(
-    leva_fixture: Path, tmp_path: Path
+    leva_fixture: str, tmp_path: Path
 ) -> None:
     mod = _load_module()
-    sl4dump = _sl4dump_of(leva_fixture)
+    sl4dump = _record(leva_fixture, "gempack") / "sl4dump.har"
+    levels = _record(leva_fixture, "sltoht") / "sl4levels.har"
     text = tmp_path / "levels.txt"
-    text.write_text(_sic_text_from(sl4dump, leva_fixture))
-    out = tmp_path / leva_fixture.name
+    text.write_text(_sic_text_from(sl4dump, levels))
+    out = tmp_path / f"{leva_fixture}.har"
 
     rc = mod.main(
         [str(text), "--from-text", "--sl4dump", str(sl4dump), "--out", str(out)]
     )
 
     assert rc == 0
-    expected, got = read_har(str(leva_fixture)), read_har(str(out))
-    sentinel = np.float32(1e10)
-    with_level = {k: v for k, v in expected.items() if not np.all(v.array == sentinel)}
-    no_level = [
-        v.long_name.split("#", 1)[0].strip()
-        for v in expected.values()
-        if np.all(v.array == sentinel)
-    ]
+    expected, got = read_har(str(levels)), read_har(str(out))
+    # The record holds LEVA, LEVB and NOLV; the LEVA headers are the post levels.
+    with_level = {
+        k: v
+        for k, v in expected.items()
+        if k != "NOLV" and not v.long_name.startswith("LEVB")
+    }
+    no_level = [str(x) for x in expected["NOLV"].array]
     assert sorted(got) == sorted(
         [*with_level, *(mod.levb_header(k) for k in with_level), "NOLV"]
     )

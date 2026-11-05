@@ -3,7 +3,8 @@
 El mapeo GTAP de equilibria (#132): equilibria resuelto contra GEMPACK en NIVELES,
 pre y post. A = ``data/gtap7/gtap7_3x3/equilibria_levels/eq_gtap7_3x3_levels.json.gz``
 (``make_eq_gtap7_levels.py``: ``_solve_shock("gtap7_3x3", 0)``, capFlex, el cierre del
-fixture de GEMPACK); B = ``sl4levels6_gtap7_3x3_tm10.har`` (LEVB = pre, LEVA = post).
+fixture de GEMPACK); B = ``gtap7_3x3/gemsim_levels6_tm10_s8-16-32_capflex/sl4levels.har``
+(LEVB = pre, LEVA = post).
 Periodos de A: check -> pre, shock -> post. Todo a mano, con numpy:
 
 - cantidades de A / (1e-6 [inScale] * xscale[r, a] si la variable es por actividad);
@@ -37,7 +38,6 @@ from equilibria.babel.har.reader import read_har
 from equilibria.sources import dataset_dir, reference
 
 ROOT = Path(__file__).resolve().parents[3]
-FIX = ROOT / "tests" / "fixtures" / "gtap7_gempack"
 EQ = dataset_dir("gtap7_3x3_equilibria_levels") / "eq_gtap7_3x3_levels.json.gz"
 THRESHOLDS = (1e-3, 5e-3, 1e-2)
 PERIODS = {"pre": "check", "post": "shock"}
@@ -80,7 +80,17 @@ GEMPACK_VARS = (
 
 def _gempack_levels() -> dict[str, dict[tuple[str, tuple[str, ...]], float]]:
     """{var: {(periodo, indices): nivel}} desde las cabeceras LEVA/LEVB crudas."""
-    out = _leva_levb(FIX / "sl4levels6_gtap7_3x3_tm10.har")
+    out = _leva_levb(
+        reference(
+            "gtap7_3x3",
+            "gemsim",
+            tab="gtapv7_levels",
+            shock=10,
+            steps="8-16-32",
+            closure="capFlex",
+        )
+        / "sl4levels.har"
+    )
     _add_vdfb(
         out,
         dataset_dir("gtap7_3x3") / "basedata.har",

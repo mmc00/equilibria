@@ -9,6 +9,9 @@ Oraculo: ``default_gtap7_20x41_rdlt0_windows.prm``, hecho a mano en Windows el
 2026-10-19 (``4_niveles/a_mano/patch_rdlt.py`` en la rama de datos
 windows/corridas-paper-2026-10-19_1928) y
 con el que GEMSIM 11.3 resolvio el 20x41 capFix (max residual ratio 1.05e-7).
+Since phase 3b it is read from the record
+``gtap7_20x41/gemsim_levels6_tm10_s8-16-32_capfix/default_rdlt0.prm``, which is
+byte-identical to the hand-made file (``diff_3b.md``).
 """
 
 from __future__ import annotations
@@ -23,17 +26,21 @@ import numpy as np
 import pytest
 
 from equilibria.babel.har.reader import read_har
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, reference
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "data" / "gtap7" / "gempack" / "tools" / "run_gempack_matrix.py"
 PRM = dataset_dir("gtap7_20x41") / "default.prm"
 ORACLE = (
-    ROOT
-    / "tests"
-    / "fixtures"
-    / "gtap7_gempack"
-    / "default_gtap7_20x41_rdlt0_windows.prm"
+    reference(
+        "gtap7_20x41",
+        "gemsim",
+        tab="gtapv7_levels",
+        shock=10,
+        steps="8-16-32",
+        closure="capFix",
+    )
+    / "default_rdlt0.prm"
 )
 
 pytestmark = pytest.mark.skipif(not PRM.exists(), reason="falta data/gtap7/gtap7_20x41")

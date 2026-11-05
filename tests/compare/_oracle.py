@@ -545,8 +545,8 @@ EX13_PASS_PCT = 100.0
 # Ejemplo 14 — GEMPACK <-> equilibria, GTAP 3x3 en NIVELES (issue #131).
 #
 # A = equilibria resuelto (bloques, PATH, el cierre de test_gtap7_gempack_parity:
-# _solve_shock("gtap7_3x3", 0), capFlex); B = sl4levels_gtap7_3x3_tm10.har (LEVA-only,
-# solo post). Periodos: A shock -> post. Cantidades de A deshechas a mano:
+# _solve_shock("gtap7_3x3", 0), capFlex); B = gtap7_3x3/sltoht_tm10_s8-16-32_capflex/
+# sl4levels.har (LEVA y LEVB; el mapeo compara solo post). Periodos: A shock -> post. Cantidades de A deshechas a mano:
 #   output:   xp(r,a)  / (xscale[r,a] * 1e-6)  <->  qo(a,r)   (xscale de
 #             blocks.gtap._derived_params.xscale_data, NO de equilibria.compare)
 #   dom_sales: xd(r,c) / 1e-6                   <->  qds(c,r)
@@ -559,7 +559,8 @@ EX13_PASS_PCT = 100.0
 # Hallazgo (no del comparador): xd se aparta de qds hasta ~1 % en Svces.
 # ---------------------------------------------------------------------------
 EX14_HAR = (
-    ROOT / "tests" / "fixtures" / "gtap7_gempack" / "sl4levels_gtap7_3x3_tm10.har"
+    reference("gtap7_3x3", "sltoht", shock=10, steps="8-16-32", closure="capFlex")
+    / "sl4levels.har"
 )
 EX14_CELLS = {"output": 9, "dom_sales": 9}
 EX14_WITHIN = {1e-3: 16, 5e-3: 17, 1e-2: 17}
@@ -574,7 +575,8 @@ EX14_MAX_CELL = ("dom_sales", ("post", ("EU_28", "Svces")))
 # forma en niveles, mas VDFB.
 #
 # A = data/gtap7/gtap7_3x3/equilibria_levels/eq_gtap7_3x3_levels.json.gz (make_eq_gtap7_levels.py:
-# _solve_shock("gtap7_3x3", 0), capFlex); B = sl4levels6_gtap7_3x3_tm10.har (LEVB/LEVA)
+# _solve_shock("gtap7_3x3", 0), capFlex); B = gtap7_3x3/gemsim_levels6_tm10_s8-16-32_capflex/
+# sl4levels.har (LEVB/LEVA)
 # + VDFB de basedata.har (pre) y gtap7_3x3/gempack_tm10_s8-16-32_capflex/updated.har (post). A: check -> pre,
 # shock -> post. Calculado el 2026-10-21 con tests/compare/oracles/gtap7_map_3x3.py (no
 # importa equilibria.compare); las formulas estan en su docstring.
@@ -585,7 +587,15 @@ EX14_MAX_CELL = ("dom_sales", ("post", ("EU_28", "Svces")))
 # ---------------------------------------------------------------------------
 EX15_EQ = dataset_dir("gtap7_3x3_equilibria_levels") / "eq_gtap7_3x3_levels.json.gz"
 EX15_HAR = (
-    ROOT / "tests" / "fixtures" / "gtap7_gempack" / "sl4levels6_gtap7_3x3_tm10.har"
+    reference(
+        "gtap7_3x3",
+        "gemsim",
+        tab="gtapv7_levels",
+        shock=10,
+        steps="8-16-32",
+        closure="capFlex",
+    )
+    / "sl4levels.har"
 )
 EX15_CELLS = {
     "qo": 18,
@@ -653,11 +663,12 @@ EX15_INDEX_EXCLUDED = (
 #
 # Dos oraculos, ninguno sale del lector nuevo:
 # 1) Nivel PRE del nus333. Los fixtures de sltoht del nus333 (tm10) dan el post
-#    (sl4levels_nus333_tm10.har, LEVA) y el % (nus333/gempack_tm10_s8-16-32_dpsaveswap/sl4dump.har); pre =
+#    (nus333/sltoht_tm10_s8-16-32_dpsaveswap/sl4levels.har, LEVA) y el %
+#    (nus333/gempack_tm10_s8-16-32_dpsaveswap/sl4dump.har); pre =
 #    post / (1 + %/100). El pre depende solo de los datos, que son los mismos en
 #    todo Burfisher, asi que es el pre de TBL45A. Las 44 variables con nivel del
 #    nus333 son de cambio %, ninguna de cambio ordinario.
-#    Variables sin nivel: las que el fixture trae con el centinela 1e10. El .sl4
+#    Variables sin nivel: las que el registro lista en NOLV. El .sl4
 #    trae ademas 12 variables que el fixture no tiene (otra version del modelo).
 # 2) Cambio: 100*(post/pre - 1) de cada celda = el volcado de sltoht del mismo .sl4
 #    (burfisher/sl4dump_<exp>.har). Una celda con pre = 0 no tiene %: GEMPACK
@@ -704,7 +715,10 @@ class _Sl4(Mapping[str, Path]):
 EX16_EXERCISES = ("TBL45A", "ME9C", "GTAPV7")
 EX16_SL4 = _Sl4(EX16_EXERCISES)
 EX16_DUMP = {e: EX16_DIR / f"sl4dump_{e.lower()}.har" for e in EX16_EXERCISES}
-EX16_NUS333_POST = _GEMPACK_FIXTURES / "sl4levels_nus333_tm10.har"
+EX16_NUS333_POST = (
+    reference("nus333", "sltoht", shock=10, steps="8-16-32", closure="dpsaveSwap")
+    / "sl4levels.har"
+)
 EX16_NUS333_PCT = (
     reference("nus333", "gempack", shock=10, steps="8-16-32", closure="dpsaveSwap")
     / "sl4dump.har"
@@ -730,15 +744,19 @@ EX16_NO_LEVEL_WHY = "sin nivel en GEMPACK"
 # (CUMS: 695122 reales en 174 registros de 3996). Cada registro trae, antes de sus
 # datos, 7 enteros: registros que quedan, filas, columnas, fila inicial, fila
 # final, columna inicial, columna final.
-# Oraculo: sl4levels_gtap7_20x41_tm10_s8-16-32_capfix.har, escrito en Windows el
+# Oraculo: gtap7_20x41/sltoht_tm10_s8-16-32_capfix/sl4levels.har, igual (diff_3b.md)
+# al viejo sl4levels_gtap7_20x41_tm10_s8-16-32_capfix.har, escrito en Windows el
 # 2026-10-19 por data/gtap7/gempack/tools/export_sl4_levels.py desde el TEXTO de
 # `sltoht -SHL -SIC` del mismo .sl4. No pasa por el lector nuevo. El exportador
 # reporto 44 variables con nivel, 208 sin nivel (NOLV) y 0 discrepancias
 # contra el sl4dump (windows/corridas-paper, windows_paper_out/2026-10-19_1356).
 # El texto de sltoht trae ~8 cifras; el .sl4, REAL*4.
 # ---------------------------------------------------------------------------
-EX17_SL4 = _GEMPACK_FIXTURES / "sl4_gtap7_20x41_tm10_s8-16-32_capfix.sl4"
-EX17_LEVELS_HAR = _GEMPACK_FIXTURES / "sl4levels_gtap7_20x41_tm10_s8-16-32_capfix.har"
+_EX17_DIR = reference(
+    "gtap7_20x41", "sltoht", shock=10, steps="8-16-32", closure="capFix"
+)
+EX17_SL4 = _EX17_DIR / "solution.sl4"
+EX17_LEVELS_HAR = _EX17_DIR / "sl4levels.har"
 EX17_N_WITH_LEVEL = 44
 EX17_N_NO_LEVEL = 208
 EX17_RTOL = 1e-6

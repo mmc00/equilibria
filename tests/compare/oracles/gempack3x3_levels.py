@@ -1,6 +1,6 @@
 """Reproduce el oraculo del ejemplo 14 (tests/compare/_oracle.py) SIN equilibria.compare.
 
-GEMPACK (``sl4levels_gtap7_3x3_tm10.har``, solo LEVA = post) contra equilibria resuelto
+GEMPACK (``gtap7_3x3/sltoht_tm10_s8-16-32_capflex/sl4levels.har``, su LEVA = post) contra equilibria resuelto
 (``_solve_shock("gtap7_3x3", 0)``, periodo shock), deshaciendo a mano las escalas de las
 cantidades de equilibria: ``xp / (xscale[r, a] * 1e-6)`` y ``xd / 1e-6``. Lee el HAR con
 ``babel.har.reader`` y el modelo con ``pyomo.value``; ``d = |A - B| / |B|``.
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, reference
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
@@ -42,7 +42,12 @@ def main() -> None:
     )
     xscale = xscale_data(p, p.sets)
     har = read_har(
-        str(ROOT / "tests/fixtures/gtap7_gempack/sl4levels_gtap7_3x3_tm10.har")
+        str(
+            reference(
+                "gtap7_3x3", "sltoht", shock=10, steps="8-16-32", closure="capFlex"
+            )
+            / "sl4levels.har"
+        )
     )
     by_name = {ha.long_name.split("#")[0].strip(): ha for ha in har.values()}
     rows = []
