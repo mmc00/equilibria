@@ -21,7 +21,9 @@ class FakeGempack:
         "gtapv7.exe": "12.1.003", "gtapuv7.exe": "12.1.003",
         "gemsim.exe": "11.3.004", "tablo.exe": "11.3.004", "sltoht.exe": "11.3.004",
     })  # fmt: skip
-    fail_start: set[str] = field(default_factory=set)  # program names that never start once
+    fail_start: set[str] = field(
+        default_factory=set
+    )  # program names that never start once
     abort: bool = False  # gtapv7 aborts with the 20x41 signature
     mismatch: int = 0  # xcheck-mismatch the export reports
     calls: list[tuple[str, Path]] = field(default_factory=list)
