@@ -198,7 +198,72 @@ def _aridad(fn) -> int:
 
 
 def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
-    """The ifSUB closure: deactivate the 9 report equations AND fix their report
+    """The ifSUB closure (see ``_apply_ifsub_closure_cells``).
+
+    On the family state each report variable is fixed from its macro evaluated on whole
+    arrays (``family/ifsub_arrays.py``, bitwise the cell-by-cell result); a Pyomo model,
+    or a variable whose operands are not aligned with it, goes through the cell-by-cell
+    code unchanged.
+    """
+    from equilibria.family.state import StateModel
+
+    if params is None or not isinstance(pm, StateModel):
+        return _apply_ifsub_closure_cells(pm, params)
+    from equilibria.family.ifsub_arrays import fix_report_var
+
+    macros = _ifsub_macro_map()
+    n = _apply_ifsub_closure_cells(pm, params, ())  # deactivation only
+    macro_fallos: list[str] = []
+    rest: list[str] = []
+    for var_name in _IFSUB_REPORT_VARS:
+        if pm.component(var_name) is None:
+            continue
+        fn = macros[var_name]
+        if not fix_report_var(pm, params, var_name, fn, _aridad(fn), macro_fallos):
+            rest.append(var_name)
+    if rest:
+        n += _apply_ifsub_closure_cells(pm, params, tuple(rest), macro_fallos)
+    _raise_ifsub_failures(macro_fallos, [])
+    return n
+
+
+def _ifsub_macro_map() -> dict[str, Any]:
+    return {
+        "pfa": mac.m_pfa,
+        "pfy": mac.m_pfy,
+        "pp_rai": mac.m_pp,
+        "pwmg": mac.m_pwmg,
+        "pefob": mac.m_pefob,
+        "pmcif": mac.m_pmcif,
+        "pm": mac.m_pm,
+        "xwmg": mac.m_xwmg,
+        # xmgm toma CUATRO indices (mode, e, c, imp), no tres.
+        "xmgm": mac.m_xmgm,
+    }
+
+
+def _raise_ifsub_failures(macro_fallos: list[str], fix_fallos: list[str]) -> None:
+    if macro_fallos or fix_fallos:
+        raise RuntimeError(
+            "_apply_ifsub_closure no pudo fijar los vars de reporte ifSUB desde "
+            "su macro. Degradar al init en silencio es el bug que este camino "
+            "arregla, asi que se levanta.\n"
+            + "\n".join(
+                [f"  macro fallido: {m}" for m in macro_fallos[:10]]
+                + [f"  fix fallido:   {m}" for m in fix_fallos[:10]]
+            )
+        )
+
+
+def _apply_ifsub_closure_cells(
+    pm: ConcreteModel,
+    params: Any = None,
+    var_names: tuple[str, ...] = _IFSUB_REPORT_VARS,
+    macro_fallos: list[str] | None = None,
+) -> int:
+    """The ifSUB closure, cell by cell (the Pyomo path).
+
+    Deactivate the 9 report equations AND fix their report
     vars — mirrors the monolith's post-block.
 
     Deactivating alone left pfa/pfy as orphan free columns (the macros are inline in
@@ -229,7 +294,7 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
     from pyomo.environ import value
 
     n = 0
-    _macro_fallos: list[str] = []
+    _macro_fallos: list[str] = [] if macro_fallos is None else macro_fallos
     _fix_fallos: list[str] = []
     for eq_name in _IFSUB_REPORT_EQS:
         comp = pm.component(eq_name)
@@ -253,20 +318,8 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
     #   pwmg    352/1500            (0.001      vs 1.0)  <- factor 1000
     # y 11.118 celdas realmente distintas en el modelo multiperiodo al resolver
     # el shock (separando 52.455 de puro ruido de coma flotante).
-    _macro = {
-        "pfa": mac.m_pfa,
-        "pfy": mac.m_pfy,
-        "pp_rai": mac.m_pp,
-        "pwmg": mac.m_pwmg,
-        "pefob": mac.m_pefob,
-        "pmcif": mac.m_pmcif,
-        "pm": mac.m_pm,
-        "xwmg": mac.m_xwmg,
-        # xmgm toma CUATRO indices (mode, e, c, imp), no tres — por eso el
-        # guard de aridad de abajo se lee del macro y no esta fijado en 3.
-        "xmgm": mac.m_xmgm,
-    }
-    for var_name in _IFSUB_REPORT_VARS:
+    _macro = _ifsub_macro_map()
+    for var_name in var_names:
         v = pm.component(var_name)
         if v is None:
             continue
@@ -312,16 +365,7 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
                 # aparece lejos de aqui.  Se acumula y se levanta al final.
                 _fix_fallos.append(f"{var_name}{k}: {type(exc).__name__} {exc}")
 
-    if _macro_fallos or _fix_fallos:
-        raise RuntimeError(
-            "_apply_ifsub_closure no pudo fijar los vars de reporte ifSUB desde "
-            "su macro. Degradar al init en silencio es el bug que este camino "
-            "arregla, asi que se levanta.\n"
-            + "\n".join(
-                [f"  macro fallido: {m}" for m in _macro_fallos[:10]]
-                + [f"  fix fallido:   {m}" for m in _fix_fallos[:10]]
-            )
-        )
+    _raise_ifsub_failures(_macro_fallos, _fix_fallos)
     return n
 
 
