@@ -12,26 +12,33 @@ from typing import Any
 
 ENV = "EQUILIBRIA_GTAP_FAMILY_EVAL"
 
-_CACHE: dict[tuple, tuple[Any, Any]] = {}
+_CACHE: dict[tuple, tuple[Any, Any, Any]] = {}
+
+
+def _key(params: Any, closure: Any, residual_region: str | None) -> tuple:
+    return (
+        id(params),
+        None if closure is None else closure.model_dump_json(),
+        residual_region,
+    )
 
 
 def _recording(params: Any, closure: Any, residual_region: str | None):
     from equilibria.backends.family_backend import FamilyBackend
     from equilibria.templates.gtap.gtap_block_model import compose_block_state
 
-    key = (
-        id(params),
-        None if closure is None else closure.model_dump_json(),
-        residual_region,
-    )
-    if key not in _CACHE:
+    key = _key(params, closure, residual_region)
+    hit = _CACHE.get(key)
+    if hit is None or hit[0] is not params:
+        # id() of a freed params object can be reused: check identity, keep one entry.
         model, state = compose_block_state(
             params, params.sets, closure, residual_region
         )
         backend = FamilyBackend()
         backend.build(model)
-        _CACHE[key] = (backend, state)
-    return _CACHE[key]
+        _CACHE.clear()
+        _CACHE[key] = (params, backend, state)
+    return _CACHE[key][1:]
 
 
 def maybe_wrap(nlp: Any, params: Any, closure: Any, method: str) -> Any:

@@ -16,14 +16,10 @@ from tests.family._data import load_params  # noqa: E402
 from tests.family._oracle import comp_stat_closure  # noqa: E402
 
 DATASET = "gtap7_3x3"
-CROSS_PERIOD = {
-    "eq_pabs",
-    "eq_pfact",
-    "eq_pwfact",
-    "eq_rgdpmp",
-    "eq_pgdpmp",
-    "eq_chisave",
-}
+# Cross-period Fisher rows whose multiperiod form differs from the SP one. eq_pgdpmp
+# is cross-period too, but its check/shock form equals the SP row (verified at three
+# points, pattern included), so it is served.
+FALLBACK = {"eq_pabs", "eq_pfact", "eq_pwfact", "eq_rgdpmp", "eq_chisave"}
 
 
 def _frozen_nlp(period: str):
@@ -93,11 +89,8 @@ def test_hybrid_matches_pyomo_at_seed_and_perturbed(setup, point):
 
 def test_fallback_is_only_cross_period(setup):
     _, _, h, backend = setup
-    expected = {
-        n for n in backend.records if n in CROSS_PERIOD or n.startswith("eq_mq_")
-    }
     assert h.period == "check"
-    assert set(h.fallback) <= expected
+    assert set(h.fallback) == FALLBACK
     # The intra-period Fisher rows are SP-only: the multiperiod model drops them.
     assert set(h.unmapped) <= {
         f"eq_mf{a}_{b}" for a in "rw" for b in ("bs", "sb", "ss")
@@ -116,3 +109,43 @@ def test_missing_pyomo_column_raises():
     del getattr(m, var)[cell]
     with pytest.raises(KeyError, match=var):
         HybridNLP(nlp, backend, state)
+
+
+def test_check_points_move_every_cell():
+    from equilibria.family.hybrid import check_points
+
+    x0 = np.array([0.0, 0.0, 1.0, -2.0, 5e4])
+    lb = np.array([-np.inf, 0.0, 0.5, -np.inf, 0.0])
+    ub = np.array([np.inf, np.inf, 2.0, -2.0 + 1.0, np.inf])
+    pts = check_points(x0, lb, ub)
+    assert len(pts) >= 3
+    np.testing.assert_array_equal(pts[0], x0)
+    for x in pts[1:]:
+        assert np.all(x != x0), x
+        assert np.all((x >= lb) & (x <= ub)), x
+
+
+def test_pattern_mismatch_falls_back(monkeypatch):
+    """A family whose J stores an entry Pyomo does not have (an explicit zero, same
+    values) changes the merged pattern: it must not be served."""
+    from equilibria.family import core
+    from equilibria.family.hybrid import HybridNLP
+
+    backend, state = _backend()
+    _, nlp = _frozen_nlp("check")
+    orig = core.FamilySystem.jac
+
+    def jac(self, z):
+        J = orig(self, z)
+        k = self.rows.index(("eq_pvaeq", 0))
+        taken = set(J.col[J.row == k].tolist())
+        c = next(j for j in range(self.n_cols) if j not in taken)
+        return type(J)(
+            (np.append(J.data, 0.0), (np.append(J.row, k), np.append(J.col, c))),
+            shape=J.shape,
+        )
+
+    monkeypatch.setattr(core.FamilySystem, "jac", jac)
+    h = HybridNLP(nlp, backend, state)
+    assert "eq_pvaeq" in h.fallback
+    assert "eq_pvaeq" not in h.served

@@ -83,6 +83,31 @@ def _pyomo_layout(backend: Any, state: Any, m: Any, period: str, col_of: dict):
     return layout, zmap
 
 
+def check_points(
+    x0: np.ndarray, lb: np.ndarray, ub: np.ndarray, n: int = 2, step: float = 1e-3
+) -> list[np.ndarray]:
+    """The seed plus ``n`` points that move EVERY cell (zeros too) within bounds.
+
+    An additive step ``step * max(|x0|, 1)`` with a random sign; a step that would
+    cross a bound goes the other way, so cells sitting on a bound move as well.
+    """
+    rng = np.random.default_rng(0)
+    width = step * np.maximum(np.abs(x0), 1.0)
+    pts = [x0.copy()]
+    for _ in range(n):
+        d = width * rng.uniform(0.5, 1.0, x0.size) * rng.choice([-1.0, 1.0], x0.size)
+        x = x0 + d
+        x = np.where((x < lb) | (x > ub), x0 - d, x)
+        pts.append(np.clip(x, lb, ub))
+    return pts
+
+
+def _pattern(J: sp.csr_matrix, rows: np.ndarray) -> np.ndarray:
+    """Sorted (row, col) keys of the stored entries of ``rows`` (explicit zeros too)."""
+    sub = J[rows].tocoo()
+    return np.sort(sub.row.astype(np.int64) * J.shape[1] + sub.col)
+
+
 class HybridNLP:
     """A PyomoNLP whose verified family rows are evaluated by the family backend."""
 
@@ -104,8 +129,7 @@ class HybridNLP:
         fam_of = np.array([f for f, _ in self._system.rows])
 
         x0 = nlp.get_primals().copy()
-        rng = np.random.default_rng(0)
-        pts = [x0, x0 * (1 + 1e-3 * rng.standard_normal(x0.size))]
+        pts = check_points(x0, nlp.primals_lb(), nlp.primals_ub())
         err = {f.name: 0.0 for f in self._system.families}
         for x in pts:
             nlp.set_primals(x)
@@ -120,6 +144,10 @@ class HybridNLP:
                     continue
                 rows = fam_pos[k]
                 fe = np.abs(F_f[k] - F_p[rows]) / np.maximum(1.0, np.abs(F_p[rows]))
+                # Same stored pattern, or the merged J would change the LU ordering.
+                if not np.array_equal(_pattern(J_f, rows), _pattern(J_p, rows)):
+                    err[name] = np.inf
+                    continue
                 dj = (J_f[rows] - J_p[rows]).tocoo()
                 scale = max(1.0, float(abs(J_p[rows]).max()) if J_p[rows].nnz else 1.0)
                 je = float(np.abs(dj.data).max()) / scale if dj.nnz else 0.0

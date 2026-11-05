@@ -52,3 +52,18 @@ def test_wraps_and_reuses_the_recording(monkeypatch):
     assert isinstance(h_c, HybridNLP) and isinstance(h_s, HybridNLP)
     assert (h_c.period, h_s.period) == ("check", "shock")
     assert len(driver_hook._CACHE) == 1
+
+
+def test_cache_rejects_a_reused_params_id(monkeypatch):
+    """id() of a freed params object can be reused: the cache must check identity."""
+    from equilibria.family import driver_hook
+
+    p = load_params("gtap7_3x3")
+    closure = comp_stat_closure()
+    region = list(p.sets.r)[-1]
+    stale = (object(), "stale-backend", "stale-state")
+    monkeypatch.setattr(
+        driver_hook, "_CACHE", {driver_hook._key(p, closure, region): stale}
+    )
+    backend, _ = driver_hook._recording(p, closure, region)
+    assert backend != "stale-backend"

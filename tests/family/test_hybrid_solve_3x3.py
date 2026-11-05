@@ -9,14 +9,10 @@ import pytest
 pytest.importorskip("jax")
 
 ROOT = Path(__file__).resolve().parents[2]
-CROSS_PERIOD = {
-    "eq_pabs",
-    "eq_pfact",
-    "eq_pwfact",
-    "eq_rgdpmp",
-    "eq_pgdpmp",
-    "eq_chisave",
-}
+# Cross-period Fisher rows whose multiperiod form differs from the SP one. eq_pgdpmp
+# is cross-period too, but its check/shock form equals the SP row (verified at three
+# points, pattern included), so it is served.
+FALLBACK = {"eq_pabs", "eq_pfact", "eq_pwfact", "eq_rgdpmp", "eq_chisave"}
 
 
 @pytest.mark.slow
@@ -37,7 +33,7 @@ def test_family_solve_matches_pyomo_3x3():
     assert {"check", "shock"} <= set(periods)
     for s in fam["family_eval"]:
         fallback = set(re.findall(r"'(\w+)'", s.split("fallback=", 1)[1]))
-        assert fallback <= CROSS_PERIOD, s
+        assert fallback == FALLBACK, s
 
     bad = []
     for name, b in ref["levels"].items():
