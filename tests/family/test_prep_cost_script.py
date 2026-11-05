@@ -43,6 +43,15 @@ def test_prep_cost_on_3x3():
         assert all(isinstance(s, float) and s >= 0 for s in steps.values())
         # Sub-steps are inside square(): they cannot add up to more than it.
         assert sum(steps.values()) <= c["square_s"]
+    # Built once per run: apart from the per-call cost.
+    assert out["incidence_once_s"] > 0
+    assert out["masks_once_s"] > 0
+    assert out["prep_total_s"] == pytest.approx(
+        out["sp_reference_s"]
+        + out["incidence_once_s"]
+        + out["masks_once_s"]
+        + out["prep_per_call_total_s"]
+    )
     # The prep cost on top of the budget's compose_state: recipe + square per call.
     assert out["prep_per_call_total_s"] == pytest.approx(
         sum(c["run_recipe_s"] + c["square_s"] for c in out["calls"])

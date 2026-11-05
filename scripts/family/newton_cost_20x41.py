@@ -101,7 +101,8 @@ def _same_pattern(J, prev) -> bool:
     import numpy as np
 
     return bool(
-        np.array_equal(J.indptr, prev.indptr) and np.array_equal(J.indices, prev.indices)
+        np.array_equal(J.indptr, prev.indptr)
+        and np.array_equal(J.indices, prev.indices)
     )
 
 
@@ -126,7 +127,7 @@ def measure(dataset: str, capture: Path, cache_root: Path | None = None) -> dict
     from equilibria.family.mp_arrays import MPArrays
     from equilibria.family.prep_capture import pairs
     from equilibria.family.prep_recipe import run_recipe, sp_reference_arrays
-    from equilibria.family.prep_square import square
+    from equilibria.family.prep_square import ConditionalMasks, square
     from equilibria.family.squared_system import SquaredSystem, period_incidence
     from equilibria.templates.gtap import gtap_block_model as gbm
 
@@ -154,6 +155,7 @@ def measure(dataset: str, capture: Path, cache_root: Path | None = None) -> dict
     backend = FamilyBackend.load(path)
     backend_load_s = time.perf_counter() - t
 
+    masks = None
     inc_cache: dict[str, tuple[dict, float]] = {}
     calls, prev_J = [], None
     for a, b in pairs(capture):
@@ -170,6 +172,8 @@ def measure(dataset: str, capture: Path, cache_root: Path | None = None) -> dict
             base_calibrated=True,
             solve_check=True,
         )
+        if masks is None:
+            masks = ConditionalMasks.from_params(p, mp)
         if a.period not in inc_cache:
             t = time.perf_counter()
             pat = period_incidence(backend, state, a.period)
@@ -185,6 +189,7 @@ def measure(dataset: str, capture: Path, cache_root: Path | None = None) -> dict
             closure=closure,
             incidence=merged,
             exogenous=ref.exogenous,
+            masks=masks,
         )
 
         t = time.perf_counter()

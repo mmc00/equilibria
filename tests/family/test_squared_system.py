@@ -151,14 +151,15 @@ def test_incidence_keeps_structural_zeros(inc):
 
 
 def test_square_with_pattern_incidence(inc):
-    from equilibria.family.mp_arrays import compare, squared_from_photo
+    from equilibria.family.mp_arrays import MPArrays, compare, squared_from_photo
     from equilibria.family.prep_recipe import sp_reference_arrays
-    from equilibria.family.prep_square import square
+    from equilibria.family.prep_square import ConditionalMasks, square
 
     p = _params(DATASET)
     ref = sp_reference_arrays(p, _closure(), list(p.sets.r)[-1])
     calls = _calls()
     assert calls
+    masks = ConditionalMasks.from_params(p, MPArrays.from_photo(calls[0][0]))
     for a, b in calls:
         out = inc(b.period)
         _assert_all_rows_found(out, b)
@@ -172,6 +173,7 @@ def test_square_with_pattern_incidence(inc):
             closure=_closure(),
             incidence=merged,
             exogenous=ref.exogenous,
+            masks=masks,
         )
         inc_sets = {r: set(c) for r, c in merged.items()}
         hard = {(e, v) for e, v, h in b.forced if h}
@@ -195,11 +197,12 @@ def systems(inc):
     """(call, SquaredSystem, incidence used, sq) for every 3x3 solve call."""
     from equilibria.family.mp_arrays import MPArrays
     from equilibria.family.prep_recipe import sp_reference_arrays
-    from equilibria.family.prep_square import square
+    from equilibria.family.prep_square import ConditionalMasks, square
     from equilibria.family.squared_system import SquaredSystem
 
     p = _params(DATASET)
     ref = sp_reference_arrays(p, _closure(), list(p.sets.r)[-1])
+    masks = ConditionalMasks.from_params(p, MPArrays.from_photo(_calls()[0][0]))
     out = []
     for a, b in _calls():
         mp = _recipe(a, p, ref)
@@ -212,6 +215,7 @@ def systems(inc):
             closure=_closure(),
             incidence=merged,
             exogenous=ref.exogenous,
+            masks=masks,
         )
         ss = SquaredSystem.build(inc.backend, inc.state, mp, a.period, sq)
         out.append((b, ss, merged, sq))

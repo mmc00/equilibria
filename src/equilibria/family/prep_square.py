@@ -258,43 +258,87 @@ def _apply_closure(mp: MPArrays, closure: Any, exogenous: frozenset[str]) -> Non
         _fix(v, np.ones(len(v.keys), bool))
 
 
-def _conditional_fixing(mp: MPArrays, params: Any) -> None:
+class ConditionalMasks:
+    """The cells ``apply_conditional_fixing`` fixes because they lie outside the data
+    flags, per component, over every period of ``mp``.
+
+    The flags depend on the data (``params``) only, so the masks are built once per run
+    and reused by every ``square`` call (``mp``'s keys never change). The parts that
+    depend on the current values (``imptx`` / ``exptx`` not NaN) stay in the call."""
+
+    OUTSIDE_XW = ("xw", "pe", "pm", "pmcif", "pefob", "imptx", "exptx")
+    OUTSIDE_TMARG = ("xwmg", "pwmg")
+    OUTSIDE_XF = ("xf", "pf", "pfa", "pfy")
+    OUTSIDE_X_FLAG = ("xp", "va", "nd")
+    OUTSIDE_X_RAI = ("x", "p_rai", "pp_rai")
+
+    def __init__(self, outside: dict[str, np.ndarray]):
+        self.outside = outside
+
+    @classmethod
+    def from_params(cls, params: Any, mp: MPArrays) -> ConditionalMasks:
+        xw_flag, tmarg_pos, amgm_pos = _trade_params(params)
+        xf_flag = _positive(getattr(params.benchmark, "vfm", {}))
+        x_flag, x_rai = _output_flags(params)
+        regions = {(r,) for (r, _a) in x_flag}
+
+        out: dict[str, np.ndarray] = {}
+        for names, flags, ndim in (
+            (cls.OUTSIDE_XW, xw_flag, 3),
+            (cls.OUTSIDE_TMARG, tmarg_pos, 3),
+            (("xmgm",), amgm_pos, 4),
+            (cls.OUTSIDE_XF, xf_flag, 3),
+            (cls.OUTSIDE_X_FLAG, x_flag, 2),
+            (cls.OUTSIDE_X_RAI, x_rai, 3),
+            (("pabs",), regions, 1),
+        ):
+            for name in names:
+                v = mp.var(name)
+                out[name] = ~_in_set(v, flags, ndim)
+        return cls(out)
+
+    def get(self, mp: MPArrays, name: str) -> np.ndarray:
+        """The mask of ``name``; raises if it was built for other keys."""
+        try:
+            m = self.outside[name]
+        except KeyError:
+            raise KeyError(f"no conditional mask for {name!r}") from None
+        if len(m) != len(mp.var(name).keys):
+            raise ValueError(f"conditional mask of {name!r} was built for other keys")
+        return m
+
+
+def _conditional_fixing(mp: MPArrays, masks: ConditionalMasks) -> None:
     """``GTAPSolver.apply_conditional_fixing`` over every cell of every period.
 
     The ``xft`` / ``pft`` fixing at the end needs the ``xftflag`` Param, which the
     multiperiod model does not have (the Pyomo step is skipped there too)."""
-    xw_flag, tmarg_pos, amgm_pos = _trade_params(params)
-    xf_flag = _positive(getattr(params.benchmark, "vfm", {}))
-    x_flag, x_rai = _output_flags(params)
 
-    def outside(name: str, flags: set, ndim: int) -> np.ndarray:
-        v = mp.var(name)
-        return ~_in_set(v, flags, ndim)
+    def outside(name: str) -> np.ndarray:
+        return masks.get(mp, name)
 
-    _fix_zero(mp.var("xw"), outside("xw", xw_flag, 3))
+    _fix_zero(mp.var("xw"), outside("xw"))
     for name in ("pe", "pm", "pmcif", "pefob"):
-        _fix(mp.var(name), outside(name, xw_flag, 3), 1.0)
+        _fix(mp.var(name), outside(name), 1.0)
     for name in ("imptx", "exptx"):
         v = mp.var(name)
-        _fix(v, outside(name, xw_flag, 3) & ~np.isnan(v.value))
+        _fix(v, outside(name) & ~np.isnan(v.value))
     xe = mp.var("xe")
     _fix(xe, np.ones(len(xe.keys), bool))
-    _fix_zero(mp.var("xwmg"), outside("xwmg", tmarg_pos, 3))
-    _fix_zero(mp.var("pwmg"), outside("pwmg", tmarg_pos, 3))
-    _fix_zero(mp.var("xmgm"), outside("xmgm", amgm_pos, 4))
-    _fix_zero(mp.var("xf"), outside("xf", xf_flag, 3))
+    _fix_zero(mp.var("xwmg"), outside("xwmg"))
+    _fix_zero(mp.var("pwmg"), outside("pwmg"))
+    _fix_zero(mp.var("xmgm"), outside("xmgm"))
+    _fix_zero(mp.var("xf"), outside("xf"))
     for name in ("pf", "pfa", "pfy"):
-        _fix(mp.var(name), outside(name, xf_flag, 3), 1.0)
+        _fix(mp.var(name), outside(name), 1.0)
     for name in ("xp", "va", "nd"):
-        _fix_zero(mp.var(name), outside(name, x_flag, 2))
-    _fix_zero(mp.var("x"), outside("x", x_rai, 3))
+        _fix_zero(mp.var(name), outside(name))
+    _fix_zero(mp.var("x"), outside("x"))
     for name in ("p_rai", "pp_rai"):
-        _fix(mp.var(name), outside(name, x_rai, 3))
+        _fix(mp.var(name), outside(name))
     pp = mp.var("pp")
     _fix(pp, np.ones(len(pp.keys), bool))
-    pabs = mp.var("pabs")
-    regions = {r for (r, _a) in x_flag}
-    _fix(pabs, ~_in_set(pabs, {(r,) for r in regions}, 1))
+    _fix(mp.var("pabs"), outside("pabs"))
 
 
 def _n_free(mp: MPArrays) -> int:
@@ -529,6 +573,7 @@ def square(
     closure: Any,
     incidence: dict[str, Any],
     exogenous: frozenset[str],
+    masks: ConditionalMasks,
     mode: str = "gtap",
 ) -> Squared:
     """The squared system of ``period`` from the arrays after the recipe.
@@ -536,7 +581,8 @@ def square(
     ``incidence`` maps each active row's name to the names of the variables in its
     body (those not free are ignored). ``exogenous`` are the registered ShockBlock
     instruments (``SPRef.exogenous``), which ``apply_closure`` does not overwrite when
-    fixed (the numeraire); no default, the model owns them.
+    fixed (the numeraire); no default, the model owns them. ``masks`` are the data-flag
+    cell masks (``ConditionalMasks.from_params``), built once per run for all periods.
     ``mp`` is not modified. Raises ``ValueError`` where Pyomo would repair the system
     by matching (gap > 0, rows > free variables, not square) and ``KeyError`` for a
     missing component."""
@@ -553,7 +599,7 @@ def square(
     _initialize_benchmark(mp)
     if closure is not None:
         _apply_closure(mp, closure, exogenous)
-    _conditional_fixing(mp, params)
+    _conditional_fixing(mp, masks)
     _check_gap(mp)
     _fix_sluggish_pft(mp, params)
     _deactivate_fixed_quantity_eqs(mp)

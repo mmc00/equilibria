@@ -1,13 +1,19 @@
 """Cost of the period preparation on arrays, from a two-photo capture.
 
     <python> scripts/family/prep_cost_20x41.py [--dataset gtap7_20x41]
-        [--capture DIR] [--out FILE]
+        [--capture DIR] [--cache-root DIR] [--out FILE]
 
 For each solve call of the capture (settle check, check, shock): rebuild the state
 from photo A, run the recipe and the squaring on arrays, and check the result
 against photo B. ``from_photo`` replaces today's Pyomo model and is reported apart;
 ``sp_reference`` (the single-period reference, once per run) and the per-call
 ``run_recipe`` + ``square`` are the prep cost.
+
+Work that does not depend on the call is built once per run and reported apart:
+``incidence_once_s`` (``period_incidence`` of the backend's J pattern, once per
+distinct period; photo B's incidence only for the cross-period rows, as in
+``newton_cost_20x41.py``) and ``masks_once_s`` (``ConditionalMasks``). Neither is in
+``prep_per_call_total_s``; both are in ``prep_total_s``.
 """
 
 from __future__ import annotations
@@ -17,6 +23,7 @@ import contextlib
 import copy
 import functools
 import gc
+import importlib.util
 import json
 import time
 from pathlib import Path
@@ -105,21 +112,72 @@ def _timed_square_steps(steps: dict[str, float]):
             setattr(ps, attr, fn)
 
 
-def measure(dataset: str, capture: Path) -> dict:
+def _load_backend(p, cache_root: Path):
+    """The single-period state and the backend, recorded once and then loaded from disk
+    (as ``newton_cost_20x41.py`` does)."""
+    from equilibria.backends.family_backend import FamilyBackend
+    from equilibria.family.disk_cache import cache_key, enable_jax_cache
+    from equilibria.templates.gtap import gtap_block_model as gbm
+
+    budget_path = Path(__file__).resolve().with_name("budget_20x41.py")
+    spec = importlib.util.spec_from_file_location("budget_20x41", budget_path)
+    assert spec is not None and spec.loader is not None
+    budget = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(budget)
+
+    enable_jax_cache(cache_root)
+    rr = list(p.sets.r)[-1]
+    bclosure = budget._closure()
+    model, state = gbm.compose_block_state(p, p.sets, bclosure, rr)
+    key = cache_key(p, bclosure, rr)
+    if key is None:
+        raise RuntimeError("no cache key (uncoverable input)")
+    path = cache_root / key / "records.pkl"
+    if not path.exists():
+        b0 = FamilyBackend()
+        b0.build(model, skip=state.ifsub_skipped)
+        b0.save(path)
+    return FamilyBackend.load(path), state
+
+
+def measure(dataset: str, capture: Path, cache_root: Path | None = None) -> dict:
     from equilibria.family.mp_arrays import MPArrays, compare, squared_from_photo
     from equilibria.family.prep_capture import pairs
     from equilibria.family.prep_recipe import run_recipe, sp_reference_arrays
-    from equilibria.family.prep_square import square
+    from equilibria.family.prep_square import ConditionalMasks, square
+    from equilibria.family.squared_system import is_cross_period, period_incidence
 
+    cache_root = cache_root or Path.home() / ".cache" / "equilibria" / "family"
     p = _params(dataset)
     closure = _closure()
     t = time.perf_counter()
     ref = sp_reference_arrays(p, closure, list(p.sets.r)[-1])
     sp_reference_s = time.perf_counter() - t
 
+    backend, state = _load_backend(p, cache_root)
+    photos = pairs(capture)
+    # Once per run: the J-pattern incidence per distinct period, and the data masks.
+    patterns, incidence_once_s = {}, 0.0
+    for a, _b in photos:
+        if a.period not in patterns:
+            t = time.perf_counter()
+            patterns[a.period] = period_incidence(backend, state, a.period)
+            incidence_once_s += time.perf_counter() - t
+    t = time.perf_counter()
+    masks = ConditionalMasks.from_params(p, MPArrays.from_photo(photos[0][0]))
+    masks_once_s = time.perf_counter() - t
+
     calls = []
-    for a, b in pairs(capture):
-        inc = {r: list(c) for r, c in zip(b.con_names, b.incidence, strict=True)}
+    for a, b in photos:
+        # Photo B's incidence only for the rows the pattern does not give.
+        t = time.perf_counter()
+        inc = {
+            r: list(c)
+            for r, c in zip(b.con_names, b.incidence, strict=True)
+            if is_cross_period(r.partition("[")[0])
+        }
+        inc.update(patterns[a.period])
+        merge_s = time.perf_counter() - t
         hard = {(e, v) for e, v, h in b.forced if h}
         t0 = time.perf_counter()
         mp = MPArrays.from_photo(a)
@@ -146,14 +204,18 @@ def measure(dataset: str, capture: Path) -> dict:
                 closure=closure,
                 incidence=inc,
                 exogenous=ref.exogenous,
+                masks=masks,
             )
         t3 = time.perf_counter()
-        diffs = compare(sq, squared_from_photo(b), inc, hard)
+        diffs = compare(
+            sq, squared_from_photo(b), {r: set(c) for r, c in inc.items()}, hard
+        )
         calls.append(
             {
                 "period": a.period,
                 "rows": len(b.con_names),
                 "from_photo_s": t1 - t0,
+                "incidence_merge_s": merge_s,
                 "run_recipe_s": t2 - t1,
                 "square_s": t3 - t2,
                 "square_steps": steps,
@@ -166,10 +228,12 @@ def measure(dataset: str, capture: Path) -> dict:
         "dataset": dataset,
         # compose_block_state: the budget already counts it as compose_state.
         "sp_reference_s": sp_reference_s,
+        "incidence_once_s": incidence_once_s,
+        "masks_once_s": masks_once_s,
         "calls": calls,
         # The prep cost on top of the budget: recipe + square, all calls.
         "prep_per_call_total_s": per_call,
-        "prep_total_s": sp_reference_s + per_call,
+        "prep_total_s": sp_reference_s + incidence_once_s + masks_once_s + per_call,
         "parity": all(c["parity"] for c in calls),
     }
 
@@ -179,10 +243,11 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", default="gtap7_20x41")
     ap.add_argument("--capture", type=Path)
+    ap.add_argument("--cache-root", type=Path)
     ap.add_argument("--out", type=Path)
     a = ap.parse_args()
     cap = a.capture or Path.home() / ".cache/equilibria/family/prep_capture" / a.dataset
-    text = json.dumps(measure(a.dataset, cap), indent=1)
+    text = json.dumps(measure(a.dataset, cap, a.cache_root), indent=1)
     if a.out:
         a.out.write_text(text)
     print(text)
