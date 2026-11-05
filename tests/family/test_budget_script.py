@@ -62,7 +62,9 @@ def test_budget_runs_on_3x3(tmp_path):
     )
     assert out["verdict_conditional"] is True
     assert out["if_sub"] == 1
-    assert {"cross_period_rows", "calibration_rest"} <= set(out["not_measured"])
+    assert {"cross_period_rows", "calibration_rest", "incidence_from_pattern"} <= set(
+        out["not_measured"]
+    )
     # Measured now (prep_cost_20x41.py): neither unmeasured nor in the upper bound.
     assert "period_prep_on_arrays" not in out["not_measured"]
     assert "period_prep_on_arrays" not in out["today_cost_of_not_measured"]

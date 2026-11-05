@@ -8,6 +8,8 @@ writes AFTER ``prepare`` is checked against photo B.
 
 from __future__ import annotations
 
+from typing import TypedDict
+
 import numpy as np
 import pytest
 
@@ -21,6 +23,22 @@ DATASETS = (
     pytest.param("gtap7_15x10", marks=pytest.mark.slow),
 )
 SP_DATASETS = ("gtap7_3x3", "gtap7_10x7")
+
+
+class Route(TypedDict):
+    mute_welfare: bool
+    seed_from_prior: bool
+    base_calibrated: bool
+    solve_check: bool
+
+
+# The driver flags of the test route (_solve_shock): F3.5 base, check solved.
+ROUTE: Route = {
+    "mute_welfare": True,
+    "seed_from_prior": False,
+    "base_calibrated": True,
+    "solve_check": True,
+}
 
 
 def _closure():
@@ -185,8 +203,7 @@ def test_recipe_matches_pyomo(case, k):
         closure=_closure(),
         sp_ref=ref,
         mode="gtap",
-        mute_welfare=True,
-        seed_from_prior=False,
+        **ROUTE,
     )
     # mq_* values: the Fisher aggregates refreshed after the seed (known gap); the
     # shock's imptx: the default tariff is written after prepare (see test below).
@@ -204,7 +221,12 @@ def test_shock_default_tariff_matches_b(case):
     _, _, p, ref, calls, _ = case
     a, b = next((a, b) for a, b in calls if a.period == "shock")
     got = run_recipe(
-        MPArrays.from_photo(a), "shock", params=p, closure=_closure(), sp_ref=ref
+        MPArrays.from_photo(a),
+        "shock",
+        params=p,
+        closure=_closure(),
+        sp_ref=ref,
+        **ROUTE,
     )
     g, w = got.var("imptx"), b.vars["imptx"]
     assert g.keys[: len(w.keys)] is not None
@@ -225,7 +247,7 @@ def test_missing_component_raises(case):
     mp = MPArrays.from_photo(a)
     del mp.vars["pft"]
     with pytest.raises(KeyError, match="pft"):
-        run_recipe(mp, a.period, params=p, closure=_closure(), sp_ref=ref)
+        run_recipe(mp, a.period, params=p, closure=_closure(), sp_ref=ref, **ROUTE)
 
 
 def test_other_periods_not_ported(case):
@@ -235,8 +257,62 @@ def test_other_periods_not_ported(case):
     _, _, p, ref, calls, _ = case
     mp = MPArrays.from_photo(calls[0][0])
     with pytest.raises(NotImplementedError):
-        run_recipe(mp, "base", params=p, closure=_closure(), sp_ref=ref)
+        run_recipe(mp, "base", params=p, closure=_closure(), sp_ref=ref, **ROUTE)
     with pytest.raises(NotImplementedError):
         run_recipe(
-            mp, "check", params=p, closure=_closure(), sp_ref=ref, mode="altertax"
+            mp,
+            "check",
+            params=p,
+            closure=_closure(),
+            sp_ref=ref,
+            mode="altertax",
+            **ROUTE,
         )
+
+
+@pytest.mark.parametrize("base_calibrated", [False, True])
+@pytest.mark.parametrize("solve_check", [False, True])
+@pytest.mark.parametrize("period", ["check", "shock"])
+def test_seed_prior_matches_preparer(period, solve_check, base_calibrated):
+    from equilibria.family.prep_recipe import seed_prior
+    from equilibria.templates.gtap.period_prep import PeriodPreparer
+
+    pyomo = PeriodPreparer(
+        mode="gtap",
+        base_closure=None,
+        alt_closure=None,
+        residual_region="r",
+        base_calibrated=base_calibrated,
+        solve_check=solve_check,
+    )
+    assert seed_prior(
+        period, base_calibrated=base_calibrated, solve_check=solve_check
+    ) == pyomo.seed_prior(period)
+
+
+def test_driver_flags_are_required(case):
+    """No silent defaults: the driver's flags pick the recipe and the seed."""
+    from equilibria.family.mp_arrays import MPArrays
+    from equilibria.family.prep_recipe import run_recipe
+
+    _, _, p, ref, calls, _ = case
+    mp = MPArrays.from_photo(calls[0][0])
+    with pytest.raises(TypeError):
+        run_recipe(mp, "check", params=p, closure=_closure(), sp_ref=ref, mode="gtap")  # ty: ignore[missing-argument]
+
+
+def test_copied_check_raises(case):
+    """F3.5 without solve_check copies the check from the base: not ported."""
+    from equilibria.family.mp_arrays import MPArrays
+    from equilibria.family.prep_recipe import run_recipe
+
+    _, _, p, ref, calls, _ = case
+    mp = MPArrays.from_photo(calls[0][0])
+    flags = Route(
+        mute_welfare=True,
+        seed_from_prior=False,
+        base_calibrated=True,
+        solve_check=False,
+    )
+    with pytest.raises(NotImplementedError, match="copied"):
+        run_recipe(mp, "check", params=p, closure=_closure(), sp_ref=ref, **flags)

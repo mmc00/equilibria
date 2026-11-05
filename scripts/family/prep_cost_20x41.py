@@ -133,11 +133,20 @@ def measure(dataset: str, capture: Path) -> dict:
             mode="gtap",
             mute_welfare=True,
             seed_from_prior=False,
+            base_calibrated=True,  # the capture route (_solve_shock): F3.5 base,
+            solve_check=True,  # check solved
         )
-        steps = {name: 0.0 for name in SQUARE_STEPS}
+        steps = dict.fromkeys(SQUARE_STEPS, 0.0)
         t2 = time.perf_counter()
         with _timed_square_steps(steps):
-            sq = square(mp, a.period, params=p, closure=closure, incidence=inc)
+            sq = square(
+                mp,
+                a.period,
+                params=p,
+                closure=closure,
+                incidence=inc,
+                exogenous=ref.exogenous,
+            )
         t3 = time.perf_counter()
         diffs = compare(sq, squared_from_photo(b), inc, hard)
         calls.append(

@@ -528,14 +528,15 @@ def square(
     params: Any,
     closure: Any,
     incidence: dict[str, Any],
+    exogenous: frozenset[str],
     mode: str = "gtap",
-    exogenous: frozenset[str] = frozenset({"pnum"}),
 ) -> Squared:
     """The squared system of ``period`` from the arrays after the recipe.
 
     ``incidence`` maps each active row's name to the names of the variables in its
     body (those not free are ignored). ``exogenous`` are the registered ShockBlock
-    instruments, which ``apply_closure`` does not overwrite when fixed (the numeraire).
+    instruments (``SPRef.exogenous``), which ``apply_closure`` does not overwrite when
+    fixed (the numeraire); no default, the model owns them.
     ``mp`` is not modified. Raises ``ValueError`` where Pyomo would repair the system
     by matching (gap > 0, rows > free variables, not square) and ``KeyError`` for a
     missing component."""

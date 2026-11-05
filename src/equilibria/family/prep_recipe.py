@@ -383,6 +383,14 @@ _RECIPES = {
 }
 
 
+def seed_prior(period: str, *, base_calibrated: bool, solve_check: bool) -> str:
+    """The period ``period`` is seeded from, as ``PeriodPreparer.seed_prior``: the
+    shock from the check, unless F3.5 copied the check from the base."""
+    if period == "shock":
+        return "base" if base_calibrated and not solve_check else "check"
+    return "base"
+
+
 def run_recipe(
     mp: MPArrays,
     period: str,
@@ -391,14 +399,19 @@ def run_recipe(
     closure,
     sp_ref: SPRef,
     mode: str = "gtap",
-    mute_welfare: bool = True,
-    seed_from_prior: bool = False,
-    seed_prior: str | None = None,
+    mute_welfare: bool,
+    seed_from_prior: bool,
+    base_calibrated: bool,
+    solve_check: bool,
 ) -> MPArrays:
     """``mp`` after the recipe of ``period`` (check or shock; gtap), as new arrays.
 
-    ``seed_prior`` is the period the seed copies from (default: base for the check,
-    check for the shock). A step whose component is missing raises ``KeyError``."""
+    The driver flags (``PeriodPreparer``'s) have no default: they pick the recipe and
+    the period the seed copies from. A step whose component is missing raises
+    ``KeyError``; the F3.5 copied check (``base_calibrated`` without
+    ``solve_check``) raises ``NotImplementedError``."""
+    if period == "check" and base_calibrated and not solve_check:
+        raise NotImplementedError("no array recipe for the check copied from the base")
     steps = _RECIPES.get((period, mode))
     if steps is None:
         raise NotImplementedError(
@@ -413,7 +426,7 @@ def run_recipe(
         mode,
         mute_welfare,
         seed_from_prior,
-        seed_prior or ("check" if period == "shock" else "base"),
+        seed_prior(period, base_calibrated=base_calibrated, solve_check=solve_check),
     )
     for step in steps:
         step(ctx)

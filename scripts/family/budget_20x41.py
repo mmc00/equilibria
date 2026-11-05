@@ -41,6 +41,9 @@ NOT_MEASURED = {
     "cross_period_rows": "Fisher/Tornqvist rows are not block equations yet",
     "calibration_rest": "calibrate_base bookkeeping outside its settle solve",
     "outside_phases": "imports, reference GDX, post-processing",
+    # The prep measured squares with Pyomo's string incidence (photo B); the real
+    # path needs each squared row's columns from the J pattern, per call.
+    "incidence_from_pattern": "squared-row incidence from the J pattern, per call",
 }
 
 
@@ -148,9 +151,7 @@ def measure(dataset: str, cache_root: Path) -> dict:
 
     tm("names", names)
     Jc = sp.csr_matrix((np.ones(J.nnz), (J.row, J.col)), shape=J.shape)
-    match = tm(
-        "matching", lambda: maximum_bipartite_matching(Jc, perm_type="column")
-    )
+    match = tm("matching", lambda: maximum_bipartite_matching(Jc, perm_type="column"))
 
     not_measured = dict(NOT_MEASURED)
     if J.shape[0] != J.shape[1]:
@@ -246,7 +247,11 @@ if __name__ == "__main__":
     gc.disable()
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", default="gtap7_20x41")
-    ap.add_argument("--cache-root", type=Path, default=Path.home() / ".cache" / "equilibria" / "family")
+    ap.add_argument(
+        "--cache-root",
+        type=Path,
+        default=Path.home() / ".cache" / "equilibria" / "family",
+    )
     ap.add_argument("--out", type=Path)
     a = ap.parse_args()
     cold = run(a.dataset, a.cache_root, warm=False)

@@ -11,7 +11,7 @@ import pytest
 
 from tests.family._data import load_params
 from tests.family._prep import capture_dir
-from tests.family.test_prep_recipe import _closure, _params
+from tests.family.test_prep_recipe import ROUTE, _closure, _params
 
 DATASETS = (
     "gtap7_3x3",
@@ -42,16 +42,22 @@ def _recipe(a, p, ref):
         closure=_closure(),
         sp_ref=ref,
         mode="gtap",
-        mute_welfare=True,
-        seed_from_prior=False,
+        **ROUTE,
     )
 
 
-def _square(mp, a, p, b):
+def _square(mp, a, p, b, ref):
     from equilibria.family.prep_square import square
 
     inc = {r: list(c) for r, c in zip(b.con_names, b.incidence, strict=True)}
-    return square(mp, a.period, params=p, closure=_closure(), incidence=inc)
+    return square(
+        mp,
+        a.period,
+        params=p,
+        closure=_closure(),
+        incidence=inc,
+        exogenous=ref.exogenous,
+    )
 
 
 def _hard(b):
@@ -66,7 +72,7 @@ def test_square_matches_pyomo(case, k):
     if k >= len(calls):
         pytest.skip("fewer solve calls")
     a, b = calls[k]
-    got = _square(_recipe(a, p, ref), a, p, b)
+    got = _square(_recipe(a, p, ref), a, p, b, ref)
     inc = {r: set(c) for r, c in zip(b.con_names, b.incidence, strict=True)}
     assert compare(got, squared_from_photo(b), inc, _hard(b)) == []
 
@@ -74,7 +80,7 @@ def test_square_matches_pyomo(case, k):
 def test_hard_pairs_kept(case):
     _, p, ref, calls = case
     for a, b in calls:
-        got = _square(_recipe(a, p, ref), a, p, b)
+        got = _square(_recipe(a, p, ref), a, p, b, ref)
         pairs = set(zip(got.row_names, got.col_names, strict=True))
         assert _hard(b)
         assert _hard(b) <= pairs
@@ -95,13 +101,13 @@ def test_overdetermined_raises(case):
     _, p, ref, calls = case
     a, b = calls[-1]
     mp = _recipe(a, p, ref)
-    sq = _square(mp, a, p, b)
+    sq = _square(mp, a, p, b, ref)
     name = next(c for c in sq.col_names if c.startswith("xp["))
     comp, key = name[:-1].split("[")
     v = mp.vars[comp]
     v.fixed[v.pos(tuple(key.split(",")))] = True
     with pytest.raises(ValueError, match="over-determined"):
-        _square(mp, a, p, b)
+        _square(mp, a, p, b, ref)
 
 
 def test_gap_raises(case):
@@ -116,7 +122,7 @@ def test_gap_raises(case):
     )
     r.active[int(r.active.nonzero()[0][0])] = False
     with pytest.raises(ValueError, match="gap"):
-        _square(mp, a, p, b)
+        _square(mp, a, p, b, ref)
 
 
 def test_missing_component_raises(case):
@@ -125,7 +131,7 @@ def test_missing_component_raises(case):
     mp = _recipe(a, p, ref)
     del mp.vars["pmt"]
     with pytest.raises(KeyError, match="pmt"):
-        _square(mp, a, p, b)
+        _square(mp, a, p, b, ref)
 
 
 def test_input_not_mutated(case):
@@ -135,7 +141,20 @@ def test_input_not_mutated(case):
     a, b = calls[-1]
     mp = _recipe(a, p, ref)
     before = {n: (v.fixed.copy(), v.lb.copy()) for n, v in mp.vars.items()}
-    _square(mp, a, p, b)
+    _square(mp, a, p, b, ref)
     for n, (f, lb) in before.items():
         np.testing.assert_array_equal(mp.vars[n].fixed, f)
         np.testing.assert_array_equal(mp.vars[n].lb, lb)
+
+
+def test_exogenous_is_required(case):
+    """The registered instruments come from the model (``SPRef.exogenous``)."""
+    from equilibria.family.prep_square import square
+
+    _, p, ref, calls = case
+    a, b = calls[-1]
+    inc = {r: list(c) for r, c in zip(b.con_names, b.incidence, strict=True)}
+    with pytest.raises(TypeError):
+        square(  # ty: ignore[missing-argument]
+            _recipe(a, p, ref), a.period, params=p, closure=_closure(), incidence=inc
+        )
