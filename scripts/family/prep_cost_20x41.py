@@ -163,8 +163,9 @@ def measure(dataset: str, capture: Path, cache_root: Path | None = None) -> dict
             t = time.perf_counter()
             patterns[a.period] = period_incidence(backend, state, a.period)
             incidence_once_s += time.perf_counter() - t
+    mp0 = MPArrays.from_photo(photos[0][0])
     t = time.perf_counter()
-    masks = ConditionalMasks.from_params(p, MPArrays.from_photo(photos[0][0]))
+    masks = ConditionalMasks.from_params(p, mp0)
     masks_once_s = time.perf_counter() - t
 
     calls = []
@@ -215,7 +216,11 @@ def measure(dataset: str, capture: Path, cache_root: Path | None = None) -> dict
                 "period": a.period,
                 "rows": len(b.con_names),
                 "from_photo_s": t1 - t0,
+                # Harness artefact: merging photo B's cross-period rows with the
+                # pattern. In the real path those rows come from their own recorded
+                # families, once per run; so it is NOT in the prep totals.
                 "incidence_merge_s": merge_s,
+                "incidence_merge_is_harness": True,
                 "run_recipe_s": t2 - t1,
                 "square_s": t3 - t2,
                 "square_steps": steps,

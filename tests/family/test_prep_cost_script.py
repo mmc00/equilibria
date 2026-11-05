@@ -33,8 +33,8 @@ def _script():
 
 
 @pytest.mark.slow
-def test_prep_cost_on_3x3():
-    out = _script().measure("gtap7_3x3", capture_dir())
+def test_prep_cost_on_3x3(tmp_path):
+    out = _script().measure("gtap7_3x3", capture_dir(), tmp_path)
     assert out["parity"] is True
     assert [c["period"] for c in out["calls"]] == ["check", "check", "shock"]
     for c in out["calls"]:
@@ -51,6 +51,18 @@ def test_prep_cost_on_3x3():
         + out["incidence_once_s"]
         + out["masks_once_s"]
         + out["prep_per_call_total_s"]
+    )
+    # The merge with photo B's cross-period rows is a harness artefact: not in totals.
+    assert all(c["incidence_merge_is_harness"] is True for c in out["calls"])
+    assert all(c["incidence_merge_s"] >= 0 for c in out["calls"])
+    assert out["prep_per_call_total_s"] == pytest.approx(
+        sum(c["run_recipe_s"] + c["square_s"] for c in out["calls"])
+    )
+    assert out["prep_per_call_total_s"] != pytest.approx(
+        sum(
+            c["run_recipe_s"] + c["square_s"] + c["incidence_merge_s"]
+            for c in out["calls"]
+        )
     )
     # The prep cost on top of the budget's compose_state: recipe + square per call.
     assert out["prep_per_call_total_s"] == pytest.approx(

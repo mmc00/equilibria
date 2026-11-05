@@ -272,8 +272,13 @@ class ConditionalMasks:
     OUTSIDE_X_FLAG = ("xp", "va", "nd")
     OUTSIDE_X_RAI = ("x", "p_rai", "pp_rai")
 
-    def __init__(self, outside: dict[str, np.ndarray]):
+    def __init__(self, outside: dict[str, np.ndarray], keys: dict[str, list]):
         self.outside = outside
+        self._keys = keys  # per component, the keys the mask was built for
+        self._checked: dict[str, list] = {}  # key lists already verified equal
+
+    def __getstate__(self):
+        return {"outside": self.outside, "_keys": self._keys, "_checked": {}}
 
     @classmethod
     def from_params(cls, params: Any, mp: MPArrays) -> ConditionalMasks:
@@ -283,6 +288,7 @@ class ConditionalMasks:
         regions = {(r,) for (r, _a) in x_flag}
 
         out: dict[str, np.ndarray] = {}
+        keys: dict[str, list] = {}
         for names, flags, ndim in (
             (cls.OUTSIDE_XW, xw_flag, 3),
             (cls.OUTSIDE_TMARG, tmarg_pos, 3),
@@ -295,16 +301,25 @@ class ConditionalMasks:
             for name in names:
                 v = mp.var(name)
                 out[name] = ~_in_set(v, flags, ndim)
-        return cls(out)
+                keys[name] = v.keys
+        return cls(out, keys)
 
     def get(self, mp: MPArrays, name: str) -> np.ndarray:
-        """The mask of ``name``; raises if it was built for other keys."""
+        """The mask of ``name``; raises if ``mp`` has other keys (size or order).
+
+        Identity first (``mp.copy()`` shares the key lists); an equal list that is a
+        different object is compared once and remembered."""
         try:
             m = self.outside[name]
         except KeyError:
             raise KeyError(f"no conditional mask for {name!r}") from None
-        if len(m) != len(mp.var(name).keys):
-            raise ValueError(f"conditional mask of {name!r} was built for other keys")
+        keys = mp.var(name).keys
+        if keys is not self._keys[name] and keys is not self._checked.get(name):
+            if len(keys) != len(m) or keys != self._keys[name]:
+                raise ValueError(
+                    f"conditional mask of {name!r} was built for other keys"
+                )
+            self._checked[name] = keys
         return m
 
 

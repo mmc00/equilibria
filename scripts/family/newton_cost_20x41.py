@@ -101,8 +101,7 @@ def _same_pattern(J, prev) -> bool:
     import numpy as np
 
     return bool(
-        np.array_equal(J.indptr, prev.indptr)
-        and np.array_equal(J.indices, prev.indices)
+        np.array_equal(J.indptr, prev.indptr) and np.array_equal(J.indices, prev.indices)
     )
 
 

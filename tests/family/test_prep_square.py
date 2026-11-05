@@ -191,3 +191,34 @@ def test_masks_required(case):
             incidence=inc,
             exogenous=ref.exogenous,
         )
+
+
+def test_masks_reject_other_keys(case):
+    """Masks built for one key layout raise on a permuted or a different-size mp."""
+    import copy
+
+    _, _, _, calls, masks = case
+    mp = _mp_of(calls)
+    masks.get(mp, "xp")  # same keys: fine (equal list, other object too)
+    assert masks.get(mp.copy(), "xp") is masks.outside["xp"]
+    permuted = copy.copy(mp)
+    permuted.vars = dict(mp.vars)
+    v = copy.copy(mp.vars["xp"])
+    v.keys = list(reversed(v.keys))
+    permuted.vars["xp"] = v
+    assert v.keys != masks._keys["xp"]
+    with pytest.raises(ValueError, match="other keys"):
+        masks.get(permuted, "xp")
+    short = copy.copy(mp)
+    short.vars = dict(mp.vars)
+    w = copy.copy(mp.vars["xp"])
+    w.keys = w.keys[:-1]
+    short.vars["xp"] = w
+    with pytest.raises(ValueError, match="other keys"):
+        masks.get(short, "xp")
+
+
+def _mp_of(calls):
+    from equilibria.family.mp_arrays import MPArrays
+
+    return MPArrays.from_photo(calls[0][0])
