@@ -53,10 +53,7 @@ def test_las_variables_sin_nivel_se_excluyen_con_motivo() -> None:
 
 
 def test_un_log_sin_metodo_es_un_error(tmp_path) -> None:
-    import gzip
-
-    with gzip.open(tmp_path / "x.log.gz", "wt") as fh:
-        fh.write("Steps = 2 4 6;\n")
+    (tmp_path / "run.cmf").write_text("Steps = 2 4 6;\n")
     with pytest.raises(ValueError, match="no dice el metodo"):
         _script().method("X", tmp_path)
 
@@ -73,21 +70,23 @@ def test_hay_solucion_gempack_para_los_37_ejercicios() -> None:
 
 def test_con_dos_lineas_method_vale_la_ultima(tmp_path) -> None:
     """GEMPACK toma la ultima ``Method`` del command file (tools/gempack-oracle)."""
-    import gzip
-
-    with gzip.open(tmp_path / "x.log.gz", "wt") as fh:
-        fh.write(" Method = Gragg;\n Steps = 2 4 6;\n Method = Johansen;\n")
+    (tmp_path / "run.cmf").write_text(
+        " Method = Gragg;\n Steps = 2 4 6;\n Method = Johansen;\n"
+    )
     assert _script().method("X", tmp_path) == "Johansen"
 
 
-GRAGG = O.ROOT / "tests" / "fixtures" / "gtap7_gempack" / "burfisher_gragg"
+GRAGG = "gragg"  # compare_burfisher_gempack's source: nus333/gemsim_burfisher_gragg/
 
 
 def test_las_corridas_del_paso_5_son_todas_gragg() -> None:
-    """burfisher_gragg/: Gragg tambien donde el libro usa Johansen (TBL45A, TBL64...)."""
+    """Gragg 2-4-6: Gragg tambien donde el libro usa Johansen (TBL45A, TBL64...)."""
     mod = _script()
-    con = {e for e in mod.rb.EXERCISES if (GRAGG / f"{e.lower()}.sl4.gz").exists()}
-    assert set(mod.rb.EXERCISES) - con == {"TBL53", "GTAPV7"}
+    con = {e for e in mod.rb.EXERCISES if mod.solution(e, GRAGG) is not None}
+    # D1 (plan-phase-3b): ME4A and ME4B fail with Gragg ("Accuracy too low") and have
+    # no Gragg run; their oracle is the book's Johansen run. TBL53 and GTAPV7 got
+    # theirs in phase 3a-2.
+    assert set(mod.rb.EXERCISES) - con == {"ME4A", "ME4B"}
     assert {mod.method(e, GRAGG) for e in con} == {"Gragg"}
 
 
@@ -108,7 +107,7 @@ def test_gempack_dir_elige_las_corridas(tmp_path, monkeypatch) -> None:
         sys,
         "argv",
         ["x", "--only", "TBL45A", "--eq-dir", str(O.EX18_EQ["tbl45a"].parent),
-         "--gempack-dir", str(GRAGG), "--json", str(out)],
+         "--gempack-dir", GRAGG, "--json", str(out)],
     )  # fmt: skip
     assert mod.main() == 0
     assert json.loads(out.read_text())["TBL45A"]["method"] == "Gragg"

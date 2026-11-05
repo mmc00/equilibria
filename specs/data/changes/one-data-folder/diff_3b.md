@@ -87,3 +87,10 @@ name, the new one through `equilibria.sources.reference(...)`.
   `test_mk_exp_directos` pins them to the old logs by sha256
   (`test_the_cmf_shocks_are_the_2026_09_30_logs`), because `run.cmf` now also
   equals the `-dir.exp` the script under test writes.
+- **Task 5: two maintainer decisions (2026-11-05).**
+  `test_las_corridas_del_paso_5_son_todas_gragg` used to read the method of every
+  old Gragg file; ME4A/B have no Gragg record (D1), so its assertion is now
+  `set(EXERCISES) - con == {"ME4A", "ME4B"}`, with a comment naming D1. The
+  Gragg records also hold TBL53 and GTAPV7, which the old folder lacked: their
+  notebooks (`tbl53.ipynb`, `gtapv7.ipynb`) were generated and added to
+  `MATCHED` in `tests/examples/test_burfisher_notebooks.py` (44 → 46 tests).

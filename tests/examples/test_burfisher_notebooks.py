@@ -10,8 +10,6 @@ Not checked against GEMPACK here, each for its reason:
 
 - ME4A, ME4B: checked against the book's own Johansen result instead (see below);
   solved exactly, neither GEMPACK ("Accuracy too low") nor equilibria reach the shock.
-- TBL53, GTAPV7: no GEMPACK Gragg solution yet (phase 3a-2 of one-data-folder
-  adds them).
 - ME9A: up to 0.77% from GEMPACK (``pe`` ROW LAND), while it matches GAMS. GEMPACK's
   own log rates many of its results to 2 figures; a rerun with more steps decides.
   Its notebook is kept, without the check.
@@ -45,6 +43,7 @@ MATCHED = (
     "TBL67", "TBL75A", "TBL75B", "TBL77", "TBL78", "TBL79",
     "TBL813", "TBL93", "TBL94", "ME3A", "ME3B", "ME3C",
     "ME5", "ME7A", "ME7B", "ME8", "ME9B", "ME9C", "ME9D",
+    "TBL53", "GTAPV7",  # Gragg runs since phase 3a-2 (maintainer, 2026-11-05)
 )  # fmt: skip
 UNCHECKED = ("ME9A",)
 JOHANSEN_ONLY = ("ME4A", "ME4B")
