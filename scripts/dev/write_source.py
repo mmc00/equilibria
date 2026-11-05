@@ -42,11 +42,23 @@ from equilibria.sources import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
+# STATUS_DLL_INIT_FAILED, as an unsigned and a signed exit code: the process never started
+NOT_STARTED = (0xC0000142, -1073741502)
+RETRY_PAUSE_S = 15  # before running a command that did not start once more
 
 
 def machine_info() -> dict[str, Any]:
     """OS, CPU model, logical cores and RAM in GB. Nothing that names the machine."""
     system = platform.system()
+    if system == "Windows":
+        # platform's processor/release/version query WMI here (Python 3.12), and WMI
+        # timed out mid-run (WinError 258, KeyError 'Architecture'): no WMI at all
+        return {
+            "os": _windows_os(),
+            "cpu": _windows_cpu(),
+            "cores": os.cpu_count() or 1,
+            "ram_gb": round(_windows_ram(), 1),
+        }
     cpu, ram = platform.processor() or platform.machine(), 0.0
     if system == "Darwin":
         cpu = _sysctl("machdep.cpu.brand_string") or cpu
@@ -62,10 +74,6 @@ def machine_info() -> dict[str, Any]:
             if line.startswith("MemTotal"):
                 ram = int(line.split()[1]) / 2**20
                 break
-    elif system == "Windows":
-        os_name = f"Windows {platform.release()} ({platform.version()})"
-        cpu = _windows_cpu()
-        ram = _windows_ram()
     else:
         os_name = f"{system} {platform.release()}"
     return {
@@ -83,6 +91,14 @@ def _sysctl(key: str) -> str:
         return ""
 
 
+def _windows_os() -> str:
+    """"Windows 11 (10.0.26200)", as platform.release()/version() print it, from the
+    kernel's version: no WMI. Build 22000 and later is Windows 11."""
+    v = sys.getwindowsversion()  # type: ignore[attr-defined]  # Windows only
+    release = "11" if v.major == 10 and v.build >= 22000 else str(v.major)
+    return f"Windows {release} ({v.major}.{v.minor}.{v.build})"
+
+
 def _windows_cpu(winreg_module: Any = None) -> str:
     """The CPU model name; platform.processor() on Windows gives only the family."""
     try:
@@ -95,7 +111,8 @@ def _windows_cpu(winreg_module: Any = None) -> str:
         name, _ = winreg_module.QueryValueEx(key, "ProcessorNameString")
         return str(name).strip()
     except (ImportError, OSError):
-        return platform.processor() or platform.machine()
+        # no WMI here either: the architecture Windows puts in the environment
+        return os.environ.get("PROCESSOR_ARCHITECTURE", "")
 
 
 def _windows_ram() -> float:
@@ -130,20 +147,25 @@ def _outputs(folder: Path) -> dict[str, str]:
     return {p.relative_to(folder).as_posix(): sha256_file(p) for p in own_files(folder)}
 
 
+def _hashed(path: Path, root: Path) -> dict[str, Any]:
+    """``{path, sha256}`` of a file, or of every file of a folder, under ``root``."""
+    p = path.resolve()
+    return {
+        "path": p.relative_to(root).as_posix(),
+        # a folder: every file, so an edited include makes it stale
+        "sha256": (
+            {f.relative_to(p).as_posix(): sha256_file(f) for f in own_files(p)}
+            if p.is_dir()
+            else sha256_file(p)
+        ),
+    }
+
+
 def _inputs(args: argparse.Namespace, root: Path) -> dict[str, Any]:
-    """Hash the inputs. Raises ValueError for a path outside ``root``."""
+    """Hash the inputs. Raises ValueError for a path outside ``root`` or a bad name."""
     generated_from: dict[str, Any] = {}
     if args.model_file:
-        mf = args.model_file.resolve()
-        generated_from["model"] = {
-            "path": mf.relative_to(root).as_posix(),
-            # a model folder: every file, so an edited include makes it stale
-            "sha256": (
-                {p.relative_to(mf).as_posix(): sha256_file(p) for p in own_files(mf)}
-                if mf.is_dir()
-                else sha256_file(mf)
-            ),
-        }
+        generated_from["model"] = _hashed(args.model_file, root)
     if args.data_dir:
         dd = args.data_dir.resolve()
         generated_from["data"] = {
@@ -152,7 +174,40 @@ def _inputs(args: argparse.Namespace, root: Path) -> dict[str, Any]:
                 p.relative_to(dd).as_posix(): sha256_file(p) for p in own_files(dd)
             },
         }
+    # another result (or model) under data/ this one was made from
+    for pair in args.input:
+        name, _, path = pair.partition("=")
+        if not name or not path or name in ("model", "data") or name in generated_from:
+            raise ValueError(f"--input {pair!r}: NAME=PATH with a new name")
+        if not Path(path).exists():
+            raise ValueError(f"--input {pair!r}: no such file or folder")
+        generated_from[name] = _hashed(Path(path), root)
     return generated_from
+
+
+def _externals(pairs: list[str]) -> dict[str, Any]:
+    """``NAME=PATH[@RELEASE]``: a file kept out of the repository, by sha256 only.
+
+    Raises ValueError for a missing file or a repeated name.
+    """
+    external: dict[str, Any] = {}
+    for pair in pairs:
+        name, _, rest = pair.partition("=")
+        path, release = rest, ""
+        head, at, tail = rest.rpartition("@")
+        if at and tail and "/" not in tail and "\\" not in tail:
+            path, release = head, tail
+        if not name or name in external:
+            raise ValueError(f"--external {pair!r}: NAME=PATH with a new name")
+        f = Path(path)
+        if not f.is_file():
+            raise ValueError(f"--external {pair!r}: no such file")
+        external[name] = {
+            "path": path,
+            "sha256": sha256_file(f),
+            **({"release": release} if release else {}),
+        }
+    return external
 
 
 def _solver(name: str, folder: Path, options_file: str | None) -> dict[str, Any]:
@@ -191,6 +246,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--phases", nargs="*")
     ap.add_argument("--model-file", type=Path)
     ap.add_argument("--data-dir", type=Path)
+    ap.add_argument(
+        "--input",
+        action="append",
+        default=[],
+        help="NAME=PATH: another file or folder under the data root this was made from",
+    )
+    ap.add_argument(
+        "--external",
+        action="append",
+        default=[],
+        help="NAME=PATH[@RELEASE]: a file never put in the repository, recorded by sha256",
+    )
     ap.add_argument("--solver")
     ap.add_argument(
         "--solver-options-file",
@@ -213,6 +280,10 @@ def main(argv: list[str] | None = None) -> int:
         help="the command solved remotely: neos reads <folder>/neos_job.json",
     )
     ap.add_argument("--notes", default="")
+    ap.add_argument(
+        "--notes-from",
+        help="file the command may leave in the folder: appended to notes, not an output",
+    )
     ap.add_argument("--no-run", action="store_true")
     ap.add_argument("command", nargs=argparse.REMAINDER)
     args = ap.parse_args(argv)
@@ -227,6 +298,10 @@ def main(argv: list[str] | None = None) -> int:
     record: dict[str, Any] = {"kind": args.kind, "model": args.model}
     if args.dataset:
         record["dataset"] = args.dataset
+    try:
+        external = _externals(args.external)
+    except ValueError as err:
+        ap.error(str(err))
 
     if args.kind == "result":
         if args.no_run or not command:
@@ -235,18 +310,36 @@ def main(argv: list[str] | None = None) -> int:
         try:
             generated_from = _inputs(args, root)
         except ValueError as err:
-            ap.error(f"an input is outside the data root {root}: {err}")
+            ap.error(f"an input is outside the data root {root} or malformed: {err}")
         # A rerun replaces the record: if it fails, no stale "verified" stays.
         (folder / SOURCE_FILE).unlink(missing_ok=True)
         started = dt.datetime.now().astimezone()
         t0 = time.perf_counter()
         proc = subprocess.run(command, cwd=folder)
+        # Now and then Windows does not start the command at all (3a-1, 3a-2:
+        # STATUS_DLL_INIT_FAILED). It never ran, so it is run once more, and the
+        # record says so; a command that ran and failed is not retried.
+        if proc.returncode in NOT_STARTED:
+            retry = (
+                f"the command did not start on the first attempt "
+                f"(exit 0x{proc.returncode & 0xFFFFFFFF:08X}); retried once"
+            )
+            print(retry)
+            args.notes = "; ".join(s for s in (args.notes, retry) if s)
+            time.sleep(RETRY_PAUSE_S)  # an immediate retry failed like the first attempt
+            proc = subprocess.run(command, cwd=folder)
         duration = time.perf_counter() - t0
         if proc.returncode != 0:
             print(f"command failed (exit {proc.returncode}); no source.yaml written")
             if created:  # a failed job leaves nothing; the next run resumes from it
                 shutil.rmtree(folder)
             return proc.returncode
+        # what the command wants said about this run (e.g. a retried start)
+        note = folder / args.notes_from if args.notes_from else None
+        if note is not None and note.is_file():
+            extra = note.read_text(encoding="utf-8").strip()
+            note.unlink()
+            args.notes = "; ".join(s for s in (args.notes, extra) if s)
         run_info: dict[str, Any] = {
             "date": started.isoformat(timespec="seconds"),
             "duration_s": round(duration, 3),
@@ -271,6 +364,7 @@ def main(argv: list[str] | None = None) -> int:
                 "variant": _variant(args.variant),
                 **({"phases": args.phases} if args.phases else {}),
                 "generated_from": generated_from,
+                **({"external": external} if external else {}),
                 **(
                     {"solver": _solver(args.solver, folder, args.solver_options_file)}
                     if args.solver
@@ -294,6 +388,8 @@ def main(argv: list[str] | None = None) -> int:
                 ap.error("--derived-from and --changes go together, for --kind model")
             record["derived_from"] = args.derived_from
             record["changes"] = yaml.safe_load(args.changes.read_text(encoding="utf-8"))
+        if external:
+            record["external"] = external
         record["outputs"] = _outputs(folder)
     record["status"] = "verified"
     record["notes"] = args.notes

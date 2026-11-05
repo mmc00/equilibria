@@ -1,0 +1,11 @@
+kind: model
+model: gtap7
+source: 'RunGTAP 3.75 (C:\runGTAP375): gtapv7.tab and gtapv7.sti of GTAP Model Version
+  7.0 (June 2017, history to Dec 2019), the files its gtapv7.exe was compiled from;
+  unchanged (CRLF kept, no final newline in the tab)'
+outputs:
+  gtapv7.sti: a3279021f72413ed3519031dd5ffbe2a893f7c770c0d8267a174415d8abc7a87
+  gtapv7.tab: 67cb2c6793fc40b3e14d8ce997ab1d66920b03800d0d0f3897c7a1bf0d5d2836
+status: verified
+notes: 'licence: not stated by the source; to confirm. Chosen over the official 7.1:
+  docs/findings/gtapv7_tab_70_vs_71_2026-11-03.md'

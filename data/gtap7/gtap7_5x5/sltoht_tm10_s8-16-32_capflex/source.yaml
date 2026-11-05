@@ -1,0 +1,76 @@
+kind: result
+model: gtap7
+dataset: gtap7_5x5
+tool: sltoht
+tool_version: 11.3.004
+variant:
+  shock: 10
+  steps: 8-16-32
+  closure: capFlex
+phases:
+- shock
+generated_from:
+  model:
+    path: gtap7/gempack
+    sha256:
+      tools/_job_cli.py: e7f25cc85890c54cc879fae36c6e2e132bdfc5b8f8d3a9b307a772b449f7dd5d
+      tools/burfisher_job.py: 653c50361576302a9a1f55ab704d607b60b9800594cf5bc5c2db5fe906425ed4
+      tools/cmf/9x10_tm10_dpsaveswap.cmf: 97842333032392ea8e0e543b9520465829a33488c1dab68657176f72a6032a1f
+      tools/cmf/gtap7_20x41_tm10_dpsaveswap.cmf: fba601626927290a341865a55e99e52320135180286fe34fcc72a277aebc8154
+      tools/cmf/nus333_tm10_dpsaveswap.cmf: ac916d48f03c5c02db91be028377765e9e6672c0c89c627f88465076053e8d0b
+      tools/export_sl4_levels.py: d3fe47958ee23e21c778b467a650007edcfe0b08390fec1af0a5ce97f3ea1c45
+      tools/gemsim_job.py: 5feb9074e7e0fda993dbe0b9ac6a3553be42e9301dc959b10889a0467bee65c5
+      tools/levels_job.py: aa4073da35de5ab1504cb3bc3e555b2f0c05bf9f80eed1f88d6be3f77d733d5d
+      tools/make_levels_tab.py: 52e58f847f0033b2dcc3c223cbdf99993638633d4a524057adf71d1c583bb80a
+      tools/regenerate_gempack.py: ecb1099c39fb686315c0b5a2e7935d6a7481578475688980aa84f6345d5b94a6
+      tools/regenerate_paper.py: 80f057d8c274ee06d1d34a09b369eedc2e54b05f341a8bd1e9b23f53553222b6
+      tools/release_check.py: 7ef240328c439d32ff203b6a30d4a84f39266c6a4b082d314977c34866241b5e
+      tools/run_gempack_matrix.py: dad828823ecafc5b55022454e35d83e0a0d5e200ee6e5e5d4ca1acc16af0ff6d
+      tools/swap_job.py: 850f58385cceba171d9451ac5d89b75f6d1d2e32c455e93a423a990357a33902
+      tools/target_shocks.py: 983253cd6adac881107450837959cde36a371a1d2e2ec819f967c61fa015f4cc
+  data:
+    path: gtap7/gtap7_5x5
+    sha256:
+      basedata.har: 1bc5fdada69d539d5a4846082b97729f0f2c402328400a6e530d437d6dbd3d66
+      baserate.har: 512016e327ece7e11903bd87b508d09a428ddaa92c205c9cbf2c54e316cc20fe
+      default.prm: 4b344be79624c3f1e815765117bd4a6cd2adb06c67b9157acfb85e9fb376448b
+      sets.har: 21b0543013851d0de576db97257fd22944a6f6c39788ccf9d30b6e6740775992
+      v7_consolidated.gdx: 595b9709680967bb4a7f23fe7df07a8c967ed02c47103adc92f18a6c3573a27c
+  sl4dump:
+    path: gtap7/gtap7_5x5/gempack_tm10_s8-16-32_capflex/sl4dump.har
+    sha256: 01624d1641f52b44baa635c00fd58e3803173e0b4c51cf8ad740b3ca2db6cc87
+external:
+  gtapv7.exe:
+    path: C:\runGTAP375\gtapv7.exe
+    sha256: 0d298829f9f56836798c6280fee0711fa9c099de169d41962eeed9b4f729420a
+    release: 12.1.003
+  sltoht.exe:
+    path: C:\GP\sltoht.exe
+    sha256: 8f9b37c53d42cae5272fc70576abb0f5bd4c62ea0fa97896c25e8d6f02a91d20
+    release: 11.3.004
+solver:
+  name: gtapv7
+command: '''C:\Documentos\proyectos\equilibria\.venv\Scripts\python.exe'' ''C:\Documentos\proyectos\equilibria\data\gtap7\gempack\tools\levels_job.py''
+  resolve --dataset gtap7_5x5 --shock 10 --steps 8-16-32 --rordelta 1 --sl4dump ''C:\Documentos\proyectos\equilibria\data\gtap7\gtap7_5x5\gempack_tm10_s8-16-32_capflex\sl4dump.har''
+  --gtapv7 ''C:\runGTAP375\gtapv7.exe'' --sltoht ''C:\GP\sltoht.exe'' --out ''C:\Documentos\proyectos\equilibria\data\gtap7\gtap7_5x5\sltoht_tm10_s8-16-32_capflex''
+  --expect-release 11.3.004 --work ''C:\Documentos\proyectos\equilibria\runs\gempack_work''
+  --release gtapv7.exe=12.1.003 --release sltoht.exe=11.3.004'
+equilibria_commit: fd9d7696
+exit:
+  code: 0
+outputs:
+  export_console.txt: 6ccda319258fefddaeefe68fa325c97d6c2da4747dc0362ae24ae6a1d1bcd766
+  run.cmf: 275a248f5d75fd1f1868c180246f75ed1a094bba602b8eaf02393b342f302996
+  sl4levels.har: e6add24afc5b5b7dc01f7b9ca73246fcc90ac8de2d3aab08848cf727a2136204
+  solution.sl4: 400e01e9eeccee6766925625d25632ab038fd1a7d81f879f8adbbd273ce73a57
+  solve_console.txt: 6d4f9a22d47b9852d1b01d7953a6223806497fccb0c68fb8fc8c93ea5a6cc119
+run:
+  date: '2026-11-04T15:32:49-06:00'
+  duration_s: 26.421
+  machine:
+    os: Windows 11 (10.0.26200)
+    cpu: 13th Gen Intel(R) Core(TM) i7-1365U
+    cores: 10
+    ram_gb: 31.4
+status: verified
+notes: ''

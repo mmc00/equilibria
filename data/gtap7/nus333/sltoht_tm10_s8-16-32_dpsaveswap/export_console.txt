@@ -1,0 +1,1 @@
+  levels vars=44 (LEVB+LEVA)  no-level=207 (NOLV)  (xcheck-mismatch=0 [])  -> C:\Documentos\proyectos\equilibria\runs\gempack_work\resolve\nus333_sltoht_tm10_s8-16-32_dpsaveswap\sl4levels.har

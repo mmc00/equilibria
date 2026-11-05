@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -62,6 +63,9 @@ _ALLOWED = frozenset(
         # a result solved on NEOS: job, times, category/solver/input, options,
         # sha256 of the .gms sent (never the job password or an e-mail)
         "neos",
+        # files used but never put in the repository (RunGTAP's .exe, what
+        # tablo compiles): name -> {path, sha256, release?}; not checked here
+        "external",
     }
 )
 _REQUIRED: dict[str, tuple[str, ...]] = {
@@ -87,6 +91,8 @@ _STATUSES = ("verified", "pending")
 # every file it adds or modifies, with what and why.
 _CHANGE_KEYS = frozenset({"file", "change", "what", "why", "commit"})
 _CHANGE_KINDS = ("added", "modified")
+_EXTERNAL_KEYS = frozenset({"path", "sha256", "release"})
+_SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
 class SourceError(ValueError):
@@ -141,6 +147,8 @@ def load_source(folder: Path) -> SourceRecord:
         _check_run(file, data["run"])
     if "derived_from" in data or "changes" in data:
         _check_changes(file, data)
+    if "external" in data:
+        _check_external(file, data["external"])
     variant = data.get("variant") or {}
     if not isinstance(variant, Mapping):
         raise SourceError(f"{file}: variant must be a mapping")
@@ -170,6 +178,22 @@ def _check_run(file: Path, run: Any) -> None:
         raise SourceError(
             f"{file}: run.machine must have exactly {sorted(_MACHINE_KEYS)}, got {got}"
         )
+
+
+def _check_external(file: Path, external: Any) -> None:
+    if not isinstance(external, Mapping):
+        raise SourceError(f"{file}: external must be a mapping of name -> file")
+    for name, entry in external.items():
+        where = f"{file}: external[{name!r}]"
+        if not isinstance(entry, Mapping):
+            raise SourceError(f"{where} must be a mapping {{path, sha256, release?}}")
+        keys = set(entry)
+        if not {"path", "sha256"} <= keys or not keys <= _EXTERNAL_KEYS:
+            raise SourceError(
+                f"{where} must have path and sha256 (release optional), got {sorted(keys)}"
+            )
+        if not _SHA256.fullmatch(str(entry["sha256"])):
+            raise SourceError(f"{where}: sha256 is not 64 hex digits")
 
 
 def _check_changes(file: Path, data: Mapping[str, Any]) -> None:

@@ -1,0 +1,87 @@
+kind: result
+model: horridge_simple
+dataset: horridge_simple
+tool: gemsim
+tool_version: 11.3.004
+variant:
+  experiment: tariff10
+phases:
+- shock
+generated_from:
+  model:
+    path: gtap7/gempack
+    sha256:
+      tools/_job_cli.py: e7f25cc85890c54cc879fae36c6e2e132bdfc5b8f8d3a9b307a772b449f7dd5d
+      tools/burfisher_job.py: 653c50361576302a9a1f55ab704d607b60b9800594cf5bc5c2db5fe906425ed4
+      tools/cmf/9x10_tm10_dpsaveswap.cmf: 97842333032392ea8e0e543b9520465829a33488c1dab68657176f72a6032a1f
+      tools/cmf/gtap7_20x41_tm10_dpsaveswap.cmf: fba601626927290a341865a55e99e52320135180286fe34fcc72a277aebc8154
+      tools/cmf/nus333_tm10_dpsaveswap.cmf: ac916d48f03c5c02db91be028377765e9e6672c0c89c627f88465076053e8d0b
+      tools/export_sl4_levels.py: d3fe47958ee23e21c778b467a650007edcfe0b08390fec1af0a5ce97f3ea1c45
+      tools/gemsim_job.py: 5feb9074e7e0fda993dbe0b9ac6a3553be42e9301dc959b10889a0467bee65c5
+      tools/levels_job.py: aa4073da35de5ab1504cb3bc3e555b2f0c05bf9f80eed1f88d6be3f77d733d5d
+      tools/make_levels_tab.py: 52e58f847f0033b2dcc3c223cbdf99993638633d4a524057adf71d1c583bb80a
+      tools/regenerate_gempack.py: ecb1099c39fb686315c0b5a2e7935d6a7481578475688980aa84f6345d5b94a6
+      tools/regenerate_paper.py: 80f057d8c274ee06d1d34a09b369eedc2e54b05f341a8bd1e9b23f53553222b6
+      tools/release_check.py: 7ef240328c439d32ff203b6a30d4a84f39266c6a4b082d314977c34866241b5e
+      tools/run_gempack_matrix.py: dad828823ecafc5b55022454e35d83e0a0d5e200ee6e5e5d4ca1acc16af0ff6d
+      tools/swap_job.py: 850f58385cceba171d9451ac5d89b75f6d1d2e32c455e93a423a990357a33902
+      tools/target_shocks.py: 983253cd6adac881107450837959cde36a371a1d2e2ec819f967c61fa015f4cc
+  data:
+    path: horridge_simple
+    sha256:
+      dogams.bat: 7f5c2a3fa16b8f25caf7092e001dd2f3b03315a4ac4b2b0e53d5c6052dfa66f7
+      fixcap.cmf: 955c425dc18b8fa0155fa28e56c7b8fc948465575dea84ebf8885a1a2637ad01
+      gempack.bat: 1daaa73abfeb4666bf5b4f33a7f2ee2a29b5f81b81dbc6252cbfd37e984e1a9e
+      input.gdx: 334ed0acfe459b19117707601ad52d0adeeef989ec1e4f71a09671e0e6de2a55
+      mobcap.cmf: 38a981e073cb1ab4f2d7e66ff840bbf179c9763bc4abb5a6e4b8f80b658ce546
+      mpsgevh.gms: e80f19820637c50248bc75d8a67a539111db2f9a82ddf82465f5ed73446d692f
+      readme.txt: ffde046c57fd2f8ccf6b31636dea71166ce8507f3280fa16083dc198bf7a06ff
+      simdata.har: 26bc9e0e7b42ae7b994ee709121c056f3eaa68f6e2e30a102f4c97fa9eea07dd
+      simple.tab: cab28224a9f5710fd8ed2a3143a47df04d60f421d9e81a7ad0e33919c9110b70
+      simpleMCP.gms: f3ebc09deee16c792a8cbb2cd83ffbee89edb553d615e8cdbc057ee4fead5068
+      simpleMCP_tariff.gms: f1062088ddd589d19a49e812a36812ec2806ec583f7f2721902dcafb22d2fd26
+      simpleNLP.gms: 2f350ba3503043bf70dcce777a9f3b5b237efc0ee77abf87f71a8367e08d9cc5
+      simpleNLP_tariff.gms: 9bf1a82ea785824d81cada9c22664885fb11c65ce6c77f0112b8f92b5027e7a7
+      tariff10.cmf: 2812572a281fa6bb3223676c6f4bcbe9f947ae691e3b498830f6eb1ec1aafd61
+external:
+  tablo.exe:
+    path: C:\GP\tablo.exe
+    sha256: 68d033bdc7d2aeeec18fc4a4321c6d8cf4d94a0b4e5dc2609716c2c81ea7b94e
+    release: 11.3.004
+  gemsim.exe:
+    path: C:\GP\gemsim.exe
+    sha256: 15efc8a74164317e6c8139623fabdb3d45ef105b0bac536649f2bdcd1a821851
+    release: 11.3.004
+  sltoht.exe:
+    path: C:\GP\sltoht.exe
+    sha256: 8f9b37c53d42cae5272fc70576abb0f5bd4c62ea0fa97896c25e8d6f02a91d20
+    release: 11.3.004
+solver:
+  name: gemsim
+command: '''C:\Documentos\proyectos\equilibria\.venv\Scripts\python.exe'' ''C:\Documentos\proyectos\equilibria\data\gtap7\gempack\tools\gemsim_job.py''
+  horridge --experiment tariff10 --model-dir ''C:\Documentos\proyectos\equilibria\data\horridge_simple''
+  --tablo ''C:\GP\tablo.exe'' --gemsim ''C:\GP\gemsim.exe'' --sltoht ''C:\GP\sltoht.exe''
+  --out ''C:\Documentos\proyectos\equilibria\data\horridge_simple\gemsim_tariff10''
+  --expect-release 11.3.004 --work ''C:\Documentos\proyectos\equilibria\runs\gempack_work''
+  --release tablo.exe=11.3.004 --release gemsim.exe=11.3.004 --release sltoht.exe=11.3.004'
+equilibria_commit: fd9d7696
+exit:
+  code: 0
+outputs:
+  gemsim_console.txt: aa48179c51714cb667b231db6744f0f6d385bf1d4dcb61e0512519e7bbcc13d1
+  run.cmf: 2812572a281fa6bb3223676c6f4bcbe9f947ae691e3b498830f6eb1ec1aafd61
+  sl4dump.har: 42b22225f16aaf3118120eb337ad4b9e2c6a83edeb3224976e48e2266492b24e
+  sltoht_console.txt: 0e6d3b33d1f543ddbad107f793f9ffd22e5baa1a5bdcf0ae477a7deeab813b18
+  solution.sl4: dd0baaa9e84551c7e41c17bf4804828a7fdca1c700bd777a18c74b2140fb1e96
+  tablo_console.txt: ac660bb60d11020356cc79f946d8aade0a07dee9db617672f7e733c038cbef2c
+  updated.har: 94186628538f212720a9ba3a115c66deaecd2fa4e2a08a3f17faedc8cb270325
+run:
+  date: '2026-11-04T15:44:01-06:00'
+  duration_s: 5.471
+  machine:
+    os: Windows 11 (10.0.26200)
+    cpu: 13th Gen Intel(R) Core(TM) i7-1365U
+    cores: 10
+    ram_gb: 31.4
+status: verified
+notes: ''
