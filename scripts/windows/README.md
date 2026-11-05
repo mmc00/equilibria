@@ -66,7 +66,8 @@ From the repo root, in PowerShell:
 
 ```powershell
 git fetch origin
-git switch data/phase-3-gempack
+git switch main
+git pull
 uv sync --frozen
 
 # 1. the GEMPACK version gtapv7.exe prints in its banner ("GEMPACK Release 12.1.003 ...");
@@ -115,7 +116,7 @@ this disk, and committing them would break their records everywhere else.
 
 ```powershell
 cd C:\Documentos\proyectos\equilibria
-git switch data/phase-3-gempack
+git switch main
 git pull                      # brings data/.gitattributes; do not run GEMPACK again
 
 # re-add the GEMPACK results and tools as they are on disk, CRLF included
