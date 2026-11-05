@@ -65,6 +65,7 @@ class Photo:
     incidence: list[list[str]] = field(default_factory=list)
     n_deact: int = 0
     n_fixed: int = 0
+    forced: list[tuple[str, str, bool]] = field(default_factory=list)
 
 
 def _key(idx: Any) -> tuple:
@@ -130,9 +131,16 @@ def capture_state(m: Any, period: str, tag: str = "A") -> None:
 
 
 def capture_squared(
-    model: Any, constraints: list, free_variables: list, n_deact: int, n_fixed: int
+    model: Any,
+    constraints: list,
+    free_variables: list,
+    n_deact: int,
+    n_fixed: int,
+    forced: Any = (),
 ) -> None:
-    """Photo B: the squared system PyomoNLP is about to receive."""
+    """Photo B: the squared system PyomoNLP is about to receive. ``forced`` are the
+    GAMS pairs handed to the matching as ``(eq, var, hard)``: hard ones are locked
+    (and may lie outside the row's incidence), soft ones are only a starting point."""
     if _dir() is None:
         return
     from pyomo.core.expr.visitor import identify_variables
@@ -154,6 +162,9 @@ def capture_squared(
             ],
             n_deact=int(n_deact),
             n_fixed=int(n_fixed),
+            forced=[
+                (str(fp[0]), str(fp[1]), len(fp) > 2 and bool(fp[2])) for fp in forced
+            ],
         )
     )
 

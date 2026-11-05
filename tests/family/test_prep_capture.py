@@ -54,6 +54,10 @@ def test_capture_pairs_3x3(monkeypatch, tmp_path):
         assert a.period == b.period
         assert len(b.con_names) == len(b.var_names) == len(b.incidence) > 0
         assert b.n_deact == 0 and b.n_fixed == 0
+        # The GAMS pairs handed to the matching: the hard ones are always kept.
+        assert b.forced and all(len(fp) == 3 for fp in b.forced)
+        pairs_b = set(zip(b.con_names, b.var_names, strict=True))
+        assert {(e, v) for e, v, hard in b.forced if hard} <= pairs_b
         free = {
             f"{v}[{','.join(k)}]" if k else v
             for v, cells in b.vars.items()
