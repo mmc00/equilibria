@@ -168,7 +168,7 @@ Before running:
 From the repo root:
 
 ```powershell
-git switch data/phase-3a2-gempack
+git switch main
 git pull
 uv sync --frozen
 $r = @("--gempack-release", "12.1.003", "--gp-release", "11.3.004")
