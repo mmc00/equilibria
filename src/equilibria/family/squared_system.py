@@ -13,6 +13,30 @@ import numpy as np
 
 from equilibria.family.layout import VarLayout
 
+# Cross-period rows (the Fisher/Tornqvist block of ``build_equations_fisher``): the
+# backend records them in their single-period form, which is not the multiperiod row,
+# so they are left out and the caller supplies them. Component names as defined in
+# gtap_model_multiperiod.py (``eq_*_base`` are the base-period twins; ``eq_mq_*`` are
+# matched by prefix, no such component exists today).
+CROSS_PERIOD_FAMILIES = frozenset(
+    {
+        "eq_rgdpmp",
+        "eq_pgdpmp",
+        "eq_pabs",
+        "eq_pabs_base",
+        "eq_pfact",
+        "eq_pfact_base",
+        "eq_pwfact",
+        "eq_pwfact_base",
+        "eq_chisave",
+    }
+)
+_CROSS_PERIOD_PREFIX = "eq_mq_"
+
+
+def is_cross_period(family: str) -> bool:
+    return family in CROSS_PERIOD_FAMILIES or family.startswith(_CROSS_PERIOD_PREFIX)
+
 
 def _all_free_layout(backend: Any, state: Any) -> VarLayout:
     """Every variable cell a column, Parameters fixed slots (the pattern is the same
@@ -50,6 +74,8 @@ def period_incidence(backend: Any, state: Any, period: str) -> dict[str, list[st
     rows = [_with_period(n, period) for n in system.row_names]
     out: dict[str, list[str]] = {}
     for i, name in enumerate(rows):
+        if is_cross_period(name.partition("[")[0]):
+            continue
         lo, hi = J.indptr[i], J.indptr[i + 1]
         out[name] = [cols[j] for j in sorted(J.indices[lo:hi])]
     return out

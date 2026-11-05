@@ -18,11 +18,10 @@ DATASET = "gtap7_3x3"
 # family J pattern lacks. The backend records the single-period form of the equation;
 # the multiperiod model's row differs (eq_nd/eq_va/eq_xi/eq_xfteq/eq_paa/... carry more
 # variables) and the cross-period Fisher rows (eq_chisave, eq_pabs, eq_pfact,
-# eq_pwfact, eq_rgdpmp) are recorded in their single-period form.
+# eq_pwfact, eq_rgdpmp) are left out of period_incidence (CROSS_PERIOD_FAMILIES).
 KNOWN_GAPS = {
-    "eq_chisave", "eq_gdpmp", "eq_nd", "eq_paa", "eq_pabs", "eq_pfact", "eq_pmteq",
-    "eq_pwfact", "eq_rgdpmp", "eq_va", "eq_xfteq", "eq_xi", "eq_xtmg", "eq_xweq",
-    "eq_ytax",
+    "eq_gdpmp", "eq_nd", "eq_paa", "eq_pmteq", "eq_va", "eq_xfteq", "eq_xi",
+    "eq_xtmg", "eq_xweq", "eq_ytax",
 }  # fmt: skip
 GAP = pytest.mark.xfail(
     strict=True, reason="J pattern lacks columns of B in KNOWN_GAPS (task-1 finding)"
@@ -63,6 +62,8 @@ def _free(b):
 
 
 def test_incidence_gaps_are_the_known_ones(inc):
+    from equilibria.family.squared_system import is_cross_period
+
     out, _, _ = inc
     gaps, seen = set(), set()
     for _, b in _calls():
@@ -74,14 +75,15 @@ def test_incidence_gaps_are_the_known_ones(inc):
                     gaps.add(r.split("[")[0])
     assert len(seen) > 60
     assert gaps == KNOWN_GAPS
-    # Everything else is exact: no extra column either (pabs aside, see KNOWN_GAPS).
+    assert not any(is_cross_period(f) for f in seen)
+    # Everything else is exact: no extra column either.
     extra = {
         r.split("[")[0]
         for _, b in _calls()
         for r, cols in zip(b.con_names, b.incidence, strict=True)
         if r in out and (set(out[r]) & _free(b)) - set(cols)
     }
-    assert extra <= {"eq_pabs"}
+    assert extra == set()
 
 
 @GAP
