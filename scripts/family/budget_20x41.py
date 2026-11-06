@@ -52,10 +52,13 @@ MEASURED_REST_S = {
     # call 1.59 + family call outside its phases 2.12
     "outside_phases": 7.88,
 }
-# What the whole route takes in practice (same file): wall of the child process and
-# wall from the start of _solve_shock to its return.
-E2E_PROCESS_WALL_S = 117.2
-E2E_SOLVE_SHOCK_S = 113.0
+# What the whole route takes in practice: wall of the child process and wall from the
+# start of _solve_shock to its return. Median of 3 after a warm-up, GC as the route sets
+# it (gen-0 threshold 50000), e9f90f10, load average 3.6-5.6 (the 117.2 / 113.0 of the
+# earlier file were GC off, on a quieter machine):
+# plans/research/mediciones/family_e2e_timing_20x41_e9f90f10_gc_route.json
+E2E_PROCESS_WALL_S = 140.5
+E2E_SOLVE_SHOCK_S = 137.3
 NOT_MEASURED: dict[str, str] = {}
 
 
