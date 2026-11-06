@@ -444,11 +444,7 @@ def endow(request, tmp_path_factory):
     closure = _route_closure()
     rr = list(p.sets.r)[-1]
     m, _ = build_block_model(p, p.sets, closure, rr, base_calibrated=False)
-    root = (
-        tmp_path_factory.mktemp("records_e")
-        if ds == "gtap7_3x3"
-        else Path.home() / ".cache" / "equilibria" / "family"
-    )
+    root = tmp_path_factory.mktemp("records_e")
     backend, state = load_or_build(p, closure, rr, root)
     cross = cross_period.load_or_record(
         p, closure, rr, root, sets=backend.sets, var_domains=backend.var_domains

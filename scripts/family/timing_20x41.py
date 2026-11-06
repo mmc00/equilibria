@@ -3,7 +3,7 @@
 usage: <python with pymumps> scripts/family/timing_20x41.py [DATASET] [--runs 3]
            [--cache-root DIR] [--out FILE] [--max-load 4.0]
 
-Protocol: one child process per run (GC off unless ``--gc``), one warm-up run (fills the record and
+Protocol: one child process per run (GC as the route sets it unless ``--gc off``), one warm-up run (fills the record and
 JAX caches, not reported), then ``--runs`` measured ones; the report gives the median
 and the spread (min, max) of the process wall, of the wall from the start of
 ``_solve_shock`` to its return, and of every phase. The machine load average and free
@@ -141,7 +141,7 @@ def machine() -> dict:
     return {"load_1m": load[0], "load_5m": load[1], "reclaimable_gb": free_gb}
 
 
-def run_child(dataset: str, cache_root: Path, gc_off: bool = True) -> dict:
+def run_child(dataset: str, cache_root: Path, gc_off: bool = False) -> dict:
     code = _CHILD.format(
         src=str(ROOT / "src"),
         root=str(ROOT),
@@ -267,7 +267,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path)
     ap.add_argument("--max-load", type=float, default=4.0)
     ap.add_argument("--max-wait", type=float, default=600.0)
-    ap.add_argument("--gc", action="store_true", help="leave the garbage collector on")
+    ap.add_argument(
+        "--gc",
+        choices=("route", "off"),
+        default="route",
+        help="route: the garbage collector as solve_gtap_family sets it (default); "
+        "off: gc.disable() in the child, for comparison",
+    )
     ap.add_argument("--force", action="store_true")
     a = ap.parse_args(argv)
 
@@ -285,7 +291,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"load {before['load_1m']:.2f} > {a.max_load}: stop", file=sys.stderr)
             return 2
         before["waited_s"] = waited
-        r = run_child(a.dataset, a.cache_root, gc_off=not a.gc)
+        r = run_child(a.dataset, a.cache_root, gc_off=a.gc == "off")
         after = machine()
         loads.append({"run": i, "warm_up": i == 0, "before": before, "after": after})
         print(
@@ -300,7 +306,7 @@ def main(argv: list[str] | None = None) -> int:
     out = {
         "dataset": a.dataset,
         "sha": _sha(),
-        "gc": "enabled in the child" if a.gc else "disabled in the child",
+        "gc": "disabled in the child" if a.gc == "off" else "as the route sets it",
         "runs_measured": len(runs),
         "machine": loads,
         "import_time": import_time(a.dataset),

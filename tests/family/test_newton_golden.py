@@ -1,12 +1,16 @@
 """The Pyomo Newton-TR path on 3x3 is bitwise what it was before the extraction."""
 
 import json
+import sys
 
 import pytest
 
 pytest.importorskip("pyomo")
 
 from tests.family._newton_golden import golden_path, run_in_child  # noqa: E402
+
+# The interpreters we run: a missing golden there is a failure, not a skip.
+SUPPORTED = {("mumps", (3, 12)), ("direct", (3, 13))}
 
 
 @pytest.mark.slow
@@ -16,6 +20,8 @@ def test_pyomo_newton_matches_golden(linsolve):
         pytest.importorskip("mumps")
     path = golden_path(linsolve)
     if not path.exists():
+        if (linsolve, sys.version_info[:2]) in SUPPORTED:
+            pytest.fail(f"missing golden for a supported interpreter: {path.name}")
         pytest.skip(f"no golden for this interpreter: {path.name}")
     want = json.loads(path.read_text())
     got = run_in_child(linsolve)

@@ -22,6 +22,7 @@ import numpy as np
 
 from equilibria.family.mp_arrays import MPArrays, Squared
 from equilibria.family.phases import PhaseTimer, activate, phase, scope
+from equilibria.solver.gc_tuning import _gc_relaxed_threshold, _gc_threshold_from_env
 
 # Settings that change the Newton-TR system or add debug side effects the family route
 # does not reproduce. Any of them set (non-empty) is refused.
@@ -31,6 +32,15 @@ _UNSUPPORTED_ENV: tuple[str, ...] = (
     "EQUILIBRIA_GTAP_WARM_START",
     "EQUILIBRIA_GTAP_DIRECT_DEGEN_FIX",
     "EQUILIBRIA_GTAP_BTF_PROBE",
+    # Pyomo turns it into ``shock_steps`` (``_solve_shock_in_steps``)
+    "EQUILIBRIA_GTAP_SHOCK_CONTINUATION",
+    # NEOS takes precedence over the scipy solver in ``path_capi``
+    "EQUILIBRIA_GTAP_SOLVE_NEOS",
+    # rescale the equations the Pyomo route hands to Newton (the family rows are raw)
+    "EQUILIBRIA_GTAP_BENCH_SCALE",
+    "EQUILIBRIA_GTAP_ROW_EQUIL",
+    # seeds the exported .nl from a GDX
+    "EQUILIBRIA_SEED_FROM_GDX",
 )
 
 
@@ -81,6 +91,11 @@ def check_supported(
         refuse(f"EQUILIBRIA_GTAP_TR_LINSOLVE={linsolve!r} (only 'mumps' or 'direct')")
     if not env.get("EQUILIBRIA_GTAP_SOLVE_NLP"):
         refuse("EQUILIBRIA_GTAP_SOLVE_NLP unset (the NLP-square route is required)")
+    if env.get("EQUILIBRIA_GTAP_MUMPS_ICNTL6"):
+        refuse(
+            "EQUILIBRIA_GTAP_MUMPS_ICNTL6 (the family route fixes MUMPS "
+            f"ICNTL(6)={ICNTL6_FAMILY} by design)"
+        )
     for name in _UNSUPPORTED_ENV:
         if env.get(name):
             refuse(f"{name}")
@@ -218,7 +233,7 @@ def _newton(ss: Any, sq: Squared) -> tuple[Any, float, int]:
     The settings are read from the environment as the Pyomo path reads them (the
     ``NEWTON_MUMPS`` set); the family pairing is the system's own column order, and
     MUMPS runs with ICNTL(6)=7. ``code`` is 1 iff Newton succeeded and the residual of
-    the squared system is below ``CODE_RESIDUAL`` (``_ok_sr``)."""
+    the squared system is below ``CODE_RESIDUAL`` (``_ok_sr``), else 2 as the Pyomo path."""
     from equilibria.solver.newton_tr import newton_tr
 
     linsolve = os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE", "direct").lower()
@@ -263,7 +278,7 @@ def _newton(ss: Any, sq: Squared) -> tuple[Any, float, int]:
         )
     with phase("residual_check"):
         resid = float(np.linalg.norm(ss.F(np.clip(res.x, lb, ub)), np.inf))
-    return res, resid, int(bool(res.success) and resid < CODE_RESIDUAL)
+    return res, resid, 1 if (bool(res.success) and resid < CODE_RESIDUAL) else 2
 
 
 def _solve_period(
@@ -448,17 +463,20 @@ def solve_gtap_family(
     timer = PhaseTimer()
     prev = activate(timer)
     try:
-        return _solve_family(
-            params,
-            closure,
-            residual_region,
-            shock,
-            shock_levels,
-            cache_root,
-            jax_cache,
-            timing,
-            timer,
-        )
+        # as ``solve_multiperiod``: raise the gen-0 threshold for the solve
+        # (EQUILIBRIA_GTAP_GC_THRESHOLD: unset -> 50000, 0 -> off)
+        with _gc_relaxed_threshold(_gc_threshold_from_env()):
+            return _solve_family(
+                params,
+                closure,
+                residual_region,
+                shock,
+                shock_levels,
+                cache_root,
+                jax_cache,
+                timing,
+                timer,
+            )
     finally:
         activate(prev)
 

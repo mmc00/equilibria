@@ -152,7 +152,8 @@ def _flat_index(var: Any, doms: tuple[str, ...], sets: dict[str, list[str]]):
     (cached on the arrays: keys never change). ``KeyError`` for a key element outside
     the sets."""
     cache = var.__dict__.setdefault("_dense_flat", {})
-    key = (doms, id(sets))
+    # the labels themselves, not id(sets): a freed dict's id can be reused
+    key = (doms, tuple(tuple(sets[d]) for d in doms))
     if key not in cache:
         pos = [{e: i for i, e in enumerate(sets[d])} for d in doms]
         shape = [len(sets[d]) for d in doms]

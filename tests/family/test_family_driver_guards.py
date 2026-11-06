@@ -65,11 +65,62 @@ def test_argument_refusals_name_the_setting(kw, needle):
         ({"EQUILIBRIA_GTAP_DIRECT_DEGEN_FIX": "1"}, "DIRECT_DEGEN_FIX"),
         ({"EQUILIBRIA_GTAP_BTF_PROBE": "1"}, "BTF_PROBE"),
         ({"EQUILIBRIA_DEBUG_EXPORT_NL_CHECK": "1"}, "EQUILIBRIA_DEBUG_EXPORT_NL_CHECK"),
+        # Pyomo turns it into shock_steps / takes NEOS over scipy
+        ({"EQUILIBRIA_GTAP_SHOCK_CONTINUATION": "0.5,1.0"}, "SHOCK_CONTINUATION"),
+        ({"EQUILIBRIA_GTAP_SOLVE_NEOS": "conopt"}, "SOLVE_NEOS"),
+        # rescale the equations the Pyomo route hands to Newton
+        ({"EQUILIBRIA_GTAP_BENCH_SCALE": "1"}, "BENCH_SCALE"),
+        ({"EQUILIBRIA_GTAP_ROW_EQUIL": "1"}, "ROW_EQUIL"),
+        ({"EQUILIBRIA_SEED_FROM_GDX": "x.gdx"}, "SEED_FROM_GDX"),
+        # the family route fixes ICNTL(6)=7 by design
+        ({"EQUILIBRIA_GTAP_MUMPS_ICNTL6": "0"}, "ICNTL6"),
     ],
 )
 def test_env_refusals_name_the_setting(env, needle):
     with pytest.raises(NotImplementedError, match=needle):
         run(env=env)
+
+
+def test_icntl6_refusal_explains_the_fixed_value():
+    with pytest.raises(NotImplementedError, match=r"ICNTL\(6\)=7"):
+        run(env={"EQUILIBRIA_GTAP_MUMPS_ICNTL6": "0"})
+
+
+def _any(x: Any) -> Any:
+    return x
+
+
+def test_failed_newton_has_code_2_like_pyomo(monkeypatch):
+    import types
+
+    import numpy as np
+
+    import equilibria.solver.newton_tr as ntr
+
+    class SS:
+        x0 = np.zeros(2)
+
+        def fscale(self):
+            return np.ones(2)
+
+        def F(self, z):
+            return np.ones(2)
+
+        def J(self, z):
+            return None
+
+    sq = _any(
+        types.SimpleNamespace(
+            cells={"a": (0, 0, -np.inf, np.inf), "b": (0, 0, -np.inf, np.inf)},
+            col_names=["a", "b"],
+            row_names=["r0", "r1"],
+        )
+    )
+    res = types.SimpleNamespace(success=False, x=np.zeros(2), nit=3)
+    monkeypatch.setattr(ntr, "newton_tr", lambda *a, **k: res)
+    assert driver._newton(SS(), sq)[2] == 2
+    res.success = True
+    assert driver._newton(SS(), sq)[2] == 2  # residual 1.0 above the tolerance
 
 
 def test_missing_solve_nlp_key_is_refused():
@@ -167,3 +218,46 @@ def test_pyomo_route_runs_no_family_driver_code(monkeypatch):
     with pytest.raises(Stop):
         mod._solve_shock("gtap7_3x3", 1, "capFix", solve_nlp=True)
     assert calls == []
+
+
+def test_family_solve_runs_under_the_gc_threshold_of_the_pyomo_route(monkeypatch):
+    """``solve_gtap_family`` wraps its work in ``_gc_relaxed_threshold`` with the same
+    env control (``EQUILIBRIA_GTAP_GC_THRESHOLD``) as ``solve_multiperiod``."""
+    import contextlib
+    import gc
+
+    from equilibria.family import driver as drv
+    from equilibria.solver import gc_tuning
+
+    seen = []
+
+    @contextlib.contextmanager
+    def spy(threshold0):
+        seen.append(("enter", threshold0, gc.get_threshold()[0]))
+        yield
+        seen.append(("exit",))
+
+    monkeypatch.setattr(drv, "_gc_relaxed_threshold", spy, raising=False)
+    monkeypatch.setattr(drv, "check_supported", lambda **k: None)
+
+    def inner(*a, **k):
+        seen.append(("inner",))
+        return "result"
+
+    monkeypatch.setattr(drv, "_solve_family", inner)
+    monkeypatch.setenv("EQUILIBRIA_GTAP_GC_THRESHOLD", "1234")
+    assert drv.solve_gtap_family(None, None, "R") == "result"
+    assert seen == [("enter", 1234, gc.get_threshold()[0]), ("inner",), ("exit",)]
+    # the Pyomo route's helpers are the very same objects
+    from equilibria.templates.gtap import gtap_multiperiod_driver as pyomo_drv
+
+    assert pyomo_drv._gc_relaxed_threshold is gc_tuning._gc_relaxed_threshold
+    assert pyomo_drv._gc_threshold_from_env is gc_tuning._gc_threshold_from_env
+
+
+def test_family_driver_import_does_not_load_pyomo():
+    import subprocess
+    import sys
+
+    code = "import sys, equilibria.family.driver; sys.exit('pyomo' in sys.modules)"
+    assert subprocess.run([sys.executable, "-c", code], check=False).returncode == 0

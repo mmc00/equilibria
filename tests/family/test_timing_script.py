@@ -49,3 +49,10 @@ def test_timing_runs_on_3x3(tmp_path):
     # the additive phases explain the family call
     got = sum(v["median"] for v in d["phases"].values())
     assert got <= d["marks"]["family_call_s"]["median"] * 1.001
+
+
+def test_gc_option_defaults_to_the_route_mode():
+    s = _script()
+    assert s.run_child.__defaults__[-1] is False  # gc_off: the route's own GC
+    src = (ROOT / "scripts" / "family" / "timing_20x41.py").read_text()
+    assert 'choices=("route", "off")' in src and 'default="route"' in src

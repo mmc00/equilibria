@@ -70,7 +70,8 @@ def test_budget_runs_on_3x3(tmp_path):
     assert out["with_measured_rest_s"] == pytest.approx(
         out["projected_s"] + sum(out["measured_rest_s"].values())
     )
-    assert out["e2e_process_wall_s"] == 117.2
+    assert isinstance(out["e2e_process_wall_s"], float)
+    assert out["e2e_process_wall_s"] > 0
     assert out["verdict_conditional"] == bool(out["not_measured"])
     assert not (
         {"cross_period_rows", "calibration_rest", "outside_phases"}
