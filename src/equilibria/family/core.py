@@ -33,6 +33,8 @@ import jax.numpy as jnp  # noqa: E402
 import numpy as np  # noqa: E402
 import scipy.sparse as sp  # noqa: E402
 
+from equilibria.family import aot_cache  # noqa: E402
+
 
 def _eval_part_impl(fn, x_all, cols, args):
     return jax.vmap(lambda c, a: fn(x_all[c], **a))(cols, args)
@@ -51,6 +53,20 @@ def _scatter_impl(values, rows, num_rows):
 _eval_part: Any = jax.jit(_eval_part_impl, static_argnames=("fn",))
 _jac_part: Any = jax.jit(_jac_part_impl, static_argnames=("fn",))
 _scatter: Any = jax.jit(_scatter_impl, static_argnames=("num_rows",))
+
+
+# The kernels go through stored executables when ``aot_cache.set_dir`` enabled them
+# (a hit needs no trace); otherwise they are the plain jit calls above.
+def _eval(fn, x_all, cols, args):
+    return aot_cache.run_part("eval", _eval_part, fn, x_all, cols, args)
+
+
+def _jac(fn, x_all, cols, args):
+    return aot_cache.run_part("jac", _jac_part, fn, x_all, cols, args)
+
+
+def _segment_sum(values, rows, num_rows):
+    return aot_cache.run_scatter(_scatter, values, rows, num_rows)
 
 
 @dataclass
@@ -198,8 +214,8 @@ class FamilySystem:
         for f, dev in zip(self._compiled, self._dev, strict=True):
             res = jnp.zeros(f.n_rows)
             for g, d in zip(f.groups, dev, strict=True):
-                t = _eval_part(g.fn, x, d["cols"], d["args"])
-                res = res + g.sign * _scatter(t, d["rows"], f.n_rows)
+                t = _eval(g.fn, x, d["cols"], d["args"])
+                res = res + g.sign * _segment_sum(t, d["rows"], f.n_rows)
             out.append(res)
         return np.asarray(jnp.concatenate(out)) if out else np.zeros(0)
 
@@ -208,7 +224,7 @@ class FamilySystem:
         vals = []
         for f, dev in zip(self._compiled, self._dev, strict=True):
             for g, d in zip(f.groups, dev, strict=True):
-                vals.append(g.sign * _jac_part(g.fn, x, d["cols"], d["args"]).ravel())
+                vals.append(g.sign * _jac(g.fn, x, d["cols"], d["args"]).ravel())
         v = np.asarray(jnp.concatenate(vals)) if vals else np.zeros(0)
         data = np.bincount(self._inverse, weights=v[self._keep], minlength=self.nnz)
         return sp.coo_matrix(

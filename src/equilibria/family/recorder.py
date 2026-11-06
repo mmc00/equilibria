@@ -508,6 +508,8 @@ def template(key) -> Any:
             return s * body(xs, c)
 
         fn.__name__ = f"term_{len(_TEMPLATES)}"
+        # stable across processes: the executable cache key
+        fn.__dict__["_aot_key"] = repr(key)
         _TEMPLATES[key] = fn
     return fn
 

@@ -74,7 +74,8 @@ def load_or_build(
 
 
 def enable_jax_cache(root: Path) -> None:
-    """Persist every compiled family program under ``root/jax``.
+    """Persist every compiled family program under ``root/jax`` and the serialized
+    executables of the F/J kernels under ``root/jax_aot`` (no trace on a warm start).
 
     Process-wide JAX config; call it before the first compile, or programs already
     compiled in this process are not cached."""
@@ -83,3 +84,6 @@ def enable_jax_cache(root: Path) -> None:
     jax.config.update("jax_compilation_cache_dir", str(Path(root) / "jax"))
     jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.0)
     jax.config.update("jax_persistent_cache_min_entry_size_bytes", 0)
+    from equilibria.family import aot_cache
+
+    aot_cache.set_dir(Path(root) / "jax_aot")
