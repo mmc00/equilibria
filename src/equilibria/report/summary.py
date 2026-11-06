@@ -14,6 +14,7 @@ usually a real corner (an absent flow).
 
 from __future__ import annotations
 
+import logging
 import statistics
 from dataclasses import dataclass, field
 from typing import Any
@@ -28,6 +29,8 @@ from equilibria.version import __version__
 
 # Matrix palette of the approved mockup (dev-tools plans/research/report-mockup).
 _G, _G2, _G3, _WARN, _RED = "#00ff41", "#00c832", "#008f11", "#d4ff00", "#ff3b3b"
+
+_log = logging.getLogger(__name__)
 
 #: Relative distance to the lower bound under which a variable is on its floor.
 FLOOR_RTOL = 1e-6
@@ -171,8 +174,42 @@ def summary(
         unevaluated=unevaluated,
         on_floor=_on_floor(m, period),
     )
+    _to_log(s)
     (console or Console()).print(_panel(s))
     return s
+
+
+def _to_log(s: SolveSummary) -> None:
+    """The panel's numbers as plain text, for a log file of an unattended run."""
+    worst = (
+        f", worst {s.worst[0].equation} {_e(s.worst[0].residual)}" if s.worst else ""
+    )
+    _log.info(
+        "%s: code %s, %d equations, max residual %s, mean %s, median %s, walras %s%s",
+        s.period or "model",
+        s.code if s.code is not None else "-",
+        s.n_equations,
+        _e(s.max_residual),
+        _e(s.mean_residual),
+        _e(s.median_residual),
+        _e(s.walras),
+        worst,
+    )
+    if s.code not in (None, 1):
+        _log.warning("%s: solve ended with code %s", s.period or "model", s.code)
+    if s.on_floor:
+        _log.warning(
+            "%s: %d variables on their floor: %s",
+            s.period or "model",
+            len(s.on_floor),
+            ", ".join(s.on_floor),
+        )
+    if s.unevaluated:
+        _log.warning(
+            "%s: %d equations could not be evaluated",
+            s.period or "model",
+            s.unevaluated,
+        )
 
 
 def _e(x: float | None) -> str:

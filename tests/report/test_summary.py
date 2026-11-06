@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import logging
 
 import pytest
 from pyomo.environ import ConcreteModel, Constraint, Var
@@ -116,3 +117,42 @@ def test_no_floor_warning_when_nothing_rests_on_its_floor():
         s.on_floor == []
     )  # q above its floor, x on a zero bound, p[check] another period
     assert "no price on its floor" in console.export_text()
+
+
+def test_summary_line_goes_to_the_log(caplog):
+    with caplog.at_level(logging.INFO, logger="equilibria"):
+        summary(_model(), {"shock": {"code": 1}}, period="shock", console=_quiet())
+
+    info = [r for r in caplog.records if r.levelno == logging.INFO]
+    assert len(info) == 1
+    assert info[0].name == "equilibria.report.summary"
+    msg = info[0].getMessage()
+    assert "shock" in msg and "code 1" in msg and "4 equations" in msg
+    assert "max residual 5e-01" in msg and "walras -2e-09" in msg
+    assert "eq_y[shock]" in msg  # the worst equation
+
+
+def test_a_price_on_its_floor_is_a_log_warning(caplog):
+    with caplog.at_level(logging.WARNING, logger="equilibria"):
+        summary(_floored(), {"shock": {"code": 1}}, period="shock", console=_quiet())
+
+    warns = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("on their floor" in w and "p[shock]" in w for w in warns)
+
+
+def test_a_failed_code_is_a_log_warning(caplog):
+    with caplog.at_level(logging.WARNING, logger="equilibria"):
+        summary(_model(), {"shock": {"code": 2}}, period="shock", console=_quiet())
+
+    warns = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("code 2" in w for w in warns)
+
+
+def test_a_clean_solve_logs_no_warning(caplog):
+    m = ConcreteModel()
+    m.a = Var(initialize=4.0)
+    m.eq = Constraint(expr=m.a == 4.0)
+    with caplog.at_level(logging.WARNING, logger="equilibria"):
+        summary(m, console=_quiet())
+
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
