@@ -3,7 +3,7 @@
 Times every piece of the future path that already exists, adds the measured
 family Newton + prep times and projects the total against the 2-minute goal
 (spec 2026-11-04-family-backend-multiperiod-design.md). Pieces not built yet are
-listed in ``not_measured``.
+listed in ``not_measured`` (none left: see ``scripts/family/timing_20x41.py``).
 
     <python with pymumps> scripts/family/budget_20x41.py [--dataset gtap7_20x41]
         [--cache-root DIR] [--out FILE]
@@ -38,18 +38,25 @@ PERIOD_PREP_ON_ARRAYS_S = 9.3
 # Once per run: the period incidence from the J pattern (8.82) plus the conditional
 # masks (2.43), same file, "incidence_once_s" + "masks_once_s".
 PREP_ONCE_S = 11.3
-# Today's Pyomo cost of each piece not measured yet (fases_20x41_d44692d.json): an
-# upper bound for the arrays version, not a forecast.
-TODAY_COST_OF_NOT_MEASURED = {
-    "cross_period_rows": 0.0,  # inside "reflejar filas" today; recorded with the SP
-    "calibration_rest": 26.5,  # "calibracion (resto)"
-    "outside_phases": 31.3,  # "fuera de las fases": imports, GDX, post-processing
+# The pieces that were "not measured", now measured end to end by
+# scripts/family/timing_20x41.py (median of 3 runs after a warm-up, GC off),
+# plans/research/mediciones/family_e2e_timing_20x41_1c2d00bd.json. They do not overlap
+# with the projected pieces above.
+MEASURED_REST_S = {
+    # cross-period records: cache key (0.81) + load (0.43)
+    "cross_period_rows": 1.24,
+    # the settle's own calls are phases of the same recipe/square/build/Newton code
+    # counted in the per-call pieces; nothing is left outside them
+    "calibration_rest": 0.0,
+    # process start/exit 3.13 + imports 1.04 + _solve_shock before/after the family
+    # call 1.59 + family call outside its phases 2.12
+    "outside_phases": 7.88,
 }
-NOT_MEASURED = {
-    "cross_period_rows": "Fisher/Tornqvist rows are not block equations yet",
-    "calibration_rest": "calibrate_base bookkeeping outside its settle solve",
-    "outside_phases": "imports, reference GDX, post-processing",
-}
+# What the whole route takes in practice (same file): wall of the child process and
+# wall from the start of _solve_shock to its return.
+E2E_PROCESS_WALL_S = 117.2
+E2E_SOLVE_SHOCK_S = 113.0
+NOT_MEASURED: dict[str, str] = {}
 
 
 def _closure():
@@ -192,7 +199,7 @@ def measure(dataset: str, cache_root: Path) -> dict:
         + PREP_ONCE_S
     )
     verdict = "go" if projected <= 100 else "tight" if projected <= 120 else "no"
-    pessimistic = projected + sum(TODAY_COST_OF_NOT_MEASURED.values())
+    with_rest = projected + sum(MEASURED_REST_S.values())
     return {
         "dataset": dataset,
         "if_sub": 1,
@@ -208,10 +215,11 @@ def measure(dataset: str, cache_root: Path) -> dict:
         "prep_once_s": PREP_ONCE_S,
         "projected_s": float(projected),
         "verdict": verdict,
-        # The verdict holds only if the unmeasured pieces fit in the margin.
         "verdict_conditional": bool(not_measured),
-        "pessimistic_s": float(pessimistic),
-        "today_cost_of_not_measured": dict(TODAY_COST_OF_NOT_MEASURED),
+        "with_measured_rest_s": float(with_rest),
+        "e2e_process_wall_s": E2E_PROCESS_WALL_S,
+        "e2e_solve_shock_s": E2E_SOLVE_SHOCK_S,
+        "measured_rest_s": dict(MEASURED_REST_S),
         "not_measured": not_measured,
     }
 

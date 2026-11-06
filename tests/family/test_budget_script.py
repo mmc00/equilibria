@@ -61,20 +61,27 @@ def test_budget_runs_on_3x3(tmp_path):
     assert out["newton_today_s"] == 48.0
     assert out["projected_s"] == pytest.approx(want)
     assert out["verdict"] in {"go", "tight", "no"}
-    # The unmeasured pieces at today's Pyomo cost: an upper bound, not a forecast.
-    assert out["pessimistic_s"] == pytest.approx(
-        out["projected_s"] + sum(out["today_cost_of_not_measured"].values())
+    # The formerly unmeasured pieces are measured end to end (timing_20x41.py).
+    assert set(out["measured_rest_s"]) == {
+        "cross_period_rows",
+        "calibration_rest",
+        "outside_phases",
+    }
+    assert out["with_measured_rest_s"] == pytest.approx(
+        out["projected_s"] + sum(out["measured_rest_s"].values())
     )
-    assert out["verdict_conditional"] is True
+    assert out["e2e_process_wall_s"] == 117.2
+    assert out["verdict_conditional"] == bool(out["not_measured"])
+    assert not (
+        {"cross_period_rows", "calibration_rest", "outside_phases"}
+        & set(out["not_measured"])
+    )
     assert out["if_sub"] == 1
-    assert {"cross_period_rows", "calibration_rest", "outside_phases"} <= set(
-        out["not_measured"]
-    )
     # Measured now (family_prep_20x41_30d400b.json: incidence_once_s + masks_once_s).
     assert "incidence_from_pattern" not in out["not_measured"]
     # Measured now (prep_cost_20x41.py): neither unmeasured nor in the upper bound.
     assert "period_prep_on_arrays" not in out["not_measured"]
-    assert "period_prep_on_arrays" not in out["today_cost_of_not_measured"]
+    assert "period_prep_on_arrays" not in out["measured_rest_s"]
 
 
 def test_a_failing_piece_fails_the_run(tmp_path, monkeypatch):
