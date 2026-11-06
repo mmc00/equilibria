@@ -18,6 +18,7 @@ import scipy.sparse as sp
 
 from equilibria.family.layout import VarLayout
 from equilibria.family.mp_arrays import MPArrays, Squared
+from equilibria.family.recorder import Node
 
 # Cross-period rows (the Fisher/Tornqvist block of ``build_equations_fisher``): the
 # backend records them in their single-period form, which is not the multiperiod row,
@@ -83,17 +84,34 @@ def _pattern(backend: Any, layout: VarLayout, period: str | None) -> dict[str, l
 
 
 def _cross_pattern(cross: Any) -> dict[str, list[str]]:
-    """The J pattern of every cross-period row (all periods, all cells free), once per
-    recording."""
+    """Columns of every cross-period row (all periods, all cells free), once per
+    recording.
+
+    Read off the records: with every cell free nothing is folded, so the J pattern of a
+    row is the set of its variable leaves, in column order. Same rows (family order,
+    then record order) and columns as evaluating J, without compiling or differentiating
+    the rows."""
     cached = getattr(cross, "_pattern_cache", None)
     if cached is None:
-        values = {
-            v: np.ones(tuple(len(cross.sets[d]) for d in doms))
-            for v, doms in cross.var_domains.items()
-        }
-        free = {v: np.ones(a.shape, dtype=bool) for v, a in values.items()}
-        layout = VarLayout.from_state(cross.sets, cross.var_domains, values, free)
-        cached = cross._pattern_cache = _pattern(cross, layout, None)
+        offsets, names = {}, []
+        for v, doms in cross.var_domains.items():
+            offsets[v] = len(names)
+            for idx in itertools.product(*(cross.sets[d] for d in doms)):
+                names.append(f"{v}[{','.join(idx)}]" if idx else v)
+        cached = {}
+        for fam, recs in cross.records.items():
+            for idx, res in recs:
+                lab = ",".join(str(i) for i in idx)
+                cols = {
+                    offsets[v] + flat
+                    for node in (res.lhs, res.rhs)
+                    if isinstance(node, Node)
+                    for v, flat in node.var_leaves()
+                }
+                cached[f"{fam}[{lab}]" if lab != "" else fam] = [
+                    names[c] for c in sorted(cols)
+                ]
+        cross._pattern_cache = cached
     return cached
 
 

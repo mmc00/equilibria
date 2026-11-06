@@ -784,3 +784,36 @@ def test_square_matches_photo_b_with_family_cross_rows(dataset):
         hard = {(e, v) for e, v, h in b.forced if h}
         print(f"{dataset} call {a.n}: pairs not Pyomo's {_pairs_not_b(got, b)}")
         assert compare(got, squared_from_photo(b), inc_sets, hard) == []
+
+
+# ---------------------------------------------------------------------------
+# The cross-period incidence read off the records equals the evaluated J pattern
+# ---------------------------------------------------------------------------
+
+
+def _evaluated_cross_pattern(cross):
+    """The ``0e2d2b60`` way: J of the cross recording, every cell free, every period."""
+    import numpy as np
+
+    from equilibria.family.layout import VarLayout
+    from equilibria.family.squared_system import _pattern
+
+    values = {
+        v: np.ones(tuple(len(cross.sets[d]) for d in doms))
+        for v, doms in cross.var_domains.items()
+    }
+    free = {v: np.ones(a.shape, dtype=bool) for v, a in values.items()}
+    layout = VarLayout.from_state(cross.sets, cross.var_domains, values, free)
+    return _pattern(cross, layout, None)
+
+
+@pytest.mark.parametrize("dataset", ["gtap7_3x3", "gtap7_10x7"], ids=["3x3", "10x7"])
+def test_cross_pattern_from_records_equals_evaluated_j(dataset):
+    from equilibria.family.squared_system import _cross_pattern
+
+    cross = _backends(dataset)[3]
+    want = _evaluated_cross_pattern(cross)
+    got = _cross_pattern(cross)
+    assert list(got) == list(want)
+    assert got == want
+    assert all(got.values())
