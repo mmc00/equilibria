@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.family._prep import capture_dir
+from tests.family._prep import capture_dir, recording
 from tests.family.test_prep_recipe import ROUTE, _closure, _params
 from tests.family.test_prep_square import _recipe
 
@@ -189,7 +189,7 @@ def test_square_with_pattern_incidence(inc):
         merged = {r: list(c) for r, c in zip(b.con_names, b.incidence, strict=True)}
         merged.update(out)
         got = square(
-            _recipe(a, p, ref),
+            _recipe(a, p, ref, DATASET),
             a.period,
             params=p,
             closure=_closure(),
@@ -227,7 +227,7 @@ def systems(inc):
     masks = ConditionalMasks.from_params(p, MPArrays.from_photo(_calls()[0][0]))
     out = []
     for a, b in _calls():
-        mp = _recipe(a, p, ref)
+        mp = _recipe(a, p, ref, DATASET)
         merged = {r: list(c) for r, c in zip(b.con_names, b.incidence, strict=True)}
         merged.update(inc(b.period))
         sq = square(
@@ -550,6 +550,7 @@ def _real_square(a, p, ref, masks, backend, state, cross):
         sp_ref=ref,
         mode="gtap",
         cross=cross,
+        backend=backend,
         **ROUTE,
     )
     sq, mp_sq = square(
@@ -610,7 +611,7 @@ def test_cross_rows_missing_raise_without_proxies(inc):
     p = _params(DATASET)
     ref = sp_reference_arrays(p, _closure(), list(p.sets.r)[-1])
     a, b = _calls()[0]
-    mp = _recipe(a, p, ref)
+    mp = _recipe(a, p, ref, DATASET)
     merged = {r: list(c) for r, c in zip(b.con_names, b.incidence, strict=True)}
     merged.update(inc(a.period))
     sq = square(
@@ -701,6 +702,7 @@ def test_pairs_equal_pyomo_with_period_incidence(inc):
             closure=closure,
             sp_ref=ref,
             mode="gtap",
+            backend=recording(DATASET),
             **ROUTE,
         )
         masks = masks or ConditionalMasks.from_params(p, mp)
@@ -768,6 +770,7 @@ def test_square_matches_photo_b_with_family_cross_rows(dataset):
             sp_ref=ref,
             mode="gtap",
             cross=cross,
+            backend=backend,
             **ROUTE,
         )
         inc = period_incidence(backend, state, a.period, cross)

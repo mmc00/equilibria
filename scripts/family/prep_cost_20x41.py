@@ -190,6 +190,7 @@ def measure(dataset: str, capture: Path, cache_root: Path | None = None) -> dict
             closure=closure,
             sp_ref=ref,
             mode="gtap",
+            backend=backend,
             mute_welfare=True,
             seed_from_prior=False,
             base_calibrated=True,  # the capture route (_solve_shock): F3.5 base,

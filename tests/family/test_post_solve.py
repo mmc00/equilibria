@@ -210,6 +210,7 @@ def test_base_recipe_equals_a2(case, n):
         closure=case["recipe_closure"],
         sp_ref=case["ref"],
         mode="gtap",
+        backend=case["backend"],
         **flags,
         cross=case["cross"],
     )
@@ -230,6 +231,7 @@ def test_base_recipe_without_seed_ignores_settled(case):
         closure=case["recipe_closure"],
         sp_ref=case["ref"],
         mode="gtap",
+        backend=case["backend"],
         **_flags(1),
     )
     a2 = _load(case["dir"], "001_A2_base.pkl")
@@ -304,6 +306,7 @@ def _shock_final(case):
         closure=case["recipe_closure"],
         sp_ref=case["ref"],
         mode="gtap",
+        backend=case["backend"],
         **ROUTE,
         cross=case["cross"],
     )

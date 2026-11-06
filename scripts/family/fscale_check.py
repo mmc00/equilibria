@@ -90,6 +90,7 @@ def measure(dataset: str, reference: Path, cache_root: Path | None = None) -> di
             closure=closure,
             sp_ref=ref,
             mode="gtap",
+            backend=backend,
             mute_welfare=True,
             seed_from_prior=False,
             base_calibrated=True,

@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from tests.family._data import load_params
-from tests.family._prep import capture_dir
+from tests.family._prep import capture_dir, recording
 from tests.family.test_prep_recipe import ROUTE, _closure, _params
 
 DATASETS = (
@@ -40,7 +40,7 @@ def _masks(p, calls):
     return ConditionalMasks.from_params(p, MPArrays.from_photo(calls[0][0]))
 
 
-def _recipe(a, p, ref):
+def _recipe(a, p, ref, ds):
     from equilibria.family.mp_arrays import MPArrays
     from equilibria.family.prep_recipe import run_recipe
 
@@ -51,6 +51,7 @@ def _recipe(a, p, ref):
         closure=_closure(),
         sp_ref=ref,
         mode="gtap",
+        backend=recording(ds),
         **ROUTE,
     )
 
@@ -78,19 +79,19 @@ def _hard(b):
 def test_square_matches_pyomo(case, k):
     from equilibria.family.mp_arrays import compare, squared_from_photo
 
-    _, p, ref, calls, masks = case
+    ds, p, ref, calls, masks = case
     if k >= len(calls):
         pytest.skip("fewer solve calls")
     a, b = calls[k]
-    got = _square(_recipe(a, p, ref), a, p, b, ref, masks)
+    got = _square(_recipe(a, p, ref, ds), a, p, b, ref, masks)
     inc = {r: set(c) for r, c in zip(b.con_names, b.incidence, strict=True)}
     assert compare(got, squared_from_photo(b), inc, _hard(b)) == []
 
 
 def test_hard_pairs_kept(case):
-    _, p, ref, calls, masks = case
+    ds, p, ref, calls, masks = case
     for a, b in calls:
-        got = _square(_recipe(a, p, ref), a, p, b, ref, masks)
+        got = _square(_recipe(a, p, ref, ds), a, p, b, ref, masks)
         pairs = set(zip(got.row_names, got.col_names, strict=True))
         assert _hard(b)
         assert _hard(b) <= pairs
@@ -100,17 +101,17 @@ def test_gams_pairs_equal_pyomo(case):
     """The (eq, var, hard) pairs handed to the matching are the ones Pyomo built."""
     from equilibria.family.prep_square import gams_pairs
 
-    _, p, ref, calls, masks = case
+    ds, p, ref, calls, masks = case
     for a, b in calls:
-        got = gams_pairs(_recipe(a, p, ref), params=p, mode="gtap")
+        got = gams_pairs(_recipe(a, p, ref, ds), params=p, mode="gtap")
         assert set(got) == set(b.forced)
 
 
 def test_overdetermined_raises(case):
     """One free column fewer than rows: Pyomo would drop an equation by matching."""
-    _, p, ref, calls, masks = case
+    ds, p, ref, calls, masks = case
     a, b = calls[-1]
-    mp = _recipe(a, p, ref)
+    mp = _recipe(a, p, ref, ds)
     sq = _square(mp, a, p, b, ref, masks)
     name = next(c for c in sq.col_names if c.startswith("xp["))
     comp, key = name[:-1].split("[")
@@ -122,9 +123,9 @@ def test_overdetermined_raises(case):
 
 def test_gap_raises(case):
     """More free columns than rows: Pyomo would fix variables by matching."""
-    _, p, ref, calls, masks = case
+    ds, p, ref, calls, masks = case
     a, b = calls[-1]
-    mp = _recipe(a, p, ref)
+    mp = _recipe(a, p, ref, ds)
     r = (
         mp.rows["eq_xp"]
         if "eq_xp" in mp.rows
@@ -136,9 +137,9 @@ def test_gap_raises(case):
 
 
 def test_missing_component_raises(case):
-    _, p, ref, calls, masks = case
+    ds, p, ref, calls, masks = case
     a, b = calls[-1]
-    mp = _recipe(a, p, ref)
+    mp = _recipe(a, p, ref, ds)
     del mp.vars["pmt"]
     with pytest.raises(KeyError, match="pmt"):
         _square(mp, a, p, b, ref, masks)
@@ -147,9 +148,9 @@ def test_missing_component_raises(case):
 def test_input_not_mutated(case):
     import numpy as np
 
-    _, p, ref, calls, masks = case
+    ds, p, ref, calls, masks = case
     a, b = calls[-1]
-    mp = _recipe(a, p, ref)
+    mp = _recipe(a, p, ref, ds)
     before = {n: (v.fixed.copy(), v.lb.copy()) for n, v in mp.vars.items()}
     _square(mp, a, p, b, ref, masks)
     for n, (f, lb) in before.items():
@@ -161,12 +162,12 @@ def test_exogenous_is_required(case):
     """The registered instruments come from the model (``SPRef.exogenous``)."""
     from equilibria.family.prep_square import square
 
-    _, p, ref, calls, masks = case
+    ds, p, ref, calls, masks = case
     a, b = calls[-1]
     inc = {r: list(c) for r, c in zip(b.con_names, b.incidence, strict=True)}
     with pytest.raises(TypeError):
-        square(  # ty: ignore[missing-argument]
-            _recipe(a, p, ref),
+        square(  # ty: ignore[no-matching-overload]
+            _recipe(a, p, ref, ds),
             a.period,
             params=p,
             closure=_closure(),
@@ -179,12 +180,12 @@ def test_masks_required(case):
     """The data masks are built once per run: ``masks`` has no default."""
     from equilibria.family.prep_square import square
 
-    _, p, ref, calls, _ = case
+    ds, p, ref, calls, _ = case
     a, b = calls[-1]
     inc = {r: list(c) for r, c in zip(b.con_names, b.incidence, strict=True)}
     with pytest.raises(TypeError):
-        square(  # ty: ignore[missing-argument]
-            _recipe(a, p, ref),
+        square(  # ty: ignore[no-matching-overload]
+            _recipe(a, p, ref, ds),
             a.period,
             params=p,
             closure=_closure(),
@@ -235,9 +236,9 @@ def _pairs_differing(got, b):
 
 def test_pairs_equal_pyomo_with_b_incidence(case):
     """Same rows, same columns, same pairs as Pyomo's ``structural_matching``."""
-    _, p, ref, calls, masks = case
+    ds, p, ref, calls, masks = case
     for a, b in calls:
-        got = _square(_recipe(a, p, ref), a, p, b, ref, masks)
+        got = _square(_recipe(a, p, ref, ds), a, p, b, ref, masks)
         assert _pairs_differing(got, b) == []
 
 

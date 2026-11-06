@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from tests.family._data import load_params
-from tests.family._prep import capture_dir
+from tests.family._prep import capture_dir, recording
 
 RTOL = 1e-9
 DATASETS = (
@@ -190,7 +190,7 @@ def test_recipe_matches_pyomo(case, k):
     from equilibria.family.mp_arrays import MPArrays
     from equilibria.family.prep_recipe import run_recipe
 
-    _, d, p, ref, calls, load_a2 = case
+    ds, d, p, ref, calls, load_a2 = case
     if k >= len(calls):
         pytest.skip("fewer solve calls")
     a, _ = calls[k]
@@ -203,6 +203,7 @@ def test_recipe_matches_pyomo(case, k):
         closure=_closure(),
         sp_ref=ref,
         mode="gtap",
+        backend=recording(ds),
         **ROUTE,
     )
     # mq_* values: the Fisher aggregates refreshed after the seed (known gap); the
@@ -218,7 +219,7 @@ def test_shock_default_tariff_matches_b(case):
     from equilibria.family.mp_arrays import MPArrays
     from equilibria.family.prep_recipe import run_recipe
 
-    _, _, p, ref, calls, _ = case
+    ds, _, p, ref, calls, _ = case
     a, b = next((a, b) for a, b in calls if a.period == "shock")
     got = run_recipe(
         MPArrays.from_photo(a),
@@ -226,6 +227,7 @@ def test_shock_default_tariff_matches_b(case):
         params=p,
         closure=_closure(),
         sp_ref=ref,
+        backend=recording(ds),
         **ROUTE,
     )
     g, w = got.var("imptx"), b.vars["imptx"]

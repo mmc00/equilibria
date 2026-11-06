@@ -60,3 +60,26 @@ def capture_dir(dataset: str = "gtap7_3x3", linsolve: str = "direct") -> Path:
                 os.environ[k] = v
     assert code == 1
     return out
+
+
+@cache
+def recording(dataset: str = "gtap7_3x3"):
+    """The single-period recording of the route (``FamilyBackend``) the shock recipe asks
+    which instrument cells a live row reads: from the family disk cache, 3x3 in a temp
+    dir removed at exit."""
+    import atexit
+    import shutil
+    import tempfile
+
+    from equilibria.family.disk_cache import load_or_build
+    from tests.family.test_prep_recipe import _params
+    from tests.family.test_squared_system import _route_closure
+
+    p = _params(dataset)
+    if dataset == "gtap7_3x3":
+        root = Path(tempfile.mkdtemp(prefix="records_3x3_"))
+        atexit.register(shutil.rmtree, root, True)
+    else:
+        root = Path.home() / ".cache" / "equilibria" / "family"
+    backend, _ = load_or_build(p, _route_closure(), list(p.sets.r)[-1], root)
+    return backend

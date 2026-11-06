@@ -144,6 +144,9 @@ class _Ctx:
     seed_prior: str
     cross: Any = None  # cross-period recording: refresh the mq_* after a seed
     base_calibrated: bool = False
+    backend: Any = None  # single-period recording: which instrument cells a row reads
+    shock: Any = None  # user shock {instrument: {cell: pct}} (shock period)
+    shock_levels: bool = False  # the numbers of ``shock`` are levels, not percents
 
     def exo(self, name: str, v: VarArr) -> np.ndarray:
         """Cells of ``name`` that are exogenous instruments (the driver never frees,
@@ -364,10 +367,26 @@ def _fnm_pf(c: _Ctx) -> None:
             pf.fixed[i] = True
 
 
+def _user_shock(c: _Ctx) -> None:
+    """Write the user's shock into the shock period, at the moment a Pyomo user does:
+    on the model before ``prepare`` has muted anything, i.e. with the shock period's rows
+    live (right after ``_freeze_inactive``), so a cell is accepted exactly when
+    ``shocks.apply_shock`` accepts it on the built model."""
+    if not c.shock:
+        return
+    if c.backend is None:
+        raise ValueError("a user shock needs the single-period recording (backend=)")
+    from equilibria.family.shock import apply_shock
+
+    apply_shock(c.mp, c.backend, c.shock, levels=c.shock_levels)
+
+
 def _default_tariff(c: _Ctx) -> None:
     """The driver writes the +10 % default tariff into imptx[.., shock] when no
-    instrument differs from its check value (``shocks.apply_default_tariff``)."""
-    from equilibria.templates.gtap.shocks import DEFAULT_TARIFF_PCT, shocked
+    instrument differs from its check value (``shocks.apply_default_tariff``): every
+    ``imptx`` cell that ``can_take_shock`` accepts gets +10 % on its power 1 + t."""
+    from equilibria.family.shock import apply_shock, can_take_shock
+    from equilibria.templates.gtap.shocks import DEFAULT_TARIFF_PCT
 
     mp, sp = c.mp, c.sp
     for name in sorted(sp.exogenous):  # shock_of: any shocked cell -> nothing to do
@@ -375,31 +394,19 @@ def _default_tariff(c: _Ctx) -> None:
         ia, ib = _aligned(v, "shock", "check")
         if (c.exo(name, v)[ia] & (v.value[ia] != v.value[ib])).any():
             return
+    if c.backend is None:
+        raise ValueError(
+            "the default tariff needs the single-period recording (backend=)"
+        )
     imptx = mp.var("imptx")
-    if "imptx" not in sp.exogenous:
+    cells = {
+        cell: DEFAULT_TARIFF_PCT
+        for cell in _table(imptx, "shock")
+        if can_take_shock(mp, c.backend, "imptx", cell)
+    }
+    if not cells:
         raise ValueError("no imptx cell can take the default tariff")
-    ia, ib = _aligned(imptx, "shock", "check")
-    exo = c.exo("imptx", imptx)[ia]
-    # a live row must read the cell: eq_pmeq, or under ifSUB the inline macro in
-    # eq_xweq (assumed to read imptx wherever it is active)
-    live = np.zeros(len(ia), dtype=bool)
-    rows = ["eq_pmeq"] + (["eq_xweq"] if getattr(c.closure, "if_sub", False) else [])
-    for name in rows:
-        if name not in mp.rows:
-            continue
-        r = mp.rows[name]
-        tab = _table(r, "shock")
-        pos = np.array([tab.get(imptx.keys[i][:-1], -1) for i in ia], dtype=int)
-        live |= (pos >= 0) & r.active[np.maximum(pos, 0)]
-    take = exo & live
-    if not take.any():
-        raise ValueError("no imptx cell can take the default tariff")
-    chk = imptx.value[ib[take]]
-    new = shocked("power", chk, 1.0 + DEFAULT_TARIFF_PCT / 100.0)
-    if (new == chk).any() or not (1.0 + new > 0.0).all():
-        raise ValueError("the default tariff leaves the domain of imptx")
-    imptx.value[ia[take]] = new
-    imptx.fixed[ia[take]] = True
+    apply_shock(mp, c.backend, {"imptx": cells})
 
 
 _RECIPES = {
@@ -416,6 +423,7 @@ _RECIPES = {
     ),
     ("shock", "gtap"): (
         _freeze_inactive,
+        _user_shock,
         _seed_from_prior,
         _unfix_regy,
         _fix_shock_numeraire,
@@ -450,6 +458,9 @@ def run_recipe(
     base_calibrated: bool,
     solve_check: bool,
     cross: Any = None,
+    backend: Any = None,
+    shock: Any = None,
+    shock_levels: bool = False,
 ) -> MPArrays:
     """``mp`` after the recipe of ``period`` (base, check or shock; gtap), as new arrays.
 
@@ -460,7 +471,12 @@ def run_recipe(
     The driver flags (``PeriodPreparer``'s) have no default: they pick the recipe and
     the period the seed copies from. A step whose component is missing raises
     ``KeyError``; the F3.5 copied check (``base_calibrated`` without
-    ``solve_check``) raises ``NotImplementedError``."""
+    ``solve_check``) raises ``NotImplementedError``.
+
+    ``backend`` (the single-period recording) says which instrument cells a live row
+    reads; the shock period needs it for the default tariff and for ``shock``, a user
+    shock ``{instrument: {cell: pct}}`` (levels with ``shock_levels``) applied as
+    ``shocks.apply_shock`` does, which then replaces the default tariff."""
     if period == "check" and base_calibrated and not solve_check:
         raise NotImplementedError("no array recipe for the check copied from the base")
     steps = _RECIPES.get((period, mode))
@@ -480,7 +496,13 @@ def run_recipe(
         seed_prior(period, base_calibrated=base_calibrated, solve_check=solve_check),
         cross,
         base_calibrated,
+        backend,
+        shock,
+        shock_levels,
     )
+    if not ctx.mp.exogenous:  # a photo's arrays lack what ``MPArrays.build`` sets
+        ctx.mp.exogenous = sp_ref.exogenous
+        ctx.mp.endogenous_instrument_cells = dict(sp_ref.endogenous)
     for step in steps:
         step(ctx)
     return ctx.mp
