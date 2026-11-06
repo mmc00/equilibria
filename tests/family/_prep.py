@@ -23,9 +23,11 @@ def reference_dir(dataset: str) -> Path:
 
 
 @cache
-def capture_dir(dataset: str = "gtap7_3x3") -> Path:
+def capture_dir(dataset: str = "gtap7_3x3", linsolve: str = "direct") -> Path:
     """Photos of ``dataset``: the saved Pyomo reference when there is one (larger
-    datasets), else captured once per session into a temp dir (in-process solve)."""
+    datasets), else captured once per session into a temp dir (in-process solve with
+    Pyomo's ``linsolve``: a reference only matches a family run that uses the same one,
+    since the stopping point of the Newton loop depends on its trajectory)."""
     import atexit
     import os
     import shutil
@@ -42,7 +44,7 @@ def capture_dir(dataset: str = "gtap7_3x3") -> Path:
     atexit.register(shutil.rmtree, out, True)
     env = {
         **_newton_mumps(),
-        "EQUILIBRIA_GTAP_TR_LINSOLVE": "direct",
+        "EQUILIBRIA_GTAP_TR_LINSOLVE": linsolve,
         prep_capture.ENV: str(out),
     }
     old = {k: os.environ.get(k) for k in env}
