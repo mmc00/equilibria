@@ -52,7 +52,9 @@ jobs:
           path: dist/
 
   publish-pypi:
-    if: github.ref_type == 'tag'
+    # push only: a manual run started from a tag also has ref_type 'tag', and
+    # must go to TestPyPI, not to PyPI
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     needs: build
     runs-on: ubuntu-latest
     environment:
