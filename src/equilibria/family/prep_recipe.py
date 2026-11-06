@@ -5,6 +5,9 @@
 Var cells' value / fixed / lb / ub and the Constraint cells' active flag) as numpy
 masks, with no model and no expressions:
 
+* ``("base", "gtap")``: seed from the settled check point (F3.5, only when the driver
+  runs with ``base_calibrated`` and the arrays carry ``settled_seed``), freeze the other
+  periods, copy the single-period reference's fixing and bounds.
 * ``("check", "gtap")``: freeze the other periods, seed (only with ``seed_from_prior``),
   unfix ``regy``, collapse the ``pft`` block, copy the single-period reference's fixing
   and bounds, free what GAMS does not bound, mute the welfare tail, holdfix the
@@ -32,7 +35,7 @@ import numpy as np
 from equilibria.family.mp_arrays import MPArrays, RowArr, VarArr
 
 PERIODS = ("base", "check", "shock")
-RECIPE_PERIODS = ("check", "shock")
+RECIPE_PERIODS = ("base", "check", "shock")
 _UID = itertools.count()
 
 
@@ -140,6 +143,7 @@ class _Ctx:
     seed_from_prior: bool
     seed_prior: str
     cross: Any = None  # cross-period recording: refresh the mq_* after a seed
+    base_calibrated: bool = False
 
     def exo(self, name: str, v: VarArr) -> np.ndarray:
         """Cells of ``name`` that are exogenous instruments (the driver never frees,
@@ -155,6 +159,36 @@ class _Ctx:
 
 
 # ── Steps ───────────────────────────────────────────────────────────────────
+
+
+def _seed_from_settled(c: _Ctx) -> None:
+    """F3.5: the base starts at the settled point (``mp.settled_seed``, the dict
+    ``calibrate_base`` returns: ``{var: {cell without period: level}}``). Skips the
+    derived-demand vars (``F35_DERIVED_DEMAND``), the exogenous instruments and the
+    cells the model lacks; writes fixed cells too, as ``set_value`` does. Pyomo 6.10
+    only warns when a level is outside the Var's domain, so no cell is skipped for
+    that; a level that is not a number is (its ``float()`` raised there)."""
+    from equilibria.templates.gtap.period_prep import F35_DERIVED_DEMAND
+
+    seed = c.mp.settled_seed
+    if not (c.base_calibrated and seed):
+        return
+    for name, cells in seed.items():
+        if name in F35_DERIVED_DEMAND:
+            continue
+        v = c.mp.vars.get(name)
+        if v is None:
+            continue
+        exo = c.exo(name, v) if name in c.sp.exogenous else None
+        tab = _table(v, c.period)
+        for body, val in cells.items():
+            i = tab.get(tuple(body) if isinstance(body, tuple) else (body,))
+            if i is None or (exo is not None and exo[i]):
+                continue
+            try:
+                v.value[i] = float(val)
+            except (TypeError, ValueError):
+                continue
 
 
 def _freeze_inactive(c: _Ctx) -> None:
@@ -369,6 +403,7 @@ def _default_tariff(c: _Ctx) -> None:
 
 
 _RECIPES = {
+    ("base", "gtap"): (_seed_from_settled, _freeze_inactive, _replicate_sp_reference),
     ("check", "gtap"): (
         _freeze_inactive,
         _seed_from_prior_if_asked,
@@ -416,7 +451,7 @@ def run_recipe(
     solve_check: bool,
     cross: Any = None,
 ) -> MPArrays:
-    """``mp`` after the recipe of ``period`` (check or shock; gtap), as new arrays.
+    """``mp`` after the recipe of ``period`` (base, check or shock; gtap), as new arrays.
 
     With ``cross`` (the cross-period recording) the ``mq_*`` aggregates are refreshed
     from the sums they define where the Pyomo recipe does (the seed from the prior
@@ -444,6 +479,7 @@ def run_recipe(
         seed_from_prior,
         seed_prior(period, base_calibrated=base_calibrated, solve_check=solve_check),
         cross,
+        base_calibrated,
     )
     for step in steps:
         step(ctx)

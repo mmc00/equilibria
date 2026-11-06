@@ -31,9 +31,9 @@ def _few(items, n: int = 5) -> str:
     return ", ".join(items[:n]) + (f" (+{len(items) - n})" if len(items) > n else "")
 
 
-def diff_to_photo(mp, photo) -> list[str]:
+def diff_to_photo(mp, photo, rtol: float = RTOL) -> list[str]:
     """Differences between ``mp`` and a photo (empty = equal): names, keys, values within
-    ``RTOL`` (NaN equals NaN), fixed flags, bounds, row active flags."""
+    ``rtol`` (NaN equals NaN), fixed flags, bounds, row active flags."""
     msgs = []
     if set(mp.vars) != set(photo.vars):
         msgs.append(
@@ -66,7 +66,8 @@ def diff_to_photo(mp, photo) -> list[str]:
             got.ub[sel],
         )
         close = (np.isnan(gv) & np.isnan(c.value)) | (
-            np.abs(gv - c.value) <= RTOL * np.maximum(1.0, np.abs(c.value))
+            (gv == c.value)
+            | (np.abs(gv - c.value) <= rtol * np.maximum(1.0, np.abs(c.value)))
         )
         for what, bad in (
             ("value", ~close),

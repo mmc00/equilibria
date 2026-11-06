@@ -214,7 +214,11 @@ def _compare_paths(monkeypatch, seeds, break_labels=False, calls=None):
 
     def grab(st, params=None):
         base = _snapshot(st)
-        saved = {a: copy.deepcopy(getattr(p.taxes, a, None)) for a in TAX}
+        saved = {
+            a: copy.deepcopy(getattr(p.taxes, a)) if hasattr(p.taxes, a) else None
+            for a in TAX
+        }
+        present = {a for a in TAX if hasattr(p.taxes, a)}
         for seed in seeds:
             _restore(st, base)
             _perturb(st, p, np.random.default_rng(seed))
@@ -235,7 +239,10 @@ def _compare_paths(monkeypatch, seeds, break_labels=False, calls=None):
                     if not np.array_equal(x, y, equal_nan=True):
                         bad.append((seed, n, int((x != y).sum())))
         for attr, d in saved.items():
-            setattr(p.taxes, attr, d)
+            if attr in present:
+                setattr(p.taxes, attr, d)
+            elif hasattr(p.taxes, attr):  # created by the perturbation: remove it
+                delattr(p.taxes, attr)
         _restore(st, base)
         return real(st, params)
 

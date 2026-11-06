@@ -250,14 +250,14 @@ def test_missing_component_raises(case):
         run_recipe(mp, a.period, params=p, closure=_closure(), sp_ref=ref, **ROUTE)
 
 
-def test_other_periods_not_ported(case):
+def test_other_modes_and_periods_not_ported(case):
     from equilibria.family.mp_arrays import MPArrays
     from equilibria.family.prep_recipe import run_recipe
 
     _, _, p, ref, calls, _ = case
     mp = MPArrays.from_photo(calls[0][0])
     with pytest.raises(NotImplementedError):
-        run_recipe(mp, "base", params=p, closure=_closure(), sp_ref=ref, **ROUTE)
+        run_recipe(mp, "shocks", params=p, closure=_closure(), sp_ref=ref, **ROUTE)
     with pytest.raises(NotImplementedError):
         run_recipe(
             mp,
