@@ -7,8 +7,9 @@ Protocol: one child process per run (GC off), one warm-up run (fills the record 
 JAX caches, not reported), then ``--runs`` measured ones; the report gives the median
 and the spread (min, max) of the process wall, of the wall from the start of
 ``_solve_shock`` to its return, and of every phase. The machine load average and free
-memory are recorded around each run; a load above ``--max-load`` before a run aborts
-(exit 2) unless ``--force`` is given. The phases come from ``FamilyResult.phases``
+memory are recorded around each run; a load above ``--max-load`` before a run waits (up to
+``--max-wait`` s, the average still carries the previous run) and then aborts (exit 2)
+unless ``--force`` is given. The phases come from ``FamilyResult.phases``
 (self time, additive); the MUMPS analysis / factor / solve times and the first F and J
 call of each squared system (JAX compile-cache load) are details inside the Newton
 phases, measured by wrapping the calls in the child only.
@@ -260,6 +261,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--out", type=Path)
     ap.add_argument("--max-load", type=float, default=4.0)
+    ap.add_argument("--max-wait", type=float, default=600.0)
     ap.add_argument("--force", action="store_true")
     a = ap.parse_args(argv)
 
@@ -267,9 +269,16 @@ def main(argv: list[str] | None = None) -> int:
     runs = []
     for i in range(a.runs + 1):  # run 0 is the warm-up
         before = machine()
+        waited = 0.0
+        # the 1-minute load average still carries the previous run: let it settle
+        while before["load_1m"] > a.max_load and not a.force and waited < a.max_wait:
+            time.sleep(15)
+            waited += 15
+            before = machine()
         if before["load_1m"] > a.max_load and not a.force:
             print(f"load {before['load_1m']:.2f} > {a.max_load}: stop", file=sys.stderr)
             return 2
+        before["waited_s"] = waited
         r = run_child(a.dataset, a.cache_root)
         after = machine()
         loads.append({"run": i, "warm_up": i == 0, "before": before, "after": after})
