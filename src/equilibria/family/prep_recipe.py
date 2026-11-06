@@ -58,15 +58,19 @@ class SPRef:
     endogenous: dict[str, frozenset]  # instrument cells an @overwrite hook freed
 
 
-def sp_reference_arrays(params, closure, residual_region) -> SPRef:
+def sp_reference_arrays(params, closure, residual_region, *, state=None) -> SPRef:
     """The reference ``PeriodPreparer`` reads, from ``compose_block_state``.
 
     Same cells as ``_sp_snapshot(_build_sp_reference(...))``: the Fisher auxiliaries
-    the driver deletes from the reference are left out."""
+    the driver deletes from the reference are left out. ``state`` is the composed state
+    when the caller already has it (``MPArrays.build`` reads the same one), so the
+    composition runs once; it is only read."""
     from equilibria.blocks.gtap.closure import FISHER_AUX_VARS
-    from equilibria.templates.gtap.gtap_block_model import compose_block_state
 
-    _, state = compose_block_state(params, params.sets, closure, residual_region)
+    if state is None:
+        from equilibria.templates.gtap.gtap_block_model import compose_block_state
+
+        _, state = compose_block_state(params, params.sets, closure, residual_region)
     out = {}
     for name, doms in state.var_domains.items():
         if name in FISHER_AUX_VARS:

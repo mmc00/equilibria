@@ -566,7 +566,7 @@ def compose_block_state(
     Returns ``(model, state)``. With ifSUB=1, ``state.ifsub_skipped`` names the
     report equations a backend must not record.
     """
-    from equilibria.blocks.gtap.overwrite import endogenous_cells
+    from equilibria.blocks.gtap.overwrite import endogenous_cells, shock_rows
     from equilibria.family.state import StateModel
 
     if_sub = bool(getattr(closure, "if_sub", False))
@@ -576,6 +576,7 @@ def compose_block_state(
     state = StateModel(model)
     state._endogenous_instrument_cells = endogenous_cells(units)
     state._targets = targets
+    state._shock_rows = shock_rows(units)
 
     ctx = ScalingContext(
         params=params, sets=sets, residual_region=residual_region or "NAmerica"

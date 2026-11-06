@@ -5,6 +5,10 @@ lb, ub) and, per Constraint component, every cell's active flag: what the Pyomo
 ``ConcreteModel`` carries for the period preparation, without expressions. Cells
 keep their Pyomo index tuples (period last), so names match Pyomo's.
 
+``MPArrays.build`` makes that state straight from the composed single-period state
+(``compose_block_state``), replacing the reflection ``build_block_model`` runs over a
+Pyomo model; ``tests/family/test_mp_build.py`` ties it to the photo of the Pyomo model.
+
 ``Squared`` is the per-period system right before Newton: active rows and free
 columns in paired order, plus every cell of the active period. ``compare`` is the
 parity rule of the array port: same rows, same columns, same cells (1e-9
@@ -15,6 +19,8 @@ relative, identical fixed flags) and a VALID pairing, not an identical one (see
 from __future__ import annotations
 
 import copy
+import dataclasses
+import itertools
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -61,6 +67,16 @@ def _name(comp: str, key: tuple) -> str:
 class MPArrays:
     vars: dict[str, VarArr]
     rows: dict[str, RowArr]
+    # What ``build_block_model`` leaves on the Pyomo model besides Vars and Constraints.
+    exogenous: frozenset = frozenset()  # registered ShockBlock instruments
+    endogenous_instrument_cells: dict = field(default_factory=dict)
+    targets: dict = field(default_factory=dict)
+    shock_rows: frozenset = frozenset()
+    fctts: Any = None
+    residual_region: str | None = None
+    gtap_mode: bool = False  # the driver sets it when it runs
+    base_calibrated: bool = False
+    settled_seed: Any = None
 
     @classmethod
     def from_photo(cls, photo: Any) -> MPArrays:
@@ -80,6 +96,114 @@ class MPArrays:
             },
         )
 
+    @classmethod
+    def build(
+        cls,
+        state: Any,
+        backend: Any,
+        cross: Any,
+        *,
+        params: Any,
+        base_calibrated: bool = False,
+    ) -> MPArrays:
+        """The multiperiod state of ``build_block_model``, from the composed state.
+
+        ``state`` is the ``StateModel`` of ``compose_block_state``, ``backend`` the
+        single-period recording and ``cross`` the cross-period one. Reproduces the
+        reflection (``GTAPBlockMultiPeriodModel.build_vars`` and
+        ``build_equations_all_periods``) cell by cell:
+
+        * every single-period Var in each period, at its level (1.0 when it has none),
+          lb 0 only if Pyomo declares it ``NonNegativeReals``, no other bound; free
+          except the ShockBlock / ``@overwrite`` instruments, fixed in every period;
+        * every single-period row in each period, active; the Fisher auxiliaries and
+          the ifSUB report rows are absent (Pyomo drops them from the reflected SP);
+        * the rows of ``cross`` replace the single-period ones of the same name, and its
+          ``mq_*`` Vars (free, at the value of the sum they define) are added;
+          ``pwfact[base]`` is fixed at 1.
+
+        Row cells come in recording order, not Pyomo's (sorted within a period)."""
+        from equilibria.blocks.gtap import _derived_params as dp
+        from equilibria.blocks.gtap.closure import FISHER_AUX_EQS, FISHER_AUX_VARS
+        from equilibria.blocks.gtap.overwrite import overwrite
+        from equilibria.blocks.gtap.periods import PERIODS
+        from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
+        from equilibria.family.cross_period import mq_keys, refresh_aggregates
+        from equilibria.templates.gtap.instruments import is_free_cell
+
+        if overwrite.active():
+            # ``shock_only`` would keep the hooks' rows in the shock period only and
+            # anchor their targets to the check; not ported.
+            raise NotImplementedError("family backend: @overwrite hooks")
+        periods = list(PERIODS)
+        n_t = len(periods)
+        endo = dict(getattr(state, "_endogenous_instrument_cells", {}) or {})
+        targets = dict(getattr(state, "_targets", {}) or {})
+        instruments = {*SHOCK_INSTRUMENTS, *targets}
+
+        vars_: dict[str, VarArr] = {}
+        for name, doms in state.var_domains.items():
+            if name in FISHER_AUX_VARS:
+                continue
+            keys = [
+                (*k, t)
+                for k in itertools.product(*(state.sets[d] for d in doms))
+                for t in periods
+            ]
+            value = np.repeat(np.asarray(state.values[name], dtype=float).ravel(), n_t)
+            value = np.where(np.isnan(value), 1.0, value)
+            fixed = np.zeros(len(keys), dtype=bool)
+            if name in instruments:
+                libres = endo.get(name, frozenset())
+                fixed[:] = True
+                if libres:
+                    for i, k in enumerate(keys):
+                        if is_free_cell(k, libres):
+                            fixed[i] = False
+            lb = np.full(len(keys), 0.0 if name in state.nonneg_vars else -np.inf)
+            vars_[name] = VarArr(keys, value, fixed, lb, np.full(len(keys), np.inf))
+
+        rows: dict[str, RowArr] = {}
+        for fam, recs in backend.records.items():
+            if fam in FISHER_AUX_EQS or fam in cross.records:
+                continue
+            keys = [(*idx, t) for t in periods for idx, _ in recs]
+            rows[fam] = RowArr(keys, np.ones(len(keys), dtype=bool))
+        for fam, recs in cross.records.items():
+            keys = [tuple(idx) for idx, _ in recs]
+            rows[fam] = RowArr(keys, np.ones(len(keys), dtype=bool))
+
+        for name, cells in mq_keys(list(state.sets["r"]), periods).items():
+            n = len(cells)
+            vars_[name] = VarArr(
+                list(cells),
+                np.zeros(n),
+                np.zeros(n, dtype=bool),
+                np.full(n, -np.inf),
+                np.full(n, np.inf),
+            )
+        # ``build_equations_fisher`` anchors the world factor price index by fixing the
+        # Var (a row would duplicate eq_pnum): ``pwfact[base] = 1``.
+        pwfact = vars_.get("pwfact")
+        if pwfact is not None and ("base",) in pwfact.keys:
+            i = pwfact.pos(("base",))
+            pwfact.value[i] = 1.0
+            pwfact.fixed[i] = True
+
+        mp = cls(
+            vars_,
+            rows,
+            exogenous=frozenset(getattr(state, "_exogenous_instruments", ())),
+            endogenous_instrument_cells=endo,
+            targets=targets,
+            shock_rows=frozenset(getattr(state, "_shock_rows", ()) or ()),
+            fctts=dp.fctts_data(params, params.sets),
+            residual_region=getattr(state, "_residual_region", None),
+            base_calibrated=base_calibrated,
+        )
+        refresh_aggregates(cross, mp)
+        return mp
+
     def copy(self) -> MPArrays:
         """Independent arrays; the (immutable) keys and their lookup caches are shared."""
         vars_ = {}
@@ -97,7 +221,7 @@ class MPArrays:
             c = copy.copy(r)
             c.active = r.active.copy()
             rows[n] = c
-        return MPArrays(vars_, rows)
+        return dataclasses.replace(self, vars=vars_, rows=rows)
 
     def var(self, name: str) -> VarArr:
         """The component, or ``KeyError``: a step must never skip a missing one."""

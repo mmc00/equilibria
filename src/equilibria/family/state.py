@@ -318,6 +318,9 @@ class StateModel:
         self.__dict__["lower"] = {}
         self.__dict__["upper"] = {}
         self.__dict__["_components"] = {}
+        # Variables Pyomo declares NonNegativeReals (any other domain is free): the
+        # multiperiod reflection takes its only bound, lb 0, from this.
+        self.__dict__["nonneg_vars"] = set()
         for n in vm.list_vars():
             v = vm.get(n)
             doms = tuple(v.domains)
@@ -326,6 +329,7 @@ class StateModel:
             lo = _as_shape(v.lower, shape)
             if getattr(v, "domain", "Reals") == "NonNegativeReals":
                 lo = np.maximum(lo, 0.0)
+                self.nonneg_vars.add(n)
             hi = _as_shape(v.upper, shape)
             fx = np.zeros(shape, dtype=bool)
             self.var_domains[n] = doms
