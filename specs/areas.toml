@@ -67,6 +67,7 @@ data = [
 solver = [
   "src/equilibria/solver/",
   "src/equilibria/backends/",
+  "src/equilibria/report/",
 ]
 parity = [
   "src/equilibria/compare/",
