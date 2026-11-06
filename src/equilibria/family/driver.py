@@ -213,6 +213,9 @@ def prepare_run(
         sets=backend.sets,
         var_domains=backend.var_domains,
     )
+    # the loaded records are long-lived and large: freeze them before mp_build and the
+    # later steps churn allocations over them (the entry-point freeze predates them)
+    _gc_freeze_now(_gc_freeze_from_env())
     with phase("mp_build"):
         mp = MPArrays.build(state, backend, cross, params=params, base_calibrated=False)
     with phase("sp_reference"):

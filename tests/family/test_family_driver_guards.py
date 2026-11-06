@@ -389,6 +389,51 @@ def test_family_backend_load_runs_with_gc_paused(tmp_path, monkeypatch):
     assert gc.isenabled()
 
 
+def test_prepare_run_freezes_the_loaded_records_before_mp_build(monkeypatch):
+    import gc
+    import types
+
+    from equilibria.family import cross_period, disk_cache, prep_recipe, prep_square
+    from equilibria.family import driver as drv
+    from equilibria.templates.gtap import residual_region as rr
+
+    keep = []
+
+    def load_or_build(*a, **k):
+        keep.append([[i] for i in range(4000)])
+        return types.SimpleNamespace(sets={}, var_domains={}), "state"
+
+    def load_cross(*a, **k):
+        keep.append([[i] for i in range(4000)])
+        return "cross"
+
+    seen = {}
+
+    def build(*a, **k):
+        seen["at_mp_build"] = gc.get_freeze_count()
+        return "mp"
+
+    params = types.SimpleNamespace(
+        sets=types.SimpleNamespace(r=["a"]), set_va_subsidy_basis=lambda b: None
+    )
+    monkeypatch.setattr(disk_cache, "load_or_build", load_or_build)
+    monkeypatch.setattr(cross_period, "load_or_record", load_cross)
+    monkeypatch.setattr(drv.MPArrays, "build", staticmethod(build))
+    monkeypatch.setattr(rr, "resolve_residual_region", lambda *a, **k: "R")
+    monkeypatch.setattr(prep_recipe, "sp_reference_arrays", lambda *a, **k: None)
+    monkeypatch.setattr(
+        prep_square.ConditionalMasks, "from_params", staticmethod(lambda *a, **k: None)
+    )
+    monkeypatch.setattr(drv, "_driver_closure", lambda c: c)
+    monkeypatch.delenv("EQUILIBRIA_GTAP_GC_FREEZE", raising=False)
+    gc.unfreeze()
+    try:
+        drv.prepare_run(params, None, "R", jax_cache=False)
+        assert seen["at_mp_build"] >= 8000
+    finally:
+        gc.unfreeze()
+
+
 def test_family_driver_import_does_not_load_pyomo():
     import subprocess
     import sys
