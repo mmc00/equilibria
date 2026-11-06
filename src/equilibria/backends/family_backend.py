@@ -108,7 +108,9 @@ class FamilyBackend:
     def load(cls, path: Any) -> FamilyBackend:
         import pickle
 
-        with open(path, "rb") as fh:
+        from equilibria.solver.gc_tuning import _gc_paused
+
+        with open(path, "rb") as fh, _gc_paused():
             data = pickle.load(fh)
         backend = cls()
         for k in cls._SAVED:

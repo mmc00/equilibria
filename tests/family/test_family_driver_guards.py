@@ -255,6 +255,140 @@ def test_family_solve_runs_under_the_gc_threshold_of_the_pyomo_route(monkeypatch
     assert pyomo_drv._gc_threshold_from_env is gc_tuning._gc_threshold_from_env
 
 
+def test_family_solve_freezes_the_gc_and_undoes_it(monkeypatch):
+    """Like ``solve_multiperiod``: the family solve runs under ``gc.freeze()`` (same
+    ``EQUILIBRIA_GTAP_GC_FREEZE`` control) and unfreezes on exit, also on error."""
+    import contextlib
+    import gc
+
+    import pytest
+
+    from equilibria.family import driver as drv
+    from equilibria.solver import gc_tuning
+    from equilibria.templates.gtap import gtap_multiperiod_driver as pyomo_drv
+
+    assert pyomo_drv._gc_frozen_permanent_graph is gc_tuning._gc_frozen_permanent_graph
+    assert pyomo_drv._gc_freeze_from_env is gc_tuning._gc_freeze_from_env
+    monkeypatch.setattr(drv, "check_supported", lambda **k: None)
+    monkeypatch.setattr(
+        drv, "_gc_relaxed_threshold", lambda t: contextlib.nullcontext()
+    )
+    gc.unfreeze()
+    monkeypatch.delenv("EQUILIBRIA_GTAP_GC_FREEZE", raising=False)
+    inside = []
+
+    def inner(*a, **k):
+        inside.append(gc.get_freeze_count())
+        return "result"
+
+    monkeypatch.setattr(drv, "_solve_family", inner)
+    assert drv.solve_gtap_family(None, None, "R") == "result"
+    assert inside[0] > 0
+    assert gc.get_freeze_count() == 0
+
+    def boom(*a, **k):
+        inside.append(gc.get_freeze_count())
+        raise RuntimeError
+
+    monkeypatch.setattr(drv, "_solve_family", boom)
+    with pytest.raises(RuntimeError):
+        drv.solve_gtap_family(None, None, "R")
+    assert inside[1] > 0
+    assert gc.get_freeze_count() == 0
+
+    # EQUILIBRIA_GTAP_GC_FREEZE=0 turns it off
+    monkeypatch.setenv("EQUILIBRIA_GTAP_GC_FREEZE", "0")
+    monkeypatch.setattr(drv, "_solve_family", inner)
+    drv.solve_gtap_family(None, None, "R")
+    assert inside[2] == 0
+
+
+def test_solve_family_freezes_what_prepare_run_loaded(monkeypatch):
+    """The records/cross/MPArrays built by ``prepare_run`` are long-lived too: they
+    are frozen right after it, and the outer unfreeze releases everything."""
+    import gc
+
+    import pytest
+
+    from equilibria.family import driver as drv
+
+    class Stop(Exception):
+        pass
+
+    keep = []
+    seen = {}
+
+    def fake_prepare(*a, **k):
+        seen["before"] = gc.get_freeze_count()
+        keep.append([[i] for i in range(5000)])  # young long-lived containers
+        return "run", "mp"
+
+    def fake_calibrate(mp, run):
+        seen["after"] = gc.get_freeze_count()
+        raise Stop
+
+    monkeypatch.setattr(drv, "prepare_run", fake_prepare)
+    monkeypatch.setattr(drv, "calibrate_base_arrays", fake_calibrate)
+    monkeypatch.setattr(drv, "check_supported", lambda **k: None)
+    monkeypatch.delenv("EQUILIBRIA_GTAP_GC_FREEZE", raising=False)
+    gc.unfreeze()
+    with pytest.raises(Stop):
+        drv.solve_gtap_family(None, None, "R")
+    assert seen["after"] >= seen["before"] + 5000
+    assert gc.get_freeze_count() == 0
+
+    monkeypatch.setenv("EQUILIBRIA_GTAP_GC_FREEZE", "0")
+    seen.clear()
+    with pytest.raises(Stop):
+        drv.solve_gtap_family(None, None, "R")
+    assert seen["after"] == seen["before"] == 0
+
+
+def test_gc_paused_disables_and_restores():
+    import gc
+
+    from equilibria.solver.gc_tuning import _gc_paused
+
+    assert gc.isenabled()
+    with _gc_paused():
+        assert not gc.isenabled()
+    assert gc.isenabled()
+    gc.disable()  # a caller that had it disabled keeps it disabled
+    try:
+        with _gc_paused():
+            assert not gc.isenabled()
+        assert not gc.isenabled()
+    finally:
+        gc.enable()
+    try:
+        with _gc_paused():
+            raise RuntimeError
+    except RuntimeError:
+        pass
+    assert gc.isenabled()
+
+
+def test_family_backend_load_runs_with_gc_paused(tmp_path, monkeypatch):
+    import gc
+
+    from equilibria.backends.family_backend import FamilyBackend
+
+    b = FamilyBackend()
+    for k in FamilyBackend._SAVED:
+        setattr(b, k, {})
+    b.save(tmp_path / "r.pkl")
+    import pickle
+
+    states = []
+    real = pickle.load
+    monkeypatch.setattr(
+        pickle, "load", lambda fh: (states.append(gc.isenabled()), real(fh))[1]
+    )
+    FamilyBackend.load(tmp_path / "r.pkl")
+    assert states == [False]
+    assert gc.isenabled()
+
+
 def test_family_driver_import_does_not_load_pyomo():
     import subprocess
     import sys

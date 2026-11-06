@@ -22,7 +22,13 @@ import numpy as np
 
 from equilibria.family.mp_arrays import MPArrays, Squared
 from equilibria.family.phases import PhaseTimer, activate, phase, scope
-from equilibria.solver.gc_tuning import _gc_relaxed_threshold, _gc_threshold_from_env
+from equilibria.solver.gc_tuning import (
+    _gc_freeze_from_env,
+    _gc_freeze_now,
+    _gc_frozen_permanent_graph,
+    _gc_relaxed_threshold,
+    _gc_threshold_from_env,
+)
 
 # Settings that change the Newton-TR system or add debug side effects the family route
 # does not reproduce. Any of them set (non-empty) is refused.
@@ -463,9 +469,13 @@ def solve_gtap_family(
     timer = PhaseTimer()
     prev = activate(timer)
     try:
-        # as ``solve_multiperiod``: raise the gen-0 threshold for the solve
-        # (EQUILIBRIA_GTAP_GC_THRESHOLD: unset -> 50000, 0 -> off)
-        with _gc_relaxed_threshold(_gc_threshold_from_env()):
+        # as ``solve_multiperiod``: freeze the live graph (EQUILIBRIA_GTAP_GC_FREEZE,
+        # "0" -> off) and raise the gen-0 threshold (EQUILIBRIA_GTAP_GC_THRESHOLD:
+        # unset -> 50000, 0 -> off) for the solve
+        with (
+            _gc_frozen_permanent_graph(_gc_freeze_from_env()),
+            _gc_relaxed_threshold(_gc_threshold_from_env()),
+        ):
             return _solve_family(
                 params,
                 closure,
@@ -497,6 +507,9 @@ def _solve_family(
         params, closure, residual_region, cache_root=cache_root, jax_cache=jax_cache
     )
     timing["prepare_s"] = time.perf_counter() - t0
+    # records, cross records and MPArrays are now loaded and long-lived: hide them
+    # from the full passes too (the entry-point freeze predates them)
+    _gc_freeze_now(_gc_freeze_from_env())
 
     t = time.perf_counter()
     settled, settle = calibrate_base_arrays(mp, run)
