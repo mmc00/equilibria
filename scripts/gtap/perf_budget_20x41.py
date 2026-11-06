@@ -54,7 +54,7 @@ import json, sys, time
 sys.path[:0] = [{src!r}, {scripts!r}, {tests!r}, {root!r}]
 from templates.gtap.test_gtap7_gempack_parity import _solve_shock
 t = time.perf_counter()
-_, code = _solve_shock("gtap7_20x41", 1, "capFix", solve_nlp=True)
+_, code = _solve_shock("gtap7_20x41", 1, "capFix", solve_nlp=True, backend={backend!r})
 print("PERF " + json.dumps({{"code": code, "wall_min": (time.perf_counter() - t) / 60}}))
 """
 
@@ -103,8 +103,9 @@ def _falta_mumps() -> str | None:
     )
 
 
-def medir() -> tuple[dict, float]:
+def medir(backend: str = "pyomo") -> tuple[dict, float]:
     codigo = _HIJO.format(
+        backend=backend,
         src=str(ROOT / "src"),
         scripts=str(ROOT / "scripts" / "gtap"),
         tests=str(ROOT / "tests"),
@@ -137,16 +138,29 @@ def medir() -> tuple[dict, float]:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--update", action="store_true", help="guardar como linea base")
+    ap.add_argument(
+        "--backend",
+        choices=("pyomo", "family"),
+        default="pyomo",
+        help="family: la ruta de arreglos, solo mide (la linea base es de Pyomo)",
+    )
     args = ap.parse_args()
     if falta := _falta_mumps():
         print(falta)
         return 2
-    medido, swap = medir()
+    medido, swap = medir(args.backend)
     # Siempre, aunque la medicion se anule: con swap el numero sigue orientando.
     print(
         f"medido: {medido['wall_min']:.2f} min, {medido['peak_gb']:.2f} GB, "
         f"swap {swap:.0f} MB, code={medido.get('code')}"
     )
+    if args.backend == "family":
+        if args.update:
+            print("--update solo guarda la linea base de Pyomo")
+            return 2
+        rc, msg = veredicto(medido, {"wall_min": 1e9, "peak_gb": 1e9}, swap)
+        print(msg if rc else "OK (sin comparar: la linea base es de Pyomo)")
+        return rc
     if args.update:
         rc, msg = veredicto(medido, {"wall_min": 1e9, "peak_gb": 1e9}, swap)
         if rc != 0:

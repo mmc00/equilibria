@@ -359,9 +359,57 @@ def calibrate_base_arrays(
 
 
 def solve_gtap_family(
-    params: Any, closure: Any, residual_region: str, *, ref_gdx: Any = None
-) -> Any:
-    """Run base, check and shock on arrays. Filled in by the next task."""
-    raise NotImplementedError(
-        "family backend: solve_gtap_family is not implemented yet"
+    params: Any,
+    closure: Any,
+    residual_region: str,
+    *,
+    ref_gdx: Any = None,
+    shock: Any = None,
+    shock_levels: bool = False,
+    cache_root: Path | None = None,
+    jax_cache: bool = True,
+) -> FamilyResult:
+    """Calibrated base, check and shock on arrays: ``_solve_shock``'s route without Pyomo.
+
+    ``shock`` is a user shock ``{instrument: {cell: pct}}`` (levels with
+    ``shock_levels``) for any ShockBlock instrument, applied as ``shocks.apply_shock``
+    does; ``None`` leaves the default +10 % import tariff. ``ref_gdx`` only feeds cache
+    keys under capFix, so it is not read."""
+    check_supported(
+        if_sub=bool(getattr(closure, "if_sub", False)),
+        savf_flag=str(getattr(closure, "savf_flag", "capFix")),
+        mode="gtap",
+        skip_base_solve=True,
+        mute_welfare=True,
+        seed_from_prior=False,
+        solve_check=True,
+        shock_steps=None,
+        shock_method="nonlinear",
     )
+    timing: dict[str, float] = {}
+    t0 = time.perf_counter()
+    run, mp = prepare_run(
+        params, closure, residual_region, cache_root=cache_root, jax_cache=jax_cache
+    )
+    timing["prepare_s"] = time.perf_counter() - t0
+
+    t = time.perf_counter()
+    settled, settle = calibrate_base_arrays(mp, run)
+    timing["calibrate_s"] = time.perf_counter() - t
+
+    cur = dataclasses.replace(mp, settled_seed=settled, base_calibrated=True)
+    results: dict[str, dict[str, Any]] = {}
+    for period in PERIODS:
+        t = time.perf_counter()
+        cur, results[period] = _solve_period(
+            run,
+            cur,
+            period,
+            base_calibrated=True,
+            solve_check=True,
+            shock=shock,
+            shock_levels=shock_levels,
+        )
+        timing[f"{period}_s"] = time.perf_counter() - t
+    timing["total_s"] = time.perf_counter() - t0
+    return FamilyResult(cur, results, settled, settle, timing)
