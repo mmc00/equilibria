@@ -33,6 +33,7 @@ class NewtonResult:
     null_pivots: list = field(default_factory=list)  # MUMPS INFOG(28) per factor
     cfg: dict = field(default_factory=dict)  # GMIN / ICNTL actually used
     linsolve: str = "direct"
+    gmin_factors: int = 0  # numeric factorizations that ran with GMIN on the diagonal
 
 
 def _nm(names: Sequence | None, i: int) -> str:
@@ -58,6 +59,8 @@ def newton_tr(
     maxit: int = 300,
     f0: np.ndarray | None = None,
     on_symbolic_factorization: Callable[[], None] | None = None,
+    gmin: float | None = None,
+    gmin_policy: str = "always",
 ) -> NewtonResult:
     """Solve ``F(x) = 0`` from ``x0`` inside ``[lb, ub]``.
 
@@ -68,7 +71,22 @@ def newton_tr(
     reads ``EQUILIBRIA_GTAP_TR_RELTOL``; ignored without ``fscale``). ``f0``: ``F`` at
     the clipped ``x0`` when the caller already has it. ``row_names``/``col_names``/
     ``col_is_fixed`` only feed diagnostics and the structural gate.
+    ``gmin``: diagonal regularization of J·P (``None`` reads ``EQUILIBRIA_GTAP_GMIN``).
+    ``gmin_policy="always"`` (default) adds it to every factorization;
+    ``"on_null_pivot"`` factors J·P as is and, only when MUMPS reports null pivots
+    (INFOG(28) > 0), refactors that same matrix with ``gmin`` (counted in
+    ``NewtonResult.gmin_factors``).
     """
+    if gmin_policy not in ("always", "on_null_pivot"):
+        raise ValueError(f"unknown gmin_policy {gmin_policy!r}")
+    _on_null_pivot = gmin_policy == "on_null_pivot"
+    _gmin_cfg = (
+        float(gmin)
+        if gmin is not None
+        else float(os.environ.get("EQUILIBRIA_GTAP_GMIN", "0") or 0.0)
+    )
+    _lu_gmin_pattern = False  # the live MUMPS analysis was done on the GMIN pattern
+    _tr_gmin_factors = 0
     import time as _time
 
     n = int(np.asarray(x0).size)
@@ -383,234 +401,265 @@ def newton_tr(
             # completes and the Newton step is well-defined on those DOF. This is
             # the STANDARD floating-node remedy, applied globally — no per-family
             # patching. Env EQUILIBRIA_GTAP_GMIN (default 0 = off).
-            _gmin = float(os.environ.get("EQUILIBRIA_GTAP_GMIN", "0") or 0.0)
-            if _gmin > 0.0:
-                # Add ε to EVERY diagonal, materialized as an explicit stored entry
-                # (setdiag on lil forces the slot to exist even where J·P had a 0).
-                # This keeps the nonzero PATTERN fixed across Newton steps — MUMPS
-                # analyzes the symbol once and reuses it, and aborts "nonzeros
-                # changed between symbolic and numeric" if the degenerate diagonals
-                # flip in/out (measured n9). Also FORCE re-symbolization each factor
-                # when GMIN is on (below) so the analyzed pattern always matches.
-                _Jm_lil = _Jm_tr.tolil()
-                _Jm_lil.setdiag(_Jm_lil.diagonal() + _gmin)
-                _Jm_tr = _Jm_lil.tocsr()
-                # Symbolic reuse (lever B2): the symbolic factorization depends only
-                # on the PATTERN (nnz + indices/indptr), not the values. Under GMIN
-                # the ~30 degenerate diagonals CAN change the stored-nnz between
-                # steps, so we cannot reuse blindly — but the spike showed the
-                # pattern changes RARELY (3 distinct patterns in 28 steps), so
-                # re-analyzing every step is mostly wasted. Detect a pattern change
-                # by signature and force re-analysis ONLY on a change; otherwise let
-                # the existing _need_lu/_lu_age_tr reuse machinery run. Reusing only
-                # on a byte-identical pattern makes the MUMPS "nonzeros changed"
-                # abort impossible. EQUILIBRIA_GTAP_GMIN_SYM_REUSE=0 restores the
-                # old unconditional re-analyze.
-                if os.environ.get("EQUILIBRIA_GTAP_GMIN_SYM_REUSE", "1") != "0":
-                    import hashlib as _hl_sr
-
-                    _sig = (
-                        _Jm_tr.nnz,
-                        _hl_sr.sha256(
-                            _Jm_tr.indices.tobytes() + _Jm_tr.indptr.tobytes()
-                        ).hexdigest(),
-                    )
-                    if _sig != _gmin_pattern_sig:
-                        _lu_tr = None  # pattern changed → re-analyze
-                        _gmin_pattern_sig = _sig
-                    # else: pattern unchanged → keep _lu_tr, reuse the symbolic
+            _Jm_base = _Jm_tr
+            for _attempt in (0, 1):
+                _Jm_tr = _Jm_base
+                if _attempt == 0:
+                    _gmin = 0.0 if _on_null_pivot else _gmin_cfg
+                    if _on_null_pivot and _lu_gmin_pattern and _need_lu:
+                        _lu_tr = None  # last analysis was on the GMIN pattern
+                        _lu_gmin_pattern = False
                 else:
-                    _lu_tr = None  # opt-out: old unconditional re-analyze
-            if _need_lu or _gmin > 0.0:
-                try:
-                    _t_m = __import__("time").perf_counter()
-                    if _lu_tr is None:
-                        # sym=0 (unsymmetric). ICNTL(14): working-space %-increase
-                        # (avoid fill-underestimate failures at 393k).
-                        # ICNTL(6): column permutation / scaling strategy. We ALREADY
-                        # give MUMPS a zero-free-diagonal matrix (_Jm_tr = J·P with P
-                        # from the GAMS pairing). ICNTL(6)=5 makes MUMPS compute ITS
-                        # OWN max-transversal permutation ON TOP, which discards our
-                        # (correct) P and re-introduced the structural singularity →
-                        # error -6 even after the paired colperm made the diagonal
-                        # full (measured: kernel n2, "paired colperm 391839/391839"
-                        # then "MUMPS error -6"). With our own P applied, default to
-                        # ICNTL(6)=0 (no MUMPS permutation). Overridable to A/B other
-                        # strategies (0/7) via EQUILIBRIA_GTAP_MUMPS_ICNTL6.
-                        _icntl6 = (
-                            int(icntl6)
-                            if icntl6 is not None
-                            else int(
-                                os.environ.get("EQUILIBRIA_GTAP_MUMPS_ICNTL6", "0")
-                            )
-                        )
-                        # ICNTL(7): fill-reducing ordering. Default PORD SEGFAULTED
-                        # in libpord (findIndMultisecs) on the 393k GTAP pattern
-                        # (measured n3). METIS (5) is robust at this scale — switch
-                        # away from PORD. ICNTL(8): row/col SCALING. =8 is MUMPS's
-                        # iterative row/col equilibration (Ruiz-like) — the numeric
-                        # fix for error -10 (numerically singular pivot 391545 = the
-                        # ill-conditioned eq_pfeq[Land] row, coef ~680 vs xft~2e-4).
-                        # ICNTL(24)=1: detect+handle null pivots instead of aborting
-                        # -10; CNTL(3) sets the null-pivot threshold (small relative).
-                        # Default AMD (0): universally available (unlike METIS/5,
-                        # which needs MUMPS compiled --with-metis — not guaranteed
-                        # on Kaggle's libmumps) and NOT PORD, so it avoids the
-                        # libpord segfault. Override to 5 (METIS) if the build has it.
-                        _icntl7 = int(
-                            os.environ.get("EQUILIBRIA_GTAP_MUMPS_ICNTL7", "0")
-                        )  # 0=AMD (safe, avoids PORD segfault)
-                        _icntl8 = int(
-                            os.environ.get("EQUILIBRIA_GTAP_MUMPS_ICNTL8", "8")
-                        )  # 8=iterative row/col scaling (MUMPS Ruiz)
-                        _icntl24 = int(
-                            os.environ.get("EQUILIBRIA_GTAP_MUMPS_ICNTL24", "1")
-                        )  # 1=null-pivot detection
-                        _tr_cfg.update(
-                            icntl={
-                                "6": _icntl6,
-                                "7": _icntl7,
-                                "8": _icntl8,
-                                "14": 100,
-                                "24": _icntl24,
-                            }
-                        )
-                        _lu_tr = _Mumps_tr(sym=0)
-                        _lu_tr.set_icntl(14, 100)
-                        _lu_tr.set_icntl(6, _icntl6)
-                        _lu_tr.set_icntl(7, _icntl7)
-                        _lu_tr.set_icntl(8, _icntl8)
-                        _lu_tr.set_icntl(24, _icntl24)
-                        # CNTL(3): null-pivot threshold (used when ICNTL(24)=1).
-                        # Small relative value so only genuinely ~0 pivots are
-                        # treated as null (not the merely small-but-valid ones).
-                        if _icntl24:
-                            try:
-                                _lu_tr.set_cntl(
-                                    3,
-                                    float(
-                                        os.environ.get(
-                                            "EQUILIBRIA_GTAP_MUMPS_CNTL3",
-                                            "-1e-8",
-                                        )
-                                    ),
-                                )
-                            except Exception:
-                                pass
-                        _plog_m(
-                            f"ICNTL 6={_icntl6}(perm) 7={_icntl7}(order) "
-                            f"8={_icntl8}(scale) 24={_icntl24}(nullpiv)"
-                        )
-                        if on_symbolic_factorization is not None:
-                            on_symbolic_factorization()
-                        _lu_tr.do_symbolic_factorization(_Jm_tr)
-                        _plog_m(
-                            "symbolic factorization done in "
-                            f"{__import__('time').perf_counter() - _t_m:.1f}s "
-                            f"(n={n})"
-                        )
-                        _t_m = __import__("time").perf_counter()
-                    _lu_tr.do_numeric_factorization(_Jm_tr)
-                    _tr_nfact += 1
-                    _tr_cfg["gmin"] = _gmin
-                    # INFOG(28) = number of null pivots detected (ICNTL(24)=1). A
-                    # handful is fine (the TR rejects a bad step); many means the
-                    # scaling didn't rescue the ill-conditioned rows.
-                    try:
-                        _nnull = _lu_tr.get_infog(28)
-                        _tr_nullpiv.append(int(_nnull or 0))
-                        if _nnull:
-                            _plog_m(f"null pivots detected: {_nnull}")
-                            # NAME the null-pivot rows (env EQUILIBRIA_GTAP_MUMPS_
-                            # NAME_NULLPIV=1). MUMPS fills id.pivnul_list with the
-                            # 1-based indices of the null pivots. In the permuted
-                            # matrix _Jm_tr, position i corresponds to constraints[i]
-                            # (rows are NOT permuted; only columns via _colperm_tr).
-                            # So pivnul index → constraint name → equation FAMILY.
-                            if (
-                                os.environ.get("EQUILIBRIA_GTAP_MUMPS_NAME_NULLPIV")
-                                == "1"
-                            ):
-                                try:
-                                    # ROBUST namer (no MUMPS ctypes internals — the
-                                    # pivnul_list pointer isn't portably iterable
-                                    # across PyMUMPS builds). A null pivot ≈ a row
-                                    # whose diagonal entry in J·P is ~0 relative to
-                                    # the row's magnitude. _Jm_tr = J[:, colperm], so
-                                    # its diagonal IS the paired-pivot value for each
-                                    # row. Rank-deficient rows = |diag| / rowmax tiny.
-                                    _JmC = _Jm_tr.tocsr()
-                                    _diagv = _JmC.diagonal()
-                                    _absJ = abs(_JmC)
-                                    _rowmax = np.asarray(
-                                        _absJ.max(axis=1).todense()
-                                    ).flatten()
-                                    _rowmax[_rowmax <= 0] = 1.0
-                                    _ratio = np.abs(_diagv) / _rowmax
-                                    _bad = np.where(_ratio < 1e-10)[0]
-                                    _cons_nlp2 = (
-                                        row_names if row_names is not None else ()
-                                    )
-                                    _vars_nlp2 = (
-                                        col_names if col_names is not None else ()
-                                    )
-                                    from collections import Counter as _Ctr
+                    _gmin = _gmin_cfg  # retry: refactor this same matrix with GMIN
+                    _lu_tr = None  # the pattern gains the diagonal: re-analyze
+                    _need_lu = True
+                    _lu_gmin_pattern = True
+                _factored_now = False
+                if _gmin > 0.0:
+                    # Add ε to EVERY diagonal, materialized as an explicit stored entry
+                    # (setdiag on lil forces the slot to exist even where J·P had a 0).
+                    # This keeps the nonzero PATTERN fixed across Newton steps — MUMPS
+                    # analyzes the symbol once and reuses it, and aborts "nonzeros
+                    # changed between symbolic and numeric" if the degenerate diagonals
+                    # flip in/out (measured n9). Also FORCE re-symbolization each factor
+                    # when GMIN is on (below) so the analyzed pattern always matches.
+                    _Jm_lil = _Jm_tr.tolil()
+                    _Jm_lil.setdiag(_Jm_lil.diagonal() + _gmin)
+                    _Jm_tr = _Jm_lil.tocsr()
+                    # Symbolic reuse (lever B2): the symbolic factorization depends only
+                    # on the PATTERN (nnz + indices/indptr), not the values. Under GMIN
+                    # the ~30 degenerate diagonals CAN change the stored-nnz between
+                    # steps, so we cannot reuse blindly — but the spike showed the
+                    # pattern changes RARELY (3 distinct patterns in 28 steps), so
+                    # re-analyzing every step is mostly wasted. Detect a pattern change
+                    # by signature and force re-analysis ONLY on a change; otherwise let
+                    # the existing _need_lu/_lu_age_tr reuse machinery run. Reusing only
+                    # on a byte-identical pattern makes the MUMPS "nonzeros changed"
+                    # abort impossible. EQUILIBRIA_GTAP_GMIN_SYM_REUSE=0 restores the
+                    # old unconditional re-analyze.
+                    if os.environ.get("EQUILIBRIA_GTAP_GMIN_SYM_REUSE", "1") != "0":
+                        import hashlib as _hl_sr
 
-                                    _famc = _Ctr()
-                                    _examples = []
-                                    for _ri in _bad.tolist():
-                                        if 0 <= _ri < len(_cons_nlp2):
-                                            _cn = str(_cons_nlp2[_ri])
-                                            _fam = _cn.split("[")[0]
-                                            _famc[_fam] += 1
-                                            _cj = (
-                                                int(_colperm_tr[_ri])
-                                                if _ri < len(_colperm_tr)
-                                                else -1
-                                            )
-                                            _vn = (
-                                                str(_vars_nlp2[_cj])
-                                                if 0 <= _cj < len(_vars_nlp2)
-                                                else "?"
-                                            )
-                                            if len(_examples) < 20:
-                                                _examples.append(f"{_cn}⊥{_vn}")
-                                    _plog_m(
-                                        f"NULLPIV rows(|diag|/rowmax<1e-10)="
-                                        f"{len(_bad)} families: "
-                                        + ", ".join(
-                                            f"{_f}={_c}"
-                                            for _f, _c in _famc.most_common()
-                                        )
-                                    )
-                                    _plog_m("NULLPIV examples: " + "; ".join(_examples))
-                                except Exception as _ne:
-                                    _plog_m(f"nullpiv naming failed: {_ne}")
-                    except Exception:
-                        pass
-                    _plog_m(
-                        "numeric factorization done in "
-                        f"{__import__('time').perf_counter() - _t_m:.1f}s"
-                    )
-                    _lu_age_tr = 0
-                except Exception as _e_m:
-                    # Log INFOG(1)/INFOG(2) so the failure is diagnosable from the
-                    # log instead of guessed: -6/-10 = structurally/numerically
-                    # singular (INFOG(2)=offending pivot), -9/-8 = workspace too
-                    # small (bump ICNTL(14)), etc.
-                    _infog = ""
-                    try:
-                        _lu_any = cast(Any, _lu_tr)
-                        _infog = (
-                            f" INFOG(1)={_lu_any.get_infog(1)} "
-                            f"INFOG(2)={_lu_any.get_infog(2)}"
+                        _sig = (
+                            _Jm_tr.nnz,
+                            _hl_sr.sha256(
+                                _Jm_tr.indices.tobytes() + _Jm_tr.indptr.tobytes()
+                            ).hexdigest(),
                         )
-                    except Exception:
-                        pass
-                    _plog_m(f"MUMPS FAILED: {_e_m}{_infog}")
-                    _lu_tr = None
-            else:
-                _lu_age_tr += 1
+                        if _sig != _gmin_pattern_sig:
+                            _lu_tr = None  # pattern changed → re-analyze
+                            _gmin_pattern_sig = _sig
+                        # else: pattern unchanged → keep _lu_tr, reuse the symbolic
+                    else:
+                        _lu_tr = None  # opt-out: old unconditional re-analyze
+                # GMIN on keeps the cadence of one factorization per step; the policy
+                # only moves the regularization, not when J·P is refactored.
+                if _need_lu or _gmin_cfg > 0.0:
+                    try:
+                        _t_m = __import__("time").perf_counter()
+                        if _lu_tr is None:
+                            # sym=0 (unsymmetric). ICNTL(14): working-space %-increase
+                            # (avoid fill-underestimate failures at 393k).
+                            # ICNTL(6): column permutation / scaling strategy. We ALREADY
+                            # give MUMPS a zero-free-diagonal matrix (_Jm_tr = J·P with P
+                            # from the GAMS pairing). ICNTL(6)=5 makes MUMPS compute ITS
+                            # OWN max-transversal permutation ON TOP, which discards our
+                            # (correct) P and re-introduced the structural singularity →
+                            # error -6 even after the paired colperm made the diagonal
+                            # full (measured: kernel n2, "paired colperm 391839/391839"
+                            # then "MUMPS error -6"). With our own P applied, default to
+                            # ICNTL(6)=0 (no MUMPS permutation). Overridable to A/B other
+                            # strategies (0/7) via EQUILIBRIA_GTAP_MUMPS_ICNTL6.
+                            _icntl6 = (
+                                int(icntl6)
+                                if icntl6 is not None
+                                else int(
+                                    os.environ.get("EQUILIBRIA_GTAP_MUMPS_ICNTL6", "0")
+                                )
+                            )
+                            # ICNTL(7): fill-reducing ordering. Default PORD SEGFAULTED
+                            # in libpord (findIndMultisecs) on the 393k GTAP pattern
+                            # (measured n3). METIS (5) is robust at this scale — switch
+                            # away from PORD. ICNTL(8): row/col SCALING. =8 is MUMPS's
+                            # iterative row/col equilibration (Ruiz-like) — the numeric
+                            # fix for error -10 (numerically singular pivot 391545 = the
+                            # ill-conditioned eq_pfeq[Land] row, coef ~680 vs xft~2e-4).
+                            # ICNTL(24)=1: detect+handle null pivots instead of aborting
+                            # -10; CNTL(3) sets the null-pivot threshold (small relative).
+                            # Default AMD (0): universally available (unlike METIS/5,
+                            # which needs MUMPS compiled --with-metis — not guaranteed
+                            # on Kaggle's libmumps) and NOT PORD, so it avoids the
+                            # libpord segfault. Override to 5 (METIS) if the build has it.
+                            _icntl7 = int(
+                                os.environ.get("EQUILIBRIA_GTAP_MUMPS_ICNTL7", "0")
+                            )  # 0=AMD (safe, avoids PORD segfault)
+                            _icntl8 = int(
+                                os.environ.get("EQUILIBRIA_GTAP_MUMPS_ICNTL8", "8")
+                            )  # 8=iterative row/col scaling (MUMPS Ruiz)
+                            _icntl24 = int(
+                                os.environ.get("EQUILIBRIA_GTAP_MUMPS_ICNTL24", "1")
+                            )  # 1=null-pivot detection
+                            _tr_cfg.update(
+                                icntl={
+                                    "6": _icntl6,
+                                    "7": _icntl7,
+                                    "8": _icntl8,
+                                    "14": 100,
+                                    "24": _icntl24,
+                                }
+                            )
+                            _lu_tr = _Mumps_tr(sym=0)
+                            _lu_tr.set_icntl(14, 100)
+                            _lu_tr.set_icntl(6, _icntl6)
+                            _lu_tr.set_icntl(7, _icntl7)
+                            _lu_tr.set_icntl(8, _icntl8)
+                            _lu_tr.set_icntl(24, _icntl24)
+                            # CNTL(3): null-pivot threshold (used when ICNTL(24)=1).
+                            # Small relative value so only genuinely ~0 pivots are
+                            # treated as null (not the merely small-but-valid ones).
+                            if _icntl24:
+                                try:
+                                    _lu_tr.set_cntl(
+                                        3,
+                                        float(
+                                            os.environ.get(
+                                                "EQUILIBRIA_GTAP_MUMPS_CNTL3",
+                                                "-1e-8",
+                                            )
+                                        ),
+                                    )
+                                except Exception:
+                                    pass
+                            _plog_m(
+                                f"ICNTL 6={_icntl6}(perm) 7={_icntl7}(order) "
+                                f"8={_icntl8}(scale) 24={_icntl24}(nullpiv)"
+                            )
+                            if on_symbolic_factorization is not None:
+                                on_symbolic_factorization()
+                            _lu_tr.do_symbolic_factorization(_Jm_tr)
+                            _plog_m(
+                                "symbolic factorization done in "
+                                f"{__import__('time').perf_counter() - _t_m:.1f}s "
+                                f"(n={n})"
+                            )
+                            _t_m = __import__("time").perf_counter()
+                        _lu_tr.do_numeric_factorization(_Jm_tr)
+                        _tr_nfact += 1
+                        _factored_now = True
+                        if _gmin > 0.0:
+                            _tr_gmin_factors += 1
+                        _tr_cfg["gmin"] = _gmin_cfg
+                        _tr_cfg["gmin_policy"] = gmin_policy
+                        # INFOG(28) = number of null pivots detected (ICNTL(24)=1). A
+                        # handful is fine (the TR rejects a bad step); many means the
+                        # scaling didn't rescue the ill-conditioned rows.
+                        try:
+                            _nnull = _lu_tr.get_infog(28)
+                            _tr_nullpiv.append(int(_nnull or 0))
+                            if _nnull:
+                                _plog_m(f"null pivots detected: {_nnull}")
+                                # NAME the null-pivot rows (env EQUILIBRIA_GTAP_MUMPS_
+                                # NAME_NULLPIV=1). MUMPS fills id.pivnul_list with the
+                                # 1-based indices of the null pivots. In the permuted
+                                # matrix _Jm_tr, position i corresponds to constraints[i]
+                                # (rows are NOT permuted; only columns via _colperm_tr).
+                                # So pivnul index → constraint name → equation FAMILY.
+                                if (
+                                    os.environ.get("EQUILIBRIA_GTAP_MUMPS_NAME_NULLPIV")
+                                    == "1"
+                                ):
+                                    try:
+                                        # ROBUST namer (no MUMPS ctypes internals — the
+                                        # pivnul_list pointer isn't portably iterable
+                                        # across PyMUMPS builds). A null pivot ≈ a row
+                                        # whose diagonal entry in J·P is ~0 relative to
+                                        # the row's magnitude. _Jm_tr = J[:, colperm], so
+                                        # its diagonal IS the paired-pivot value for each
+                                        # row. Rank-deficient rows = |diag| / rowmax tiny.
+                                        _JmC = _Jm_tr.tocsr()
+                                        _diagv = _JmC.diagonal()
+                                        _absJ = abs(_JmC)
+                                        _rowmax = np.asarray(
+                                            _absJ.max(axis=1).todense()
+                                        ).flatten()
+                                        _rowmax[_rowmax <= 0] = 1.0
+                                        _ratio = np.abs(_diagv) / _rowmax
+                                        _bad = np.where(_ratio < 1e-10)[0]
+                                        _cons_nlp2 = (
+                                            row_names if row_names is not None else ()
+                                        )
+                                        _vars_nlp2 = (
+                                            col_names if col_names is not None else ()
+                                        )
+                                        from collections import Counter as _Ctr
+
+                                        _famc = _Ctr()
+                                        _examples = []
+                                        for _ri in _bad.tolist():
+                                            if 0 <= _ri < len(_cons_nlp2):
+                                                _cn = str(_cons_nlp2[_ri])
+                                                _fam = _cn.split("[")[0]
+                                                _famc[_fam] += 1
+                                                _cj = (
+                                                    int(_colperm_tr[_ri])
+                                                    if _ri < len(_colperm_tr)
+                                                    else -1
+                                                )
+                                                _vn = (
+                                                    str(_vars_nlp2[_cj])
+                                                    if 0 <= _cj < len(_vars_nlp2)
+                                                    else "?"
+                                                )
+                                                if len(_examples) < 20:
+                                                    _examples.append(f"{_cn}⊥{_vn}")
+                                        _plog_m(
+                                            f"NULLPIV rows(|diag|/rowmax<1e-10)="
+                                            f"{len(_bad)} families: "
+                                            + ", ".join(
+                                                f"{_f}={_c}"
+                                                for _f, _c in _famc.most_common()
+                                            )
+                                        )
+                                        _plog_m(
+                                            "NULLPIV examples: " + "; ".join(_examples)
+                                        )
+                                    except Exception as _ne:
+                                        _plog_m(f"nullpiv naming failed: {_ne}")
+                        except Exception:
+                            pass
+                        _plog_m(
+                            "numeric factorization done in "
+                            f"{__import__('time').perf_counter() - _t_m:.1f}s"
+                        )
+                        _lu_age_tr = 0
+                    except Exception as _e_m:
+                        # Log INFOG(1)/INFOG(2) so the failure is diagnosable from the
+                        # log instead of guessed: -6/-10 = structurally/numerically
+                        # singular (INFOG(2)=offending pivot), -9/-8 = workspace too
+                        # small (bump ICNTL(14)), etc.
+                        _infog = ""
+                        try:
+                            _lu_any = cast(Any, _lu_tr)
+                            _infog = (
+                                f" INFOG(1)={_lu_any.get_infog(1)} "
+                                f"INFOG(2)={_lu_any.get_infog(2)}"
+                            )
+                        except Exception:
+                            pass
+                        _plog_m(f"MUMPS FAILED: {_e_m}{_infog}")
+                        _lu_tr = None
+                else:
+                    _lu_age_tr += 1
+                if (
+                    _attempt == 0
+                    and _on_null_pivot
+                    and _gmin_cfg > 0.0
+                    and _factored_now
+                    and _tr_nullpiv
+                    and _tr_nullpiv[-1] > 0
+                ):
+                    continue
+                break
             try:
                 if _lu_tr is not None:
                     _y_m, _ = _lu_tr.do_back_solve(-_F_tr)  # (J P) y = -F
@@ -900,4 +949,5 @@ def newton_tr(
         null_pivots=_tr_nullpiv,
         cfg=_tr_cfg,
         linsolve=_linsolve_tr,
+        gmin_factors=_tr_gmin_factors,
     )

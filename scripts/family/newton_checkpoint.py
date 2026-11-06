@@ -171,6 +171,11 @@ def solve_squared(ss, sq, linsolve: str) -> dict:
             col_names=sq.col_names,
             linsolve=linsolve,
             maxit=int(os.environ.get("EQUILIBRIA_GTAP_SCIPY_MAXITER", "300")),
+            # GMIN lands on other entries under the family pairing than under
+            # Pyomo's and moves weakly determined cells (CHE/Rice) by ~1e-7: factor
+            # without it and regularize only when MUMPS reports null pivots.
+            gmin=float(os.environ.get("EQUILIBRIA_GTAP_GMIN", "0") or 0.0),
+            gmin_policy="on_null_pivot",
         )
     newton_s = time.perf_counter() - t0
     resid = float(np.linalg.norm(ss.F(np.clip(res.x, lb, ub)), np.inf))
@@ -282,6 +287,7 @@ def measure(
                 "nfact": res.nfact,
                 "trace": res.trace,
                 "null_pivots": res.null_pivots,
+                "gmin_factors": res.gmin_factors,
                 "cfg": res.cfg,
                 "infog1": out["infog1"],
             },
