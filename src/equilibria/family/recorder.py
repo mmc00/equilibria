@@ -512,69 +512,166 @@ def template(key) -> Any:
     return fn
 
 
-def compile_family(name: str, records, layout) -> Any:
+class _Bucket:
+    """The terms of one shape: lists while the table is read, arrays after."""
+
+    __slots__ = ("key", "k", "m", "rows", "codes", "flats", "c", "s", "t", "terms")
+
+    def __init__(self, key: tuple, k: int, m: int):
+        self.key, self.k, self.m = key, k, m
+        self.rows: Any = []
+        self.codes: Any = []
+        self.flats: Any = []
+        self.c: Any = []
+        self.s: Any = []
+        self.t: Any = []
+        self.terms: list = []
+
+    def freeze(self) -> None:
+        n = len(self.rows)
+        self.rows = np.asarray(self.rows, dtype=np.int64)
+        self.codes = np.asarray(self.codes, dtype=np.int64).reshape(n, self.k)
+        self.flats = np.asarray(self.flats, dtype=np.int64).reshape(n, self.k)
+        self.c = np.asarray(self.c, dtype=float).reshape(n, self.m)
+        self.s = np.asarray(self.s, dtype=float)
+        self.t = np.asarray(self.t, dtype=np.int64)
+
+
+# A folded term can split into several: position = stream index * _SPLIT + split number.
+_SPLIT = 1 << 16
+
+
+class TermTable:
+    """The signed terms of a family's records grouped by shape, built once.
+
+    Which cells are fixed changes with the call, the terms do not: per layout only the
+    terms that read a cell fixed at 0 are re-simplified (``fold_zeros``), the others are
+    gathered as arrays. The groups are those ``compile_family`` has always produced
+    (buckets by first appearance, entries in stream order inside a bucket)."""
+
+    def __init__(self, records) -> None:
+        self.labels = [",".join(str(i) for i in idx) for idx, _ in records]
+        self.vars: dict[str, int] = {}
+        buckets: dict[tuple, _Bucket] = {}
+        t = 0
+        for row, (_, res) in enumerate(records):
+            for sgn, term in residual_terms(res):
+                key, leaves, consts = signature(term)
+                b = buckets.get(key)
+                if b is None:
+                    b = buckets[key] = _Bucket(key, len(leaves), len(consts))
+                b.rows.append(row)
+                for var, flat in leaves:
+                    b.codes.append(self.vars.setdefault(var, len(self.vars)))
+                    b.flats.append(flat)
+                b.c.extend(consts)
+                b.s.append(sgn)
+                b.t.append(t)
+                b.terms.append(term)
+                t += 1
+        self.buckets = list(buckets.values())
+        for b in self.buckets:
+            b.freeze()
+
+    def groups(self, layout) -> list:
+        from equilibria.family.core import TermGroup
+
+        flat_slots = {v: np.asarray(layout.slots[v]).ravel() for v in self.vars}
+        n_cols = layout.n_cols
+        fixed = np.asarray(layout.fixed_values, dtype=float)
+        sizes = [len(flat_slots[v]) for v in self.vars]
+        off = np.concatenate([[0], np.cumsum(sizes, dtype=np.int64)]).astype(np.int64)
+        all_slots = (
+            np.concatenate([flat_slots[v] for v in self.vars])
+            if self.vars
+            else np.zeros(0, dtype=np.int64)
+        )
+        zero = np.zeros(len(all_slots), dtype=bool)
+        is_fixed = all_slots >= n_cols
+        zero[is_fixed] = fixed[all_slots[is_fixed] - n_cols] == 0.0
+
+        def is_fixed_zero(leaf) -> bool:
+            slot = flat_slots[leaf[0]][leaf[1]]
+            return bool(slot >= n_cols and fixed[slot - n_cols] == 0.0)
+
+        # per shape: parts of (position, rows, slots, c, s), merged by position below
+        parts: dict[tuple, list] = {}
+        meta: dict[tuple, tuple[int, int]] = {}
+        folded: dict[tuple, dict[str, list]] = {}
+        for b in self.buckets:
+            gl = off[:-1][b.codes] + b.flats  # (n, k) positions in all_slots
+            slots = all_slots[gl]
+            hit = zero[gl].any(axis=1) if b.k else np.zeros(len(b.rows), dtype=bool)
+            meta[b.key] = (b.k, b.m)
+            for i in np.flatnonzero(hit).tolist():
+                f = fold_zeros(b.terms[i], is_fixed_zero)
+                for j, (s2, t2) in enumerate(residual_terms(Residual(f, 0.0))):
+                    key2, leaves2, consts2 = signature(t2)
+                    meta.setdefault(key2, (len(leaves2), len(consts2)))
+                    d = folded.setdefault(
+                        key2, {"pos": [], "rows": [], "slots": [], "c": [], "s": []}
+                    )
+                    d["pos"].append(int(b.t[i]) * _SPLIT + j)
+                    d["rows"].append(int(b.rows[i]))
+                    d["slots"].extend(flat_slots[v][fl] for v, fl in leaves2)
+                    d["c"].extend(consts2)
+                    d["s"].append(float(b.s[i]) * s2)
+            keep = ~hit
+            parts.setdefault(b.key, []).append(
+                (b.t[keep] * _SPLIT, b.rows[keep], slots[keep], b.c[keep], b.s[keep])
+            )
+        for key2, d in folded.items():
+            k, m = meta[key2]
+            n = len(d["rows"])
+            parts.setdefault(key2, []).append(
+                (
+                    np.asarray(d["pos"], dtype=np.int64),
+                    np.asarray(d["rows"], dtype=np.int64),
+                    np.asarray(d["slots"], dtype=np.int64).reshape(n, k),
+                    np.asarray(d["c"], dtype=float).reshape(n, m),
+                    np.asarray(d["s"], dtype=float),
+                )
+            )
+        merged = []
+        for key, ps in parts.items():
+            pos = np.concatenate([p[0] for p in ps])
+            if len(pos) == 0:
+                continue  # every term of the shape folded away
+            o = np.argsort(pos, kind="stable") if len(ps) > 1 else slice(None)
+            merged.append(
+                (
+                    int(pos[o][0]),
+                    key,
+                    np.concatenate([p[1] for p in ps])[o],
+                    np.concatenate([p[2] for p in ps])[o],
+                    np.concatenate([p[3] for p in ps])[o],
+                    np.concatenate([p[4] for p in ps])[o],
+                )
+            )
+        merged.sort(key=lambda g: g[0])  # buckets by first appearance
+        return [
+            TermGroup(rows=rows, fn=template(key), cols=cols, args={"c": c, "s": s})
+            for _, key, rows, cols, c, s in merged
+        ]
+
+
+def compile_family(name: str, records, layout, table: TermTable | None = None) -> Any:
     """Recorded cells of one equation -> ``CompiledFamily`` (rows + term groups by shape).
 
     ``records`` is ``[(indices, Residual), ...]`` for the cells the rule did not skip.
+    ``table`` is ``TermTable(records)``, kept by a caller that compiles several layouts.
     """
-    from equilibria.family.core import CompiledFamily, TermGroup
+    from equilibria.family.core import CompiledFamily
 
-    flat_slots = {v: np.asarray(a).ravel() for v, a in layout.slots.items()}
-    n_cols = layout.n_cols
-    fixed = np.asarray(layout.fixed_values, dtype=float)
-
-    def is_fixed_zero(leaf) -> bool:
-        slot = flat_slots[leaf[0]][leaf[1]]
-        return bool(slot >= n_cols and fixed[slot - n_cols] == 0.0)
-
-    def signed_terms(res):
-        """Terms of the residual; a term touching a fixed cell at 0 is re-simplified
-        with that 0 in place (it may vanish or split), as the ``.nl`` writer does."""
-        for sgn, term in residual_terms(res):
-            key, leaves, consts = signature(term)
-            if any(is_fixed_zero(lf) for lf in leaves):
-                folded = fold_zeros(term, is_fixed_zero)
-                for s2, t2 in residual_terms(Residual(folded, 0.0)):
-                    yield (sgn * s2, *signature(t2))
-            else:
-                yield sgn, key, leaves, consts
-
-    buckets: dict[tuple, dict[str, list]] = {}
-    labels = []
-    for row, (idx, res) in enumerate(records):
-        labels.append(",".join(str(i) for i in idx))
-        for sgn, key, leaves, consts in signed_terms(res):
-            b = buckets.get(key)
-            if b is None:
-                b = buckets[key] = {"rows": [], "leaves": [], "c": [], "s": []}
-            b["rows"].append(row)
-            b["leaves"].append(leaves)
-            b["c"].append(consts)
-            b["s"].append(sgn)
-
-    groups = []
-    for key, b in buckets.items():
-        n = len(b["rows"])
-        k = len(b["leaves"][0])
-        cols = np.empty((n, k), dtype=np.int64)
-        for t, leaves in enumerate(b["leaves"]):
-            for j, (var, flat) in enumerate(leaves):
-                cols[t, j] = flat_slots[var][flat]
-        groups.append(
-            TermGroup(
-                rows=np.asarray(b["rows"], dtype=np.int64),
-                fn=template(key),
-                cols=cols,
-                args={
-                    "c": np.asarray(b["c"], dtype=float).reshape(n, -1),
-                    "s": np.asarray(b["s"], dtype=float),
-                },
-            )
-        )
-    return CompiledFamily(name=name, row_labels=labels, groups=groups)
+    if table is None:
+        table = TermTable(records)
+    return CompiledFamily(
+        name=name, row_labels=list(table.labels), groups=table.groups(layout)
+    )
 
 
 __all__ = [
+    "TermTable",
     "compile_family",
     "signature",
     "template",

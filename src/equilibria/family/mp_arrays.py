@@ -263,6 +263,9 @@ class Squared:
         self.row_names = row_names
         self.col_names = col_names
         self._cells = cells
+        # integer ids of the rows / columns (``cell_index.SquaredIds``), set by
+        # ``square``; ``SquaredSystem.build`` reads them instead of the name strings
+        self.ids: Any = None
 
     @property
     def cells(self) -> dict[str, tuple[float, bool, float, float]]:
@@ -273,6 +276,7 @@ class Squared:
     @cells.setter
     def cells(self, value: dict) -> None:
         self._cells = value
+        self.ids = None  # the ids describe the cells square captured
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Squared):

@@ -17,7 +17,12 @@ from contextlib import contextmanager
 from typing import Any
 
 from equilibria.family.core import CompiledFamily, FamilySystem
-from equilibria.family.recorder import RecordingModel, compile_family, intrinsic
+from equilibria.family.recorder import (
+    RecordingModel,
+    TermTable,
+    compile_family,
+    intrinsic,
+)
 
 _INTRINSICS = ("sqrt", "log", "exp")
 
@@ -133,7 +138,14 @@ class FamilyBackend:
         return VarLayout.from_state(state.sets, domains, values, free)
 
     def families(self, layout: Any) -> list[CompiledFamily]:
-        return [compile_family(n, recs, layout) for n, recs in self.records.items()]
+        tables = self.__dict__.setdefault("_term_tables", {})
+        out = []
+        for n, recs in self.records.items():
+            hit = tables.get(n)
+            if hit is None or hit[0] is not recs:
+                hit = tables[n] = (recs, TermTable(recs))
+            out.append(compile_family(n, recs, layout, hit[1]))
+        return out
 
     def system(self, layout: Any) -> FamilySystem:
         return FamilySystem.from_families(self.families(layout), layout)

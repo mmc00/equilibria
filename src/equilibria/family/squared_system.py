@@ -16,6 +16,7 @@ from typing import Any, NamedTuple
 import numpy as np
 import scipy.sparse as sp
 
+from equilibria.family.cell_index import CellIndex, SquaredIds
 from equilibria.family.layout import VarLayout
 from equilibria.family.mp_arrays import MPArrays, Squared
 from equilibria.family.recorder import Node
@@ -326,6 +327,92 @@ def _flat_index(var: Any, doms: tuple[str, ...], sets: dict[str, list[str]]):
     return cache[key]
 
 
+class _SPTables(NamedTuple):
+    cells: dict[
+        str, np.ndarray | None
+    ]  # var -> global id of every flat cell (-1: none)
+    rows: dict[str, np.ndarray]  # family -> global row id of every record (-1: none)
+
+
+def _single_period_tables(
+    backend: Any, state: Any, mp: MPArrays, period: str, index: CellIndex
+) -> _SPTables:
+    """Per run, backend and period: where the single-period layout's cells and the
+    backend's records sit in the arrays (the keys never change within a run)."""
+    key = ("build_sp", id(backend), period)
+    hit = index.cache.get(key)
+    if hit is not None and hit[0] is backend:
+        return hit[1]
+    cells: dict[str, np.ndarray | None] = {}
+    for v, doms in backend.var_domains.items():
+        var = mp.vars.get(v)
+        if var is None:
+            cells[v] = None
+            continue
+        flat = {
+            idx: k
+            for k, idx in enumerate(itertools.product(*(state.sets[d] for d in doms)))
+        }
+        ids = index.period_ids("var", v, period, var)
+        k = np.array([flat.get(var.keys[i][:-1], -1) for i in ids.tolist()], np.int64)
+        g = np.full(len(flat), -1, dtype=np.int64)
+        ok = k >= 0
+        g[k[ok]] = index.var_off[v] + ids[ok]
+        if (g < 0).any():
+            missing = int(np.flatnonzero(g < 0)[0])
+            raise KeyError(f"variable {v!r}: cell {missing} of the layout not in mp")
+        cells[v] = g
+    rows: dict[str, np.ndarray] = {}
+    for fam, recs in backend.records.items():
+        row = mp.rows.get(fam)
+        if row is None or is_cross_period(fam):
+            rows[fam] = np.full(len(recs), -1, dtype=np.int64)
+            continue
+        ids = index.period_ids("row", fam, period, row)
+        where = {row.keys[i][:-1]: i for i in ids.tolist()}
+        pos = np.array([where.get(tuple(idx), -1) for idx, _ in recs], np.int64)
+        rows[fam] = np.where(pos >= 0, index.row_off[fam] + pos, -1)
+    out = _SPTables(cells, rows)
+    index.cache[key] = (backend, out)
+    return out
+
+
+class _CrossTables(NamedTuple):
+    order: dict[str, tuple[np.ndarray, np.ndarray]]  # var -> (flat order, global ids)
+    rows: dict[str, np.ndarray]
+
+
+def _cross_period_tables(cross: Any, mp: MPArrays, index: CellIndex) -> _CrossTables:
+    key = ("build_cross", id(cross))
+    hit = index.cache.get(key)
+    if hit is not None and hit[0] is cross:
+        return hit[1]
+    order = {}
+    for v, doms in cross.var_domains.items():
+        var = mp.var(v)
+        flat = _flat_index(var, doms, cross.sets)
+        gid = index.var_off[v] + np.arange(len(var.keys), dtype=np.int64)
+        order[v] = (np.argsort(flat, kind="stable"), gid)
+    rows = {}
+    for fam, recs in cross.records.items():
+        row = mp.rows.get(fam)
+        if row is None:
+            rows[fam] = np.full(len(recs), -1, dtype=np.int64)
+            continue
+        where = {k: i for i, k in enumerate(row.keys)}
+        pos = np.array([where.get(tuple(idx), -1) for idx, _ in recs], np.int64)
+        rows[fam] = np.where(pos >= 0, index.row_off[fam] + pos, -1)
+    out = _CrossTables(order, rows)
+    index.cache[key] = (cross, out)
+    return out
+
+
+def _squared_rows(rows: dict[str, np.ndarray], records: dict, ids: Any) -> np.ndarray:
+    """Squared row of every row of a system (family order, record order); -1: dropped."""
+    gid = np.concatenate([rows[f] for f in records] or [np.zeros(0, dtype=np.int64)])
+    return np.where(gid >= 0, ids.row_pos[np.maximum(gid, 0)], -1).astype(np.int64)
+
+
 class SquaredSystem:
     """The squared system of one solve call, evaluated by the family backend.
 
@@ -347,7 +434,8 @@ class SquaredSystem:
         self._parts = parts
         self._proxy_k = proxy_k
         # set by ``build`` for ``fscale``: row name -> position, per-recording context
-        self._row_pos: dict[str, int] = {}
+        self._row_pos_d: dict[str, int] | None = None
+        self._row_names: list[str] = row_names
         self._fscale_ctx: list = []
         self.proxy_rows = [row_names[k] for k in proxy_k]
         # Squared columns with no backend cell (each paired with a proxy row).
@@ -358,24 +446,26 @@ class SquaredSystem:
             self.proxy_families[f] = self.proxy_families.get(f, 0) + 1
 
     @staticmethod
-    def _single_period_part(backend, state, mp, period, sq, col_pos):
-        values, free = {}, {}
+    def _single_period_part(backend, state, mp, period, ids):
+        """Layout of ``period``, the backend system on it, and where its columns and
+        rows go in the squared system (integer maps, no name strings)."""
+        tab = _single_period_tables(backend, state, mp, period, ids.index)
+        col_pos = ids.col_pos
+        vals_g, _ = ids.values()
+        values, free, zcols = {}, {}, []
         for v, doms in backend.var_domains.items():
             shape = tuple(len(state.sets[d]) for d in doms)
-            vals = np.empty(shape)
-            mask = np.zeros(shape, dtype=bool)
-            var = mp.vars.get(v)
-            for k, idx in enumerate(itertools.product(*(state.sets[d] for d in doms))):
-                name = _cell_name(v, idx, period)
-                if name in sq.cells:
-                    vals.flat[k] = sq.cells[name][0]
-                elif var is not None:
-                    vals.flat[k] = var.value[var.pos((*idx, period))]
-                elif v in SP_ONLY_VARS:  # a fixed slot at the state's level
-                    vals.flat[k] = np.asarray(state.values[v], dtype=float).flat[k]
-                else:
-                    raise KeyError(f"variable component {v!r} missing from mp")
-                mask.flat[k] = name in col_pos
+            g = tab.cells[v]
+            if g is not None:
+                vals = vals_g[g].reshape(shape)
+                cp = col_pos[g]
+                mask = (cp >= 0).reshape(shape)
+                zcols.append(cp[cp >= 0])
+            elif v in SP_ONLY_VARS:  # a fixed slot at the state's level
+                vals = np.array(state.values[v], dtype=float).reshape(shape)
+                mask = np.zeros(shape, dtype=bool)
+            else:
+                raise KeyError(f"variable component {v!r} missing from mp")
             values[v], free[v] = vals, mask
         for p in backend.param_domains:
             values[p] = state.find_component(p).data
@@ -383,17 +473,20 @@ class SquaredSystem:
         layout = VarLayout.from_state(
             state.sets, {**backend.var_domains, **backend.param_domains}, values, free
         )
-        names = [_with_period(n, period) for n in layout.col_names]
+        zperm = np.concatenate(zcols) if zcols else np.zeros(0, dtype=np.int64)
         ctx = (backend.records, values, free)
-        return backend.system(layout), names, lambda n: _with_period(n, period), ctx
+        k = _squared_rows(tab.rows, backend.records, ids)
+        return backend.system(layout), zperm, k, ctx
 
     @staticmethod
-    def _cross_period_part(cross, mp):
+    def _cross_period_part(cross, mp, ids):
         """Layout over every period: levels and fixed flags of ``mp`` (``square``'s
         returned arrays, which carry the closure's fixings of every period); the free
         cells are the squared columns."""
         sets = cross.sets
-        values, free = {}, {}
+        col_pos = ids.col_pos
+        tab = _cross_period_tables(cross, mp, ids.index)
+        values, free, zcols = {}, {}, []
         for v, doms in cross.var_domains.items():
             shape = tuple(len(sets[d]) for d in doms)
             vals = np.ones(shape)  # the cells no row reads (mq of other slots)
@@ -403,9 +496,17 @@ class SquaredSystem:
             vals.flat[flat] = var.value
             mask.flat[flat] = ~var.fixed
             values[v], free[v] = vals, mask
+            # layout columns of v: its free cells in flat order
+            order, gid = tab.order[v]
+            cp = col_pos[gid[order[~var.fixed[order]]]]
+            if (cp < 0).any():
+                raise KeyError(f"{v}: free cell of the layout is not a squared column")
+            zcols.append(cp)
         layout = VarLayout.from_state(sets, cross.var_domains, values, free)
+        zperm = np.concatenate(zcols) if zcols else np.zeros(0, dtype=np.int64)
         ctx = (cross.records, values, free)
-        return cross.system(layout), list(layout.col_names), lambda n: n, ctx
+        k = _squared_rows(tab.rows, cross.records, ids)
+        return cross.system(layout), zperm, k, ctx
 
     @classmethod
     def build(
@@ -426,46 +527,52 @@ class SquaredSystem:
         ``cross`` is the cross-period recording (``cross_period.load_or_record``); its
         layout spans every period, so ``mp`` must be the arrays ``square`` returns
         (``return_mp=True``): other periods' levels and fixings as the closure left
-        them. Rows with no family function raise unless ``proxies`` and cross-period."""
-        col_pos = {c: k for k, c in enumerate(sq.col_names)}
-        if len(col_pos) != len(sq.col_names) or len(sq.row_names) != len(sq.col_names):
+        them. Rows with no family function raise unless ``proxies`` and cross-period.
+
+        Rows, columns and values go through the integer ids ``square`` leaves on
+        ``sq.ids``; a ``Squared`` without them (built from names) gets them from its
+        names first."""
+        n = len(sq.col_names)
+        ids = sq.ids
+        if (
+            ids is None
+            or not ids.index.fits(mp)
+            or len(ids.row_gid) != len(sq.row_names)
+            or len(ids.col_gid) != n
+        ):
+            if len(set(sq.col_names)) != n or len(sq.row_names) != n:
+                raise ValueError("sq is not a square system of distinct columns")
+            ids = SquaredIds.from_names(sq, mp)
+        elif len(sq.row_names) != n:
             raise ValueError("sq is not a square system of distinct columns")
-        row_pos = {r: k for k, r in enumerate(sq.row_names)}
 
-        raw = [cls._single_period_part(backend, state, mp, period, sq, col_pos)]
+        raw = [cls._single_period_part(backend, state, mp, period, ids)]
         if cross is not None:
-            raw.append(cls._cross_period_part(cross, mp))
-        x0 = np.empty(len(sq.col_names))
-        for name, k in col_pos.items():
-            if name not in sq.cells:
-                raise KeyError(f"{name}: free column missing from sq.cells")
-            x0[k] = sq.cells[name][0]
+            raw.append(cls._cross_period_part(cross, mp, ids))
+        x0 = np.array(ids.x0(), dtype=float)
 
-        parts, covered, backend_cols = [], set(), np.zeros(len(sq.col_names), bool)
+        parts, covered, backend_cols = [], np.zeros(n, bool), np.zeros(n, bool)
         fscale_ctx = []
-        for i, (system, col_names, row_name, ctx) in enumerate(raw):
+        for i, (system, zperm, k_of_row, ctx) in enumerate(raw):
+            row_name = (
+                (lambda nm, p=period: _with_period(nm, p))
+                if i == 0
+                else (lambda nm: nm)
+            )
             fscale_ctx.append((*ctx, row_name, i == 0))
-            zperm = np.array([col_pos[n] for n in col_names], dtype=np.int64)
             backend_cols[zperm] = True
-            fam_rows, fam_k = [], []
-            for r, name in enumerate(system.row_names):
-                full = row_name(name)
-                k = row_pos.get(full)
-                if k is None or (i == 0 and is_cross_period(name.partition("[")[0])):
-                    continue  # row inactive in this call, or not the multiperiod row
-                fam_rows.append(r)
-                fam_k.append(k)
-            fam_rows, fam_k = np.array(fam_rows, np.int64), np.array(fam_k, np.int64)
-            dup = covered & set(fam_k.tolist())
-            if dup:
+            fam_rows = np.flatnonzero(k_of_row >= 0).astype(np.int64)
+            fam_k = k_of_row[fam_rows]
+            dup = covered[fam_k]
+            if dup.any():
                 raise ValueError(
-                    f"rows given by two recordings: {sorted(sq.row_names[k] for k in dup)[:5]}"
+                    f"rows given by two recordings: {sorted(sq.row_names[k] for k in fam_k[dup])[:5]}"
                 )
-            covered |= set(fam_k.tolist())
+            covered[fam_k] = True
             row_of = np.full(system.n_rows, -1, dtype=np.int64)
             row_of[fam_rows] = fam_k
             parts.append((system, fam_rows, fam_k, zperm, row_of))
-        proxy_k = np.setdiff1d(np.arange(len(sq.row_names)), np.array(sorted(covered)))
+        proxy_k = np.flatnonzero(~covered)
         # A row nobody records is only legitimate as a cross-period proxy; anything
         # else active would be a fake row.
         bad = sorted(
@@ -489,9 +596,20 @@ class SquaredSystem:
                 f"with a proxy row: {unpaired[:5]}"
             )
         ss = cls(x0, parts, sq.row_names, proxy_k, len(outside))
-        ss._row_pos = row_pos
+        ss._row_names = sq.row_names
         ss._fscale_ctx = fscale_ctx
         return ss
+
+    @property
+    def _row_pos(self) -> dict[str, int]:
+        """Row name -> position, built on first use (only ``fscale`` reads it)."""
+        if self._row_pos_d is None:
+            self._row_pos_d = {r: k for k, r in enumerate(self._row_names)}
+        return self._row_pos_d
+
+    @_row_pos.setter
+    def _row_pos(self, value: dict[str, int]) -> None:
+        self._row_pos_d = value
 
     def fscale(self) -> np.ndarray:
         """Per-row scale of the relative-residual test (``EQUILIBRIA_GTAP_TR_RELTOL``),

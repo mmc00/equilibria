@@ -85,3 +85,89 @@ class CellIndex:
                 table = {self.col_names[off + i]: off + i for i in range(len(v.keys))}
             self._name_gid[comp] = table
         return table.get(name)
+
+
+class SquaredIds:
+    """Global ids of the rows and columns of a ``Squared`` (paired order) and the values
+    captured when it was squared, so the system is built without name strings.
+
+    ``row_gid[k]`` / ``col_gid[k]`` are ``CellIndex`` ids, -1 for a name the arrays do
+    not have. ``snap`` is ``(var name, positions, values)`` per variable: the cells of
+    the squared period as they were when squaring."""
+
+    def __init__(self, index: CellIndex, row_gid, col_gid, snap, x0=None) -> None:
+        self.index = index
+        self.row_gid = np.asarray(row_gid, dtype=np.int64)
+        self.col_gid = np.asarray(col_gid, dtype=np.int64)
+        self.snap = snap
+        self._x0 = x0
+        self._row_pos: np.ndarray | None = None
+        self._col_pos: np.ndarray | None = None
+        self._vals: tuple[np.ndarray, np.ndarray] | None = None
+
+    @classmethod
+    def from_names(cls, sq: Any, mp: MPArrays, index: CellIndex | None = None):
+        """Ids of a ``Squared`` built some other way (names only)."""
+        index = index or CellIndex(mp)
+        rows = {n: i for i, n in enumerate(index.row_names)}
+        cols = {n: i for i, n in enumerate(index.col_names)}
+        out = cls(
+            index,
+            [rows.get(n, -1) for n in sq.row_names],
+            [cols.get(n, -1) for n in sq.col_names],
+            [],
+        )
+        vals = np.zeros(len(index.col_names))
+        has = np.zeros(len(index.col_names), dtype=bool)
+        for name, cell in sq.cells.items():
+            g = cols.get(name)
+            if g is not None:
+                vals[g], has[g] = cell[0], True
+        out._vals = (vals, has)
+        out._x0 = np.array([sq.cells[n][0] for n in sq.col_names], dtype=float)
+        return out
+
+    @property
+    def row_pos(self) -> np.ndarray:
+        """Squared row of every global row id (-1: not a row of the system)."""
+        if self._row_pos is None:
+            pos = np.full(len(self.index.row_names), -1, dtype=np.int64)
+            ok = self.row_gid >= 0
+            pos[self.row_gid[ok]] = np.flatnonzero(ok)
+            self._row_pos = pos
+        return self._row_pos
+
+    @property
+    def col_pos(self) -> np.ndarray:
+        """Squared column of every global variable id (-1: not a column)."""
+        if self._col_pos is None:
+            pos = np.full(len(self.index.col_names), -1, dtype=np.int64)
+            ok = self.col_gid >= 0
+            pos[self.col_gid[ok]] = np.flatnonzero(ok)
+            self._col_pos = pos
+        return self._col_pos
+
+    def values(self) -> tuple[np.ndarray, np.ndarray]:
+        """(value, present) of every global variable id at squaring time."""
+        if self._vals is None:
+            vals = np.zeros(len(self.index.col_names))
+            has = np.zeros(len(self.index.col_names), dtype=bool)
+            for name, idx, value in self.snap:
+                g = self.index.var_off[name] + idx
+                vals[g], has[g] = value, True
+            self._vals = (vals, has)
+        return self._vals
+
+    def x0(self) -> np.ndarray:
+        """Values of the squared columns; ``KeyError`` for one with no captured value."""
+        if self._x0 is None:
+            vals, has = self.values()
+            g = self.col_gid
+            ok = g >= 0
+            ok[ok] = has[g[ok]]
+            if not ok.all():
+                k = int(np.flatnonzero(~ok)[0])
+                name = self.index.col_names[g[k]] if g[k] >= 0 else f"column {k}"
+                raise KeyError(f"{name}: free column missing from sq.cells")
+            self._x0 = vals[g]
+        return self._x0

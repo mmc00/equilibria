@@ -40,7 +40,7 @@ from typing import Any, Literal, overload
 
 import numpy as np
 
-from equilibria.family.cell_index import CellIndex
+from equilibria.family.cell_index import CellIndex, SquaredIds
 from equilibria.family.mp_arrays import MPArrays, RowArr, Squared, VarArr
 from equilibria.solver._matching import match_rows
 
@@ -489,6 +489,7 @@ class _LazyCells:
                 off = index.var_off[name]
                 self._snap.append(
                     (
+                        name,
                         index.col_names[off : off + len(v.keys)],
                         idx,
                         v.value[idx],
@@ -500,7 +501,7 @@ class _LazyCells:
 
     def __call__(self) -> dict[str, tuple[float, bool, float, float]]:
         out = {}
-        for names, idx, value, fixed, lb, ub in self._snap:
+        for _, names, idx, value, fixed, lb, ub in self._snap:
             out.update(
                 zip(
                     [names[i] for i in idx.tolist()],
@@ -769,5 +770,12 @@ def square(
     pairs = _gams_pair_ids(mp, index, params, row_pos, col_pos, mode)
     paired = match_rows(len(rnames), adjacency, pairs)
     _check_permutation(paired, rnames, cnames, pairs)
-    sq = Squared(rnames, [cnames[j] for j in paired], _LazyCells(mp, index, period))
+    lazy = _LazyCells(mp, index, period)
+    sq = Squared(rnames, [cnames[j] for j in paired], lazy)
+    sq.ids = SquaredIds(
+        index,
+        rid,
+        cid[np.asarray(paired, dtype=np.int64)],
+        [(name, idx, value) for name, _, idx, value, *_ in lazy._snap],
+    )
     return (sq, mp) if return_mp else sq
