@@ -11,7 +11,7 @@ for scripts that time the system without them.
 from __future__ import annotations
 
 import itertools
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 import scipy.sparse as sp
@@ -66,21 +66,53 @@ def _with_period(name: str, period: str) -> str:
     return f"{name[:-1]},{period}]"
 
 
+class PatternCSR(NamedTuple):
+    """Structure of a system's J as integer CSR: row ``i`` has the layout columns
+    ``indices[indptr[i]:indptr[i + 1]]``, ascending."""
+
+    indptr: np.ndarray
+    indices: np.ndarray
+    row_names: list[str]
+    col_names: list[str]
+
+
+def _pattern_csr(system: Any, layout: VarLayout) -> PatternCSR:
+    """The stored pattern of ``system`` (``FamilySystem._pat_rows/_pat_cols``: unique
+    (row, col) pairs sorted by row, then column) as CSR, without evaluating J."""
+    n = system.n_rows
+    indptr = np.zeros(n + 1, dtype=np.int64)
+    np.cumsum(np.bincount(system._pat_rows, minlength=n), out=indptr[1:])
+    return PatternCSR(
+        indptr,
+        np.asarray(system._pat_cols, dtype=np.int64),
+        list(system.row_names),
+        list(layout.col_names),
+    )
+
+
 def _pattern(backend: Any, layout: VarLayout, period: str | None) -> dict[str, list]:
     """Row name -> columns of its J pattern. ``period`` is appended to the single-period
     names; ``None`` keeps them (the cross-period names carry their period)."""
-    system = backend.system(layout)
-    J = system.jac(layout.free_values).tocsr()
-    cols = list(layout.col_names)
-    rows = list(system.row_names)
+    pat = _pattern_csr(backend.system(layout), layout)
+    cols, rows = pat.col_names, pat.row_names
     if period is not None:
         cols = [_with_period(n, period) for n in cols]
         rows = [_with_period(n, period) for n in rows]
-    out: dict[str, list[str]] = {}
-    for i, name in enumerate(rows):
-        lo, hi = J.indptr[i], J.indptr[i + 1]
-        out[name] = [cols[j] for j in sorted(J.indices[lo:hi])]
-    return out
+    ind, ptr = pat.indices, pat.indptr
+    return {
+        name: [cols[j] for j in ind[ptr[i] : ptr[i + 1]].tolist()]
+        for i, name in enumerate(rows)
+    }
+
+
+def incidence_csr(backend: Any, state: Any) -> PatternCSR:
+    """The single-period J pattern with every variable cell free, once per backend
+    (the pattern does not depend on the closure, the period or the levels)."""
+    cached = getattr(backend, "_incidence_csr", None)
+    if cached is None:
+        layout = _all_free_layout(backend, state)
+        cached = backend._incidence_csr = _pattern_csr(backend.system(layout), layout)
+    return cached
 
 
 def _cross_pattern(cross: Any) -> dict[str, list[str]]:
@@ -115,6 +147,24 @@ def _cross_pattern(cross: Any) -> dict[str, list[str]]:
     return cached
 
 
+def _single_period_incidence(backend: Any, state: Any, period: str) -> dict:
+    """The single-period rows' incidence of ``period``, once per backend and period."""
+    cache = backend.__dict__.setdefault("_incidence_by_period", {})
+    hit = cache.get(period)
+    if hit is None:
+        pat = incidence_csr(backend, state)
+        cols = [_with_period(n, period) for n in pat.col_names]
+        ind, ptr = pat.indices, pat.indptr
+        hit = cache[period] = {
+            _with_period(name, period): [
+                cols[j] for j in ind[ptr[i] : ptr[i + 1]].tolist()
+            ]
+            for i, name in enumerate(pat.row_names)
+            if not is_cross_period(name.partition("[")[0])
+        }
+    return hit
+
+
 def period_incidence(
     backend: Any, state: Any, period: str, cross: Any = None
 ) -> dict[str, list[str]]:
@@ -125,11 +175,7 @@ def period_incidence(
     zeros stay in the pattern. Rows the backend does not record are absent. With
     ``cross`` (the cross-period recording) the rows of ``period`` it records are added,
     their columns being the cells of every period they read."""
-    out = {
-        k: v
-        for k, v in _pattern(backend, _all_free_layout(backend, state), period).items()
-        if not is_cross_period(k.partition("[")[0])
-    }
+    out = dict(_single_period_incidence(backend, state, period))
     if cross is not None:
         for name, cols in _cross_pattern(cross).items():
             if name.endswith(f",{period}]") or name.endswith(f"[{period}]"):

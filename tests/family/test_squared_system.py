@@ -799,7 +799,7 @@ def _evaluated_cross_pattern(cross):
     import numpy as np
 
     from equilibria.family.layout import VarLayout
-    from equilibria.family.squared_system import _pattern
+    from tests.family.test_incidence_csr import _legacy_pattern
 
     values = {
         v: np.ones(tuple(len(cross.sets[d]) for d in doms))
@@ -807,7 +807,7 @@ def _evaluated_cross_pattern(cross):
     }
     free = {v: np.ones(a.shape, dtype=bool) for v, a in values.items()}
     layout = VarLayout.from_state(cross.sets, cross.var_domains, values, free)
-    return _pattern(cross, layout, None)
+    return _legacy_pattern(cross, layout, None)
 
 
 @pytest.mark.parametrize("dataset", ["gtap7_3x3", "gtap7_10x7"], ids=["3x3", "10x7"])
