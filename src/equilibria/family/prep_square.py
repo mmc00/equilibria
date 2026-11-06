@@ -36,7 +36,7 @@ Pyomo does (``eq_pfaeq`` and ``eq_pfyeq`` are not in every model).
 from __future__ import annotations
 
 import itertools
-from typing import Any
+from typing import Any, Literal, overload
 
 import numpy as np
 
@@ -555,6 +555,7 @@ def _check_permutation(
         raise ValueError("the matching is not a permutation: " + " | ".join(problems))
 
 
+@overload
 def square(
     mp: MPArrays,
     period: str,
@@ -565,7 +566,37 @@ def square(
     exogenous: frozenset[str],
     masks: ConditionalMasks,
     mode: str = "gtap",
-) -> Squared:
+    return_mp: Literal[False] = False,
+) -> Squared: ...
+
+
+@overload
+def square(
+    mp: MPArrays,
+    period: str,
+    *,
+    params: Any,
+    closure: Any,
+    incidence: dict[str, Any],
+    exogenous: frozenset[str],
+    masks: ConditionalMasks,
+    mode: str = "gtap",
+    return_mp: Literal[True],
+) -> tuple[Squared, MPArrays]: ...
+
+
+def square(
+    mp: MPArrays,
+    period: str,
+    *,
+    params: Any,
+    closure: Any,
+    incidence: dict[str, Any],
+    exogenous: frozenset[str],
+    masks: ConditionalMasks,
+    mode: str = "gtap",
+    return_mp: bool = False,
+) -> Squared | tuple[Squared, MPArrays]:
     """The squared system of ``period`` from the arrays after the recipe.
 
     ``incidence`` maps each active row's name to the names of the variables in its
@@ -577,7 +608,8 @@ def square(
     cell masks (``ConditionalMasks.from_params``), built once per run for all periods.
     ``mp`` is not modified. Raises ``ValueError`` where Pyomo would repair the system
     by matching (gap > 0, rows > free variables, not square) and ``KeyError`` for a
-    missing component."""
+    missing component. With ``return_mp`` the mutated copy comes back too (closure
+    fixings, deactivated rows and floors of every period, which Pyomo leaves on ``m``)."""
     if mode != "gtap":
         raise NotImplementedError(f"no array squaring for mode {mode!r}")
     if closure is not None and getattr(closure, "name", None) == "altertax":
@@ -620,4 +652,5 @@ def square(
     ]
     paired = match_rows(len(rnames), adjacency, pairs)
     _check_permutation(paired, rnames, cnames, pairs)
-    return Squared(rnames, [cnames[j] for j in paired], _cells(mp, period))
+    sq = Squared(rnames, [cnames[j] for j in paired], _cells(mp, period))
+    return (sq, mp) if return_mp else sq

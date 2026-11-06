@@ -18,9 +18,14 @@ def _newton_mumps() -> dict:
     return mod.NEWTON_MUMPS
 
 
+def reference_dir(dataset: str) -> Path:
+    return Path.home() / ".cache/equilibria/family/reference" / dataset / "tol_today"
+
+
 @cache
 def capture_dir(dataset: str = "gtap7_3x3") -> Path:
-    """Capture ``dataset`` once per session into a temp dir (in-process solve)."""
+    """Photos of ``dataset``: the saved Pyomo reference when there is one (larger
+    datasets), else captured once per session into a temp dir (in-process solve)."""
     import atexit
     import os
     import shutil
@@ -29,6 +34,9 @@ def capture_dir(dataset: str = "gtap7_3x3") -> Path:
     from equilibria.family import prep_capture
     from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
 
+    ref = reference_dir(dataset)
+    if dataset != "gtap7_3x3" and ref.is_dir() and any(ref.glob("001_A_*.pkl")):
+        return ref
     out = Path(tempfile.mkdtemp(prefix=f"prep_{dataset}_"))
     # Photos run to hundreds of MB on 15x10: never leave them behind.
     atexit.register(shutil.rmtree, out, True)

@@ -16,8 +16,9 @@ masks, with no model and no expressions:
 ``sp_reference_arrays`` is the single-period reference (what the driver reads from a
 throwaway Pyomo model) as arrays, from the same composer steps on a ``StateModel``.
 
-Known gap: the Fisher aggregates ``mq_*`` are refreshed after the seed from the sums
-over the periods; here they keep the seeded value (their fixed / bounds are right).
+The Fisher aggregates ``mq_*`` are refreshed after the seed from the sums over the
+periods when ``run_recipe`` gets the cross-period recording (``cross=``); without it
+they keep the value they had (their fixed / bounds are right).
 """
 
 from __future__ import annotations
@@ -134,6 +135,7 @@ class _Ctx:
     mute_welfare: bool
     seed_from_prior: bool
     seed_prior: str
+    cross: Any = None  # cross-period recording: refresh the mq_* after a seed
 
     def exo(self, name: str, v: VarArr) -> np.ndarray:
         """Cells of ``name`` that are exogenous instruments (the driver never frees,
@@ -167,12 +169,17 @@ def _freeze_inactive(c: _Ctx) -> None:
 
 
 def _seed_from_prior(c: _Ctx) -> None:
-    """Warm start: this period's free Vars take the prior period's value. The Fisher
-    aggregates (mq_*) are not recomputed (known gap)."""
+    """Warm start: this period's free Vars take the prior period's value; the Fisher
+    aggregates (mq_*) are then recomputed from the sums they define (every period's,
+    as ``refresh_fisher_aggregates`` does), when the cross-period recording is given."""
     for name, v in c.mp.vars.items():
         ia, ib = _aligned(v, c.period, c.seed_prior)
         take = ~c.exo(name, v)[ia] & ~v.fixed[ia] & ~np.isnan(v.value[ib])
         v.value[ia[take]] = v.value[ib[take]]
+    if c.cross is not None:
+        from equilibria.family.cross_period import refresh_aggregates
+
+        refresh_aggregates(c.cross, c.mp)
 
 
 def _seed_from_prior_if_asked(c: _Ctx) -> None:
@@ -403,8 +410,13 @@ def run_recipe(
     seed_from_prior: bool,
     base_calibrated: bool,
     solve_check: bool,
+    cross: Any = None,
 ) -> MPArrays:
     """``mp`` after the recipe of ``period`` (check or shock; gtap), as new arrays.
+
+    With ``cross`` (the cross-period recording) the ``mq_*`` aggregates are refreshed
+    from the sums they define where the Pyomo recipe does (the seed from the prior
+    period); without it they keep their value (see the module docstring).
 
     The driver flags (``PeriodPreparer``'s) have no default: they pick the recipe and
     the period the seed copies from. A step whose component is missing raises
@@ -427,6 +439,7 @@ def run_recipe(
         mute_welfare,
         seed_from_prior,
         seed_prior(period, base_calibrated=base_calibrated, solve_check=solve_check),
+        cross,
     )
     for step in steps:
         step(ctx)

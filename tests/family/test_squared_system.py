@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from tests.family._prep import capture_dir
-from tests.family.test_prep_recipe import _closure, _params
+from tests.family.test_prep_recipe import ROUTE, _closure, _params
 from tests.family.test_prep_square import _recipe
 
 DATASET = "gtap7_3x3"
@@ -239,7 +239,7 @@ def systems(inc):
             exogenous=ref.exogenous,
             masks=masks,
         )
-        ss = SquaredSystem.build(inc.backend, inc.state, mp, a.period, sq)
+        ss = SquaredSystem.build(inc.backend, inc.state, mp, a.period, sq, proxies=True)
         out.append((b, ss, merged, sq))
     assert out
     return out
@@ -324,7 +324,7 @@ def test_unknown_family_row_raises(inc, systems):
 
     with pytest.raises(ValueError, match="eq_unknown"):
         SquaredSystem.build(
-            inc.backend, inc.state, MPArrays.from_photo(a), "check", bad
+            inc.backend, inc.state, MPArrays.from_photo(a), "check", bad, proxies=True
         )
 
 
@@ -346,7 +346,7 @@ def test_variable_missing_from_mp_raises(inc, systems):
     mp = MPArrays.from_photo(a)
     del mp.vars[drop]
     with pytest.raises(KeyError, match=drop):
-        SquaredSystem.build(inc.backend, inc.state, mp, a.period, sq2)
+        SquaredSystem.build(inc.backend, inc.state, mp, a.period, sq2, proxies=True)
 
 
 # ---------------------------------------------------------------------------
@@ -445,8 +445,7 @@ def _pairs_not_b(sq, b) -> int:
     return sum(pb[r] != c for r, c in zip(sq.row_names, sq.col_names, strict=True))
 
 
-@pytest.mark.slow
-def test_squared_system_matches_pyomo_3x3(systems, pyomo_mp):
+def _check_against_pyomo(systems, pyomo_mp, rtol, *, proxies_allowed):
     """F and J of ``SquaredSystem`` equal Pyomo's at photo B's point, on every
     non-proxy row (PyomoNLP of the capture route's model in B's state: B's values,
     fixed flags and active rows)."""
@@ -465,6 +464,7 @@ def test_squared_system_matches_pyomo_3x3(systems, pyomo_mp):
         x = np.array([bval.get(c, ss.x0[k]) for k, c in enumerate(sq.col_names)])
         Ff, Jf = ss.F(x), ss.J(x).tocoo()
         proxy = set(ss.proxy_rows)
+        assert proxies_allowed or not proxy
         rpos = {r: k for k, r in enumerate(sq.row_names)}
         cpos = {c: k for k, c in enumerate(sq.col_names)}
         fp = {r: float(Fp[i]) for i, r in enumerate(rows) if r not in proxy}
@@ -482,10 +482,10 @@ def test_squared_system_matches_pyomo_3x3(systems, pyomo_mp):
         j_rel = {k: abs(jf.get(k, 0.0) - v) / max(1.0, abs(v)) for k, v in jp.items()}
         new = set(jf) - set(jp)  # a family entry Pyomo does not have
         for r, d in f_rel.items():
-            if d > F_RTOL:
+            if d > rtol:
                 bad.setdefault((b.n, "F", _fam(r)), []).append((r, d))
         for (i, j), d in j_rel.items():
-            tol = J_ZERO if (i, j) not in jf else J_RTOL
+            tol = J_ZERO if (i, j) not in jf else rtol
             if (d if (i, j) in jf else abs(jp[(i, j)])) > tol:
                 r = sq.row_names[i]
                 bad.setdefault((b.n, "J", _fam(r)), []).append((r, sq.col_names[j], d))
@@ -507,6 +507,135 @@ def test_squared_system_matches_pyomo_3x3(systems, pyomo_mp):
     for k, v in sorted(bad.items()):
         print(k, len(v), v[:3])
     assert not bad, f"(call, kind, family) -> (rows, max rel diff): {summary}"
+
+
+@pytest.mark.slow
+def test_squared_system_matches_pyomo_3x3(systems, pyomo_mp):
+    """With unit proxy rows for the cross-period families (old scripts)."""
+    _check_against_pyomo(systems, pyomo_mp, F_RTOL, proxies_allowed=True)
+
+
+# ---------------------------------------------------------------------------
+# With the real cross-period rows: no proxy rows
+# ---------------------------------------------------------------------------
+
+REAL_RTOL = 1e-12
+
+
+@pytest.fixture(scope="module")
+def cross(inc):
+    from equilibria.family import cross_period
+
+    p = _params(DATASET)
+    return cross_period.record_cross_period(
+        p,
+        list(p.sets.r)[-1],
+        sets=inc.backend.sets,
+        var_domains=inc.backend.var_domains,
+    )
+
+
+def _real_square(a, p, ref, masks, backend, state, cross):
+    """Recipe, family incidence (cross rows included) and squaring of one call."""
+    from equilibria.family.mp_arrays import MPArrays
+    from equilibria.family.prep_recipe import run_recipe
+    from equilibria.family.prep_square import square
+    from equilibria.family.squared_system import SquaredSystem, period_incidence
+
+    mp = run_recipe(
+        MPArrays.from_photo(a),
+        a.period,
+        params=p,
+        closure=_closure(),
+        sp_ref=ref,
+        mode="gtap",
+        cross=cross,
+        **ROUTE,
+    )
+    sq, mp_sq = square(
+        mp,
+        a.period,
+        params=p,
+        closure=_closure(),
+        incidence=period_incidence(backend, state, a.period, cross),
+        exogenous=ref.exogenous,
+        masks=masks,
+        return_mp=True,
+    )
+    ss = SquaredSystem.build(backend, state, mp_sq, a.period, sq, cross=cross)
+    return sq, ss
+
+
+@pytest.fixture(scope="module")
+def real_systems(inc, cross):
+    from equilibria.family.prep_recipe import sp_reference_arrays
+
+    p = _params(DATASET)
+    ref = sp_reference_arrays(p, _closure(), list(p.sets.r)[-1])
+    masks = _masks_of(p)
+    out = []
+    for a, b in _calls():
+        sq, ss = _real_square(a, p, ref, masks, inc.backend, inc.state, cross)
+        out.append((b, ss, None, sq))
+    assert out
+    return out
+
+
+def _masks_of(p):
+    from equilibria.family.mp_arrays import MPArrays
+    from equilibria.family.prep_square import ConditionalMasks
+
+    return ConditionalMasks.from_params(p, MPArrays.from_photo(_calls()[0][0]))
+
+
+def test_real_system_has_no_proxy_rows(real_systems):
+    for b, ss, _, sq in real_systems:
+        assert ss.proxy_rows == [] and ss.proxy_cols_outside_backend == 0
+        assert ss.F(ss.x0).shape == (len(sq.row_names),)
+        print(f"call {b.n}: pairs not B's {_pairs_not_b(sq, b)}")
+
+
+@pytest.mark.slow
+def test_real_system_matches_pyomo_3x3(real_systems, pyomo_mp):
+    """All calls: F and J equal PyomoNLP at photo B (max rel 1e-12), every row."""
+    _check_against_pyomo(real_systems, pyomo_mp, REAL_RTOL, proxies_allowed=False)
+
+
+def test_cross_rows_missing_raise_without_proxies(inc):
+    """Without the cross recording an active cross-period row is an error."""
+    from equilibria.family.prep_recipe import sp_reference_arrays
+    from equilibria.family.prep_square import square
+    from equilibria.family.squared_system import SquaredSystem
+
+    p = _params(DATASET)
+    ref = sp_reference_arrays(p, _closure(), list(p.sets.r)[-1])
+    a, b = _calls()[0]
+    mp = _recipe(a, p, ref)
+    merged = {r: list(c) for r, c in zip(b.con_names, b.incidence, strict=True)}
+    merged.update(inc(a.period))
+    sq = square(
+        mp,
+        a.period,
+        params=p,
+        closure=_closure(),
+        incidence=merged,
+        exogenous=ref.exogenous,
+        masks=_masks_of(p),
+    )
+    with pytest.raises(ValueError, match="no family"):
+        SquaredSystem.build(inc.backend, inc.state, mp, a.period, sq)
+
+
+def test_period_incidence_adds_the_period_cross_rows(inc, cross):
+    from equilibria.family.squared_system import is_cross_period, period_incidence
+
+    for _, b in _calls():
+        out = period_incidence(inc.backend, inc.state, b.period, cross)
+        want = {r for r in b.con_names if is_cross_period(_fam(r))}
+        assert want and want <= set(out), sorted(want - set(out))[:5]
+        mine = {r for r in out if is_cross_period(_fam(r))}
+        # every cross row of the period (a few of them inactive in B are fine)
+        assert all(r.endswith(f"{b.period}]") for r in mine)
 
 
 def _with_outside_column(sq, proxy, swap: bool):
@@ -535,13 +664,13 @@ def test_column_outside_backend_needs_a_proxy_row(inc, systems):
     print(f"call {b.n}: proxy columns outside the backend {base}")
     ok, _ = _with_outside_column(sq, set(ss.proxy_rows), swap=False)
     got = SquaredSystem.build(
-        inc.backend, inc.state, MPArrays.from_photo(a), "check", ok
+        inc.backend, inc.state, MPArrays.from_photo(a), "check", ok, proxies=True
     )
     assert got.proxy_cols_outside_backend == base + 1
     bad, row = _with_outside_column(sq, set(ss.proxy_rows), swap=True)
     with pytest.raises(ValueError, match=r"nocell\[x,check\]"):
         SquaredSystem.build(
-            inc.backend, inc.state, MPArrays.from_photo(a), "check", bad
+            inc.backend, inc.state, MPArrays.from_photo(a), "check", bad, proxies=True
         )
     print(f"paired with family row {row}: raises")
 
@@ -591,3 +720,67 @@ def test_pairs_equal_pyomo_with_period_incidence(inc):
             r for r, c in zip(got.row_names, got.col_names, strict=True) if want[r] != c
         ]
         assert differ == [], f"call {b.n}: {len(differ)} rows differ, e.g. {differ[:5]}"
+
+
+# ---------------------------------------------------------------------------
+# Family incidence everywhere (cross rows from their recording) against photo B
+# ---------------------------------------------------------------------------
+
+
+def _backends(dataset):
+    """(params, single-period backend, state, cross-period backend) of the route."""
+    from equilibria.backends.family_backend import FamilyBackend
+    from equilibria.family import cross_period
+    from equilibria.templates.gtap.gtap_block_model import compose_block_state
+
+    p = _params(dataset)
+    rr = list(p.sets.r)[-1]
+    model, state = compose_block_state(p, p.sets, _route_closure(), rr)
+    backend = FamilyBackend()
+    backend.build(model, skip=state.ifsub_skipped)
+    cross = cross_period.record_cross_period(
+        p, rr, sets=backend.sets, var_domains=backend.var_domains
+    )
+    return p, backend, state, cross
+
+
+@pytest.mark.parametrize("dataset", ["gtap7_3x3", "gtap7_10x7"], ids=["3x3", "10x7"])
+def test_square_matches_photo_b_with_family_cross_rows(dataset):
+    """``compare(square(...), squared_from_photo(B)) == []`` with every incidence row,
+    the cross-period ones included, from the J patterns; the pairing may differ from
+    Pyomo's (reported)."""
+    from equilibria.family.mp_arrays import MPArrays, compare, squared_from_photo
+    from equilibria.family.prep_capture import pairs
+    from equilibria.family.prep_recipe import run_recipe, sp_reference_arrays
+    from equilibria.family.prep_square import ConditionalMasks, square
+    from equilibria.family.squared_system import period_incidence
+
+    p, backend, state, cross = _backends(dataset)
+    ref = sp_reference_arrays(p, _closure(), list(p.sets.r)[-1])
+    calls = pairs(capture_dir(dataset))
+    masks = ConditionalMasks.from_params(p, MPArrays.from_photo(calls[0][0]))
+    for a, b in calls:
+        mp = run_recipe(
+            MPArrays.from_photo(a),
+            a.period,
+            params=p,
+            closure=_closure(),
+            sp_ref=ref,
+            mode="gtap",
+            cross=cross,
+            **ROUTE,
+        )
+        inc = period_incidence(backend, state, a.period, cross)
+        got = square(
+            mp,
+            a.period,
+            params=p,
+            closure=_closure(),
+            incidence=inc,
+            exogenous=ref.exogenous,
+            masks=masks,
+        )
+        inc_sets = {r: set(c) for r, c in inc.items()}
+        hard = {(e, v) for e, v, h in b.forced if h}
+        print(f"{dataset} call {a.n}: pairs not Pyomo's {_pairs_not_b(got, b)}")
+        assert compare(got, squared_from_photo(b), inc_sets, hard) == []

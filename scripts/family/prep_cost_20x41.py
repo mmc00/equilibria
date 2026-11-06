@@ -251,7 +251,10 @@ if __name__ == "__main__":
     ap.add_argument("--cache-root", type=Path)
     ap.add_argument("--out", type=Path)
     a = ap.parse_args()
-    cap = a.capture or Path.home() / ".cache/equilibria/family/prep_capture" / a.dataset
+    cap = (
+        a.capture
+        or Path.home() / ".cache/equilibria/family/reference" / a.dataset / "tol_today"
+    )
     text = json.dumps(measure(a.dataset, cap, a.cache_root), indent=1)
     if a.out:
         a.out.write_text(text)

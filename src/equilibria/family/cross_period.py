@@ -444,3 +444,16 @@ def mq_values(backend: Any, mp: Any) -> dict[str, dict[tuple, float]]:
         name = fam[3:]
         out[name] = {idx: _value(res.rhs, level) for idx, res in recs}
     return out
+
+
+def refresh_aggregates(backend: Any, mp: Any) -> int:
+    """Write ``mq_values`` into the ``mq_*`` cells of ``mp`` (in place): the defined
+    sums at the levels just installed, as ``refresh_fisher_aggregates`` leaves them.
+    Returns the number of cells written."""
+    n = 0
+    for name, cells in mq_values(backend, mp).items():
+        var = mp.var(name)
+        for key, val in cells.items():
+            var.value[var.pos(key)] = val
+            n += 1
+    return n

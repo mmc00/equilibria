@@ -653,7 +653,7 @@ def measure(
         )
 
         t = time.perf_counter()
-        ss = SquaredSystem.build(backend, state, mp, a.period, sq)
+        ss = SquaredSystem.build(backend, state, mp, a.period, sq, proxies=True)
         build_s = time.perf_counter() - t
         t = time.perf_counter()
         ss.F(ss.x0)
@@ -736,7 +736,10 @@ if __name__ == "__main__":
     a = ap.parse_args()
     if a.weighted and not a.orderings:
         ap.error("--weighted needs --orderings")
-    cap = a.capture or Path.home() / ".cache/equilibria/family/prep_capture" / a.dataset
+    cap = (
+        a.capture
+        or Path.home() / ".cache/equilibria/family/reference" / a.dataset / "tol_today"
+    )
     result = {
         "sha": _sha(),
         **measure(
