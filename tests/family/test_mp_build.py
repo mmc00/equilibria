@@ -31,9 +31,10 @@ def _few(items, n: int = 5) -> str:
     return ", ".join(items[:n]) + (f" (+{len(items) - n})" if len(items) > n else "")
 
 
-def diff_to_photo(mp, photo, rtol: float = RTOL) -> list[str]:
+def diff_to_photo(mp, photo, rtol: float = RTOL, lb_rtol: float = 0.0) -> list[str]:
     """Differences between ``mp`` and a photo (empty = equal): names, keys, values within
-    ``rtol`` (NaN equals NaN), fixed flags, bounds, row active flags."""
+    ``rtol`` (NaN equals NaN), fixed flags, bounds (lower bounds within ``lb_rtol`` relative,
+    exact by default), row active flags."""
     msgs = []
     if set(mp.vars) != set(photo.vars):
         msgs.append(
@@ -72,7 +73,22 @@ def diff_to_photo(mp, photo, rtol: float = RTOL) -> list[str]:
         for what, bad in (
             ("value", ~close),
             ("fixed", gf != c.fixed),
-            ("lb", gl != c.lb),
+            (
+                "lb",
+                (gl != c.lb)
+                & ~(
+                    np.isfinite(gl)
+                    & np.isfinite(c.lb)
+                    & (
+                        np.abs(
+                            np.where(
+                                np.isfinite(gl) & np.isfinite(c.lb), gl - c.lb, 0.0
+                            )
+                        )
+                        <= lb_rtol * np.abs(c.lb)
+                    )
+                ),
+            ),
             ("ub", gu != c.ub),
         ):
             if bad.any():
