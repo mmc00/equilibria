@@ -54,11 +54,12 @@ MEASURED_REST_S = {
 }
 # What the whole route takes in practice: wall of the child process and wall from the
 # start of _solve_shock to its return. Median of 3 after a warm-up, GC as the route sets
-# it (gen-0 threshold 50000), e9f90f10, load average 3.6-5.6 (the 117.2 / 113.0 of the
-# earlier file were GC off, on a quieter machine):
-# plans/research/mediciones/family_e2e_timing_20x41_e9f90f10_gc_route.json
-E2E_PROCESS_WALL_S = 140.5
-E2E_SOLVE_SHOCK_S = 137.3
+# it (gen-0 threshold 50000 plus gc.freeze() at entry, after the records load and before
+# mp_build), 3ec3e16f, load average 3.5-4.0 at start (5.9-8.4 at the end of each run);
+# the paired GC-off run took 126.0 s:
+# plans/research/mediciones/family_e2e_timing_20x41_3ec3e16f_gc_route.json
+E2E_PROCESS_WALL_S = 133.7
+E2E_SOLVE_SHOCK_S = 130.0
 NOT_MEASURED: dict[str, str] = {}
 
 
