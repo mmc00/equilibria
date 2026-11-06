@@ -57,6 +57,8 @@ dependencies = [
     # equilibria` da un DeferredImportError al resolver. En el repo entraba de
     # rebote por mypy, asi que el agujero solo se ve en un venv limpio.
     "packaging>=23.0",
+    # end-of-solve panel (equilibria.report)
+    "rich>=13",
 ]
 
 [project.scripts]

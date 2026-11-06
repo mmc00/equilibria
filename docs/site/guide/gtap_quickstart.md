@@ -101,6 +101,25 @@ for t in ("check", "shock"):
 `check` that moves means the model does not reproduce its own data. `shock`
 is the counterfactual.
 
+A termination code of 1 says the solver stopped normally. To see how well the
+equations hold, `summary` prints a panel for the period: the code, Walras, the
+largest, mean and median residual, and the equations with the largest
+residuals. It also warns when a variable rests on its floor: prices carry a
+small lower bound only to keep the solver away from zero, so a code 1 with a
+price there is a corner the model does not mean (`s.on_floor` lists them). It
+returns the same numbers.
+
+```python
+from equilibria.report import summary
+
+s = summary(m, results, period="shock")
+print(s.max_residual < 1e-6, s.worst[0].equation)
+```
+
+`summary` works on the period that was solved last: once the driver moves on
+to the next period it deactivates the previous one's equations, and `summary`
+refuses an inactive period rather than report another one under its name.
+
 `apply_shock(m, {instrument: {cell: pct}})` takes each number as the GEMPACK
 percentage change and converts it to levels according to the instrument
 (`shocks.GEMPACK_KIND`), starting from the `check` value:
