@@ -21,6 +21,7 @@ from typing import Any
 import numpy as np
 
 from equilibria.family.mp_arrays import MPArrays, Squared
+from equilibria.family.phases import PhaseTimer, activate, phase, scope
 
 # Settings that change the Newton-TR system or add debug side effects the family route
 # does not reproduce. Any of them set (non-empty) is refused.
@@ -126,13 +127,16 @@ class FamilyResult:
 
     ``results[period]`` is ``{"code", "residual", "nit"}`` (the base is not solved:
     ``skipped_solve``); ``settled`` is the dict the calibration returned;
-    ``settle`` the same stats for the settle's own calls; ``timing`` seconds per phase."""
+    ``settle`` the same stats for the settle's own calls; ``timing`` seconds per
+    period; ``phases`` self seconds per fine phase (``settle_check.newton_J``, ...)."""
 
     mp: MPArrays
     results: dict[str, dict[str, Any]]
     settled: dict
     settle: dict[str, dict[str, Any]] = field(default_factory=dict)
     timing: dict[str, float] = field(default_factory=dict)
+    phases: dict[str, float] = field(default_factory=dict)  # self seconds per phase
+    phase_counts: dict[str, int] = field(default_factory=dict)
 
 
 def _driver_closure(closure: Any) -> Any:
@@ -177,7 +181,8 @@ def prepare_run(
     params.set_va_subsidy_basis(getattr(closure, "va_subsidy_basis", "gams"))
     root = Path(cache_root) if cache_root is not None else default_cache_root()
     if jax_cache:
-        enable_jax_cache(root)
+        with phase("jax_cache_setup"):
+            enable_jax_cache(root)
     backend, state = load_or_build(params, closure, residual_region, root)
     cross = cross_period.load_or_record(
         params,
@@ -187,15 +192,20 @@ def prepare_run(
         sets=backend.sets,
         var_domains=backend.var_domains,
     )
-    mp = MPArrays.build(state, backend, cross, params=params, base_calibrated=False)
+    with phase("mp_build"):
+        mp = MPArrays.build(state, backend, cross, params=params, base_calibrated=False)
+    with phase("sp_reference"):
+        ref = sp_reference_arrays(params, closure, residual_region, state=state)
+    with phase("masks"):
+        masks = ConditionalMasks.from_params(params, mp)
     run = FamilyRun(
         params=params,
         closure=_driver_closure(closure),
         backend=backend,
         state=state,
         cross=cross,
-        ref=sp_reference_arrays(params, closure, residual_region, state=state),
-        masks=ConditionalMasks.from_params(params, mp),
+        ref=ref,
+        masks=masks,
         regions=[str(r) for r in params.sets.r],
         if_sub=bool(getattr(closure, "if_sub", False)),
     )
@@ -219,28 +229,40 @@ def _newton(ss: Any, sq: Squared) -> tuple[Any, float, int]:
     ub[~np.isfinite(ub)] = 1e20
     # the relative test needs RELTOL > 0, then fscale applies
     reltol = float(os.environ.get("EQUILIBRIA_GTAP_TR_RELTOL", "0") or 0.0)
-    fscale = ss.fscale() if reltol > 0.0 else None
-    res = newton_tr(
-        lambda z: ss.F(np.clip(z, lb, ub)),
-        lambda z: ss.J(np.clip(z, lb, ub)),
-        np.clip(ss.x0, lb, ub),
-        lb,
-        ub,
-        colperm=np.arange(n),  # row k is paired with column k
-        fscale=fscale,
-        reltol=reltol,
-        icntl6=ICNTL6_FAMILY if linsolve == "mumps" else None,
-        row_names=sq.row_names,
-        col_names=sq.col_names,
-        linsolve=linsolve,
-        maxit=int(os.environ.get("EQUILIBRIA_GTAP_SCIPY_MAXITER", "300")),
-        # GMIN lands on other entries under the family pairing than under Pyomo's
-        # and moves weakly determined cells by ~1e-7: factor without it and
-        # regularize only when MUMPS reports null pivots.
-        gmin=float(os.environ.get("EQUILIBRIA_GTAP_GMIN", "0") or 0.0),
-        gmin_policy="on_null_pivot",
-    )
-    resid = float(np.linalg.norm(ss.F(np.clip(res.x, lb, ub)), np.inf))
+    with phase("fscale"):
+        fscale = ss.fscale() if reltol > 0.0 else None
+
+    def timed_F(z):
+        with phase("newton_F"):
+            return ss.F(np.clip(z, lb, ub))
+
+    def timed_J(z):
+        with phase("newton_J"):
+            return ss.J(np.clip(z, lb, ub))
+
+    with phase("newton_other"):  # analysis, factor, solve and the TR logic
+        res = newton_tr(
+            timed_F,
+            timed_J,
+            np.clip(ss.x0, lb, ub),
+            lb,
+            ub,
+            colperm=np.arange(n),  # row k is paired with column k
+            fscale=fscale,
+            reltol=reltol,
+            icntl6=ICNTL6_FAMILY if linsolve == "mumps" else None,
+            row_names=sq.row_names,
+            col_names=sq.col_names,
+            linsolve=linsolve,
+            maxit=int(os.environ.get("EQUILIBRIA_GTAP_SCIPY_MAXITER", "300")),
+            # GMIN lands on other entries under the family pairing than under Pyomo's
+            # and moves weakly determined cells by ~1e-7: factor without it and
+            # regularize only when MUMPS reports null pivots.
+            gmin=float(os.environ.get("EQUILIBRIA_GTAP_GMIN", "0") or 0.0),
+            gmin_policy="on_null_pivot",
+        )
+    with phase("residual_check"):
+        resid = float(np.linalg.norm(ss.F(np.clip(res.x, lb, ub)), np.inf))
     return res, resid, int(bool(res.success) and resid < CODE_RESIDUAL)
 
 
@@ -253,66 +275,97 @@ def _solve_period(
     solve_check: bool,
     shock: Any = None,
     shock_levels: bool = False,
+    tag: str | None = None,
 ) -> tuple[MPArrays, dict[str, Any]]:
     """One period of ``_solve_multiperiod_inner``: recipe, solve, post-solve.
 
-    Returns the arrays the next period starts from (``mp`` itself is not modified)."""
+    Returns the arrays the next period starts from (``mp`` itself is not modified).
+    ``tag`` names the call in the phase timing (default: the period)."""
+    with scope(tag or period):
+        return _solve_period_inner(
+            run,
+            mp,
+            period,
+            base_calibrated=base_calibrated,
+            solve_check=solve_check,
+            shock=shock,
+            shock_levels=shock_levels,
+        )
+
+
+def _solve_period_inner(
+    run: FamilyRun,
+    mp: MPArrays,
+    period: str,
+    *,
+    base_calibrated: bool,
+    solve_check: bool,
+    shock: Any = None,
+    shock_levels: bool = False,
+) -> tuple[MPArrays, dict[str, Any]]:
     from equilibria.family.post_solve import post_solve
     from equilibria.family.prep_recipe import run_recipe
     from equilibria.family.prep_square import square
     from equilibria.family.squared_system import SquaredSystem, period_incidence
 
-    mp1 = run_recipe(
-        mp,
-        period,
-        params=run.params,
-        closure=run.closure,
-        sp_ref=run.ref,
-        mode="gtap",
-        backend=run.backend,
-        mute_welfare=True,
-        seed_from_prior=False,
-        base_calibrated=base_calibrated,
-        solve_check=solve_check,
-        cross=run.cross,
-        shock=shock if period == "shock" else None,
-        shock_levels=shock_levels,
-    )
+    with phase("recipe"):
+        mp1 = run_recipe(
+            mp,
+            period,
+            params=run.params,
+            closure=run.closure,
+            sp_ref=run.ref,
+            mode="gtap",
+            backend=run.backend,
+            mute_welfare=True,
+            seed_from_prior=False,
+            base_calibrated=base_calibrated,
+            solve_check=solve_check,
+            cross=run.cross,
+            shock=shock if period == "shock" else None,
+            shock_levels=shock_levels,
+        )
     if period == "base":  # skip_base_solve: the base is the calibrated benchmark
-        post_solve(
+        with phase("post_solve"):
+            post_solve(
+                mp1,
+                "base",
+                backend=run.backend,
+                state=run.state,
+                params=run.params,
+                regions=run.regions,
+                if_sub=run.if_sub,
+            )
+        return mp1, {"code": 1, "residual": 0.0, "skipped_solve": True}
+    with phase("square"):
+        sq, mp_sq = square(
             mp1,
-            "base",
+            period,
+            params=run.params,
+            closure=run.closure,
+            incidence=period_incidence(run.backend, run.state, period, run.cross),
+            exogenous=run.ref.exogenous,
+            masks=run.masks,
+            return_mp=True,
+        )
+    with phase("system_build"):
+        ss = SquaredSystem.build(
+            run.backend, run.state, mp_sq, period, sq, cross=run.cross
+        )
+    res, resid, code = _newton(ss, sq)
+    with phase("post_solve"):
+        post_solve(
+            mp_sq,
+            period,
             backend=run.backend,
             state=run.state,
             params=run.params,
             regions=run.regions,
             if_sub=run.if_sub,
+            sq=sq,
+            x=res.x,
+            code=code,
         )
-        return mp1, {"code": 1, "residual": 0.0, "skipped_solve": True}
-    sq, mp_sq = square(
-        mp1,
-        period,
-        params=run.params,
-        closure=run.closure,
-        incidence=period_incidence(run.backend, run.state, period, run.cross),
-        exogenous=run.ref.exogenous,
-        masks=run.masks,
-        return_mp=True,
-    )
-    ss = SquaredSystem.build(run.backend, run.state, mp_sq, period, sq, cross=run.cross)
-    res, resid, code = _newton(ss, sq)
-    post_solve(
-        mp_sq,
-        period,
-        backend=run.backend,
-        state=run.state,
-        params=run.params,
-        regions=run.regions,
-        if_sub=run.if_sub,
-        sq=sq,
-        x=res.x,
-        code=code,
-    )
     return mp_sq, {"code": code, "residual": resid, "nit": res.nit}
 
 
@@ -353,7 +406,12 @@ def calibrate_base_arrays(
     results: dict[str, dict[str, Any]] = {}
     for period in ("base", "check"):
         cur, results[period] = _solve_period(
-            run, cur, period, base_calibrated=False, solve_check=False
+            run,
+            cur,
+            period,
+            base_calibrated=False,
+            solve_check=False,
+            tag=f"settle_{period}",
         )
     return settled_check_point(cur), results
 
@@ -387,6 +445,35 @@ def solve_gtap_family(
         shock_method="nonlinear",
     )
     timing: dict[str, float] = {}
+    timer = PhaseTimer()
+    prev = activate(timer)
+    try:
+        return _solve_family(
+            params,
+            closure,
+            residual_region,
+            shock,
+            shock_levels,
+            cache_root,
+            jax_cache,
+            timing,
+            timer,
+        )
+    finally:
+        activate(prev)
+
+
+def _solve_family(
+    params,
+    closure,
+    residual_region,
+    shock,
+    shock_levels,
+    cache_root,
+    jax_cache,
+    timing,
+    timer,
+) -> FamilyResult:
     t0 = time.perf_counter()
     run, mp = prepare_run(
         params, closure, residual_region, cache_root=cache_root, jax_cache=jax_cache
@@ -412,4 +499,12 @@ def solve_gtap_family(
         )
         timing[f"{period}_s"] = time.perf_counter() - t
     timing["total_s"] = time.perf_counter() - t0
-    return FamilyResult(cur, results, settled, settle, timing)
+    return FamilyResult(
+        cur,
+        results,
+        settled,
+        settle,
+        timing,
+        dict(timer.seconds),
+        dict(timer.counts),
+    )

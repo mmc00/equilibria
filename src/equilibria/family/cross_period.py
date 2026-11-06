@@ -386,15 +386,19 @@ def load_or_record(
 ) -> Any:
     """The cross-period backend from the disk cache, recording (and saving) on a miss."""
     from equilibria.backends.family_backend import FamilyBackend
+    from equilibria.family.phases import phase
 
-    path = cache_path(params, closure, residual_region, root)
+    with phase("cross_cache_key"):
+        path = cache_path(params, closure, residual_region, root)
     if path is not None and path.exists():
-        return FamilyBackend.load(path)
-    backend = record_cross_period(
-        params, residual_region, sets=sets, var_domains=var_domains
-    )
-    if path is not None:
-        backend.save(path)
+        with phase("cross_records_load"):
+            return FamilyBackend.load(path)
+    with phase("cross_records_build"):
+        backend = record_cross_period(
+            params, residual_region, sets=sets, var_domains=var_domains
+        )
+        if path is not None:
+            backend.save(path)
     return backend
 
 

@@ -52,17 +52,24 @@ def load_or_build(
 
     Without a key (see ``cache_key``) the records are built and not saved."""
     from equilibria.backends.family_backend import FamilyBackend
+    from equilibria.family.phases import phase
     from equilibria.templates.gtap.gtap_block_model import compose_block_state
 
-    model, state = compose_block_state(params, params.sets, closure, residual_region)
-    key = cache_key(params, closure, residual_region)
+    with phase("compose_state"):
+        model, state = compose_block_state(
+            params, params.sets, closure, residual_region
+        )
+    with phase("sp_cache_key"):
+        key = cache_key(params, closure, residual_region)
     path = None if key is None else Path(root) / key / "records.pkl"
     if path is not None and path.exists():
-        return FamilyBackend.load(path), state
-    backend = FamilyBackend()
-    backend.build(model, skip=state.ifsub_skipped)
-    if path is not None:
-        backend.save(path)
+        with phase("sp_records_load"):
+            return FamilyBackend.load(path), state
+    with phase("sp_records_build"):
+        backend = FamilyBackend()
+        backend.build(model, skip=state.ifsub_skipped)
+        if path is not None:
+            backend.save(path)
     return backend, state
 
 

@@ -178,3 +178,33 @@ def test_user_shock_is_applied_not_the_default(
         if v.value[v.pos((*o, "shock"))] != v.value[v.pos((*o, "check"))]
     ]
     assert moved == []
+
+
+def test_phase_timing_covers_the_run(family_run):
+    res, _, _ = family_run
+    ph = res.phases
+    for name in (
+        "compose_state",
+        "sp_cache_key",
+        "cross_cache_key",
+        "mp_build",
+        "sp_reference",
+        "masks",
+        "settle_base.recipe",
+        "settle_check.square",
+        "settle_check.system_build",
+        "settle_check.fscale",
+        "settle_check.newton_F",
+        "settle_check.newton_J",
+        "settle_check.newton_other",
+        "settle_check.post_solve",
+        "check.recipe",
+        "shock.newton_J",
+        "shock.post_solve",
+    ):
+        assert ph[name] >= 0.0, name
+    assert any(k.startswith(("sp_records_", "cross_records_")) for k in ph)
+    assert res.phase_counts["shock.newton_J"] >= 1
+    # what is not in a phase (copies, the settled slice) stays a small part of the run
+    assert sum(ph.values()) <= res.timing["total_s"] + 1e-6
+    assert sum(ph.values()) >= 0.9 * res.timing["total_s"]
