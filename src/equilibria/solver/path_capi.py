@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from equilibria._local_refs import path_capi_lib, path_capi_lusol, path_capi_src
+from equilibria._local_refs import path_capi_libs, path_capi_src
 from equilibria.templates.gtap import GTAPParameters, GTAPSolver
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 from equilibria.templates.gtap.gtap_parameters import (
@@ -36,18 +36,9 @@ PATH_CAPI_SRC_DEFAULT = Path(str(path_capi_src()))
 
 
 def _path_capi_libs() -> tuple[Path, Path | None]:
-    """PATH and LUSOL libraries to load: env vars first, else by platform.
-
-    LUSOL is optional for PATH, so a missing file yields ``None`` instead of
-    aborting the load.
-    """
-    lib = os.environ.get("PATH_CAPI_LIBPATH")
-    path_lib = Path(lib).expanduser() if lib else path_capi_lib()
-    lusol = os.environ.get("PATH_CAPI_LIBLUSOL")
-    if lusol:
-        return path_lib, Path(lusol).expanduser()
-    found = path_capi_lusol()
-    return path_lib, found if found.exists() else None
+    """PATH and LUSOL libraries to load (see ``_local_refs.path_capi_libs``,
+    which ``equilibria doctor`` also uses so the two cannot drift apart)."""
+    return path_capi_libs()
 
 
 @contextlib.contextmanager
