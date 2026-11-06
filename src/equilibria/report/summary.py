@@ -3,6 +3,13 @@
 The residual of an equation is ``|body - rhs|``; an inequality only counts when
 it is violated. Residuals are absolute, in the model's own units, as the solver
 sees them.
+
+A variable "on its floor" has a positive lower bound and a value within
+``FLOOR_RTOL`` of it. Prices carry such floors (``blocks/gtap/floors.py``:
+``max(1e-8, 1e-3 * init)``) only to keep the solver away from zero; a solve
+that ends with code 1 and a price there has found a corner the model does not
+mean, so it is flagged. A zero bound is left alone: a quantity at zero is
+usually a real corner (an absent flow).
 """
 
 from __future__ import annotations
@@ -20,7 +27,10 @@ from rich.text import Text
 from equilibria.version import __version__
 
 # Matrix palette of the approved mockup (dev-tools plans/research/report-mockup).
-_G, _G2, _G3, _RED = "#00ff41", "#00c832", "#008f11", "#ff3b3b"
+_G, _G2, _G3, _WARN, _RED = "#00ff41", "#00c832", "#008f11", "#d4ff00", "#ff3b3b"
+
+#: Relative distance to the lower bound under which a variable is on its floor.
+FLOOR_RTOL = 1e-6
 
 
 @dataclass(frozen=True)
@@ -40,6 +50,7 @@ class SolveSummary:
     median_residual: float
     worst: list[WorstEquation] = field(default_factory=list)
     unevaluated: int = 0
+    on_floor: list[str] = field(default_factory=list)
 
 
 def _in_period(index: Any, period: str | None) -> bool:
@@ -80,6 +91,24 @@ def _walras(m, period: str | None) -> float | None:
         if _in_period(idx, period):
             return float(value(w[idx]))
     return None
+
+
+def _on_floor(m, period: str | None) -> list[str]:
+    from pyomo.environ import Var
+
+    names = []
+    for v in m.component_data_objects(Var, descend_into=True):
+        lb = v.lb
+        if (
+            lb is None
+            or lb <= 0
+            or v.value is None
+            or not _in_period(v.index(), period)
+        ):
+            continue
+        if v.value <= lb * (1.0 + FLOOR_RTOL):
+            names.append(v.name)
+    return names
 
 
 def summary(
@@ -140,6 +169,7 @@ def summary(
         median_residual=statistics.median(res) if res else 0.0,
         worst=[WorstEquation(name, r) for r, name in rows[:top]],
         unevaluated=unevaluated,
+        on_floor=_on_floor(m, period),
     )
     (console or Console()).print(_panel(s))
     return s
@@ -185,6 +215,19 @@ def _panel(s: SolveSummary) -> Panel:
         w.add_row(Text(eq.equation), _e(eq.residual))
 
     parts: list[Any] = [head, r, w]
+    if s.on_floor:
+        shown = ", ".join(s.on_floor[:5]) + (" ..." if len(s.on_floor) > 5 else "")
+        parts.append(
+            Text.assemble(
+                ("[WARN] ", f"bold {_WARN}"),
+                (f"{len(s.on_floor)} on their floor: ", _WARN),
+                (shown, _WARN),
+            )
+        )
+    else:
+        parts.append(
+            Text.assemble(("[ OK ] ", f"bold {_G}"), ("no price on its floor", _G2))
+        )
     if s.unevaluated:
         parts.append(
             Text(

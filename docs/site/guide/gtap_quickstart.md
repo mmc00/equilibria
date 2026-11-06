@@ -104,7 +104,10 @@ is the counterfactual.
 A termination code of 1 says the solver stopped normally. To see how well the
 equations hold, `summary` prints a panel for the period: the code, Walras, the
 largest, mean and median residual, and the equations with the largest
-residuals. It returns the same numbers.
+residuals. It also warns when a variable rests on its floor: prices carry a
+small lower bound only to keep the solver away from zero, so a code 1 with a
+price there is a corner the model does not mean (`s.on_floor` lists them). It
+returns the same numbers.
 
 ```python
 from equilibria.report import summary

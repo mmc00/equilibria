@@ -84,3 +84,35 @@ def test_panel_shows_the_numbers():
     assert "eq_y[shock]" in out
     assert "5e-01" in out  # max residual
     assert "-2e-09" in out  # walras
+
+
+def _floored(p_shock: float = 1e-3):
+    """`p` rests on its 1e-3 floor in shock; `q` sits well above; `x` is at a zero bound."""
+    m = ConcreteModel()
+    m.t = ["check", "shock"]
+    m.p = Var(m.t, bounds=(1e-3, None), initialize={"check": 1e-3, "shock": p_shock})
+    m.q = Var(m.t, bounds=(1e-3, None), initialize=0.9)
+    m.x = Var(m.t, bounds=(0.0, None), initialize=0.0)
+    m.eq_p = Constraint(m.t, rule=lambda m, t: m.p[t] >= 1e-3)
+    return m
+
+
+def test_a_price_resting_on_its_floor_is_flagged():
+    console = _quiet()
+    s = summary(_floored(), {"shock": {"code": 1}}, period="shock", console=console)
+
+    out = console.export_text()
+
+    assert s.on_floor == ["p[shock]"]
+    assert "[WARN]" in out and "p[shock]" in out
+
+
+def test_no_floor_warning_when_nothing_rests_on_its_floor():
+    m = _floored(p_shock=0.5)
+    console = _quiet()
+    s = summary(m, period="shock", console=console)
+
+    assert (
+        s.on_floor == []
+    )  # q above its floor, x on a zero bound, p[check] another period
+    assert "no price on its floor" in console.export_text()

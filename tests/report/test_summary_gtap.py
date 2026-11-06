@@ -83,3 +83,29 @@ def test_an_earlier_period_is_refused_not_mislabelled(solved):
     m, results = solved
     with pytest.raises(ValueError, match="no active equations"):
         summary(m, results, period="check", console=Console(file=io.StringIO()))
+
+
+def test_no_price_on_its_floor_after_a_normal_solve(solved):
+    from equilibria.report import summary
+
+    m, results = solved
+    s = summary(m, results, period="shock", console=Console(file=io.StringIO()))
+
+    assert s.on_floor == []
+
+
+def test_a_price_pushed_onto_its_floor_is_flagged(solved):
+    """The floor is the driver's own bound (max(1e-8, 1e-3*init)), not a test value."""
+    from equilibria.report import summary
+
+    m, results = solved
+    v = m.pf["USA", "CAPITAL", "AGR", "shock"]
+    assert v.lb is not None and v.lb > 0
+    old = v.value
+    try:
+        v.set_value(v.lb)
+        s = summary(m, results, period="shock", console=Console(file=io.StringIO()))
+    finally:
+        v.set_value(old)
+
+    assert s.on_floor == ["pf[USA,CAPITAL,AGR,shock]"]
