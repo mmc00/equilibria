@@ -186,6 +186,9 @@ class SquaredSystem:
         # -> squared column, system row -> squared row (-1: dropped))
         self._parts = parts
         self._proxy_k = proxy_k
+        # set by ``build`` for ``fscale``: row name -> position, per-recording context
+        self._row_pos: dict[str, int] = {}
+        self._fscale_ctx: list = []
         self.proxy_rows = [row_names[k] for k in proxy_k]
         # Squared columns with no backend cell (each paired with a proxy row).
         self.proxy_cols_outside_backend = int(n_outside)
@@ -221,7 +224,8 @@ class SquaredSystem:
             state.sets, {**backend.var_domains, **backend.param_domains}, values, free
         )
         names = [_with_period(n, period) for n in layout.col_names]
-        return backend.system(layout), names, lambda n: _with_period(n, period)
+        ctx = (backend.records, values, free)
+        return backend.system(layout), names, lambda n: _with_period(n, period), ctx
 
     @staticmethod
     def _cross_period_part(cross, mp):
@@ -240,7 +244,8 @@ class SquaredSystem:
             mask.flat[flat] = ~var.fixed
             values[v], free[v] = vals, mask
         layout = VarLayout.from_state(sets, cross.var_domains, values, free)
-        return cross.system(layout), list(layout.col_names), lambda n: n
+        ctx = (cross.records, values, free)
+        return cross.system(layout), list(layout.col_names), lambda n: n, ctx
 
     @classmethod
     def build(
@@ -277,7 +282,9 @@ class SquaredSystem:
             x0[k] = sq.cells[name][0]
 
         parts, covered, backend_cols = [], set(), np.zeros(len(sq.col_names), bool)
-        for i, (system, col_names, row_name) in enumerate(raw):
+        fscale_ctx = []
+        for i, (system, col_names, row_name, ctx) in enumerate(raw):
+            fscale_ctx.append((*ctx, row_name, i == 0))
             zperm = np.array([col_pos[n] for n in col_names], dtype=np.int64)
             backend_cols[zperm] = True
             fam_rows, fam_k = [], []
@@ -321,7 +328,29 @@ class SquaredSystem:
                 f"{len(unpaired)} squared columns are not backend cells and not paired "
                 f"with a proxy row: {unpaired[:5]}"
             )
-        return cls(x0, parts, sq.row_names, proxy_k, len(outside))
+        ss = cls(x0, parts, sq.row_names, proxy_k, len(outside))
+        ss._row_pos = row_pos
+        ss._fscale_ctx = fscale_ctx
+        return ss
+
+    def fscale(self) -> np.ndarray:
+        """Per-row scale of the relative-residual test (``EQUILIBRIA_GTAP_TR_RELTOL``),
+        aligned with ``row_names``: ``max(1, |x_j|)`` over the free cells among the
+        row's recorded leaves, before zero folding (see ``family.fscale``). Proxy rows
+        get 1."""
+        from equilibria.family.fscale import record_fscale
+
+        out = np.ones(self._n)
+        for records, values, free, row_name, single in self._fscale_ctx:
+            recs = {
+                f: r for f, r in records.items() if not (single and is_cross_period(f))
+            }
+            names = record_fscale(
+                recs, values, free, keep=lambda n, rn=row_name: rn(n) in self._row_pos
+            )
+            for n, v in names.items():
+                out[self._row_pos[row_name(n)]] = v
+        return out
 
     def F(self, x: np.ndarray) -> np.ndarray:
         out = np.empty(self._n)
