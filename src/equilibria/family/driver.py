@@ -140,6 +140,9 @@ class FamilyRun:
     masks: Any  # ConditionalMasks
     regions: list[str]
     if_sub: bool
+    # derived once per run, filled by the first solve call that needs them
+    cell_index: Any = field(default=None, repr=False)
+    adjacency: dict = field(default_factory=dict, repr=False)
 
 
 @dataclass
@@ -327,10 +330,11 @@ def _solve_period_inner(
     shock: Any = None,
     shock_levels: bool = False,
 ) -> tuple[MPArrays, dict[str, Any]]:
+    from equilibria.family.cell_index import CellIndex
     from equilibria.family.post_solve import post_solve
     from equilibria.family.prep_recipe import run_recipe
     from equilibria.family.prep_square import square
-    from equilibria.family.squared_system import SquaredSystem, period_incidence
+    from equilibria.family.squared_system import ArrayIncidence, SquaredSystem
 
     with phase("recipe"):
         mp1 = run_recipe(
@@ -362,12 +366,19 @@ def _solve_period_inner(
             )
         return mp1, {"code": 1, "residual": 0.0, "skipped_solve": True}
     with phase("square"):
+        if run.cell_index is None or not run.cell_index.fits(mp1):
+            run.cell_index = CellIndex(mp1)
+        if period not in run.adjacency:
+            run.adjacency[period] = ArrayIncidence(
+                run.backend, run.state, period, run.cross
+            )
         sq, mp_sq = square(
             mp1,
             period,
             params=run.params,
             closure=run.closure,
-            incidence=period_incidence(run.backend, run.state, period, run.cross),
+            incidence=run.adjacency[period],
+            index=run.cell_index,
             exogenous=run.ref.exogenous,
             masks=run.masks,
             return_mp=True,

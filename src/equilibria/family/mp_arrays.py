@@ -21,6 +21,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 import itertools
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -246,11 +247,46 @@ class MPArrays:
         return np.flatnonzero(v.period == period)
 
 
-@dataclass
 class Squared:
-    row_names: list[str]
-    col_names: list[str]  # paired: row_names[k] <-> col_names[k]
-    cells: dict[str, tuple[float, bool, float, float]]  # active period, all cells
+    """Active rows and free columns in paired order (``row_names[k]`` <->
+    ``col_names[k]``) and every cell of the active period.
+
+    ``cells`` may be given as a callable that builds the dict on first access (the
+    values it reads were captured when the system was squared)."""
+
+    def __init__(
+        self,
+        row_names: list[str],
+        col_names: list[str],
+        cells: dict[str, tuple[float, bool, float, float]] | Callable[[], dict],
+    ) -> None:
+        self.row_names = row_names
+        self.col_names = col_names
+        self._cells = cells
+
+    @property
+    def cells(self) -> dict[str, tuple[float, bool, float, float]]:
+        if callable(self._cells):
+            self._cells = self._cells()
+        return self._cells
+
+    @cells.setter
+    def cells(self, value: dict) -> None:
+        self._cells = value
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Squared):
+            return NotImplemented
+        return (self.row_names, self.col_names, self.cells) == (
+            other.row_names,
+            other.col_names,
+            other.cells,
+        )
+
+    __hash__ = None
+
+    def __repr__(self) -> str:
+        return f"Squared({len(self.row_names)} rows, {len(self.col_names)} cols)"
 
 
 def squared_from_photo(b: Any) -> Squared:

@@ -74,6 +74,8 @@ class PatternCSR(NamedTuple):
     indices: np.ndarray
     row_names: list[str]
     col_names: list[str]
+    family_off: dict[str, int]  # first row of each family
+    family_len: dict[str, int]
 
 
 def _pattern_csr(system: Any, layout: VarLayout) -> PatternCSR:
@@ -82,11 +84,17 @@ def _pattern_csr(system: Any, layout: VarLayout) -> PatternCSR:
     n = system.n_rows
     indptr = np.zeros(n + 1, dtype=np.int64)
     np.cumsum(np.bincount(system._pat_rows, minlength=n), out=indptr[1:])
+    off, size, start = {}, {}, 0
+    for f in system.families:
+        off[f.name], size[f.name] = start, f.n_rows
+        start += f.n_rows
     return PatternCSR(
         indptr,
         np.asarray(system._pat_cols, dtype=np.int64),
         list(system.row_names),
         list(layout.col_names),
+        off,
+        size,
     )
 
 
@@ -181,6 +189,111 @@ def period_incidence(
             if name.endswith(f",{period}]") or name.endswith(f"[{period}]"):
                 out[name] = cols
     return out
+
+
+class ArrayIncidence:
+    """``period_incidence`` as integer adjacency for ``square``, without name strings.
+
+    ``adjacency(mp, index, rid, col_pos)`` returns, for each row id of ``rid`` (in that
+    order), the sorted positions of the free columns it reads, in the order of
+    ``period_incidence`` (layout order for the recorded rows, the cross pattern's order
+    for the cross-period ones), each once. It is ``prep_square._adjacency`` on the names
+    of ``period_incidence``, computed on the CSR pattern."""
+
+    def __init__(self, backend: Any, state: Any, period: str, cross: Any = None):
+        self.backend, self.state, self.period, self.cross = (
+            backend,
+            state,
+            period,
+            cross,
+        )
+        self.pat = incidence_csr(backend, state)
+        self._cross_pat = _cross_pattern(cross) if cross is not None else {}
+
+    def _tables(self, mp: MPArrays, index: Any):
+        """Per run and period: csr row of every mp row (-1: not a recorded row) and
+        global variable id of every layout column (-1: not in ``mp``)."""
+        key = ("incidence", id(self.backend), self.period)
+        hit = index.cache.get(key)
+        if hit is not None:
+            return hit
+        pat = self.pat
+        g2csr = np.full(len(index.row_names), -1, dtype=np.int64)
+        for fam, row in mp.rows.items():
+            base = pat.family_off.get(fam)
+            if base is None or is_cross_period(fam):
+                continue
+            where = {idx: k for k, (idx, _) in enumerate(self.backend.records[fam])}
+            ids = index.period_ids("row", fam, self.period, row)
+            k = np.array([where.get(row.keys[i][:-1], -1) for i in ids.tolist()])
+            ok = k >= 0
+            g2csr[index.row_off[fam] + ids[ok]] = base + k[ok]
+        cm = np.full(len(pat.col_names), -1, dtype=np.int64)
+        off = 0
+        for v, doms in self.backend.var_domains.items():
+            cells = itertools.product(*(self.state.sets[d] for d in doms))
+            flat = {idx: k for k, idx in enumerate(cells)}
+            var = mp.vars.get(v)
+            if var is not None:
+                ids = index.period_ids("var", v, self.period, var)
+                k = np.array([flat.get(var.keys[i][:-1], -1) for i in ids.tolist()])
+                ok = k >= 0
+                cm[off + k[ok]] = index.var_off[v] + ids[ok]
+            off += len(flat)
+        hit = index.cache[key] = (g2csr, cm)
+        return hit
+
+    def adjacency(
+        self, mp: MPArrays, index: Any, rid: np.ndarray, col_pos: np.ndarray
+    ) -> list[list[int]]:
+        g2csr, cm = self._tables(mp, index)
+        pat = self.pat
+        n = len(rid)
+        csr_row = g2csr[rid]
+        recorded = csr_row >= 0
+        r = np.where(recorded, csr_row, 0)
+        starts = pat.indptr[r]
+        cnt = np.where(recorded, pat.indptr[r + 1] - starts, 0)
+        total = int(cnt.sum())
+        first = np.cumsum(cnt) - cnt
+        flat = np.repeat(starts - first, cnt) + np.arange(total, dtype=np.int64)
+        gid = cm[pat.indices[flat]]
+        # position of the column in the squared system (-1: dropped / not free)
+        pos = np.where(gid >= 0, col_pos[np.where(gid >= 0, gid, 0)], -1)
+        keep = pos >= 0
+        owner = np.repeat(np.arange(n, dtype=np.int64), cnt)
+        kept = np.bincount(owner[keep], minlength=n)
+        vals = pos[keep].tolist()
+        ends = np.cumsum(kept).tolist()
+        out: list[list[int]] = []
+        lo = 0
+        for hi in ends:
+            out.append(vals[lo:hi])
+            lo = hi
+        for i in np.flatnonzero(~recorded).tolist():
+            out[i] = self._cross_row(mp, index, index.row_names[rid[i]], col_pos)
+        return out
+
+    def _cross_row(
+        self, mp: MPArrays, index: Any, name: str, col_pos: np.ndarray
+    ) -> list[int]:
+        p = self.period
+        names = self._cross_pat.get(name)
+        if names is None or not (name.endswith(f",{p}]") or name.endswith(f"[{p}]")):
+            raise KeyError(f"no incidence for row {name!r}")
+        table = index.cache.setdefault(("cross_gids", id(self.cross)), {})
+        gids = table.get(name)
+        if gids is None:
+            gids = [index.gid_of_name(c, mp) for c in names]
+            gids = table[name] = [-1 if g is None else g for g in gids]
+        seen: set[int] = set()
+        out: list[int] = []
+        for g in gids:
+            j = int(col_pos[g]) if g >= 0 else -1
+            if j >= 0 and j not in seen:
+                seen.add(j)
+                out.append(j)
+        return out
 
 
 # Variables of the single-period model that the multiperiod model drops together with

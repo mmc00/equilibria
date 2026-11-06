@@ -40,6 +40,7 @@ from typing import Any, Literal, overload
 
 import numpy as np
 
+from equilibria.family.cell_index import CellIndex
 from equilibria.family.mp_arrays import MPArrays, RowArr, Squared, VarArr
 from equilibria.solver._matching import match_rows
 
@@ -472,6 +473,110 @@ def gams_pairs(
     return out
 
 
+def _concat(arrays: Any) -> np.ndarray:
+    arrays = list(arrays)
+    return np.concatenate(arrays) if arrays else np.zeros(0, dtype=bool)
+
+
+class _LazyCells:
+    """``_cells(mp, period)`` on the values captured when the system was squared."""
+
+    def __init__(self, mp: MPArrays, index: CellIndex, period: str) -> None:
+        self._snap = []
+        for name, v in mp.vars.items():
+            idx = index.period_ids("var", name, period, v)
+            if len(idx):
+                off = index.var_off[name]
+                self._snap.append(
+                    (
+                        index.col_names[off : off + len(v.keys)],
+                        idx,
+                        v.value[idx],
+                        v.fixed[idx],
+                        v.lb[idx],
+                        v.ub[idx],
+                    )
+                )
+
+    def __call__(self) -> dict[str, tuple[float, bool, float, float]]:
+        out = {}
+        for names, idx, value, fixed, lb, ub in self._snap:
+            out.update(
+                zip(
+                    [names[i] for i in idx.tolist()],
+                    zip(
+                        value.tolist(),
+                        fixed.tolist(),
+                        lb.tolist(),
+                        ub.tolist(),
+                        strict=True,
+                    ),
+                    strict=True,
+                )
+            )
+        return out
+
+
+def _gams_pair_ids(
+    mp: MPArrays,
+    index: CellIndex,
+    params: Any,
+    row_pos: np.ndarray,
+    col_pos: np.ndarray,
+    mode: str,
+) -> list[tuple[int, int, bool]]:
+    """``gams_pairs`` as ``(row position, column position, hard)`` in the squared
+    system, the pairs whose row or column is not in it dropped."""
+    if mode != "gtap":
+        raise NotImplementedError(f"no array matching for mode {mode!r}")
+    out: list[tuple[int, int, bool]] = []
+
+    def add(eq: str, var: str, rows: list[int], keys: list[tuple], hard: bool) -> None:
+        vpos = index.var_pos(var, mp.vars[var])
+        r0, c0 = index.row_off[eq], index.var_off[var]
+        for i, k in zip(rows, keys, strict=True):
+            j = vpos.get(k)
+            if j is None:
+                continue
+            c = col_pos[c0 + j]
+            if c >= 0:
+                out.append((int(row_pos[r0 + i]), int(c), hard))
+
+    for eq, var in _GAMS_PAIRS:
+        row = mp.rows.get(eq)
+        if row is None or var not in mp.vars:
+            continue
+        suffix = ("shock",) if eq in _PERIODIC_SHOCK_EQS else ()
+        act = np.flatnonzero(row.active).tolist()
+        add(
+            eq,
+            var,
+            act,
+            [row.keys[i] + suffix for i in act],
+            eq in _GAMS_HARD_PAIR_EQS,
+        )
+
+    omegax = getattr(getattr(params, "elasticities", None), "omegax", {}) or {}
+    xseq = mp.rows.get("eq_xseq")
+    if xseq is None:
+        return out
+    cells = [
+        k
+        for k in _active_keys(xseq)
+        if len(k) == 3
+        and k[-1] in ("check", "shock")
+        and omegax.get((k[0], k[1]), float("inf")) == float("inf")
+    ]
+    for eq, var in _SUPPLY_CYCLE:
+        row = mp.rows.get(eq)
+        if row is None or var not in mp.vars:
+            continue
+        live = {row.keys[i]: i for i in np.flatnonzero(row.active).tolist()}
+        keys = [k for k in cells if k in live]
+        add(eq, var, [live[k] for k in keys], keys, True)
+    return out
+
+
 def _adjacency(
     row_names: list[str], col_names: list[str], incidence: dict[str, Any]
 ) -> list[list[int]]:
@@ -562,11 +667,12 @@ def square(
     *,
     params: Any,
     closure: Any,
-    incidence: dict[str, Any],
+    incidence: Any,
     exogenous: frozenset[str],
     masks: ConditionalMasks,
     mode: str = "gtap",
     return_mp: Literal[False] = False,
+    index: CellIndex | None = None,
 ) -> Squared: ...
 
 
@@ -577,11 +683,12 @@ def square(
     *,
     params: Any,
     closure: Any,
-    incidence: dict[str, Any],
+    incidence: Any,
     exogenous: frozenset[str],
     masks: ConditionalMasks,
     mode: str = "gtap",
     return_mp: Literal[True],
+    index: CellIndex | None = None,
 ) -> tuple[Squared, MPArrays]: ...
 
 
@@ -591,11 +698,12 @@ def square(
     *,
     params: Any,
     closure: Any,
-    incidence: dict[str, Any],
+    incidence: Any,
     exogenous: frozenset[str],
     masks: ConditionalMasks,
     mode: str = "gtap",
     return_mp: bool = False,
+    index: CellIndex | None = None,
 ) -> Squared | tuple[Squared, MPArrays]:
     """The squared system of ``period`` from the arrays after the recipe.
 
@@ -608,7 +716,10 @@ def square(
     cell masks (``ConditionalMasks.from_params``), built once per run for all periods.
     ``mp`` is not modified. Raises ``ValueError`` where Pyomo would repair the system
     by matching (gap > 0, rows > free variables, not square) and ``KeyError`` for a
-    missing component. With ``return_mp`` the mutated copy comes back too (closure
+    missing component. ``incidence`` is the name dict above or an object with
+    ``adjacency(mp, index, rid, col_pos)`` (``squared_system.ArrayIncidence``) giving the
+    same lists on integer ids; ``index`` (``CellIndex``, built here if absent or not
+    for these arrays) holds the names' sort ranks, built once per run. With ``return_mp`` the mutated copy comes back too (closure
     fixings, deactivated rows and floors of every period, which Pyomo leaves on ``m``)."""
     if mode != "gtap":
         raise NotImplementedError(f"no array squaring for mode {mode!r}")
@@ -630,27 +741,33 @@ def square(
     _check_overdetermined(mp)
     _relative_floors(mp)
 
-    rnames, cnames = [], []
-    for name, row in mp.rows.items():
-        rnames += _names(name, _active_keys(row))
-    for name, v in mp.vars.items():
-        cnames += _names(name, [v.keys[i] for i in np.flatnonzero(~v.fixed)])
-    rnames.sort()
-    cnames.sort()
-    if len(rnames) != len(cnames):
+    if index is None or not index.fits(mp):
+        index = CellIndex(mp)
+    row_active = _concat(r.active for r in mp.rows.values())
+    col_free = ~_concat(v.fixed for v in mp.vars.values())
+    rid = np.flatnonzero(row_active)
+    cid = np.flatnonzero(col_free)
+    if len(rid) != len(cid):
+        # as before the names are only needed for the message
         raise ValueError(
-            f"not square: {len(rnames)} active rows, {len(cnames)} free variables"
+            f"not square: {len(rid)} active rows, {len(cid)} free variables"
         )
+    # the names' own string order: the rank of every name in the run's global sort
+    rid = rid[np.argsort(index.row_rank[rid], kind="stable")]
+    cid = cid[np.argsort(index.col_rank[cid], kind="stable")]
+    rnames = [index.row_names[i] for i in rid.tolist()]
+    cnames = [index.col_names[i] for i in cid.tolist()]
+    row_pos = np.full(len(index.row_names), -1, dtype=np.int64)
+    row_pos[rid] = np.arange(len(rid))
+    col_pos = np.full(len(index.col_names), -1, dtype=np.int64)
+    col_pos[cid] = np.arange(len(cid))
 
-    adjacency = _adjacency(rnames, cnames, incidence)
-    r_index = {r: i for i, r in enumerate(rnames)}
-    c_index = {c: i for i, c in enumerate(cnames)}
-    pairs = [
-        (r_index[e], c_index[v], h)
-        for e, v, h in gams_pairs(mp, params=params, mode=mode)
-        if e in r_index and v in c_index
-    ]
+    if hasattr(incidence, "adjacency"):
+        adjacency = incidence.adjacency(mp, index, rid, col_pos)
+    else:
+        adjacency = _adjacency(rnames, cnames, incidence)
+    pairs = _gams_pair_ids(mp, index, params, row_pos, col_pos, mode)
     paired = match_rows(len(rnames), adjacency, pairs)
     _check_permutation(paired, rnames, cnames, pairs)
-    sq = Squared(rnames, [cnames[j] for j in paired], _cells(mp, period))
+    sq = Squared(rnames, [cnames[j] for j in paired], _LazyCells(mp, index, period))
     return (sq, mp) if return_mp else sq
