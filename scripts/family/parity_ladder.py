@@ -7,8 +7,9 @@ compares the three periods with ``<reference>/final.pkl`` (default
 ``~/.cache/equilibria/family/reference/<ds>/tol_today``).
 
 Gate (exit 1 when it fails): every Var cell within ``|a - b| <= 1e-9 * max(1, |b|)``
-(NaN equals NaN), identical fixed flags and upper bounds, lower bounds within 1e-12
-relative (the relative floors follow the check solution to its last bit), same
+(NaN equals NaN), identical fixed flags and upper bounds, lower bounds within 1e-9
+relative like the values (the relative floors are 1e-3 x the prior level, so they
+inherit its ~1e-10 difference), same
 components and keys, code 1 on every solve. Newton iteration counts are reported
 (ours vs the reference S files), never a gate.
 """
@@ -29,7 +30,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 RTOL = 1e-9
-LB_RTOL = 1e-12
+LB_RTOL = RTOL
 WORST = 20
 # (S file number, period): settle check, check, shock
 S_CALLS = ((2, "check"), (4, "check"), (5, "shock"))
@@ -49,6 +50,7 @@ def compare(mp, final) -> dict:
     """Cell by cell: ``mp`` (``MPArrays``) against a photo (``final.pkl``)."""
     per_component: dict[str, float] = {}
     worst: list[tuple] = []
+    worst_lb: list[tuple] = []
     over = fixed_diff = ub_diff = lb_diff = cells = 0
     lb_max_rel = 0.0
     structure: list[str] = []
@@ -81,11 +83,17 @@ def compare(mp, final) -> dict:
         lb_diff += int((lrel > LB_RTOL).sum())
         if len(lrel):
             lb_max_rel = max(lb_max_rel, float(lrel.max()))
+        for i in np.argsort(-lrel)[:WORST]:
+            if lrel[i] > LB_RTOL:
+                worst_lb.append(
+                    (float(lrel[i]), name, c.keys[i], float(la[i]), float(lbb[i]))
+                )
         # keep the WORST biggest per component, trimmed to WORST overall at the end
         for i in np.argsort(-rel)[:WORST]:
             if rel[i] > 0:
                 worst.append((float(rel[i]), name, c.keys[i], float(a[i]), float(b[i])))
     worst = sorted(worst, key=lambda t: -t[0])[:WORST]
+    worst_lb = sorted(worst_lb, key=lambda t: -t[0])[:WORST]
     return {
         "cells": cells,
         "over_1e9": over,
@@ -101,6 +109,10 @@ def compare(mp, final) -> dict:
         "worst_cells": [
             {"rel": r, "var": n, "key": list(k), "ours": a, "reference": b}
             for r, n, k, a, b in worst
+        ],
+        "worst_lb_cells": [
+            {"rel": r, "var": n, "key": list(k), "ours": a, "reference": b}
+            for r, n, k, a, b in worst_lb
         ],
     }
 
@@ -213,6 +225,8 @@ def main(argv: list[str] | None = None) -> int:
         f"codes={out['codes']} nit={out['nit_ours']} ref_nit={out['nit_reference']} "
         f"wall_min={out['wall_min']:.2f} peak_gb={out['peak_rss_gb']:.2f} top={top}"
     )
+    for w in out["worst_lb_cells"][:5]:
+        print(f"  worst lb {w['var']}{tuple(w['key'])} rel={w['rel']:.3g}")
     return 0 if out["gate_passed"] else 1
 
 

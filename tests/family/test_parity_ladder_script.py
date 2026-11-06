@@ -93,6 +93,45 @@ def test_gate_fails_on_a_bent_cell(ran):
     assert out["worst_cells"][0]["key"] == list(c.keys[i])
 
 
+def _finite_lb_cell(final):
+    for n, c in final.vars.items():
+        ok = np.flatnonzero(np.isfinite(c.lb) & (np.abs(c.lb) > 0))
+        if len(ok):
+            return n, int(ok[0])
+    raise AssertionError("no finite lower bound in the photo")
+
+
+def _mp_of(final):
+    class MP:
+        vars = {n: _v(x) for n, x in final.vars.items()}
+
+    return MP
+
+
+def test_lower_bounds_use_the_value_tolerance(ran):
+    """Relative floors inherit the ~1e-10 level difference: 1e-9 passes, 1e-8 fails."""
+    import copy
+
+    from equilibria.family.prep_capture import load
+
+    s, _, _, ref = ran
+    final = load(ref / "final.pkl")
+    name, i = _finite_lb_cell(final)
+    assert s.LB_RTOL == s.RTOL == 1e-9
+    near = copy.deepcopy(final)
+    near.vars[name].lb = near.vars[name].lb.copy()
+    near.vars[name].lb[i] *= 1 + 5e-10
+    assert s.compare(_mp_of(final), near)["lb_diff"] == 0
+    far = copy.deepcopy(final)
+    far.vars[name].lb = far.vars[name].lb.copy()
+    far.vars[name].lb[i] *= 1 + 1e-8
+    out = s.compare(_mp_of(final), far)
+    assert out["lb_diff"] == 1
+    w = out["worst_lb_cells"][0]
+    assert w["var"] == name and w["key"] == list(final.vars[name].keys[i])
+    assert w["rel"] > 1e-9
+
+
 def _v(c):
     class V:
         keys = c.keys
