@@ -194,10 +194,10 @@ def test_multishock_aot_cache_bitwise_3x3(monkeypatch, tmp_path, aot_state):
     cache.set_dir(tmp_path / "aot")
     cache.reset()
     on_a = run(shock_a)
-    n_a = cache.stats["hit"] + cache.stats["mem"]
-    on_b = run(shock_b)
     assert cache.stats["miss"] > 0  # the first run compiled and stored
-    assert cache.stats["hit"] + cache.stats["mem"] > n_a  # the second shock reused them
+    miss_a = cache.stats["miss"]
+    on_b = run(shock_b)
+    assert cache.stats["miss"] == miss_a  # the second shock compiled nothing new
     assert list((tmp_path / "aot").glob("*.aot"))
     _equal_bitwise(on_a, off["a"])
     _equal_bitwise(on_b, off["b"])
@@ -211,11 +211,11 @@ def test_aot_cache_bitwise_20x41(monkeypatch, tmp_path, aot_state):
     """The default shock on gtap7_20x41, family route with the AOT cache on and off:
     every Var cell equal bit for bit per period.
 
-    Two full 20x41 solves, so it is skipped unless ``EQUILIBRIA_RUN_20X41=1``. Needs the
-    MUMPS Python (pymumps) and the 20x41 data; the Newton environment is the one of
+    Two full 20x41 solves, so it is skipped unless ``EQUILIBRIA_RUN_20X41=1``. Needs a
+    Python with pymumps (see scripts/gtap/perf_budget_20x41.py) and the 20x41 data; the Newton environment is the one of
     ``scripts/gtap/perf_budget_20x41.py`` (set here). Run it with::
 
-        EQUILIBRIA_RUN_20X41=1 PYTHONPATH=<worktree>/src:<worktree> ~/proyectos/Pedro/.venv/bin/python \\
+        EQUILIBRIA_RUN_20X41=1 PYTHONPATH=<worktree>/src:<worktree> python \\
             -m pytest tests/family/test_family_multishock.py -m slow -k 20x41
     """
     if os.environ.get("EQUILIBRIA_RUN_20X41") != "1":

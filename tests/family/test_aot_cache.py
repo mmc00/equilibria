@@ -114,7 +114,8 @@ def test_version_or_platform_change_misses(aot, monkeypatch):
     assert cache.stats["miss"] == 0
     for field, value in (("jax", "0.0.0"), ("jaxlib", "0.0.0"), ("platform", "tpu")):
         cache.reset()
-        monkeypatch.setitem(cache.environment(), field, value)
+        cache.environment()  # fills the memoized host part
+        monkeypatch.setitem(cache._env, field, value)
         sysm.F(z)
         assert cache.stats["hit"] == 0 and cache.stats["miss"] > 0, field
         monkeypatch.undo()
@@ -246,3 +247,18 @@ def test_fallback_through_the_real_path_warns_once_and_runs(aot, monkeypatch):
     ]
     assert np.array_equal(out, [0.0, 3.0]) and np.array_equal(again, out)
     assert cache.get_dir() is None
+
+
+def test_environment_follows_a_later_jax_config_update(aot):
+    import jax
+
+    cache, _ = aot
+    before = jax.config.jax_default_matmul_precision
+    env0, name0 = cache.environment(), cache._name("f", ("spec",))
+    try:
+        jax.config.update("jax_default_matmul_precision", "highest")
+        assert cache.environment() != env0  # no reset() in between
+        assert cache._name("f", ("spec",)) != name0
+    finally:
+        jax.config.update("jax_default_matmul_precision", before)
+    assert cache._name("f", ("spec",)) == name0

@@ -98,15 +98,18 @@ def environment() -> dict[str, Any]:
             "platform": dev.client.platform,
             "platform_version": dev.client.platform_version,
             "device_kind": dev.device_kind,
-            "x64": bool(jax.config.jax_enable_x64),
             "xla_flags": os.environ.get("XLA_FLAGS", ""),
-            **{n: repr(getattr(jax.config, n, None)) for n in _JAX_CONFIG},
             "machine": platform.machine(),
             "processor": platform.processor(),
             "cpu": _cpu_brand() if dev.client.platform == "cpu" else "",
             "code": h.hexdigest()[:24],
         }
-    return _env
+    # JAX config can change after the host part was memoized: read it every time
+    live = {
+        "x64": bool(jax.config.jax_enable_x64),
+        **{n: repr(getattr(jax.config, n, None)) for n in _JAX_CONFIG},
+    }
+    return {**_env, **live}
 
 
 def _sig(a: Any) -> tuple:
@@ -176,7 +179,7 @@ def _compile_fresh(lower: Callable[[], Any]) -> Any:
                 warnings.warn(
                     "executable cache is disabled: JAX's internals changed and its "
                     "persistent cache cannot be bypassed",
-                    stacklevel=2,
+                    stacklevel=5,
                 )
             set_dir(None)
 
@@ -231,6 +234,7 @@ def _call(kind: str, spec: tuple, lower: Callable[[], Any], *dyn: Any) -> Any:
     except Exception as exc:
         _damaged(path or Path(name), exc)
         if _dir is None:  # disabled meanwhile: no entry to rebuild
+            _mem.pop(name, None)  # do not serve the bad executable again
             return lower().compile()(*dyn)
         return _build(name, lower)(*dyn)
     _verified.add(name)
