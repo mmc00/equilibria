@@ -46,7 +46,32 @@ def _multishock(m) -> dict:
     return shock
 
 
-def _check(dataset: str, linsolve: str, monkeypatch, tmp_path) -> None:
+def _multishock_ifsub0(m) -> dict:
+    """Under ifSUB=0: ``fcttx`` and ``kappaf`` cells (rejected under ifSUB=1) plus an
+    ``imptx`` and an ``aft`` cell."""
+    from equilibria.templates.gtap.shocks import _can_take_shock
+
+    def cells(name):
+        var = getattr(m, name)
+        return [
+            tuple(k[:-1])
+            for k in var
+            if k[-1] == "shock"
+            and abs(var[k].value or 0) > 0
+            and _can_take_shock(m, name, tuple(k[:-1]))
+        ]
+
+    fcttx, kappaf, imptx, aft = (cells(n) for n in ("fcttx", "kappaf", "imptx", "aft"))
+    assert fcttx and kappaf, "ifSUB=0 must accept fcttx and kappaf cells"
+    return {
+        "fcttx": {fcttx[0]: 4.0, fcttx[-1]: 2.0},
+        "kappaf": {kappaf[0]: 3.0},
+        "imptx": {imptx[1]: 8.6637},
+        "aft": {aft[0]: 10.0},
+    }
+
+
+def _check(dataset: str, linsolve: str, monkeypatch, tmp_path, ifsub: int = 1) -> None:
     from equilibria.family import prep_capture
     from equilibria.family.driver import solve_gtap_family
     from equilibria.templates.gtap.gtap_block_model import build_block_model
@@ -65,16 +90,18 @@ def _check(dataset: str, linsolve: str, monkeypatch, tmp_path) -> None:
 
     p = params()
     closure = _route_closure()
+    if ifsub == 0:
+        closure = closure.model_copy(update={"if_sub": False})
     rr = list(p.sets.r)[-1]
     ref = find_reference(
-        dataset, "gams", form="mcp", mode="gtap", ifsub=1, fbep="header"
+        dataset, "gams", form="mcp", mode="gtap", ifsub=ifsub, fbep="header"
     ) or find_reference(
-        dataset, "gams", form="nlp", mode="gtap", ifsub=1, fbep="header"
+        dataset, "gams", form="nlp", mode="gtap", ifsub=ifsub, fbep="header"
     )
     gdx = None if ref is None else ref / "out.gdx"
 
     m, _ = build_block_model(p, p.sets, closure, rr, base_calibrated=True, ref_gdx=gdx)
-    shock = _multishock(m)
+    shock = _multishock(m) if ifsub == 1 else _multishock_ifsub0(m)
     assert len(shock) >= 3  # several instruments, or the test says nothing
     apply_shock(m, shock)
 
@@ -102,7 +129,7 @@ def _check(dataset: str, linsolve: str, monkeypatch, tmp_path) -> None:
 
     fres = solve_gtap_family(
         params(),
-        _route_closure(),
+        closure,
         rr,
         shock=shock,
         cache_root=tmp_path / "cache",
@@ -118,6 +145,11 @@ def _check(dataset: str, linsolve: str, monkeypatch, tmp_path) -> None:
 
 def test_multishock_matches_pyomo_3x3(monkeypatch, tmp_path):
     _check("gtap7_3x3", "direct", monkeypatch, tmp_path)
+
+
+def test_multishock_matches_pyomo_3x3_ifsub0(monkeypatch, tmp_path):
+    """ifSUB=0: ``fcttx`` and ``kappaf`` cells, rejected under ifSUB=1, in the shock."""
+    _check("gtap7_3x3", "direct", monkeypatch, tmp_path, ifsub=0)
 
 
 @pytest.mark.slow
