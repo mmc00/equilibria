@@ -72,6 +72,15 @@ which MCP solves use. The PATH solver itself is not on PyPI; get it from its aut
 NLP solves use IPOPT through the `ipopt` extra (`cyipopt`), which needs an Ipopt
 installation on the system.
 
+To check what is installed and what is missing, run:
+
+```bash
+equilibria doctor
+```
+
+It lists PATH, its license and the solver packages, each with how to get it,
+and exits with 1 when something an MCP solve needs is missing.
+
 Other extras: `excel`, `viz` (matplotlib, plotly), `poi` (PyOptInterface),
 `modelcache` (cloudpickle), `docs`, `all`.
 

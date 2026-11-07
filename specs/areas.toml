@@ -68,6 +68,7 @@ solver = [
   "src/equilibria/solver/",
   "src/equilibria/backends/",
   "src/equilibria/report/",
+  "src/equilibria/doctor/",
 ]
 parity = [
   "src/equilibria/compare/",
