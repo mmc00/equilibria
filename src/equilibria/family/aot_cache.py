@@ -183,13 +183,15 @@ def _compile_fresh(lower: Callable[[], Any]) -> Any:
 
 def _build(name: str, lower: Callable[[], Any]) -> Any:
     assert _dir is not None
+    path = _dir / name
     compiled = _compile_fresh(lower)
-    try:
-        _write(_dir / name, compiled)
-    except Exception as exc:  # unserializable or disk full: keep going without it
-        warnings.warn(
-            f"executable cache could not write {name} ({exc!r})", stacklevel=4
-        )
+    if _dir is not None:  # the compile may have disabled the cache (JAX internals)
+        try:
+            _write(path, compiled)
+        except Exception as exc:  # unserializable or disk full: keep going without it
+            warnings.warn(
+                f"executable cache could not write {name} ({exc!r})", stacklevel=4
+            )
     _mem[name] = compiled
     _verified.add(name)
     return compiled
@@ -220,14 +222,16 @@ def _call(kind: str, spec: tuple, lower: Callable[[], Any], *dyn: Any) -> Any:
     """Run the executable of ``spec`` on the dynamic arguments ``dyn``."""
     name = _name(kind, spec)
     compiled = _obtain(name, lower)
+    path = None if _dir is None else _dir / name
     if name in _verified:
         return compiled(*dyn)
     try:  # the first run of a loaded executable: a program that loads may still not run
         out = compiled(*dyn)
         out.block_until_ready()  # a dispatch error can surface asynchronously
     except Exception as exc:
-        assert _dir is not None
-        _damaged(_dir / name, exc)
+        _damaged(path or Path(name), exc)
+        if _dir is None:  # disabled meanwhile: no entry to rebuild
+            return lower().compile()(*dyn)
         return _build(name, lower)(*dyn)
     _verified.add(name)
     return out

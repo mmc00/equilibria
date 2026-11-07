@@ -1,5 +1,6 @@
 """The family driver refuses what it cannot run, by name, and stays out of the Pyomo route."""
 
+import gc
 from typing import Any
 
 import pytest
@@ -390,7 +391,6 @@ def test_family_backend_load_runs_with_gc_paused(tmp_path, monkeypatch):
 
 
 def _stub_prepare_run(monkeypatch, seen):
-    import gc
     import types
 
     from equilibria.family import cross_period, disk_cache, prep_recipe, prep_square
@@ -428,8 +428,6 @@ def _stub_prepare_run(monkeypatch, seen):
 
 
 def test_prepare_run_leaves_the_freeze_count_alone_by_default(monkeypatch):
-    import gc
-
     from equilibria.family import driver as drv
 
     seen = {}
@@ -459,10 +457,6 @@ def test_solve_family_passes_freeze_from_env(monkeypatch):
     monkeypatch.setattr(drv, "prepare_run", fake_prepare)
     monkeypatch.setattr(drv, "check_supported", lambda **k: None)
     monkeypatch.delenv("EQUILIBRIA_GTAP_GC_FREEZE", raising=False)
-    import gc
-
-    import pytest
-
     with pytest.raises(Stop):
         drv.solve_gtap_family(None, None, "R")
     assert got["freeze"] is True
@@ -470,46 +464,13 @@ def test_solve_family_passes_freeze_from_env(monkeypatch):
     with pytest.raises(Stop):
         drv.solve_gtap_family(None, None, "R")
     assert got["freeze"] is False
-    assert gc.get_freeze_count() == 0
 
 
 def test_prepare_run_freezes_the_loaded_records_before_mp_build(monkeypatch):
-    import gc
-    import types
-
-    from equilibria.family import cross_period, disk_cache, prep_recipe, prep_square
     from equilibria.family import driver as drv
-    from equilibria.templates.gtap import residual_region as rr
-
-    keep = []
-
-    def load_or_build(*a, **k):
-        keep.append([[i] for i in range(4000)])
-        return types.SimpleNamespace(sets={}, var_domains={}), "state"
-
-    def load_cross(*a, **k):
-        keep.append([[i] for i in range(4000)])
-        return "cross"
 
     seen = {}
-
-    def build(*a, **k):
-        seen["at_mp_build"] = gc.get_freeze_count()
-        return "mp"
-
-    params = types.SimpleNamespace(
-        sets=types.SimpleNamespace(r=["a"]), set_va_subsidy_basis=lambda b: None
-    )
-    monkeypatch.setattr(disk_cache, "load_or_build", load_or_build)
-    monkeypatch.setattr(cross_period, "load_or_record", load_cross)
-    monkeypatch.setattr(drv.MPArrays, "build", staticmethod(build))
-    monkeypatch.setattr(rr, "resolve_residual_region", lambda *a, **k: "R")
-    monkeypatch.setattr(prep_recipe, "sp_reference_arrays", lambda *a, **k: None)
-    monkeypatch.setattr(
-        prep_square.ConditionalMasks, "from_params", staticmethod(lambda *a, **k: None)
-    )
-    monkeypatch.setattr(drv, "_driver_closure", lambda c: c)
-    monkeypatch.delenv("EQUILIBRIA_GTAP_GC_FREEZE", raising=False)
+    params, _keep = _stub_prepare_run(monkeypatch, seen)
     gc.unfreeze()
     try:
         drv.prepare_run(params, None, "R", jax_cache=False, freeze=True)

@@ -218,3 +218,26 @@ def test_compile_fresh_without_jax_internals_warns_once_and_disables(aot, monkey
         warnings.simplefilter("always")
         cache._compile_fresh(lambda: f.lower(x))
     assert not [w for w in rec2 if "executable cache is disabled" in str(w.message)]
+
+
+def test_fallback_through_the_real_path_warns_once_and_runs(aot, monkeypatch):
+    import types
+
+    import jax
+    import jax._src
+    import jax.numpy as jnp
+
+    cache, root = aot
+    cache.set_dir(root)
+    monkeypatch.setattr(jax._src, "compilation_cache", types.SimpleNamespace())
+    jitted = jax.jit(lambda v, r, n: jnp.zeros(n).at[r].add(v), static_argnums=2)
+    v, r = jnp.arange(3.0), jnp.array([0, 1, 1])
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        out = cache.run_scatter(jitted, v, r, 2)
+        again = cache.run_scatter(jitted, v, r, 2)  # plain jit now
+    assert len(rec) == 1 and "disabled" in str(rec[0].message), [
+        str(w.message) for w in rec
+    ]
+    assert np.array_equal(out, [0.0, 3.0]) and np.array_equal(again, out)
+    assert cache.get_dir() is None
