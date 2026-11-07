@@ -84,7 +84,7 @@ def capture_dir(
 
 
 @cache
-def recording(dataset: str = "gtap7_3x3"):
+def recording(dataset: str = "gtap7_3x3", ifsub: int = 1):
     """The single-period recording of the route (``FamilyBackend``) the shock recipe asks
     which instrument cells a live row reads: from the family disk cache, 3x3 in a temp
     dir removed at exit."""
@@ -102,5 +102,8 @@ def recording(dataset: str = "gtap7_3x3"):
         atexit.register(shutil.rmtree, root, True)
     else:
         root = Path.home() / ".cache" / "equilibria" / "family"
-    backend, _ = load_or_build(p, _route_closure(), list(p.sets.r)[-1], root)
+    closure = _route_closure()
+    if ifsub == 0:
+        closure = closure.model_copy(update={"if_sub": False})
+    backend, _ = load_or_build(p, closure, list(p.sets.r)[-1], root)
     return backend

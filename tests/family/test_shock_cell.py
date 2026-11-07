@@ -28,11 +28,32 @@ from tests.family._prep import capture_dir
 from tests.family.test_prep_recipe import ROUTE, _closure, _params
 from tests.family.test_squared_system import _route_closure
 
+# (dataset, ifSUB): ifSUB=0 only on 3x3, where it accepts the instruments that
+# ifSUB=1 rejects (fcttx, kappaf, exptx, prdtx_rai, lambdamg).
 DATASETS = (
-    "gtap7_3x3",
-    "gtap7_10x7",
-    pytest.param("gtap7_15x10", marks=pytest.mark.slow),
+    ("gtap7_3x3", 1),
+    ("gtap7_10x7", 1),
+    pytest.param(("gtap7_15x10", 1), marks=pytest.mark.slow),
+    ("gtap7_3x3", 0),
 )
+
+
+def _ids(param) -> str:
+    ds, ifsub = param
+    return ds if ifsub == 1 else f"{ds}-ifsub{ifsub}"
+
+
+def _closures(ifsub: int):
+    """The model closure (``_route_closure``) and the driver's ``_closure`` at ``ifsub``."""
+    if ifsub == 1:
+        return _route_closure(), _closure()
+    off = {"if_sub": False}
+    return (
+        _route_closure().model_copy(update=off),
+        _closure().model_copy(update=off),
+    )
+
+
 SAMPLE = 300
 # Shock of the multi-instrument case: (instrument, GEMPACK percent, cells taken).
 USER = (
@@ -120,7 +141,7 @@ def _diff(a: dict, b: dict) -> list[str]:
     return bad
 
 
-@pytest.fixture(scope="module", params=DATASETS)
+@pytest.fixture(scope="module", params=DATASETS, ids=_ids)
 def case(request, tmp_path_factory):
     from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
     from equilibria.family import cross_period
@@ -133,10 +154,10 @@ def case(request, tmp_path_factory):
     from equilibria.templates.gtap.shocks import _can_take_shock
     from equilibria.templates.gtap.shocks import apply_shock as pyomo_apply
 
-    ds = request.param
+    ds, ifsub = request.param
     load_params(ds)  # skip when the dataset is missing
     p = _params(ds)
-    closure = _route_closure()
+    closure, base_closure = _closures(ifsub)
     rr = list(p.sets.r)[-1]
     root = (
         tmp_path_factory.mktemp("records")
@@ -147,7 +168,7 @@ def case(request, tmp_path_factory):
     cross = cross_period.load_or_record(
         p, closure, rr, root, sets=backend.sets, var_domains=backend.var_domains
     )
-    sp_ref = sp_reference_arrays(p, _closure(), rr, state=state)
+    sp_ref = sp_reference_arrays(p, base_closure, rr, state=state)
     mp0 = MPArrays.build(state, backend, cross, params=p)
     m: Any = build_block_model(p, p.sets, closure, rr, base_calibrated=False)[0]
 
@@ -177,6 +198,8 @@ def case(request, tmp_path_factory):
 
     out = {
         "ds": ds,
+        "ifsub": ifsub,
+        "base_closure": base_closure,
         "params": p,
         "closure": closure,
         "rr": rr,
@@ -209,8 +232,8 @@ def case(request, tmp_path_factory):
     # stage 2: after the driver's prepare of the shock period
     prep = PeriodPreparer(
         mode="gtap",
-        base_closure=_closure(),
-        alt_closure=_closure(),
+        base_closure=base_closure,
+        alt_closure=base_closure,
         residual_region=rr,
         **ROUTE,
     )
@@ -223,7 +246,7 @@ def case(request, tmp_path_factory):
             mp0,
             "shock",
             params=p,
-            closure=_closure(),
+            closure=base_closure,
             sp_ref=sp_ref,
             mode="gtap",
             backend=backend,
@@ -281,7 +304,7 @@ def test_accept_reject_equals_pyomo(case, stage, capsys):
     bad, counts = _compare_table(pyo, arr)
     with capsys.disabled():
         print(
-            f"\n[{case['ds']} {stage}] accepted/rejected per instrument:",
+            f"\n[{case['ds']} ifsub={case['ifsub']} {stage}] accepted/rejected per instrument:",
             counts,
         )
     assert not bad, bad[:8]
@@ -289,16 +312,32 @@ def test_accept_reject_equals_pyomo(case, stage, capsys):
     assert counts["imptx"][1] > 0, "imptx: nothing rejected (the missing cell)"
 
 
+def test_ifsub0_accepts_and_rejects_the_ifsub_instruments(case):
+    """Under ifSUB=0 the instruments ifSUB=1 rejects wholesale are live, with real
+    rejected cells, and the arrays agree with Pyomo on every one of them."""
+    if case["ifsub"] != 0:
+        pytest.skip("ifSUB=1: these instruments are rejected outright")
+    bad, counts = _compare_table(case["user_pyomo"], case["user_arrays"])
+    assert not bad, bad[:8]
+    for name in ("fcttx", "kappaf", "exptx", "prdtx_rai", "lambdamg"):
+        assert counts[name][0] > 0, f"{name}: nothing accepted under ifSUB=0"
+    for name in ("fcttx", "kappaf", "prdtx_rai", "lambdamg"):
+        assert counts[name][1] > 0, f"{name}: nothing rejected under ifSUB=0"
+    assert {"fcttx", "kappaf", "exptx"} <= set(case["shock"])
+
+
 def test_accept_reject_equals_pyomo_with_rows_off(case, capsys):
     """Real cells rejected: rows of the inline path off, ``xft`` fixed, ``eq_va`` off."""
     bad, counts = _compare_table(case["stress_pyomo"], case["stress_arrays"])
     with capsys.disabled():
         print(
-            f"\n[{case['ds']} stress] accepted/rejected:",
+            f"\n[{case['ds']} ifsub={case['ifsub']} stress] accepted/rejected:",
             {n: counts[n] for n in ("imptx", "aft", "lambdava")},
         )
     assert not bad, bad[:8]
-    assert counts["imptx"][1] > 1 and counts["aft"][1] > 3 and counts["lambdava"][1] > 0
+    # under ifSUB=0 the eq_xweq rows do not read imptx: only the missing cell is rejected
+    assert counts["imptx"][1] > (1 if case["ifsub"] == 1 else 0)
+    assert counts["aft"][1] > 3 and counts["lambdava"][1] > 0
 
 
 def test_user_shock_levels_equal_pyomo(case):
@@ -347,14 +386,14 @@ def test_default_tariff_equals_final_pkl(case):
     from equilibria.family.prep_capture import load, pairs
     from equilibria.family.prep_recipe import run_recipe
 
-    d = capture_dir(case["ds"])
+    d = capture_dir(case["ds"], ifsub=case["ifsub"])
     final = load(d / "final.pkl")
     a, _ = next((a, b) for a, b in pairs(d) if a.period == "shock")
     got = run_recipe(
         MPArrays.from_photo(a),
         "shock",
         params=case["params"],
-        closure=_closure(),
+        closure=case["base_closure"],
         sp_ref=case["sp_ref"],
         mode="gtap",
         backend=case["backend"],
