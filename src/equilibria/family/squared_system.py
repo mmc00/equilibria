@@ -216,8 +216,9 @@ class ArrayIncidence:
         global variable id of every layout column (-1: not in ``mp``)."""
         key = ("incidence", id(self.backend), self.period)
         hit = index.cache.get(key)
-        if hit is not None:
-            return hit
+        # id() of a freed backend can be reused: keep the backend in the entry
+        if hit is not None and hit[0] is self.backend:
+            return hit[1]
         pat = self.pat
         g2csr = np.full(len(index.row_names), -1, dtype=np.int64)
         for fam, row in mp.rows.items():
@@ -241,8 +242,18 @@ class ArrayIncidence:
                 ok = k >= 0
                 cm[off + k[ok]] = index.var_off[v] + ids[ok]
             off += len(flat)
-        hit = index.cache[key] = (g2csr, cm)
-        return hit
+        index.cache[key] = (self.backend, (g2csr, cm))
+        return g2csr, cm
+
+    def _cross_table(self, index: Any) -> dict[str, list[int]]:
+        """Per run: global ids of the columns of every cross row (name -> ids)."""
+        key = ("cross_gids", id(self.cross))
+        hit = index.cache.get(key)
+        if hit is not None and hit[0] is self.cross:
+            return hit[1]
+        table: dict[str, list[int]] = {}
+        index.cache[key] = (self.cross, table)
+        return table
 
     def adjacency(
         self, mp: MPArrays, index: Any, rid: np.ndarray, col_pos: np.ndarray
@@ -271,18 +282,27 @@ class ArrayIncidence:
         for hi in ends:
             out.append(vals[lo:hi])
             lo = hi
-        for i in np.flatnonzero(~recorded).tolist():
-            out[i] = self._cross_row(mp, index, index.row_names[rid[i]], col_pos)
+        unrecorded = np.flatnonzero(~recorded).tolist()
+        if unrecorded:
+            table = self._cross_table(index)  # identity checked once per call
+            for i in unrecorded:
+                out[i] = self._cross_row(
+                    mp, index, index.row_names[rid[i]], col_pos, table
+                )
         return out
 
     def _cross_row(
-        self, mp: MPArrays, index: Any, name: str, col_pos: np.ndarray
+        self,
+        mp: MPArrays,
+        index: Any,
+        name: str,
+        col_pos: np.ndarray,
+        table: dict[str, list[int]],
     ) -> list[int]:
         p = self.period
         names = self._cross_pat.get(name)
         if names is None or not (name.endswith(f",{p}]") or name.endswith(f"[{p}]")):
             raise KeyError(f"no incidence for row {name!r}")
-        table = index.cache.setdefault(("cross_gids", id(self.cross)), {})
         gids = table.get(name)
         if gids is None:
             gids = [index.gid_of_name(c, mp) for c in names]

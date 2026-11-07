@@ -199,3 +199,42 @@ def inc_names(route):
 
     p, backend, state, cross, ref, masks, mps, periods = route
     return period_incidence(backend, state, periods[0], cross)
+
+
+def test_cache_entries_of_a_reused_id_are_recomputed(route):
+    """``index.cache`` keys hold ``id(obj)``; an entry stored for another object under
+    the same id (a freed object's id reused) must not be returned."""
+    from equilibria.family.cell_index import CellIndex
+    from equilibria.family.squared_system import (
+        ArrayIncidence,
+        _cross_period_tables,
+        _single_period_tables,
+    )
+
+    p, backend, state, cross, ref, masks, mps, periods = route
+    mp, period = mps[0], periods[0]
+    index = CellIndex(mp)
+    inc = ArrayIncidence(backend, state, period, cross)
+    stale = object()
+
+    key = ("incidence", id(backend), period)
+    index.cache[key] = (stale, "stale")
+    g2csr, cm = inc._tables(mp, index)
+    assert not isinstance(g2csr, str) and index.cache[key][0] is backend
+    assert inc._tables(mp, index)[0] is g2csr  # a real hit is still a hit
+
+    key = ("build_sp", id(backend), period)
+    index.cache[key] = (stale, "stale")
+    out = _single_period_tables(backend, state, mp, period, index)
+    assert out != "stale" and index.cache[key][0] is backend
+
+    key = ("build_cross", id(cross))
+    index.cache[key] = (stale, "stale")
+    out = _cross_period_tables(cross, mp, index)
+    assert out != "stale" and index.cache[key][0] is cross
+
+    key = ("cross_gids", id(cross))
+    index.cache[key] = (stale, {"x": [1]})
+    table = inc._cross_table(index)
+    assert table == {} and index.cache[key][0] is cross
+    assert inc._cross_table(index) is table

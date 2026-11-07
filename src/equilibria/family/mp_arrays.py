@@ -252,7 +252,12 @@ class Squared:
     ``col_names[k]``) and every cell of the active period.
 
     ``cells`` may be given as a callable that builds the dict on first access (the
-    values it reads were captured when the system was squared)."""
+    values it reads were captured when the system was squared).
+
+    ``ids`` is a snapshot taken by ``square``: it is dropped when ``cells`` is assigned,
+    but not when ``row_names`` / ``col_names`` are mutated in place. Do not mutate them
+    after ``square``; ``SquaredSystem.build`` only guards against a length change (and
+    rebuilds the ids from the names then)."""
 
     def __init__(
         self,
