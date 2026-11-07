@@ -11,7 +11,8 @@ import itertools
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cache
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
 import numpy as np
 
@@ -20,14 +21,19 @@ from equilibria.family.layout import VarLayout
 from equilibria.templates.gtap.gtap_block_model import _set_elems
 from tests.family._data import load_params
 
+Savf = Literal["capFix", "capSFix", "capShrFix", "capFlex", "capFixDp"]
 FAMILIES = ("eq_pndeq", "eq_pvaeq", "eq_facty")
 
 # Fidelity tolerance (plan Global Constraints).
+_ROOT = Path(__file__).resolve().parents[2]
 RTOL = 1e-12
 ATOL = 1e-14
 
 
-def comp_stat_closure(if_sub: bool = False):
+def comp_stat_closure(
+    if_sub: bool = False,
+    savf_flag: Savf = "capFix",
+):
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
     return GTAPClosureConfig(
@@ -38,7 +44,7 @@ def comp_stat_closure(if_sub: bool = False):
         fix_taxes=False,
         fix_technology=False,
         if_sub=if_sub,
-        savf_flag="capFix",
+        savf_flag=savf_flag,
         numeraire="pnum",
     )
 
@@ -54,6 +60,7 @@ class Oracle:
     con_names: list[str]
     var_names: list[str]
     x0: np.ndarray | None = None  # calibrated primals, captured before any set_primals
+    closure: Any = None  # the closure the Pyomo model was built with
     model: Any = None  # the composed equilibria Model (blocks), for the family backend
 
     def rows_of(self, families=FAMILIES) -> np.ndarray:
@@ -111,14 +118,44 @@ class Oracle:
 
 
 @cache
-def oracle(dataset: str, if_sub: bool = False) -> Oracle:
-    return build_oracle(dataset, if_sub=if_sub)
+def oracle(dataset: str, if_sub: bool = False, savf_flag: Savf = "capFix") -> Oracle:
+    return build_oracle(dataset, if_sub=if_sub, savf_flag=savf_flag)
+
+
+def _stamped_copy(p: Any, closure: Any, dataset: str, if_sub: bool) -> Any:
+    import copy
+    import sys
+
+    import pytest
+
+    from equilibria.family.capflex import stamp_capflex_risk
+
+    saved = sys.path[:]  # the parity module edits ``sys.path`` on import
+    try:
+        from tests.templates.gtap.test_gtap7_gempack_parity import _reference_gdx
+
+        gdx = _reference_gdx(dataset, int(if_sub))
+    finally:
+        sys.path[:] = saved
+    if gdx is None or not gdx.exists():
+        pytest.skip(f"no GAMS reference GDX for {dataset}")
+    q = copy.deepcopy(p)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.syspath_prepend(str(_ROOT / "scripts" / "gtap"))
+        stamp_capflex_risk(q, closure, gdx)
+    return q
 
 
 def build_oracle(
-    dataset: str, prepare: Callable[[Any], None] | None = None, if_sub: bool = False
+    dataset: str,
+    prepare: Callable[[Any], None] | None = None,
+    if_sub: bool = False,
+    savf_flag: Savf = "capFix",
 ) -> Oracle:
-    """Uncached oracle; ``prepare(pm)`` runs before PyomoNLP, which freezes fixed values."""
+    """Uncached oracle; ``prepare(pm)`` runs before PyomoNLP, which freezes fixed values.
+
+    Under capFlex the params are a copy stamped with ``risk`` from the GAMS reference
+    GDX (the one ``_solve_shock`` reads); the test skips when there is none."""
     from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP
     from pyomo.environ import Objective
 
@@ -128,9 +165,12 @@ def build_oracle(
     )
 
     p = load_params(dataset)
+    closure = comp_stat_closure(if_sub, savf_flag)
+    if savf_flag == "capFlex":
+        p = _stamped_copy(p, closure, dataset, if_sub)
     sets = _set_elems(p.sets)
     rr = sets["r"][-1]
-    pm = build_block_single_period(p, p.sets, comp_stat_closure(if_sub), rr)
+    pm = build_block_single_period(p, p.sets, closure, rr)
     if prepare is not None:
         prepare(pm)
     pm._family_phase0_obj = Objective(expr=0.0)
@@ -145,7 +185,8 @@ def build_oracle(
         con_names=[c.name for c in nlp.get_pyomo_equality_constraints()],
         var_names=[v.name for v in nlp.get_pyomo_variables()],
         x0=np.asarray(nlp.get_primals(), float).copy(),
-        model=compose_block_sp(p, p.sets, comp_stat_closure(if_sub), rr)[0],
+        closure=closure,
+        model=compose_block_sp(p, p.sets, closure, rr)[0],
     )
 
 

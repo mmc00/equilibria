@@ -44,6 +44,18 @@ def test_no_gempack_rows_is_a_clean_skip():
         pytest.skip("no reference='gempack' rows yet — awaiting RunGTAP SL4 dump")
 
 
+def _reference_gdx(dataset: str, ifsub: int) -> Path | None:
+    """The GAMS ``out.gdx`` both backends read (capFlex's ``risk`` and the Pyomo warm
+    start): the MCP reference where GAMS has one, else the NLP one (gtap7_20x41), or
+    ``None`` when neither exists."""
+    ref = find_reference(
+        dataset, "gams", form="mcp", mode="gtap", ifsub=ifsub, fbep="header"
+    ) or find_reference(
+        dataset, "gams", form="nlp", mode="gtap", ifsub=ifsub, fbep="header"
+    )
+    return None if ref is None else ref / "out.gdx"
+
+
 def _solve_shock(
     dataset: str,
     ifsub: int,
@@ -141,13 +153,7 @@ def _solve_shock(
         # twin-solve fallback recovers rore/rorg. Verified on 3x4: shock code=1 with
         # ref_gdx=None. So pass the GDX only if it exists; on small datasets the twin-solve
         # fallback is cheap enough.
-        # MCP where GAMS has one; gtap7_20x41 only has the NLP (CONOPT) reference
-        _ref = find_reference(
-            dataset, "gams", form="mcp", mode="gtap", ifsub=ifsub, fbep="header"
-        ) or find_reference(
-            dataset, "gams", form="nlp", mode="gtap", ifsub=ifsub, fbep="header"
-        )
-        gdx = None if _ref is None else _ref / "out.gdx"
+        gdx = _reference_gdx(dataset, ifsub)
         if backend == "family":
             fres = solve_gtap_family(p, ac, rr, ref_gdx=gdx)
             return fres, int(fres.results["shock"]["code"])

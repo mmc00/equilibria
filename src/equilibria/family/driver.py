@@ -69,8 +69,13 @@ def check_supported(
     def refuse(what: str) -> None:
         raise NotImplementedError(f"family backend: {what} is not supported")
 
-    if savf_flag != "capFix":
-        refuse(f"savf_flag={savf_flag!r} (only 'capFix')")
+    if savf_flag == "capFlex":
+        if not if_sub:
+            refuse(
+                "savf_flag='capFlex' with if_sub=False (capFlex runs with ifSUB=1 only)"
+            )
+    elif savf_flag != "capFix":
+        refuse(f"savf_flag={savf_flag!r} (only 'capFix' and 'capFlex')")
     if mode != "gtap":
         refuse(f"mode={mode!r} (only 'gtap')")
     if not skip_base_solve:

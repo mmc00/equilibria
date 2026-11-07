@@ -32,13 +32,20 @@ def run(env: dict[str, str] | None = None, **kw: Any) -> None:
 def test_supported_config_passes():
     run()
     run(if_sub=False)  # ifSUB=0 is supported
+    run(savf_flag="capFlex")  # capFlex with ifSUB=1 is supported
     run(env={"EQUILIBRIA_GTAP_TR_LINSOLVE": "direct"})
 
 
 @pytest.mark.parametrize(
     "kw, needle",
     [
-        ({"savf_flag": "capFlex"}, "savf_flag"),
+        (
+            {"savf_flag": "capFlex", "if_sub": False},
+            "savf_flag='capFlex' with if_sub=False",
+        ),
+        ({"savf_flag": "capSFix"}, "savf_flag='capSFix'"),
+        ({"savf_flag": "capShrFix"}, "savf_flag='capShrFix'"),
+        ({"savf_flag": "capFixDp"}, "savf_flag='capFixDp'"),
         ({"mode": "altertax"}, "mode"),
         ({"skip_base_solve": False}, "skip_base_solve"),
         ({"seed_from_prior": True}, "seed_from_prior"),
@@ -175,10 +182,10 @@ def test_solve_shock_family_route_refuses_before_any_work(monkeypatch):
     monkeypatch.delenv("EQUILIBRIA_GTAP_SOLVER", raising=False)
     with pytest.raises(NotImplementedError, match="EQUILIBRIA_GTAP_SOLVER"):
         mod._solve_shock("gtap7_3x3", 1, "capFix", solve_nlp=True, backend="family")
-    with pytest.raises(NotImplementedError, match="savf_flag"):
-        mod._solve_shock("gtap7_3x3", 1, "capFlex", solve_nlp=True, backend="family")
-    # ifSUB=0 is lifted, the other closures still refuse (before any work)
-    with pytest.raises(NotImplementedError, match="savf_flag"):
+    with pytest.raises(NotImplementedError, match="savf_flag='capSFix'"):
+        mod._solve_shock("gtap7_3x3", 1, "capSFix", solve_nlp=True, backend="family")
+    # ifSUB=0 and capFlex are lifted separately, not crossed (before any work)
+    with pytest.raises(NotImplementedError, match="capFlex' with if_sub=False"):
         mod._solve_shock("gtap7_3x3", 0, "capFlex", solve_nlp=True, backend="family")
     monkeypatch.setenv("EQUILIBRIA_GTAP_SOLVER", "scipy_newton_tr")
     with pytest.raises(NotImplementedError, match="SOLVE_NLP"):
@@ -486,3 +493,59 @@ def test_family_driver_import_does_not_load_pyomo():
 
     code = "import sys, equilibria.family.driver; sys.exit('pyomo' in sys.modules)"
     assert subprocess.run([sys.executable, "-c", code], check=False).returncode == 0
+
+
+def test_capflex_still_refuses_auto_residual_region():
+    from equilibria.templates.gtap.residual_region import resolve_residual_region
+    from tests.family._oracle import comp_stat_closure
+
+    closure = comp_stat_closure(True).model_copy(update={"savf_flag": "capFlex"})
+    with pytest.raises(ValueError, match="only valid under capFix"):
+        resolve_residual_region(None, None, closure, "auto")
+
+
+@pytest.mark.parametrize(
+    "dataset", ["gtap7_3x3", "gtap7_10x7", "gtap7_15x10", "gtap7_20x41"]
+)
+def test_family_and_pyomo_read_the_same_gdx(monkeypatch, dataset):
+    """Both routes of ``_solve_shock`` hand the same ``ref_gdx`` on (no solve runs)."""
+    import equilibria.family.driver as fdriver
+    import equilibria.templates.gtap as gtap
+    import equilibria.templates.gtap.gtap_block_model as bm
+
+    mod = _parity_module()
+    seen: dict[str, Any] = {}
+
+    class Stop(Exception):
+        pass
+
+    def fam(p, ac, rr, *, ref_gdx=None, **kw):
+        seen["family"] = ref_gdx
+        raise Stop
+
+    def pyo(p, sets, ac, rr, *, ref_gdx=None, **kw):
+        seen["pyomo"] = ref_gdx
+        raise Stop
+
+    class FakeParams:
+        sets = type("S", (), {"r": ["A", "B"]})()
+
+        def load_from_har(self, **kw):
+            pass
+
+    monkeypatch.setattr(fdriver, "solve_gtap_family", fam)
+    monkeypatch.setattr(bm, "build_block_model", pyo)
+    monkeypatch.setattr(gtap, "GTAPParameters", FakeParams)
+    monkeypatch.setenv("EQUILIBRIA_GTAP_SOLVER", "scipy_newton_tr")
+    monkeypatch.setenv("EQUILIBRIA_GTAP_TR_LINSOLVE", "direct")
+    for backend in ("family", "pyomo"):
+        with pytest.raises(Stop):
+            mod._solve_shock(dataset, 1, "capFlex", solve_nlp=True, backend=backend)
+    assert seen["family"] == seen["pyomo"] == mod._reference_gdx(dataset, 1)
+    if seen["family"] is not None:
+        name = (
+            "gams_nlp_gtap_ifsub1_fbep-header"
+            if dataset == "gtap7_20x41"
+            else ("gams_mcp_gtap_ifsub1_fbep-header")
+        )
+        assert seen["family"].parent.name == name

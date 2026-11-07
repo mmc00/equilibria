@@ -38,8 +38,12 @@ def capflex_risk(params: Any, ref_gdx: Any) -> dict[str, float]:
 
 def stamp_capflex_risk(params: Any, closure: Any, ref_gdx: Any) -> None:
     """Set ``params._capflex_risk`` under capFlex (before any cache key is taken, so
-    capFix and capFlex records never share a key); a no-op under capFix."""
+    capFix and capFlex records never share a key). Under any other closure it removes a
+    ``_capflex_risk`` left by an earlier capFlex run, so that run's value cannot move the
+    capFix keys or results."""
     if getattr(closure, "savf_flag", "capFix") != "capFlex":
+        if hasattr(params, "_capflex_risk"):
+            del params._capflex_risk
         return
     risk = capflex_risk(params, ref_gdx)
     held = getattr(params, "_capflex_risk", None)

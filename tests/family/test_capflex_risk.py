@@ -22,15 +22,14 @@ def _diff_core_on_path(monkeypatch):
 
 @pytest.fixture(scope="module")
 def gdx():
-    from tests.templates.gtap.test_gtap7_gempack_parity import find_reference
+    # importing the parity module edits ``sys.path`` for good: restore it afterwards
+    saved = sys.path[:]
+    try:
+        from tests.templates.gtap.test_gtap7_gempack_parity import _reference_gdx
 
-    sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
-    ref = find_reference(
-        DATASET, "gams", form="mcp", mode="gtap", ifsub=1, fbep="header"
-    ) or find_reference(
-        DATASET, "gams", form="nlp", mode="gtap", ifsub=1, fbep="header"
-    )
-    path = None if ref is None else ref / "out.gdx"
+        path = _reference_gdx(DATASET, 1)
+    finally:
+        sys.path[:] = saved
     if path is None or not path.exists():
         pytest.skip("no GAMS reference GDX for gtap7_3x3")
     return path
@@ -142,3 +141,18 @@ def test_stamp_refuses_a_stale_risk(gdx):
     p._capflex_risk = dict.fromkeys(p._capflex_risk, 2.0)
     with pytest.raises(ValueError, match="stale"):
         stamp_capflex_risk(p, _capflex(), gdx)
+
+
+def test_capfix_drops_a_stale_stamp_so_its_keys_do_not_move(gdx):
+    from equilibria.family.capflex import stamp_capflex_risk
+    from equilibria.family.disk_cache import cache_key
+
+    capfix = comp_stat_closure()
+    clean = _params()
+    k_clean = cache_key(clean, capfix, "ROW")
+    p = _params()
+    stamp_capflex_risk(p, _capflex(), gdx)  # an earlier capFlex run
+    assert hasattr(p, "_capflex_risk")
+    stamp_capflex_risk(p, capfix, gdx)
+    assert not hasattr(p, "_capflex_risk")
+    assert cache_key(p, capfix, "ROW") == k_clean
