@@ -120,11 +120,23 @@ def test_family_route_builds_no_pyomo_model(family_run):
     assert calls == {"ConcreteModel": 0, "PyomoNLP": 0, "identify_variables": 0}
 
 
-def test_spy_sees_the_pyomo_route(reference):
-    """The spy would have caught a build: the reference capture ran the Pyomo route."""
+def test_spy_sees_the_pyomo_route():
+    """The spy would have caught a build: a ConcreteModel built under the same wrap
+    is counted (re-armed here, since the fixture has already undone its patches)."""
     from pyomo.environ import ConcreteModel
 
-    assert ConcreteModel.__init__.__name__ == "__init__"  # restored, not a wrapper
+    calls = {"n": 0}
+    orig = ConcreteModel.__init__
+
+    def wrapped(self, *a, **k):
+        calls["n"] += 1
+        return orig(self, *a, **k)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(ConcreteModel, "__init__", wrapped)
+        ConcreteModel()
+    assert calls["n"] == 1
+    assert ConcreteModel.__init__ is orig
 
 
 def test_every_cell_of_the_three_periods_equals_final_pkl(family_run, reference):
