@@ -185,6 +185,7 @@ def prepare_run(
     cache_root: Path | None = None,
     jax_cache: bool = True,
     freeze: bool = False,
+    ref_gdx: Any = None,
 ) -> tuple[FamilyRun, MPArrays]:
     """The run context and the multiperiod arrays, from the disk cache where possible.
 
@@ -192,8 +193,11 @@ def prepare_run(
     state once, and builds ``MPArrays`` from it: what ``build_block_model`` does, with no
     Pyomo model. ``params`` takes the closure's value-added subsidy basis in place, as
     ``build_block_model`` does. ``freeze`` moves the loaded records to the GC's permanent
-    generation before ``mp_build``; only for a caller inside a context that unfreezes."""
+    generation before ``mp_build``; only for a caller inside a context that unfreezes.
+    Under capFlex ``ref_gdx`` gives ``params._capflex_risk`` (see ``family.capflex``), set
+    before the cache keys are taken."""
     from equilibria.family import cross_period
+    from equilibria.family.capflex import stamp_capflex_risk
     from equilibria.family.disk_cache import enable_jax_cache, load_or_build
     from equilibria.family.prep_recipe import sp_reference_arrays
     from equilibria.family.prep_square import ConditionalMasks
@@ -203,6 +207,7 @@ def prepare_run(
         params, params.sets, closure, residual_region
     )
     params.set_va_subsidy_basis(getattr(closure, "va_subsidy_basis", "gams"))
+    stamp_capflex_risk(params, closure, ref_gdx)
     root = Path(cache_root) if cache_root is not None else default_cache_root()
     if jax_cache:
         with phase("jax_cache_setup"):
@@ -466,8 +471,8 @@ def solve_gtap_family(
 
     ``shock`` is a user shock ``{instrument: {cell: pct}}`` (levels with
     ``shock_levels``) for any ShockBlock instrument, applied as ``shocks.apply_shock``
-    does; ``None`` leaves the default +10 % import tariff. ``ref_gdx`` only feeds cache
-    keys under capFix, so it is not read."""
+    does; ``None`` leaves the default +10 % import tariff. ``ref_gdx`` is not read under
+    capFix; under capFlex it gives ``risk`` (``family.capflex``) and is required."""
     check_supported(
         if_sub=bool(getattr(closure, "if_sub", False)),
         savf_flag=str(getattr(closure, "savf_flag", "capFix")),
@@ -500,6 +505,7 @@ def solve_gtap_family(
                 jax_cache,
                 timing,
                 timer,
+                ref_gdx,
             )
     finally:
         activate(prev)
@@ -515,6 +521,7 @@ def _solve_family(
     jax_cache,
     timing,
     timer,
+    ref_gdx=None,
 ) -> FamilyResult:
     t0 = time.perf_counter()
     run, mp = prepare_run(
@@ -524,6 +531,7 @@ def _solve_family(
         cache_root=cache_root,
         jax_cache=jax_cache,
         freeze=_gc_freeze_from_env(),
+        ref_gdx=ref_gdx,
     )
     timing["prepare_s"] = time.perf_counter() - t0
     # records, cross records and MPArrays are now loaded and long-lived: hide them
