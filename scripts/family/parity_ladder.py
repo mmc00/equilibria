@@ -218,6 +218,16 @@ def peak_rss_gb() -> float:
     return ru / (1e9 if sys.platform == "darwin" else 1e6)
 
 
+def check_linsolve(ref: Path, have: dict, ours: str | None) -> None:
+    """The Newton stopping point depends on the linear solver: refuse a reference
+    captured with another one (an old reference, linsolve unknown, is allowed)."""
+    theirs = have.get("linsolve")
+    if theirs is not None and ours is not None and theirs != ours:
+        raise ValueError(
+            f"{ref}: reference linsolve={theirs} differs from this run's linsolve={ours}"
+        )
+
+
 def run(
     dataset: str,
     reference: Path | None = None,
@@ -241,6 +251,7 @@ def run(
 
     for k, v in _newton_mumps().items():
         os.environ.setdefault(k, v)
+    check_linsolve(ref, have, os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE"))
     sys.path[:0] = [str(ROOT), str(ROOT / "src")]
     from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
 

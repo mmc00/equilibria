@@ -87,7 +87,7 @@ def capture(
     if line is None:
         raise RuntimeError(p.stderr[-4000:])
     result = int(line.split()[1])
-    for f in sorted(out.glob("*_S_*.json")):
+    for f in sorted(out.glob("*_S_*.json") if result == 1 else []):
         s = json.loads(f.read_text())
         s["closure"] = {
             "ifsub": ifsub,
@@ -98,7 +98,11 @@ def capture(
         f.write_text(json.dumps(s, indent=1))
     if keep == "gate" and result == 1:
         for f in out.iterdir():
-            if f.is_file() and f.name not in GATE_FILES and "_S_" not in f.name:
+            if (
+                f.suffix in (".pkl", ".json")
+                and f.name not in GATE_FILES
+                and "_S_" not in f.name
+            ):
                 f.unlink()
     return result
 

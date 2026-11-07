@@ -193,12 +193,32 @@ def test_closure_reaches_the_child(monkeypatch, tmp_path):
 def test_keep_gate_leaves_only_the_gate_files(monkeypatch, tmp_path):
     cp = _capture_prep()
     _fake_child(monkeypatch, cp, tmp_path, [])
+    (tmp_path / "notes.txt").write_text("mine")
     cp.capture("gtap7_3x3", tmp_path, keep="gate")
+    (tmp_path / "notes.txt").unlink()  # non pkl/json files are left alone
     assert sorted(p.name for p in tmp_path.iterdir()) == [
         "002_S_check.json",
         "final.pkl",
         "settled.pkl",
     ]
+
+
+def test_failed_capture_is_not_stamped_nor_pruned(monkeypatch, tmp_path):
+    import subprocess
+
+    cp = _capture_prep()
+    (tmp_path / "001_A_base.pkl").write_bytes(b"x")
+    (tmp_path / "002_S_check.json").write_text(json.dumps({"n": 2}))
+    monkeypatch.setattr(
+        cp.subprocess,
+        "run",
+        lambda cmd, **kw: subprocess.CompletedProcess(
+            cmd, 0, stdout="CODE 0\n", stderr=""
+        ),
+    )
+    assert cp.capture("gtap7_3x3", tmp_path, keep="gate") == 0
+    assert "closure" not in json.loads((tmp_path / "002_S_check.json").read_text())
+    assert (tmp_path / "001_A_base.pkl").exists()
 
 
 def test_altertax_mode_raises_until_phase_3(tmp_path):

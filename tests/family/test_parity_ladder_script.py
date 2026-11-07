@@ -187,3 +187,23 @@ def test_reference_dir_default_and_closure():
     mod = _script()
     assert mod.reference_dir("ds").name == "tol_today"
     assert mod.reference_dir("ds", ifsub=0).name == "gtap_ifsub0_capFix"
+
+
+def test_ladder_refuses_a_reference_of_another_linsolve(tmp_path, monkeypatch):
+    mod = _script()
+    ref = _fake_reference(
+        tmp_path, {"ifsub": 1, "savf": "capFix", "mode": "gtap", "linsolve": "direct"}
+    )
+    monkeypatch.setenv("EQUILIBRIA_GTAP_TR_LINSOLVE", "mumps")
+    with pytest.raises(ValueError, match="linsolve"):
+        mod.run("gtap7_3x3", ref)
+
+
+def test_unknown_reference_linsolve_is_allowed(tmp_path):
+    mod = _script()
+    have = mod.reference_closure(_fake_reference(tmp_path, None))
+    assert have["linsolve"] is None
+    mod.check_linsolve(tmp_path, have, "mumps")
+    mod.check_linsolve(tmp_path, {"linsolve": "mumps"}, "mumps")
+    with pytest.raises(ValueError, match="linsolve"):
+        mod.check_linsolve(tmp_path, {"linsolve": "direct"}, "mumps")
