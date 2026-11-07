@@ -4,8 +4,8 @@
         [--out DIR]
         [--ifsub {0,1}] [--savf {capFix,capFlex}] [--mode gtap] [--keep {all,gate}]
 
-Same child run as ``capture_prep.py`` (``_solve_shock(ds, 1, "capFix",
-solve_nlp=True)`` under ``NEWTON_MUMPS``) into
+Same child run as ``capture_prep.py`` (``_solve_shock`` of the requested closure,
+(1, capFix) by default, ``solve_nlp=True``, under ``NEWTON_MUMPS``) into
 ``~/.cache/equilibria/family/reference/<dataset>/<closure_tag>/`` by default
 (``tol_today`` for ifsub=1 capFix gtap; ``--mode altertax`` raises until Phase 3;
 ``--keep gate`` drops all but ``final.pkl``, ``settled.pkl`` and the S files), which now

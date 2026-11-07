@@ -118,7 +118,8 @@ class MPArrays:
           lb 0 only if Pyomo declares it ``NonNegativeReals``, no other bound; free
           except the ShockBlock / ``@overwrite`` instruments, fixed in every period;
         * every single-period row in each period, active; the Fisher auxiliaries and
-          the ifSUB report rows are absent (Pyomo drops them from the reflected SP);
+          the ifSUB report rows are absent under ifSUB=1 (Pyomo drops them from the
+          reflected SP; under ifSUB=0 they are present and active);
         * the rows of ``cross`` replace the single-period ones of the same name, and its
           ``mq_*`` Vars (free, at the value of the sum they define) are added;
           ``pwfact[base]`` is fixed at 1.
