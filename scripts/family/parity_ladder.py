@@ -3,7 +3,8 @@
 usage: parity_ladder.py DATASET [--out FILE] [--reference DIR]
                         [--ifsub {0,1}] [--savf {capFix,capFlex}] [--mode gtap]
 
-Runs ``_solve_shock(DATASET, 1, "capFix", solve_nlp=True, backend="family")`` and
+Runs the requested closure, (1, capFix) by default, with
+``_solve_shock(DATASET, ifsub, savf, solve_nlp=True, backend="family")`` and
 compares the three periods with ``<reference>/final.pkl`` (default
 ``~/.cache/equilibria/family/reference/<ds>/<closure_tag>``, ``tol_today`` for ifsub=1
 capFix). Refuses a reference whose S files carry another ``closure`` (none = ifsub=1
@@ -63,10 +64,14 @@ def reference_closure(ref: Path) -> dict:
     """Closure of the S files of ``ref``; a file with no ``closure`` field is read as
     ifsub=1 capFix gtap (the references captured before the field existed)."""
     default = {"ifsub": 1, "savf": "capFix", "mode": "gtap", "linsolve": None}
-    found = [
-        {**default, **json.loads(f.read_text()).get("closure", {})}
-        for f in sorted(ref.glob("*_S_*.json"))
-    ]
+    found = []
+    for f in sorted(ref.glob("*_S_*.json")):
+        s = json.loads(f.read_text())
+        c = {**default, **s.get("closure", {})}
+        if c["linsolve"] is None:
+            # old references carry only the top-level field of capture_solve
+            c["linsolve"] = s.get("linsolve")
+        found.append(c)
     for c in found[1:]:
         if {k: c[k] for k in ("ifsub", "savf", "mode")} != {
             k: found[0][k] for k in ("ifsub", "savf", "mode")
@@ -222,6 +227,12 @@ def check_linsolve(ref: Path, have: dict, ours: str | None) -> None:
     """The Newton stopping point depends on the linear solver: refuse a reference
     captured with another one (an old reference, linsolve unknown, is allowed)."""
     theirs = have.get("linsolve")
+    for f in sorted(ref.glob("*_S_*.json")):
+        # the top-level field is what the solver actually used
+        top = json.loads(f.read_text()).get("linsolve")
+        if top is not None:
+            theirs = top
+            break
     if theirs is not None and ours is not None and theirs != ours:
         raise ValueError(
             f"{ref}: reference linsolve={theirs} differs from this run's linsolve={ours}"

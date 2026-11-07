@@ -207,3 +207,37 @@ def test_unknown_reference_linsolve_is_allowed(tmp_path):
     mod.check_linsolve(tmp_path, {"linsolve": "mumps"}, "mumps")
     with pytest.raises(ValueError, match="linsolve"):
         mod.check_linsolve(tmp_path, {"linsolve": "direct"}, "mumps")
+
+
+def _fake_reference_top_linsolve(tmp_path, top, closure=None):
+    s = {"n": 2, "period": "check", "code": 1, "nit": 3, "linsolve": top}
+    if closure is not None:
+        s["closure"] = closure
+    (tmp_path / "002_S_check.json").write_text(json.dumps(s))
+    return tmp_path
+
+
+def test_old_reference_reads_the_top_level_linsolve(tmp_path):
+    mod = _script()
+    ref = _fake_reference_top_linsolve(tmp_path, "mumps")
+    assert mod.reference_closure(ref)["linsolve"] == "mumps"
+
+
+def test_ladder_refuses_an_old_reference_of_another_linsolve(tmp_path, monkeypatch):
+    mod = _script()
+    ref = _fake_reference_top_linsolve(tmp_path, "direct")
+    monkeypatch.setenv("EQUILIBRIA_GTAP_TR_LINSOLVE", "mumps")
+    with pytest.raises(ValueError, match="linsolve"):
+        mod.run("gtap7_3x3", ref)
+
+
+def test_top_level_linsolve_wins_over_the_closure_one(tmp_path):
+    mod = _script()
+    ref = _fake_reference_top_linsolve(
+        tmp_path,
+        "direct",
+        {"ifsub": 1, "savf": "capFix", "mode": "gtap", "linsolve": "mumps"},
+    )
+    have = mod.reference_closure(ref)
+    with pytest.raises(ValueError, match="linsolve"):
+        mod.check_linsolve(ref, have, "mumps")
