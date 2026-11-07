@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import os
 from pathlib import Path
 
 import numpy as np
@@ -210,12 +211,15 @@ def test_aot_cache_bitwise_20x41(monkeypatch, tmp_path, aot_state):
     """The default shock on gtap7_20x41, family route with the AOT cache on and off:
     every Var cell equal bit for bit per period.
 
-    Needs the MUMPS Python (pymumps) and the 20x41 data; the Newton environment is the
-    one of ``scripts/gtap/perf_budget_20x41.py`` (set here). Run it with::
+    Two full 20x41 solves, so it is skipped unless ``EQUILIBRIA_RUN_20X41=1``. Needs the
+    MUMPS Python (pymumps) and the 20x41 data; the Newton environment is the one of
+    ``scripts/gtap/perf_budget_20x41.py`` (set here). Run it with::
 
-        PYTHONPATH=<worktree>/src:<worktree> ~/proyectos/Pedro/.venv/bin/python \\
+        EQUILIBRIA_RUN_20X41=1 PYTHONPATH=<worktree>/src:<worktree> ~/proyectos/Pedro/.venv/bin/python \\
             -m pytest tests/family/test_family_multishock.py -m slow -k 20x41
     """
+    if os.environ.get("EQUILIBRIA_RUN_20X41") != "1":
+        pytest.skip("set EQUILIBRIA_RUN_20X41=1 to run the 20x41 solves")
     if importlib.util.find_spec("mumps") is None:
         pytest.skip("pymumps not available")
     from equilibria.sources import has_dataset

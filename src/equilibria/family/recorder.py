@@ -539,7 +539,7 @@ class _Bucket:
         self.t = np.asarray(self.t, dtype=np.int64)
 
 
-# Terms re-simplified because they read a cell fixed at 0 (a test hook: no output reads it).
+# Terms re-simplified because they read a cell fixed at 0 (a counter for tests; no output reads it).
 fold_stats: dict[str, int] = {"folded": 0}
 
 
