@@ -69,8 +69,6 @@ def check_supported(
     def refuse(what: str) -> None:
         raise NotImplementedError(f"family backend: {what} is not supported")
 
-    if not if_sub:
-        refuse("ifSUB=0 (closure.if_sub must be True)")
     if savf_flag != "capFix":
         refuse(f"savf_flag={savf_flag!r} (only 'capFix')")
     if mode != "gtap":

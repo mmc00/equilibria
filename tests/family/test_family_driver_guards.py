@@ -31,13 +31,13 @@ def run(env: dict[str, str] | None = None, **kw: Any) -> None:
 
 def test_supported_config_passes():
     run()
+    run(if_sub=False)  # ifSUB=0 is supported
     run(env={"EQUILIBRIA_GTAP_TR_LINSOLVE": "direct"})
 
 
 @pytest.mark.parametrize(
     "kw, needle",
     [
-        ({"if_sub": False}, "ifSUB=0"),
         ({"savf_flag": "capFlex"}, "savf_flag"),
         ({"mode": "altertax"}, "mode"),
         ({"skip_base_solve": False}, "skip_base_solve"),
@@ -175,10 +175,11 @@ def test_solve_shock_family_route_refuses_before_any_work(monkeypatch):
     monkeypatch.delenv("EQUILIBRIA_GTAP_SOLVER", raising=False)
     with pytest.raises(NotImplementedError, match="EQUILIBRIA_GTAP_SOLVER"):
         mod._solve_shock("gtap7_3x3", 1, "capFix", solve_nlp=True, backend="family")
-    with pytest.raises(NotImplementedError, match="ifSUB=0"):
-        mod._solve_shock("gtap7_3x3", 0, "capFix", solve_nlp=True, backend="family")
     with pytest.raises(NotImplementedError, match="savf_flag"):
         mod._solve_shock("gtap7_3x3", 1, "capFlex", solve_nlp=True, backend="family")
+    # ifSUB=0 is lifted, the other closures still refuse (before any work)
+    with pytest.raises(NotImplementedError, match="savf_flag"):
+        mod._solve_shock("gtap7_3x3", 0, "capFlex", solve_nlp=True, backend="family")
     monkeypatch.setenv("EQUILIBRIA_GTAP_SOLVER", "scipy_newton_tr")
     with pytest.raises(NotImplementedError, match="SOLVE_NLP"):
         mod._solve_shock("gtap7_3x3", 1, "capFix", solve_nlp=False, backend="family")

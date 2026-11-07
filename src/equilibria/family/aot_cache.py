@@ -179,7 +179,7 @@ def _compile_fresh(lower: Callable[[], Any]) -> Any:
                 warnings.warn(
                     "executable cache is disabled: JAX's internals changed and its "
                     "persistent cache cannot be bypassed",
-                    stacklevel=5,
+                    stacklevel=6,
                 )
             set_dir(None)
 
