@@ -163,8 +163,8 @@ def _license_status_in_a_fresh_process(license_string: str) -> str:
         env["PATH_CAPI_LIBLUSOL"] = str(lusol)
     code = (
         "from equilibria.doctor import check_dependencies; "
-        "print(next(c for c in check_dependencies() if c.name == 'PATH license').status + '|' + "
-        "next(c for c in check_dependencies() if c.name == 'PATH license').detail)"
+        "c = next(c for c in check_dependencies() if c.name == 'PATH license'); "
+        "print(c.status + '|' + c.detail)"
     )
     out = subprocess.run(
         [sys.executable, "-c", code],
