@@ -979,9 +979,19 @@ def _recalibrate_alphaa_hhd(m, params, active_period: str, prior_period: str) ->
         )
         numer[(r, i)] = term
 
+    # GAMS (cal block, loop t0): the denominator is sum(j, xcshr/bh), not the sum
+    # of the full terms; the two differ whenever (yc/pop)**bh or uh**(-eh*bh)
+    # varies across commodities.
     denom_by_r = {}
-    for (r, i), term in numer.items():
-        denom_by_r[r] = denom_by_r.get(r, 0.0) + term
+    for idx in list(eq_zcons):
+        if not (isinstance(idx, tuple) and idx[-1] == active_period):
+            continue
+        r, i, _t = idx
+        try:
+            share = float(_V(xcshr[(r, i, prior_period)]))
+        except (KeyError, Exception):
+            continue
+        denom_by_r[r] = denom_by_r.get(r, 0.0) + share / _bh(r, i)
 
     for idx in list(eq_zcons):
         if not (isinstance(idx, tuple) and idx[-1] == active_period):
