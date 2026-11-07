@@ -3,8 +3,9 @@
 JAX's persistent compilation cache skips the XLA compile but not the Python trace nor
 the lowering to MLIR, which it needs to compute its key. Here the compiled executable
 itself is stored (``jax.experimental.serialize_executable``) under a key made of the
-template shape, the argument shapes and dtypes, the JAX / jaxlib versions, the platform
-and the code that writes the kernels, so a hit runs the program without tracing it.
+template shape, the argument shapes and dtypes, the JAX / jaxlib versions, the platform,
+the host (machine, processor, CPU brand), ``XLA_FLAGS``, the compilation-affecting JAX
+config and the code that writes the kernels, so a hit runs the program without tracing it.
 
 Never wrong, never fatal: an entry that is missing, from another environment (the key
 changes), truncated, altered (checksum) or that fails to load is replaced by a fresh
@@ -17,6 +18,8 @@ from __future__ import annotations
 import hashlib
 import os
 import pickle
+import platform
+import subprocess
 import warnings
 from collections.abc import Callable
 from pathlib import Path
@@ -31,6 +34,7 @@ _dir: Path | None = None
 _mem: dict[str, Any] = {}
 _verified: set[str] = set()  # executables that ran once in this process
 _env: dict[str, Any] | None = None
+_warned_internals = False  # the "JAX internals changed" warning, once per process
 stats: dict[str, int] = {"hit": 0, "miss": 0, "corrupt": 0, "mem": 0}
 
 
@@ -48,8 +52,34 @@ def reset() -> None:
     """Forget the executables held in memory and zero the counters (a fresh process)."""
     _mem.clear()
     _verified.clear()
+    global _warned_internals
+    _warned_internals = False
     for k in stats:
         stats[k] = 0
+
+
+_JAX_CONFIG = ("jax_default_matmul_precision", "jax_numpy_dtype_promotion")
+
+
+def _cpu_brand() -> str:
+    """The CPU model string of this host ("" when it cannot be read)."""
+    try:
+        if platform.system() == "Darwin":
+            out = subprocess.run(
+                ["sysctl", "-n", "machdep.cpu.brand_string"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=True,
+            )
+            return out.stdout.strip()
+        with open("/proc/cpuinfo") as fh:
+            for line in fh:
+                if line.startswith("model name"):
+                    return line.split(":", 1)[1].strip()
+    except Exception:
+        pass
+    return ""
 
 
 def environment() -> dict[str, Any]:
@@ -69,6 +99,11 @@ def environment() -> dict[str, Any]:
             "platform_version": dev.client.platform_version,
             "device_kind": dev.device_kind,
             "x64": bool(jax.config.jax_enable_x64),
+            "xla_flags": os.environ.get("XLA_FLAGS", ""),
+            **{n: repr(getattr(jax.config, n, None)) for n in _JAX_CONFIG},
+            "machine": platform.machine(),
+            "processor": platform.processor(),
+            "cpu": _cpu_brand() if dev.client.platform == "cpu" else "",
             "code": h.hexdigest()[:24],
         }
     return _env
@@ -116,8 +151,10 @@ def _compile_fresh(lower: Callable[[], Any]) -> Any:
     JAX latches "cache in use" after the first compile, so the flag is switched
     in its module (private names, guarded: if they change, the first-run check in
     ``_call`` still catches an entry that cannot run)."""
+    global _warned_internals
     saved: tuple[Any, Any] | None = None
     cc: Any = None
+    fallback = False
     try:
         from jax._src import compilation_cache as cc
 
@@ -125,11 +162,23 @@ def _compile_fresh(lower: Callable[[], Any]) -> Any:
         cc._cache_checked, cc._cache_used = True, False
     except Exception:
         saved = None
+        fallback = True
     try:
         return lower().compile()
     finally:
         if saved is not None:
             cc._cache_checked, cc._cache_used = saved
+        if fallback:
+            # JAX's persistent cache may have served this one: it could fail in another
+            # process, so stop storing executables and let later calls take the jit path
+            if not _warned_internals:
+                _warned_internals = True
+                warnings.warn(
+                    "executable cache is disabled: JAX's internals changed and its "
+                    "persistent cache cannot be bypassed",
+                    stacklevel=2,
+                )
+            set_dir(None)
 
 
 def _build(name: str, lower: Callable[[], Any]) -> Any:
@@ -150,6 +199,7 @@ def _obtain(name: str, lower: Callable[[], Any]) -> Any:
     """The executable of entry ``name``: from memory, from disk, or freshly compiled."""
     cached = _mem.get(name)
     if cached is not None:
+        stats["mem"] += 1
         return cached
     assert _dir is not None
     path = _dir / name

@@ -112,9 +112,11 @@ def _gc_frozen_permanent_graph(enabled: bool = True):
     KNOWN LIMITATION: gc.unfreeze() is GLOBAL — CPython offers no way to release
     only what this call froze, so if a CALLER had frozen objects of its own
     before entering, those come back under the GC when we exit (verified: a
-    pre-existing frozen set of 6325 goes to 0 after our unfreeze). Nothing in
-    this repo calls gc.freeze(), so today the effect is nil; the consequence if
-    someone adds one is a slower GC, never a wrong answer.
+    pre-existing frozen set of 6325 goes to 0 after our unfreeze). The family
+    route also freezes, via `_gc_freeze_now` (after it loads its records), and
+    relies on this exit to release those too; a freeze made by any other caller
+    before entering is undone as well. The consequence is a slower GC, never a
+    wrong answer.
     """
     if not enabled:
         yield

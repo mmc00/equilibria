@@ -186,13 +186,15 @@ def prepare_run(
     *,
     cache_root: Path | None = None,
     jax_cache: bool = True,
+    freeze: bool = False,
 ) -> tuple[FamilyRun, MPArrays]:
     """The run context and the multiperiod arrays, from the disk cache where possible.
 
     Loads (or records, once) the single-period and cross-period families, composes the
     state once, and builds ``MPArrays`` from it: what ``build_block_model`` does, with no
     Pyomo model. ``params`` takes the closure's value-added subsidy basis in place, as
-    ``build_block_model`` does."""
+    ``build_block_model`` does. ``freeze`` moves the loaded records to the GC's permanent
+    generation before ``mp_build``; only for a caller inside a context that unfreezes."""
     from equilibria.family import cross_period
     from equilibria.family.disk_cache import enable_jax_cache, load_or_build
     from equilibria.family.prep_recipe import sp_reference_arrays
@@ -218,7 +220,7 @@ def prepare_run(
     )
     # the loaded records are long-lived and large: freeze them before mp_build and the
     # later steps churn allocations over them (the entry-point freeze predates them)
-    _gc_freeze_now(_gc_freeze_from_env())
+    _gc_freeze_now(freeze)
     with phase("mp_build"):
         mp = MPArrays.build(state, backend, cross, params=params, base_calibrated=False)
     with phase("sp_reference"):
@@ -518,7 +520,12 @@ def _solve_family(
 ) -> FamilyResult:
     t0 = time.perf_counter()
     run, mp = prepare_run(
-        params, closure, residual_region, cache_root=cache_root, jax_cache=jax_cache
+        params,
+        closure,
+        residual_region,
+        cache_root=cache_root,
+        jax_cache=jax_cache,
+        freeze=_gc_freeze_from_env(),
     )
     timing["prepare_s"] = time.perf_counter() - t0
     # records, cross records and MPArrays are now loaded and long-lived: hide them

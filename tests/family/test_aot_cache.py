@@ -60,8 +60,12 @@ def test_bitwise_equal_to_jit_and_round_trip(aot, dataset):
     cache.reset()  # a new process: nothing in memory
     F2, J2 = sysm.F(z), sysm.jac(z)  # hit from disk
     assert cache.stats["hit"] > 0 and cache.stats["miss"] == 0
+    assert cache.stats["mem"] > 0  # repeated calls in a run hit memory
     assert np.array_equal(F0, F2)
     _same(J0, J2)
+    n_mem = cache.stats["mem"]
+    sysm.F(z)  # same process again: served from memory
+    assert cache.stats["mem"] > n_mem
     # all three kernels went through the cache
     kinds = {p.name.split("-")[0] for p in root.glob("*.aot")}
     assert kinds == {"eval", "jac", "scatter"}
@@ -169,3 +173,48 @@ def test_entries_run_in_a_new_process_after_the_xla_cache_filled(tmp_path):
     assert "'miss': 0" in out and "'corrupt': 0" in out
     a, b, c = (np.load(tmp_path / f"{m}.npy") for m in "abc")
     assert np.array_equal(a, b) and np.array_equal(a, c)
+
+
+def test_environment_key_covers_xla_flags_config_and_cpu(aot, monkeypatch):
+    cache, _ = aot
+    cache._env = None
+    base = cache.environment()
+    assert isinstance(base["xla_flags"], str)
+    assert isinstance(base["cpu"], str)
+    assert "machine" in base and "processor" in base
+    for name in ("jax_default_matmul_precision", "jax_numpy_dtype_promotion"):
+        assert name in base
+    name0 = cache._name("eval", ("s",))
+    monkeypatch.setenv("XLA_FLAGS", "--xla_cpu_enable_fast_math=true")
+    cache._env = None
+    try:
+        assert cache.environment()["xla_flags"] == "--xla_cpu_enable_fast_math=true"
+        assert cache._name("eval", ("s",)) != name0
+    finally:
+        cache._env = None
+
+
+def test_compile_fresh_without_jax_internals_warns_once_and_disables(aot, monkeypatch):
+    import types
+
+    import jax
+    import jax._src
+    import jax.numpy as jnp
+
+    cache, root = aot
+    cache.set_dir(root)
+    # the module as a future JAX might shape it: without the two latch names
+    monkeypatch.setattr(jax._src, "compilation_cache", types.SimpleNamespace())
+    f = jax.jit(lambda x: x + 1.0)
+    x = jnp.ones(3)
+    with pytest.warns(UserWarning, match="executable cache is disabled") as rec:
+        out = cache._compile_fresh(lambda: f.lower(x))
+    assert (
+        len([w for w in rec if "executable cache is disabled" in str(w.message)]) == 1
+    )
+    assert np.array_equal(out(x), np.full(3, 2.0))
+    assert cache.get_dir() is None
+    with warnings.catch_warnings(record=True) as rec2:
+        warnings.simplefilter("always")
+        cache._compile_fresh(lambda: f.lower(x))
+    assert not [w for w in rec2 if "executable cache is disabled" in str(w.message)]
