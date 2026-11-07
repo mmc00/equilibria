@@ -46,8 +46,13 @@ def _same(a, b):
 
 @pytest.mark.parametrize("dataset", ["gtap7_3x3", "gtap7_10x7"])
 def test_bitwise_equal_to_jit_and_round_trip(aot, dataset):
+    from equilibria.family import recorder
+
     cache, root = aot
+    recorder.reset_fold_stats()
     sysm, z = _system(dataset)
+    # the fixed-zero folding ran: the bitwise equality below covers folded terms
+    assert recorder.fold_stats["folded"] > 0
     F0, J0 = sysm.F(z), sysm.jac(z)  # jit path: no directory set
 
     cache.set_dir(root)

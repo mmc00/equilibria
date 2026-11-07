@@ -12,6 +12,7 @@ import copy
 import importlib.util
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 pytest.importorskip("pyomo")
@@ -123,3 +124,131 @@ def test_multishock_matches_pyomo_10x7(monkeypatch, tmp_path):
     if importlib.util.find_spec("mumps") is None:
         pytest.skip("pymumps not available")
     _check("gtap7_10x7", "mumps", monkeypatch, tmp_path)
+
+
+def _equal_bitwise(a, b) -> None:
+    """Every Var cell of two ``MPArrays`` equal bit for bit (NaN equals NaN)."""
+    assert set(a.vars) == set(b.vars)
+    for name, va in a.vars.items():
+        vb = b.vars[name]
+        assert list(va.keys) == list(vb.keys), name
+        assert np.array_equal(va.value, vb.value, equal_nan=True), name
+        assert np.array_equal(va.fixed, vb.fixed), name
+
+
+@pytest.fixture
+def aot_state():
+    from equilibria.family import aot_cache
+
+    aot_cache.set_dir(None)
+    aot_cache.reset()
+    yield aot_cache
+    aot_cache.set_dir(None)
+    aot_cache.reset()
+
+
+def test_multishock_aot_cache_bitwise_3x3(monkeypatch, tmp_path, aot_state):
+    """Two different shocks with the AOT cache on give the arrays of the same runs with
+    it off, bit for bit, and the second shock is served by the cache."""
+    from equilibria.family.driver import solve_gtap_family
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+    from tests.family._data import load_params
+    from tests.family.test_squared_system import _route_closure
+
+    for k, v in {**_newton_mumps(), "EQUILIBRIA_GTAP_TR_LINSOLVE": "direct"}.items():
+        monkeypatch.setenv(k, v)
+    cache = aot_state
+
+    def params():
+        return copy.deepcopy(load_params("gtap7_3x3"))
+
+    p = params()
+    rr = list(p.sets.r)[-1]
+    m, _ = build_block_model(p, p.sets, _route_closure(), rr, base_calibrated=True)
+    shock_a = _multishock(m)
+    assert len(shock_a) >= 3
+    shock_b = {
+        inst: {c: pct * 0.5 for c, pct in cells.items()}
+        for inst, cells in shock_a.items()
+    }
+
+    def run(shock):
+        res = solve_gtap_family(
+            params(),
+            _route_closure(),
+            rr,
+            shock=shock,
+            cache_root=tmp_path / "cache",
+            jax_cache=False,
+        )
+        assert {k: v["code"] for k, v in res.results.items()} == {
+            "base": 1,
+            "check": 1,
+            "shock": 1,
+        }
+        return res.mp
+
+    off = {"a": run(shock_a), "b": run(shock_b)}
+
+    cache.set_dir(tmp_path / "aot")
+    cache.reset()
+    on_a = run(shock_a)
+    n_a = cache.stats["hit"] + cache.stats["mem"]
+    on_b = run(shock_b)
+    assert cache.stats["miss"] > 0  # the first run compiled and stored
+    assert cache.stats["hit"] + cache.stats["mem"] > n_a  # the second shock reused them
+    assert list((tmp_path / "aot").glob("*.aot"))
+    _equal_bitwise(on_a, off["a"])
+    _equal_bitwise(on_b, off["b"])
+    # the two shocks are different runs, or the comparison says nothing
+    with pytest.raises(AssertionError):
+        _equal_bitwise(on_a, on_b)
+
+
+@pytest.mark.slow
+def test_aot_cache_bitwise_20x41(monkeypatch, tmp_path, aot_state):
+    """The default shock on gtap7_20x41, family route with the AOT cache on and off:
+    every Var cell equal bit for bit per period.
+
+    Needs the MUMPS Python (pymumps) and the 20x41 data; the Newton environment is the
+    one of ``scripts/gtap/perf_budget_20x41.py`` (set here). Run it with::
+
+        PYTHONPATH=<worktree>/src:<worktree> ~/proyectos/Pedro/.venv/bin/python \\
+            -m pytest tests/family/test_family_multishock.py -m slow -k 20x41
+    """
+    if importlib.util.find_spec("mumps") is None:
+        pytest.skip("pymumps not available")
+    from equilibria.sources import has_dataset
+
+    if not has_dataset("gtap7_20x41"):
+        pytest.skip("gtap7_20x41 not available")
+    from equilibria.family.driver import solve_gtap_family
+    from tests.family._data import load_params
+    from tests.family.test_squared_system import _route_closure
+
+    for k, v in _newton_mumps().items():
+        monkeypatch.setenv(k, v)
+    cache = aot_state
+
+    def run():
+        p = copy.deepcopy(load_params("gtap7_20x41"))
+        res = solve_gtap_family(
+            p,
+            _route_closure(),
+            list(p.sets.r)[-1],
+            cache_root=tmp_path / "cache",
+            jax_cache=False,
+        )
+        assert {k: v["code"] for k, v in res.results.items()} == {
+            "base": 1,
+            "check": 1,
+            "shock": 1,
+        }
+        return res.mp
+
+    off = run()
+    cache.set_dir(tmp_path / "aot")
+    cache.reset()
+    on = run()
+    assert cache.stats["miss"] > 0
+    _equal_bitwise(on, off)

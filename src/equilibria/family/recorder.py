@@ -539,6 +539,14 @@ class _Bucket:
         self.t = np.asarray(self.t, dtype=np.int64)
 
 
+# Terms re-simplified because they read a cell fixed at 0 (a test hook: no output reads it).
+fold_stats: dict[str, int] = {"folded": 0}
+
+
+def reset_fold_stats() -> None:
+    fold_stats["folded"] = 0
+
+
 # A folded term can split into several: position = stream index * _SPLIT + split number.
 _SPLIT = 1 << 16
 
@@ -605,6 +613,7 @@ class TermTable:
             slots = all_slots[gl]
             hit = zero[gl].any(axis=1) if b.k else np.zeros(len(b.rows), dtype=bool)
             meta[b.key] = (b.k, b.m)
+            fold_stats["folded"] += int(hit.sum())
             for i in np.flatnonzero(hit).tolist():
                 f = fold_zeros(b.terms[i], is_fixed_zero)
                 for j, (s2, t2) in enumerate(residual_terms(Residual(f, 0.0))):
