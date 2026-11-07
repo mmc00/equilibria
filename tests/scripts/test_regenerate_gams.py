@@ -45,18 +45,18 @@ def _gams(tmp_path: Path, version: str) -> Path:
 
 def test_jobs_are_the_table(driver: Any) -> None:
     js = driver.jobs()
-    assert len(js) == 89
+    assert len(js) == 97
 
     def count(form: str, where: str) -> int:
         return sum(j.form == form and j.where == where for j in js)
 
-    assert (count("nl", "local"), count("nlp", "local")) == (20, 28)
+    assert (count("nl", "local"), count("nlp", "local")) == (20, 36)
     assert (count("mcp", "local"), count("mcp", "neos")) == (5, 34)
     assert count("nlp", "neos") == 2
     assert {j.fbep for j in js} == {"header", "zero"}
     assert (sum(j.fbep == "header" for j in js), sum(j.fbep == "zero" for j in js)) == (
-        44,
-        45,
+        48,
+        49,
     )
     assert {
         (j.dataset, j.mode, j.ifsub)
@@ -78,7 +78,7 @@ def test_jobs_are_the_table(driver: Any) -> None:
     assert ("gtap7_3x3", "gtap", 1) not in neos  # solved locally
     # 9x10: comp.gms's own default (ifSUB=1), which the old COMP.csv was
     assert {(m, k) for ds, m, k in neos if ds == "9x10"} == {("gtap", 1)}
-    assert len({j.folder for j in js}) == 89
+    assert len({j.folder for j in js}) == 97
     # no local mcp for 3x4: above the license cap
     assert {j.folder.name for j in js if j.dataset == "gtap7_3x4" and j.where == "local"} == {
         f"gams_{f}_altertax_ifsub{k}_fbep-{v}"
@@ -101,7 +101,7 @@ def test_neos_rows_carry_remote(driver: Any) -> None:
 
 def test_where_selects_rows(driver: Any, tmp_path: Path, capsys: Any) -> None:
     gams = str(_gams(tmp_path, "53.5.0"))
-    for where, n in (("local", 53), ("neos", 36), ("all", 89)):
+    for where, n in (("local", 61), ("neos", 36), ("all", 97)):
         argv = [
             "--tool-version",
             "53.5.0",
