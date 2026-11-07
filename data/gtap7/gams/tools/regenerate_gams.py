@@ -58,8 +58,8 @@ NL_PHASES = {
     "gtap7_15x10": ("base", "shock", "altertax"),
 }
 NLP_DATASETS = {
-    "altertax": ("gtap7_3x3", "gtap7_3x4", "gtap7_5x5", "gtap7_10x7"),
-    "gtap": ("gtap7_3x3", "gtap7_5x5", "gtap7_10x7"),
+    "altertax": ("gtap7_3x3", "gtap7_3x4", "gtap7_5x5", "gtap7_10x7", "gtap7_15x10"),
+    "gtap": ("gtap7_3x3", "gtap7_5x5", "gtap7_10x7", "gtap7_15x10"),
 }
 MCP_JOBS = (("gtap7_3x3", "gtap", 1), ("gtap7_3x3", "altertax", 1))
 # nus333 (Burfisher's NUS333): comp_nus333.gms on its HARs, ifSUB=0; FBEP is
