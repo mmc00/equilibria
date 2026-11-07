@@ -144,3 +144,46 @@ def _v(c):
             return list(c.keys).index(k)
 
     return V()
+
+
+def _fake_reference(tmp_path, closure):
+    s = {"n": 2, "period": "check", "code": 1, "nit": 3}
+    if closure is not None:
+        s["closure"] = closure
+    (tmp_path / "002_S_check.json").write_text(json.dumps(s))
+    return tmp_path
+
+
+def test_reference_closure_defaults_to_today_when_absent(tmp_path):
+    mod = _script()
+    ref = _fake_reference(tmp_path, None)
+    assert mod.reference_closure(ref) == {
+        "ifsub": 1,
+        "savf": "capFix",
+        "mode": "gtap",
+        "linsolve": None,
+    }
+
+
+def test_ladder_refuses_a_reference_of_another_closure(tmp_path):
+    mod = _script()
+    ref = _fake_reference(
+        tmp_path,
+        {"ifsub": 0, "savf": "capFix", "mode": "gtap", "linsolve": "mumps"},
+    )
+    with pytest.raises(ValueError, match="closure"):
+        mod.run("gtap7_3x3", ref)
+    with pytest.raises(ValueError, match="closure"):
+        mod.run("gtap7_3x3", ref, ifsub=1)
+
+
+def test_ladder_altertax_raises_until_phase_3(tmp_path):
+    mod = _script()
+    with pytest.raises(NotImplementedError):
+        mod.run("gtap7_3x3", tmp_path, mode="altertax")
+
+
+def test_reference_dir_default_and_closure():
+    mod = _script()
+    assert mod.reference_dir("ds").name == "tol_today"
+    assert mod.reference_dir("ds", ifsub=0).name == "gtap_ifsub0_capFix"

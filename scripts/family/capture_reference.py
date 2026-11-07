@@ -2,10 +2,13 @@
 
     <python with pymumps> scripts/family/capture_reference.py gtap7_10x7
         [--out DIR]
+        [--ifsub {0,1}] [--savf {capFix,capFlex}] [--mode gtap] [--keep {all,gate}]
 
 Same child run as ``capture_prep.py`` (``_solve_shock(ds, 1, "capFix",
 solve_nlp=True)`` under ``NEWTON_MUMPS``) into
-``~/.cache/equilibria/family/reference/<dataset>/tol_today/`` by default, which now
+``~/.cache/equilibria/family/reference/<dataset>/<closure_tag>/`` by default
+(``tol_today`` for ifsub=1 capFix gtap; ``--mode altertax`` raises until Phase 3;
+``--keep gate`` drops all but ``final.pkl``, ``settled.pkl`` and the S files), which now
 holds, per solve call: ``<n>_A/A2/B/P_<period>.pkl`` and ``<n>_S_<period>.json``
 (code, nit, nfact, per-iteration residual trace, TR/MUMPS settings, GMIN, ICNTL, null
 pivots), plus ``final.pkl`` and ``settled.pkl``. Prints one line per solve call with
@@ -22,26 +25,35 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from capture_prep import capture  # noqa: E402
+from capture_prep import capture, closure_tag  # noqa: E402
 
 
 def summary(out: Path) -> list[dict]:
     return [json.loads(f.read_text()) for f in sorted(out.glob("*_S_*.json"))]
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("dataset")
     ap.add_argument("--out", type=Path)
-    a = ap.parse_args()
+    ap.add_argument("--ifsub", type=int, choices=(0, 1), default=1)
+    ap.add_argument("--savf", choices=("capFix", "capFlex"), default="capFix")
+    ap.add_argument("--mode", choices=("gtap", "altertax"), default="gtap")
+    ap.add_argument("--keep", choices=("all", "gate"), default="all")
+    a = ap.parse_args(argv)
+    if a.mode != "gtap":
+        raise NotImplementedError(f"mode={a.mode!r}: only 'gtap' until Phase 3")
     out = a.out or (
-        Path.home() / ".cache/equilibria/family/reference" / a.dataset / "tol_today"
+        Path.home()
+        / ".cache/equilibria/family/reference"
+        / a.dataset
+        / closure_tag(a.ifsub, a.savf, a.mode)
     )
     out.mkdir(parents=True, exist_ok=True)
     for f in [*out.glob("*.pkl"), *out.glob("*.json")]:
         f.unlink()
     t = time.perf_counter()
-    code = capture(a.dataset, out)
+    code = capture(a.dataset, out, ifsub=a.ifsub, savf=a.savf, mode=a.mode, keep=a.keep)
     wall = time.perf_counter() - t
     for s in summary(out):
         print(

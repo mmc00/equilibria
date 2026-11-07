@@ -117,3 +117,91 @@ def test_reference_files_3x3(monkeypatch, tmp_path):
 
     settled = pickle.loads((tmp_path / "settled.pkl").read_bytes())
     assert settled and all(isinstance(v, dict) and v for v in settled.values())
+
+
+# --- closure-aware capture (child process stubbed: no Pyomo solve) -------------------
+
+
+def _capture_prep():
+    import importlib.util
+    from pathlib import Path
+
+    path = (
+        Path(__file__).resolve().parents[2] / "scripts" / "family" / "capture_prep.py"
+    )
+    spec = importlib.util.spec_from_file_location("capture_prep_under_test", path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _fake_child(monkeypatch, cp, out, calls):
+    import subprocess
+
+    def run(cmd, **kw):
+        calls.append(cmd)
+        for name in ("001_A_base.pkl", "002_P_check.pkl", "final.pkl", "settled.pkl"):
+            (out / name).write_bytes(b"x")
+        (out / "002_S_check.json").write_text(
+            json.dumps({"n": 2, "linsolve": "direct"})
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout="CODE 1\n", stderr="")
+
+    monkeypatch.setattr(cp.subprocess, "run", run)
+
+
+def test_closure_tag():
+    cp = _capture_prep()
+    assert cp.closure_tag(1, "capFix", "gtap") == "tol_today"
+    assert cp.closure_tag(0, "capFix", "gtap") == "gtap_ifsub0_capFix"
+    assert cp.closure_tag(1, "capFlex", "gtap") == "gtap_ifsub1_capFlex"
+    assert cp.closure_tag(1, "capFix", "altertax") == "altertax_ifsub1_capFix"
+
+
+def test_default_child_command_is_todays(monkeypatch, tmp_path):
+    cp = _capture_prep()
+    calls = []
+    _fake_child(monkeypatch, cp, tmp_path, calls)
+    assert cp.capture("gtap7_3x3", tmp_path) == 1
+    assert (
+        "from templates.gtap.test_gtap7_gempack_parity import _solve_shock"
+        in calls[0][2]
+    )
+    assert "_solve_shock('gtap7_3x3', 1, \"capFix\", solve_nlp=True)" in calls[0][2]
+    s = json.loads((tmp_path / "002_S_check.json").read_text())
+    assert s["closure"] == {
+        "ifsub": 1,
+        "savf": "capFix",
+        "mode": "gtap",
+        "linsolve": s["closure"]["linsolve"],
+    }
+    assert s["closure"]["linsolve"] in ("mumps", "direct")
+    assert (tmp_path / "001_A_base.pkl").exists()  # keep="all"
+
+
+def test_closure_reaches_the_child(monkeypatch, tmp_path):
+    cp = _capture_prep()
+    calls = []
+    _fake_child(monkeypatch, cp, tmp_path, calls)
+    cp.capture("gtap7_3x3", tmp_path, ifsub=0, savf="capFlex")
+    assert "_solve_shock('gtap7_3x3', 0, \"capFlex\", solve_nlp=True)" in calls[0][2]
+    s = json.loads((tmp_path / "002_S_check.json").read_text())
+    assert s["closure"]["ifsub"] == 0 and s["closure"]["savf"] == "capFlex"
+
+
+def test_keep_gate_leaves_only_the_gate_files(monkeypatch, tmp_path):
+    cp = _capture_prep()
+    _fake_child(monkeypatch, cp, tmp_path, [])
+    cp.capture("gtap7_3x3", tmp_path, keep="gate")
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "002_S_check.json",
+        "final.pkl",
+        "settled.pkl",
+    ]
+
+
+def test_altertax_mode_raises_until_phase_3(tmp_path):
+    cp = _capture_prep()
+    with pytest.raises(NotImplementedError):
+        cp.capture("gtap7_3x3", tmp_path, mode="altertax")

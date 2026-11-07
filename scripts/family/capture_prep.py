@@ -10,6 +10,7 @@ is importable, the exact scipy LU otherwise.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -23,12 +24,41 @@ _CHILD = """
 import sys
 sys.path[:0] = [{src!r}, {tests!r}, {root!r}]
 from templates.gtap.test_gtap7_gempack_parity import _solve_shock
-_, code = _solve_shock({ds!r}, 1, "capFix", solve_nlp=True)
+_, code = _solve_shock({ds!r}, {ifsub}, "{savf}", solve_nlp=True)
 print("CODE", code)
 """
 
 
-def capture(dataset: str, out: Path) -> int:
+def closure_tag(ifsub: int, savf: str, mode: str) -> str:
+    """Directory name of a closure's reference; today's one keeps its name."""
+    if (ifsub, savf, mode) == (1, "capFix", "gtap"):
+        return "tol_today"
+    return f"{mode}_ifsub{ifsub}_{savf}"
+
+
+GATE_FILES = ("final.pkl", "settled.pkl")
+
+
+def capture(
+    dataset: str,
+    out: Path,
+    *,
+    ifsub: int = 1,
+    savf: str = "capFix",
+    mode: str = "gtap",
+    keep: str = "all",
+) -> int:
+    """Run the Pyomo reference of one closure into ``out``.
+
+    Each ``*_S_*.json`` gets a ``closure`` field. ``keep="gate"`` deletes, after a
+    successful capture, everything but ``final.pkl``, ``settled.pkl`` and the S files.
+    """
+    if ifsub not in (0, 1) or savf not in ("capFix", "capFlex"):
+        raise ValueError(f"unsupported closure ifsub={ifsub} savf={savf}")
+    if mode != "gtap":
+        raise NotImplementedError(f"mode={mode!r}: only 'gtap' until Phase 3")
+    if keep not in ("all", "gate"):
+        raise ValueError(f"keep must be 'all' or 'gate', got {keep!r}")
     try:
         import mumps  # noqa: F401
 
@@ -43,13 +73,34 @@ def capture(dataset: str, out: Path) -> int:
     }
     env.pop("EQUILIBRIA_GTAP_MODEL_CACHE", None)
     code = _CHILD.format(
-        src=str(ROOT / "src"), tests=str(ROOT / "tests"), root=str(ROOT), ds=dataset
+        src=str(ROOT / "src"),
+        tests=str(ROOT / "tests"),
+        root=str(ROOT),
+        ds=dataset,
+        ifsub=ifsub,
+        savf=savf,
     )
-    p = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True)
+    p = subprocess.run(
+        [sys.executable, "-c", code], env=env, capture_output=True, text=True
+    )
     line = next((s for s in p.stdout.splitlines() if s.startswith("CODE ")), None)
     if line is None:
         raise RuntimeError(p.stderr[-4000:])
-    return int(line.split()[1])
+    result = int(line.split()[1])
+    for f in sorted(out.glob("*_S_*.json")):
+        s = json.loads(f.read_text())
+        s["closure"] = {
+            "ifsub": ifsub,
+            "savf": savf,
+            "mode": mode,
+            "linsolve": linsolve,
+        }
+        f.write_text(json.dumps(s, indent=1))
+    if keep == "gate" and result == 1:
+        for f in out.iterdir():
+            if f.is_file() and f.name not in GATE_FILES and "_S_" not in f.name:
+                f.unlink()
+    return result
 
 
 if __name__ == "__main__":

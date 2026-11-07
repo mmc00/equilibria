@@ -1,10 +1,13 @@
 """Parity of the family route against the saved Pyomo run, one dataset.
 
 usage: parity_ladder.py DATASET [--out FILE] [--reference DIR]
+                        [--ifsub {0,1}] [--savf {capFix,capFlex}] [--mode gtap]
 
 Runs ``_solve_shock(DATASET, 1, "capFix", solve_nlp=True, backend="family")`` and
 compares the three periods with ``<reference>/final.pkl`` (default
-``~/.cache/equilibria/family/reference/<ds>/tol_today``).
+``~/.cache/equilibria/family/reference/<ds>/<closure_tag>``, ``tol_today`` for ifsub=1
+capFix). Refuses a reference whose S files carry another ``closure`` (none = ifsub=1
+capFix gtap).
 
 Gate (exit 1 when it fails): every Var cell within ``|a - b| <= 1e-9 * max(1, |b|)``
 (NaN equals NaN), identical fixed flags and upper bounds, lower bounds within 1e-9
@@ -36,8 +39,40 @@ WORST = 20
 S_CALLS = ((2, "check"), (4, "check"), (5, "shock"))
 
 
-def reference_dir(dataset: str) -> Path:
-    return Path.home() / ".cache/equilibria/family/reference" / dataset / "tol_today"
+def _closure_tag(ifsub: int, savf: str, mode: str) -> str:
+    path = ROOT / "scripts" / "family" / "capture_prep.py"
+    spec = importlib.util.spec_from_file_location("capture_prep", path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.closure_tag(ifsub, savf, mode)
+
+
+def reference_dir(
+    dataset: str, ifsub: int = 1, savf: str = "capFix", mode: str = "gtap"
+) -> Path:
+    return (
+        Path.home()
+        / ".cache/equilibria/family/reference"
+        / dataset
+        / _closure_tag(ifsub, savf, mode)
+    )
+
+
+def reference_closure(ref: Path) -> dict:
+    """Closure of the S files of ``ref``; a file with no ``closure`` field is read as
+    ifsub=1 capFix gtap (the references captured before the field existed)."""
+    default = {"ifsub": 1, "savf": "capFix", "mode": "gtap", "linsolve": None}
+    found = [
+        {**default, **json.loads(f.read_text()).get("closure", {})}
+        for f in sorted(ref.glob("*_S_*.json"))
+    ]
+    for c in found[1:]:
+        if {k: c[k] for k in ("ifsub", "savf", "mode")} != {
+            k: found[0][k] for k in ("ifsub", "savf", "mode")
+        }:
+            raise ValueError(f"{ref}: S files disagree on the closure")
+    return found[0] if found else default
 
 
 def _same(a: np.ndarray, b: np.ndarray) -> np.ndarray:
@@ -183,8 +218,25 @@ def peak_rss_gb() -> float:
     return ru / (1e9 if sys.platform == "darwin" else 1e6)
 
 
-def run(dataset: str, reference: Path | None = None) -> dict:
+def run(
+    dataset: str,
+    reference: Path | None = None,
+    *,
+    ifsub: int = 1,
+    savf: str = "capFix",
+    mode: str = "gtap",
+) -> dict:
     """Run the family route on ``dataset`` and compare with the saved run."""
+    if mode != "gtap":
+        raise NotImplementedError(f"mode={mode!r}: only 'gtap' until Phase 3")
+    ref = reference or reference_dir(dataset, ifsub, savf, mode)
+    have = reference_closure(ref)
+    if (have["ifsub"], have["savf"], have["mode"]) != (ifsub, savf, mode):
+        raise ValueError(
+            f"{ref}: reference closure ifsub={have['ifsub']} savf={have['savf']} "
+            f"mode={have['mode']} differs from the requested ifsub={ifsub} "
+            f"savf={savf} mode={mode}"
+        )
     from equilibria.family.prep_capture import load
 
     for k, v in _newton_mumps().items():
@@ -192,9 +244,8 @@ def run(dataset: str, reference: Path | None = None) -> dict:
     sys.path[:0] = [str(ROOT), str(ROOT / "src")]
     from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
 
-    ref = reference or reference_dir(dataset)
     t = time.perf_counter()
-    res, code = _solve_shock(dataset, 1, "capFix", solve_nlp=True, backend="family")
+    res, code = _solve_shock(dataset, ifsub, savf, solve_nlp=True, backend="family")
     wall = time.perf_counter() - t
     out = report(res, code, load(ref / "final.pkl"), ref, dataset)
     out.update(
@@ -212,8 +263,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("dataset")
     ap.add_argument("--out", type=Path)
     ap.add_argument("--reference", type=Path)
+    ap.add_argument("--ifsub", type=int, choices=(0, 1), default=1)
+    ap.add_argument("--savf", choices=("capFix", "capFlex"), default="capFix")
+    ap.add_argument("--mode", choices=("gtap", "altertax"), default="gtap")
     args = ap.parse_args(argv)
-    out = run(args.dataset, args.reference)
+    out = run(
+        args.dataset, args.reference, ifsub=args.ifsub, savf=args.savf, mode=args.mode
+    )
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(out, indent=1, default=str))
