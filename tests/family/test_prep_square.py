@@ -42,7 +42,7 @@ def _ids(ds) -> str:
 def _closure_of(ds):
     """The driver's ``base_closure`` at the ifSUB of the case."""
     c = _closure()
-    return c if ds.ifsub == 1 else c.model_copy(update={"if_sub": False})
+    return c if getattr(ds, "ifsub", 1) == 1 else c.model_copy(update={"if_sub": False})
 
 
 @pytest.fixture(scope="module", params=DATASETS, ids=_ids)
@@ -76,7 +76,7 @@ def _recipe(a, p, ref, ds):
         closure=_closure_of(ds),
         sp_ref=ref,
         mode="gtap",
-        backend=recording(ds, ifsub=ds.ifsub),
+        backend=recording(ds, ifsub=getattr(ds, "ifsub", 1)),
         **ROUTE,
     )
 
