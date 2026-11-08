@@ -20,6 +20,7 @@ from typing import Any
 
 import numpy as np
 
+from equilibria.family.capflex import require_ref_gdx, stamp_capflex_risk
 from equilibria.family.mp_arrays import MPArrays, Squared
 from equilibria.family.phases import PhaseTimer, activate, phase, scope
 from equilibria.solver.gc_tuning import (
@@ -202,7 +203,6 @@ def prepare_run(
     Under capFlex ``ref_gdx`` gives ``params._capflex_risk`` (see ``family.capflex``), set
     before the cache keys are taken."""
     from equilibria.family import cross_period
-    from equilibria.family.capflex import stamp_capflex_risk
     from equilibria.family.disk_cache import enable_jax_cache, load_or_build
     from equilibria.family.prep_recipe import sp_reference_arrays
     from equilibria.family.prep_square import ConditionalMasks
@@ -480,7 +480,9 @@ def solve_gtap_family(
     ``shock`` is a user shock ``{instrument: {cell: pct}}`` (levels with
     ``shock_levels``) for any ShockBlock instrument, applied as ``shocks.apply_shock``
     does; ``None`` leaves the default +10 % import tariff. ``ref_gdx`` is not read under
-    capFix; under capFlex it gives ``risk`` (``family.capflex``) and is required."""
+    capFix; under capFlex it gives ``risk`` (``family.capflex``) and is required (a
+    missing file raises ``NotImplementedError`` before any work). capFlex also needs
+    ``gdxdump`` on PATH and ``scripts/gtap`` (``_diff_core``) importable."""
     check_supported(
         if_sub=bool(getattr(closure, "if_sub", False)),
         savf_flag=str(getattr(closure, "savf_flag", "capFix")),
@@ -492,6 +494,8 @@ def solve_gtap_family(
         shock_steps=None,
         shock_method="nonlinear",
     )
+    if getattr(closure, "savf_flag", "capFix") == "capFlex":
+        require_ref_gdx(ref_gdx)
     timing: dict[str, float] = {}
     timer = PhaseTimer()
     prev = activate(timer)

@@ -581,3 +581,40 @@ def test_family_newton_analyses_mumps_with_the_values(monkeypatch):
     monkeypatch.setattr(ntr, "newton_tr", fake)
     driver._newton(SS(), _any(sq))
     assert seen["mumps_values_at_analysis"] is True
+
+
+def test_capflex_without_a_gdx_refuses_before_any_work(monkeypatch, tmp_path):
+    import types
+
+    from equilibria.templates.gtap import residual_region as rr
+
+    touched = []
+    params = types.SimpleNamespace(
+        set_va_subsidy_basis=lambda b: touched.append("basis"),
+    )
+    monkeypatch.setattr(
+        rr, "resolve_residual_region", lambda *a, **k: touched.append("rr") or "R"
+    )
+    monkeypatch.setattr(
+        driver, "_solve_family", lambda *a, **k: touched.append("solve")
+    )
+    monkeypatch.setattr(driver, "check_supported", lambda **k: None)
+    closure = types.SimpleNamespace(if_sub=True, savf_flag="capFlex")
+    for gdx in (None, tmp_path / "missing.gdx"):
+        with pytest.raises(NotImplementedError, match="capFlex.*needs rore/rorg"):
+            driver.solve_gtap_family(params, closure, "R", ref_gdx=gdx)
+    assert touched == []
+
+
+def test_solve_shock_family_capflex_without_a_gdx_refuses_before_loading(monkeypatch):
+    mod = _parity_module()
+    monkeypatch.setenv("EQUILIBRIA_GTAP_SOLVER", "scipy_newton_tr")
+    monkeypatch.setenv("EQUILIBRIA_GTAP_TR_LINSOLVE", "mumps")
+    monkeypatch.setattr(mod, "_reference_gdx", lambda *a, **k: None)
+    monkeypatch.setattr(
+        mod,
+        "dataset_dir",
+        lambda *a, **k: pytest.fail("the dataset was touched before the refusal"),
+    )
+    with pytest.raises(NotImplementedError, match="capFlex.*needs rore/rorg"):
+        mod._solve_shock("gtap7_3x3", 1, "capFlex", solve_nlp=True, backend="family")

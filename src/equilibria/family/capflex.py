@@ -17,13 +17,19 @@ def _unsupported(cause: str) -> NotImplementedError:
     )
 
 
-def capflex_risk(params: Any, ref_gdx: Any) -> dict[str, float]:
-    """``{region: rorg/rore(r)}`` from the reference GDX; ``NotImplementedError`` when
-    the GDX cannot give it."""
+def require_ref_gdx(ref_gdx: Any) -> None:
+    """``NotImplementedError`` unless ``ref_gdx`` names an existing file (cheap, so the
+    driver can refuse capFlex before any work)."""
     if ref_gdx is None:
         raise _unsupported("no ref_gdx was given")
     if not Path(str(ref_gdx)).exists():
         raise _unsupported(f"{ref_gdx} does not exist")
+
+
+def capflex_risk(params: Any, ref_gdx: Any) -> dict[str, float]:
+    """``{region: rorg/rore(r)}`` from the reference GDX; ``NotImplementedError`` when
+    the GDX cannot give it."""
+    require_ref_gdx(ref_gdx)
     try:
         importlib.import_module("_diff_core")  # scripts/gtap, on sys.path in parity env
     except ImportError as exc:

@@ -102,7 +102,16 @@ def _solve_shock(
     else:
         _os.environ.pop("EQUILIBRIA_GTAP_SOLVE_NLP", None)
     try:
+        # The GAMS ref GDX is a SPEEDUP, not a requirement: capFlex reads benchmark rore/rorg
+        # from it (fast) instead of a capFix twin-solve, and it warm-starts the shock. When it's
+        # absent (e.g. gtap7_3x4 ships no local GAMS ref — its shock is 2168 eqs > PATH's 1000-eq
+        # demo cap), the block SELF-SEEDS: base_calibrated stamps m._settled_seed, and the risk
+        # twin-solve fallback recovers rore/rorg. Verified on 3x4: shock code=1 with
+        # ref_gdx=None. So pass the GDX only if it exists; on small datasets the twin-solve
+        # fallback is cheap enough.
+        gdx = _reference_gdx(dataset, ifsub)
         if backend == "family":
+            from equilibria.family.capflex import require_ref_gdx
             from equilibria.family.driver import check_supported, solve_gtap_family
 
             # The solve_multiperiod arguments below are the ones this function passes.
@@ -117,6 +126,9 @@ def _solve_shock(
                 shock_steps=None,
                 shock_method="nonlinear",
             )
+            if savf_flag == "capFlex":
+                # capFlex reads rore/rorg from the GDX: refuse before any work
+                require_ref_gdx(gdx)
         from equilibria.templates.gtap import GTAPParameters
         from equilibria.templates.gtap.gtap_block_model import build_block_model
         from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
@@ -146,14 +158,6 @@ def _solve_shock(
             # FTRV + FBEP), the gtap7_gempack basis. The GAMS sign drops 15x10 to 93.9%.
             va_subsidy_basis="gempack",
         )
-        # The GAMS ref GDX is a SPEEDUP, not a requirement: capFlex reads benchmark rore/rorg
-        # from it (fast) instead of a capFix twin-solve, and it warm-starts the shock. When it's
-        # absent (e.g. gtap7_3x4 ships no local GAMS ref — its shock is 2168 eqs > PATH's 1000-eq
-        # demo cap), the block SELF-SEEDS: base_calibrated stamps m._settled_seed, and the risk
-        # twin-solve fallback recovers rore/rorg. Verified on 3x4: shock code=1 with
-        # ref_gdx=None. So pass the GDX only if it exists; on small datasets the twin-solve
-        # fallback is cheap enough.
-        gdx = _reference_gdx(dataset, ifsub)
         if backend == "family":
             fres = solve_gtap_family(p, ac, rr, ref_gdx=gdx)
             return fres, int(fres.results["shock"]["code"])
