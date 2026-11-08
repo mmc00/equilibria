@@ -241,3 +241,105 @@ def test_top_level_linsolve_wins_over_the_closure_one(tmp_path):
     have = mod.reference_closure(ref)
     with pytest.raises(ValueError, match="linsolve"):
         mod.check_linsolve(ref, have, "mumps")
+
+
+# ── polished-root gate (user answer 8) ──────────────────────────────────────
+
+
+def _weak(eps=1e-6):
+    """F = A x - b, root (1, 1), A nearly singular along (1, -1)."""
+    import scipy.sparse as sp
+
+    A = sp.csr_matrix(np.array([[1.0, 1.0], [1.0, 1.0 + eps]]))
+    b = A @ np.ones(2)
+    return (lambda x: A @ x - b), (lambda x: A)
+
+
+def _polish(F, J, ours, ref, reltol=1e-6):
+    s = _script()
+    big = np.full(len(ours), 1e20)
+    return s.polish_call(
+        F,
+        J,
+        np.ones(len(ours)),
+        np.asarray(ours, float),
+        np.asarray(ref, float),
+        -big,
+        big,
+        reltol=reltol,
+        ftol=1e-7,
+        linsolve="direct",
+    )
+
+
+def test_weak_direction_raw_differ_polished_agree_passes():
+    F, J = _weak()
+    v = np.array([1.0, -1.0])
+    out = _polish(F, J, np.ones(2) + 1e-6 * v, np.ones(2) - 1e-6 * v)
+    assert out["raw_max_rel"] > 1e-9  # the end points differ along the weak direction
+    assert out["residual_ok_ours"] and out["residual_ok_reference"]
+    assert out["polished_max_rel"] <= 1e-9
+    assert out["passed"] is True
+
+
+def test_a_raw_end_point_off_the_residual_test_fails():
+    F, J = _weak()
+    out = _polish(F, J, np.ones(2), np.array([1.0 + 1e-3, 1.0]))
+    assert out["residual_ok_ours"] and not out["residual_ok_reference"]
+    assert out["polished_max_rel"] <= 1e-9  # one step would reach the root ...
+    assert out["passed"] is False  # ... but the reference stopped too early
+
+
+def test_polished_points_that_differ_fail():
+    import scipy.sparse as sp
+
+    def F(x):  # two roots, x = 1 and x = -1
+        return np.array([x[0] ** 2 - 1.0])
+
+    def J(x):
+        return sp.csr_matrix(np.array([[2.0 * x[0]]]))
+
+    out = _polish(F, J, [1.0 + 1e-8], [-1.0 - 1e-8])
+    assert out["residual_ok_ours"] and out["residual_ok_reference"]
+    assert out["polished_max_rel"] > 1e-9
+    assert out["passed"] is False
+
+
+def test_polished_gate_rules_the_report():
+    s = _script()
+    ok = {"passed": True}
+    base = {
+        "raw_over": 3,
+        "polished_over": 0,
+        "fixed_diff": 0,
+        "ub_diff": 0,
+        "lb_diff": 0,
+    }
+    assert s.polished_gate(**base, structure=[], codes_ok=True, calls={"check": ok})
+    assert not s.polished_gate(
+        **{**base, "polished_over": 1}, structure=[], codes_ok=True, calls={"c": ok}
+    )
+    assert not s.polished_gate(
+        **base, structure=[], codes_ok=True, calls={"check": {"passed": False}}
+    )
+    assert not s.polished_gate(**base, structure=[], codes_ok=True, calls={})
+    assert not s.polished_gate(**base, structure=[], codes_ok=False, calls={"c": ok})
+
+
+def test_report_has_raw_and_polished_fields(ran):
+    _, _, out, _ = ran
+    for key in (
+        "raw_max_rel",
+        "raw_worst_cells",
+        "polished_max_rel",
+        "polished_worst_cells",
+        "periods",
+    ):
+        assert key in out
+    assert out["max_rel"] == out["raw_max_rel"]  # max_rel keeps its raw meaning
+    for period in ("check", "shock"):
+        p = out["periods"][period]
+        for key in ("raw_max_rel", "polished_max_rel"):
+            assert key in p
+        assert p["residual_ours"] < 1e-5 and p["residual_reference"] < 1e-5
+    assert "raw_max_rel" in out["periods"]["base"]  # not solved: compared raw
