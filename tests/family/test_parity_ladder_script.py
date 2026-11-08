@@ -343,3 +343,35 @@ def test_report_has_raw_and_polished_fields(ran):
             assert key in p
         assert p["residual_ours"] < 1e-5 and p["residual_reference"] < 1e-5
     assert "raw_max_rel" in out["periods"]["base"]  # not solved: compared raw
+
+
+def test_polished_photos_take_the_post_solve_cells_of_both_sides():
+    """A derived cell (``pfy``, rewritten by the post-solve) is compared at the value
+    each side's polished point gives it; a cell outside the call stays raw."""
+    import types
+
+    s = _script()
+
+    def var(vals):
+        return _v(
+            types.SimpleNamespace(
+                keys=[("r", "shock"), ("q", "shock")],
+                value=np.array(vals, dtype=float),
+                fixed=np.array([True, True]),
+                lb=np.full(2, -np.inf),
+                ub=np.full(2, np.inf),
+            )
+        )
+
+    mp = types.SimpleNamespace(vars={"pfy": var([1.0 + 1e-8, 5.0])})
+    final = types.SimpleNamespace(vars={"pfy": var([1.0, 5.0])})
+    assert s.compare(mp, final)["over_1e9"] == 1  # raw: the derived cell differs
+    rec = types.SimpleNamespace(
+        calls={"shock": {}},
+        cells={"shock": [("pfy", [("r", "shock")], np.array([2.0]), np.array([2.0]))]},
+    )
+    ours, theirs = s.polished_photos(mp, final, rec)
+    out = s.compare(ours, theirs)
+    assert out["over_1e9"] == 0 and out["max_rel"] == 0.0
+    assert theirs.vars["pfy"].value[1] == 5.0  # untouched cell keeps its raw value
+    assert final.vars["pfy"].value[0] == 1.0  # the photos themselves are not modified

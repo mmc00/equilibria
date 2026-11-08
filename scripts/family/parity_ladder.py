@@ -24,8 +24,11 @@ Then every Var cell of the polished photos is within ``|a - b| <= 1e-9 * max(1, 
 (NaN equals NaN), with identical fixed flags and upper bounds, lower bounds within 1e-9
 relative like the values (the relative floors are 1e-3 x the prior level, so they inherit
 its ~1e-10 difference), same components and keys, and code 1 on every solve. Only the free
-columns of a solved call are polished; fixed cells, the base period (calibrated, not
-solved) and every other cell outside the squared systems keep their raw values. The settle
+columns of a solved call are polished, and what the family post-solve derives from them
+(the ifSUB report variables pfa / pfy / pm / ..., the welfare tail): the same post-solve
+runs on two copies, from our polished point and from the reference's (whose other cells
+are ours, identical to it within the gate). Fixed exogenous cells, the base period
+(calibrated, not solved) and every other cell keep their raw values. The settle
 (``calibrate_base``'s check, which seeds the base) is not polished: ``settled.pkl`` omits
 the variables indexed by the period alone, so it has no full reference end point; the
 base cells it produces are compared raw.
@@ -322,6 +325,10 @@ class PolishRecorder:
         self.n = 0
         self.calls: dict[str, dict] = {}
         self.columns: dict[str, list[str]] = {}
+        # per polished call: (var, keys, ours, reference) of every cell the post-solve
+        # rewrites from the solution (the columns and the report / welfare cells)
+        self.cells: dict[str, list[tuple]] = {}
+        self._pending: str | None = None
 
     def wrap(self, newton):
         def _newton(ss, sq):
@@ -357,9 +364,44 @@ class PolishRecorder:
                 linsolve=self.linsolve,
             )
             self.columns[tag] = cols
+            self._pending = tag
             return res, resid, code
 
         return _newton
+
+    def wrap_post_solve(self, post_solve):
+        """After the real post-solve of a polished call, the same post-solve on two
+        copies, from our polished point and from the reference's: the report variables
+        (pfa, pfy, pm, ...) and the welfare tail are derived from the solution."""
+
+        def _post(mp, period, **kw):
+            tag, self._pending = self._pending, None
+            if tag is None or kw.get("x") is None:
+                return post_solve(mp, period, **kw)
+            pre = mp.copy()
+            out = post_solve(mp, period, **kw)
+            info = self.calls[tag]
+            a = post_solve(pre.copy(), period, **{**kw, "x": info["x_ours_polished"]})
+            b = post_solve(pre.copy(), period, **{**kw, "x": info["x_ref_polished"]})
+            cells = []
+            for name, v in out.vars.items():
+                va, vb, v0 = (
+                    a.vars[name].value,
+                    b.vars[name].value,
+                    pre.vars[name].value,
+                )
+                with np.errstate(invalid="ignore"):
+                    m = (v.period == period) & (
+                        ~_same(v.value, v0) | ~_same(va, v0) | ~_same(vb, v0)
+                    )
+                idx = np.flatnonzero(m)
+                if len(idx):
+                    keys = [v.keys[i] for i in idx.tolist()]
+                    cells.append((name, keys, va[idx].copy(), vb[idx].copy()))
+            self.cells[tag] = cells
+            return out
+
+        return _post
 
 
 def _with_values(vars_: dict, cols: list[str], values: np.ndarray) -> dict:
@@ -379,15 +421,42 @@ def _with_values(vars_: dict, cols: list[str], values: np.ndarray) -> dict:
     return out
 
 
+def _with_cells(vars_: dict, cells: list[tuple], side: int) -> dict:
+    """``vars_`` with the recorded post-solve cells at their polished values (``side``
+    2 = ours, 3 = the reference's)."""
+    import copy
+
+    out = dict(vars_)
+    for row in cells:
+        name, keys, vals = row[0], row[1], row[side]
+        if name not in vars_:
+            continue
+        v = copy.copy(out[name])
+        v.value = np.array(v.value, dtype=float, copy=True)
+        pos = {tuple(map(str, k)): i for i, k in enumerate(v.keys)}
+        for k, x in zip(keys, vals, strict=True):
+            i = pos.get(tuple(map(str, k)))
+            if i is not None:
+                v.value[i] = x
+        out[name] = v
+    return out
+
+
 def polished_photos(mp, final, rec: PolishRecorder):
-    """``(mp, final)`` with each solved call's columns at their polished values."""
+    """``(mp, final)`` with each solved call's cells at their polished values: the
+    columns and what the post-solve derives from them (``rec.cells``), else the
+    columns alone."""
     import types
 
     ours, theirs = dict(mp.vars), dict(final.vars)
     for tag, info in rec.calls.items():
-        cols = rec.columns[tag]
-        ours = _with_values(ours, cols, info["x_ours_polished"])
-        theirs = _with_values(theirs, cols, info["x_ref_polished"])
+        if tag in rec.cells:
+            ours = _with_cells(ours, rec.cells[tag], 2)
+            theirs = _with_cells(theirs, rec.cells[tag], 3)
+        else:
+            cols = rec.columns[tag]
+            ours = _with_values(ours, cols, info["x_ours_polished"])
+            theirs = _with_values(theirs, cols, info["x_ref_polished"])
     return types.SimpleNamespace(vars=ours), types.SimpleNamespace(vars=theirs)
 
 
@@ -542,19 +611,22 @@ def run(
     sys.path[:0] = [str(ROOT), str(ROOT / "src")]
     from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
 
+    import equilibria.family.post_solve as post_mod
     from equilibria.family import driver
 
     final = load(ref / "final.pkl")
     linsolve = (os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE") or "direct").lower()
     rec = PolishRecorder(final, linsolve)
-    newton = driver._newton
+    newton, post = driver._newton, post_mod.post_solve
     driver._newton = rec.wrap(newton)
+    post_mod.post_solve = rec.wrap_post_solve(post)
     try:
         t = time.perf_counter()
         res, code = _solve_shock(dataset, ifsub, savf, solve_nlp=True, backend="family")
         wall = time.perf_counter() - t
     finally:
         driver._newton = newton
+        post_mod.post_solve = post
     out = report(res, code, final, ref, dataset, rec)
     out.update(
         wall_s=wall,
