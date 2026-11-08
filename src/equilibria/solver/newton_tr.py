@@ -61,6 +61,7 @@ def newton_tr(
     on_symbolic_factorization: Callable[[], None] | None = None,
     gmin: float | None = None,
     gmin_policy: str = "always",
+    mumps_values_at_analysis: bool = False,
 ) -> NewtonResult:
     """Solve ``F(x) = 0`` from ``x0`` inside ``[lb, ub]``.
 
@@ -76,6 +77,9 @@ def newton_tr(
     ``"on_null_pivot"`` factors J·P as is and, only when MUMPS reports null pivots
     (INFOG(28) > 0), refactors that same matrix with ``gmin`` (counted in
     ``NewtonResult.gmin_factors``).
+    ``mumps_values_at_analysis``: hand MUMPS the matrix values at the analysis (``job=1``)
+    so a value-based ICNTL(6) (e.g. 7) can use them; the default analyses the pattern
+    alone, as Pyomo's MUMPS wrapper does.
     """
     if gmin_policy not in ("always", "on_null_pivot"):
         raise ValueError(f"unknown gmin_policy {gmin_policy!r}")
@@ -335,6 +339,24 @@ def newton_tr(
                 maximum_bipartite_matching as _mbm_m,
             )
 
+            class _MumpsValuesAtAnalysis(_Mumps_tr):
+                """Pyomo's wrapper with the values set before the analysis."""
+
+                def do_symbolic_factorization(self, matrix, raise_on_error=True):
+                    coo = matrix.tocoo()
+                    ctx = cast(Any, self._mumps)
+                    set_rows_cols = ctx.set_centralized_assembled_rows_cols
+
+                    def rows_cols_then_values(irn, jcn):
+                        set_rows_cols(irn, jcn)
+                        ctx.set_centralized_assembled_values(coo.data)
+
+                    ctx.set_centralized_assembled_rows_cols = rows_cols_then_values
+                    try:
+                        return super().do_symbolic_factorization(coo, raise_on_error)
+                    finally:
+                        del ctx.set_centralized_assembled_rows_cols
+
             _pf_m = os.environ.get("EQUILIBRIA_GTAP_PROGRESS_FILE")
 
             def _plog_m(_m):
@@ -508,7 +530,11 @@ def newton_tr(
                                     "24": _icntl24,
                                 }
                             )
-                            _lu_tr = _Mumps_tr(sym=0)
+                            _lu_tr = (
+                                _MumpsValuesAtAnalysis(sym=0)
+                                if mumps_values_at_analysis
+                                else _Mumps_tr(sym=0)
+                            )
                             _lu_tr.set_icntl(14, 100)
                             _lu_tr.set_icntl(6, _icntl6)
                             _lu_tr.set_icntl(7, _icntl7)

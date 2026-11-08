@@ -297,6 +297,9 @@ def _newton(ss: Any, sq: Squared) -> tuple[Any, float, int]:
             # regularize only when MUMPS reports null pivots.
             gmin=float(os.environ.get("EQUILIBRIA_GTAP_GMIN", "0") or 0.0),
             gmin_policy="on_null_pivot",
+            # analysed on the pattern alone (Pyomo's wrapper), ICNTL(6)=7 cannot use
+            # the values and met a spurious null pivot on the 20x41 capFlex settle
+            mumps_values_at_analysis=True,
         )
     with phase("residual_check"):
         resid = float(np.linalg.norm(ss.F(np.clip(res.x, lb, ub)), np.inf))

@@ -549,3 +549,34 @@ def test_family_and_pyomo_read_the_same_gdx(monkeypatch, dataset):
             else ("gams_mcp_gtap_ifsub1_fbep-header")
         )
         assert seen["family"].parent.name == name
+
+
+def test_family_newton_analyses_mumps_with_the_values(monkeypatch):
+    """The family route hands MUMPS the values at analysis (ICNTL(6)=7 uses them)."""
+    import types
+
+    import numpy as np
+
+    import equilibria.solver.newton_tr as ntr
+
+    class SS:
+        x0 = np.zeros(1)
+
+        def fscale(self):
+            return np.ones(1)
+
+        def F(self, z):
+            return np.zeros(1)
+
+    sq = types.SimpleNamespace(
+        cells={"a": (0, 0, -np.inf, np.inf)}, col_names=["a"], row_names=["r0"]
+    )
+    seen = {}
+
+    def fake(*a, **k):
+        seen.update(k)
+        return types.SimpleNamespace(success=True, x=np.zeros(1), nit=1)
+
+    monkeypatch.setattr(ntr, "newton_tr", fake)
+    driver._newton(SS(), _any(sq))
+    assert seen["mumps_values_at_analysis"] is True
