@@ -10,35 +10,49 @@ compares the three periods with ``<reference>/final.pkl`` (default
 capFix). Refuses a reference whose S files carry another ``closure`` (none = ifsub=1
 capFix gtap).
 
-Gate (exit 1 when it fails; user answer 8, 2026-11-07, the polished-root gate). For each
-solved call of the main loop (check, shock):
+Gate (exit 1 when it fails; user answer 8, 2026-11-07, the polished-root gate, with the
+fix-round-1 checks). The solved calls of the main loop, tagged by the driver's own
+``_solve_period`` tag, must be exactly ``check`` and ``shock``. For each:
 
 (i) both raw end points, ours and the reference's (``final.pkl``), pass the residual
     test of the run on the family system: ``||F/fscale||_inf < EQUILIBRIA_GTAP_TR_RELTOL``
     (when > 0) or ``||F||_inf < EQUILIBRIA_GTAP_TR_FTOL``, as ``newton_tr`` stops;
 (ii) one exact, unregularized Newton step from each (the same linear solve for both:
-    MUMPS with the values at analysis and no GMIN under ``linsolve=mumps``, else scipy
-    ``splu``; the result clipped to the bounds) gives two "polished" points.
+    MUMPS with the values at analysis and no GMIN under ``linsolve=mumps``, INFOG(23)
+    recorded, else scipy ``splu``; clipped to the bounds) gives two polished points
+    within 1e-9 on every column; the steps are reported (``step_rel_*``) and the raw gap
+    must be covered cellwise by them (``|x_o - x_r| <= |s_o| + |s_r| + 1e-9 max(1,|x_r|)``,
+    ``consistency_violations``; implied by (ii) through the triangle inequality, kept as
+    the explanation of the raw gap);
+(iii) the family residual at the reference end point matches Pyomo's own residual there
+    (the S file's ``trace_f_inf[-1]`` and ``trace_f_scaled_inf[-1]``, same inf-norm and
+    scaling) within max(1e-11, 1e-6 x Pyomo's): the two evaluators agree on the largest
+    row at that point. This does not certify row by row agreement below that residual;
+(iv) the family post-solve run from the reference's RAW point reproduces the reference's
+    raw derived cells (ifSUB report variables pfa / pfy / pm / ..., the welfare tail)
+    within 1e-9 (``post_raw_*``).
 
 Then every Var cell of the polished photos is within ``|a - b| <= 1e-9 * max(1, |b|)``
-(NaN equals NaN), with identical fixed flags and upper bounds, lower bounds within 1e-9
-relative like the values (the relative floors are 1e-3 x the prior level, so they inherit
-its ~1e-10 difference), same components and keys, and code 1 on every solve. Only the free
-columns of a solved call are polished, and what the family post-solve derives from them
-(the ifSUB report variables pfa / pfy / pm / ..., the welfare tail): the same post-solve
-runs on two copies, from our polished point and from the reference's (whose other cells
-are ours, identical to it within the gate). Fixed exogenous cells, the base period
-(calibrated, not solved) and every other cell keep their raw values. The settle
-(``calibrate_base``'s check, which seeds the base) is not polished: ``settled.pkl`` omits
-the variables indexed by the period alone, so it has no full reference end point; the
-base cells it produces are compared raw.
+(NaN equals NaN), with identical fixed flags and upper bounds and lower bounds within 1e-9
+relative (all three compared raw: polishing changes values only), same components and keys,
+and code 1 on every solve. Polished cells: the columns of each solved call and what the
+family post-solve derives from them, run on copies from our polished point and from the
+reference's (whose other inputs are ours, identical to it within the gate). The shock
+system is the one the driver built from OUR raw check result; both shock end points are
+judged on it. Fixed exogenous cells, the base period (calibrated, not solved) and every
+other cell keep their raw values. The settle (``calibrate_base``'s check, which seeds the
+base) is not polished: ``settled.pkl`` omits the variables indexed by the period alone, so
+it has no full reference end point; the base cells it produces are compared raw. A failed
+polish (singular J, non-finite values, a missing column) is recorded as ``passed: False``
+with ``error``; the JSON is still written.
 
 The raw comparison is still made and reported: ``max_rel``, ``worst_cells``,
 ``max_rel_by_component``, ``over_1e9`` keep their raw meaning (as ``raw_max_rel`` /
 ``raw_worst_cells``); ``polished_*`` are the gate's; ``periods`` holds per period the raw
-and polished max rel and, per solved call, ``residual_ours`` / ``residual_reference``
-(``||F||_inf`` at the raw end points). Newton iteration counts are reported (ours vs the
-reference S files), never a gate.
+and polished max rel and, per polished call, the residuals, steps, consistency, cross-check
+and post-solve fields, plus a raw ``settle_check`` entry. ``timing.polish_s`` is the
+ladder's own polish time and ``family_wall_s`` the run without it. Newton iteration counts
+are reported (ours vs the reference S files), never a gate.
 """
 
 from __future__ import annotations
@@ -62,8 +76,6 @@ WORST = 20
 # (S file number, period): settle check, check, shock
 S_CALLS = ((2, "check"), (4, "check"), (5, "shock"))
 PERIODS = ("base", "check", "shock")
-# the driver's Newton calls in order: the settle's check, then the main loop's
-CALL_TAGS = ("settle_check", "check", "shock")
 
 
 def _closure_tag(ifsub: int, savf: str, mode: str) -> str:
@@ -191,12 +203,27 @@ def compare(mp, final) -> dict:
     }
 
 
-def _exact_step(J, F, linsolve: str) -> np.ndarray:
-    """``-J^-1 F`` without regularization: MUMPS (values at analysis, ICNTL 6=7, 8=8, no
-    GMIN) under ``linsolve="mumps"``, else scipy ``splu``."""
+# the family residual at the reference's end point vs Pyomo's own (S file trace): both
+# are the inf-norm of the same rows at the same point from two evaluators (JAX vs
+# Pyomo/ASL), so they differ by float noise only, ~eps x the largest residual term
+# (terms up to ~1e3-1e4 -> ~1e-12): relative 1e-6, absolute 1e-11 near zero
+XCHECK_RTOL = 1e-6
+XCHECK_ATOL = 1e-11
+WORST_STEP = 5
+# the driver's tags of the polished calls (``_solve_period(..., tag=)``, default the
+# period); the settle runs as settle_base / settle_check and is not polished
+POLISHED = ("check", "shock")
+S_OF_CALL = {"check": 4, "shock": 5}
+
+
+def _exact_step(J, F, linsolve: str) -> tuple[np.ndarray, int | None]:
+    """``(-J^-1 F, INFOG(23))`` without regularization: MUMPS (values at analysis, ICNTL
+    6=7, 8=8, no GMIN; INFOG(23) is the ICNTL(6) MUMPS actually used) under
+    ``linsolve="mumps"``, else scipy ``splu`` (``None``)."""
     import scipy.sparse as sp
 
     A = sp.csr_matrix(J)
+    f = np.asarray(F, dtype=float)
     if linsolve == "mumps":
         import mumps
 
@@ -207,21 +234,39 @@ def _exact_step(J, F, linsolve: str) -> np.ndarray:
                 ctx.set_icntl(k, v)
             ctx.set_centralized_sparse(A.tocoo())
             ctx.run(job=4)  # analysis with the values, then the factor
-            d = -np.asarray(F, dtype=float).copy()
+            infog23 = int(ctx.id.infog[22])
+            d = -f.copy()
             ctx.set_rhs(d)
             ctx.run(job=3)
-            return d
+            return d, infog23
         finally:
             ctx.destroy()
     from scipy.sparse.linalg import splu
 
-    return splu(A.tocsc()).solve(-np.asarray(F, dtype=float))
+    return splu(A.tocsc()).solve(-f), None
 
 
 def _rel(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     with np.errstate(invalid="ignore"):
         r = np.abs(a - b) / np.maximum(1.0, np.abs(b))
     return np.where(_same(a, b), 0.0, np.where(np.isnan(r), np.inf, r))
+
+
+def _worst(rel: np.ndarray, names, k: int = WORST_STEP) -> list[dict]:
+    if names is None or not len(rel):
+        return []
+    return [
+        {"col": str(names[i]), "rel": float(rel[i])}
+        for i in np.argsort(-rel)[:k]
+        if rel[i] > 0
+    ]
+
+
+def crosscheck_residual(
+    family: float, pyomo: float, rtol: float = XCHECK_RTOL, atol: float = XCHECK_ATOL
+) -> bool:
+    """The family's residual at the reference point matches Pyomo's own there."""
+    return bool(abs(family - pyomo) <= max(atol, rtol * abs(pyomo)))
 
 
 def polish_call(
@@ -236,39 +281,113 @@ def polish_call(
     reltol: float,
     ftol: float,
     linsolve: str,
+    names=None,
 ) -> dict:
-    """One solved call: the residual test at both raw end points and one exact Newton
-    step from each. ``passed`` iff both pass the test and the polished points agree
-    within ``RTOL``; ``x_ours_polished`` / ``x_ref_polished`` are the polished points."""
-    out: dict = {}
-    pts = {}
-    for tag, x in (("ours", x_ours), ("reference", x_ref)):
-        x = np.clip(x, lb, ub)
-        f = np.asarray(F(x), dtype=float)
-        rinf = float(np.abs(f).max()) if len(f) else 0.0
-        rrel = (
-            float(np.abs(f / fscale).max())
-            if reltol > 0 and fscale is not None and len(f)
-            else None
+    """One solved call: the residual test at both raw end points, one exact Newton step
+    from each, and the consistency of the raw gap with the two steps.
+
+    ``passed`` iff both pass the residual test, the polished points agree within
+    ``RTOL``, and every column satisfies ``|x_ours - x_ref| <= |step_ours| + |step_ref|
+    + RTOL max(1, |x_ref|)`` (by the triangle inequality this follows from the polished
+    agreement; it is reported to show the raw gap is the stopping-point noise the steps
+    remove). A non-finite residual or step, or a failed factor, gives ``passed: False``
+    with ``error`` instead of raising."""
+    out: dict = {"passed": False}
+    try:
+        pts, steps = {}, {}
+        raw = {
+            "ours": np.clip(np.asarray(x_ours, float), lb, ub),
+            "reference": np.clip(np.asarray(x_ref, float), lb, ub),
+        }
+        for tag, x in raw.items():
+            f = np.asarray(F(x), dtype=float)
+            if not np.all(np.isfinite(f)):
+                raise ValueError(f"non-finite residual at the {tag} end point")
+            rinf = float(np.abs(f).max()) if len(f) else 0.0
+            rrel = (
+                float(np.abs(f / fscale).max())
+                if reltol > 0 and fscale is not None and len(f)
+                else None
+            )
+            out[f"residual_{tag}"] = rinf
+            out[f"residual_scaled_{tag}"] = rrel
+            out[f"residual_ok_{tag}"] = bool(
+                rinf < ftol or (rrel is not None and rrel < reltol)
+            )
+            d, infog23 = _exact_step(J(x), f, linsolve)
+            if not np.all(np.isfinite(d)):
+                raise ValueError(f"non-finite Newton step at the {tag} end point")
+            out[f"infog23_{tag}"] = infog23
+            pts[tag] = np.clip(x + d, lb, ub)
+            steps[tag] = pts[tag] - x
+            srel = np.abs(steps[tag]) / np.maximum(1.0, np.abs(x))
+            out[f"step_rel_{tag}"] = float(srel.max()) if len(srel) else 0.0
+            out[f"step_worst_{tag}"] = _worst(srel, names)
+        gap = np.abs(raw["ours"] - raw["reference"])
+        allow = (
+            np.abs(steps["ours"])
+            + np.abs(steps["reference"])
+            + RTOL * np.maximum(1.0, np.abs(raw["reference"]))
         )
-        out[f"residual_{tag}"] = rinf
-        out[f"residual_scaled_{tag}"] = rrel
-        out[f"residual_ok_{tag}"] = bool(
-            rinf < ftol or (rrel is not None and rrel < reltol)
+        bad = gap > allow
+        out["consistency_violations"] = int(bad.sum())
+        out["consistency_worst"] = [
+            {
+                "col": str(names[i]) if names is not None else int(i),
+                "gap": float(gap[i]),
+                "allowed": float(allow[i]),
+            }
+            for i in np.flatnonzero(bad)[:WORST_STEP]
+        ]
+        rawrel = _rel(raw["ours"], raw["reference"])
+        pol = _rel(pts["ours"], pts["reference"])
+        out["raw_max_rel"] = float(rawrel.max()) if len(rawrel) else 0.0
+        out["polished_max_rel"] = float(pol.max()) if len(pol) else 0.0
+        out["passed"] = bool(
+            out["residual_ok_ours"]
+            and out["residual_ok_reference"]
+            and out["polished_max_rel"] <= RTOL
+            and out["consistency_violations"] == 0
         )
-        pts[tag] = np.clip(x + _exact_step(J(x), f, linsolve), lb, ub)
-    raw = _rel(np.clip(x_ours, lb, ub), np.clip(x_ref, lb, ub))
-    pol = _rel(pts["ours"], pts["reference"])
-    out["raw_max_rel"] = float(raw.max()) if len(raw) else 0.0
-    out["polished_max_rel"] = float(pol.max()) if len(pol) else 0.0
-    out["passed"] = bool(
-        out["residual_ok_ours"]
-        and out["residual_ok_reference"]
-        and out["polished_max_rel"] <= RTOL
-    )
-    out["x_ours_polished"] = pts["ours"]
-    out["x_ref_polished"] = pts["reference"]
+        out["x_ours_polished"] = pts["ours"]
+        out["x_ref_polished"] = pts["reference"]
+        out["x_ref_raw"] = raw["reference"]
+    except Exception as e:  # recorded, the gate fails, the JSON is still written
+        out["passed"] = False
+        out["error"] = f"{type(e).__name__}: {e}"
     return out
+
+
+def cross_check_calls(calls: dict, ref: Path) -> dict:
+    """Per polished call, the family's residual at the reference end point against
+    Pyomo's own residual there (``trace_f_inf[-1]`` / ``trace_f_scaled_inf[-1]`` of the
+    reference S file), same inf-norm and same scaling (``fscale`` = max(1, |x|) over the
+    row's free cells in both). It certifies that the family F evaluated at the reference
+    point has the reference's max-norm residual (so the family is not solving a shifted
+    system by more than ~that residual on its largest row); it does not certify row by
+    row that the two F agree below the residual level. ``calls`` is updated in place."""
+    for tag, info in calls.items():
+        n = S_OF_CALL.get(tag)
+        f = ref / f"{n:03d}_S_{tag}.json" if n is not None else None
+        if f is None or not f.exists():
+            info.update(passed=False, crosscheck_ok=False)
+            info["error"] = info.get("error") or f"no reference S file for {tag}"
+            continue
+        if "residual_reference" not in info:
+            info["crosscheck_ok"] = False
+            continue
+        sj = json.loads(f.read_text())
+        pyo = (sj.get("trace_f_inf") or [None])[-1]
+        pyo_s = (sj.get("trace_f_scaled_inf") or [None])[-1]
+        info["pyomo_residual"] = pyo
+        info["pyomo_residual_scaled"] = pyo_s
+        ok = pyo is not None and crosscheck_residual(info["residual_reference"], pyo)
+        fam_s = info.get("residual_scaled_reference")
+        if ok and fam_s is not None and pyo_s is not None:
+            ok = crosscheck_residual(fam_s, pyo_s)
+        info["crosscheck_ok"] = bool(ok)
+        info["passed"] = bool(info.get("passed") and ok)
+    return calls
 
 
 def polished_gate(
@@ -283,10 +402,11 @@ def polished_gate(
     calls: dict,
 ) -> bool:
     """User answer 8: the polished photos within RTOL, fixed/ub/lb and structure equal,
-    code 1, and every solved call polished and passed. ``raw_over`` is reported only."""
+    code 1, and the polished calls are exactly check and shock, each passed.
+    ``raw_over`` is reported only."""
     del raw_over  # reported, never a gate
     return bool(
-        calls
+        set(calls) == set(POLISHED)
         and all(c.get("passed") for c in calls.values())
         and polished_over == 0
         and fixed_diff == 0
@@ -316,63 +436,88 @@ def _ref_values(final, cols: list[str]) -> np.ndarray:
 
 
 class PolishRecorder:
-    """Wraps ``family.driver._newton``: per Newton call of the main loop (check, shock),
-    ``polish_call`` at our end point and the reference's, on the same family system."""
+    """Wraps ``family.driver._solve_period`` (to tag each call with the driver's own
+    tag), ``family.driver._newton`` (``polish_call`` at our end point and the
+    reference's, on the same family system) and ``family.post_solve.post_solve`` (the
+    derived cells, see ``wrap_post_solve``). The shock is polished on the system the
+    driver built from OUR raw check result (its lagged / fixed inputs), so both shock end
+    points are judged on that one system; the check is judged on ours too."""
 
     def __init__(self, final, linsolve: str) -> None:
         self.final = final
         self.linsolve = linsolve
-        self.n = 0
         self.calls: dict[str, dict] = {}
         self.columns: dict[str, list[str]] = {}
         # per polished call: (var, keys, ours, reference) of every cell the post-solve
         # rewrites from the solution (the columns and the report / welfare cells)
         self.cells: dict[str, list[tuple]] = {}
+        self.polish_s = 0.0
+        self._tag: str | None = None
         self._pending: str | None = None
+
+    def wrap_solve_period(self, solve_period):
+        def _solve_period(run, mp, period, **kw):
+            prev, self._tag = self._tag, kw.get("tag") or period
+            try:
+                return solve_period(run, mp, period, **kw)
+            finally:
+                self._tag = prev
+
+        return _solve_period
 
     def wrap(self, newton):
         def _newton(ss, sq):
             res, resid, code = newton(ss, sq)
-            tag = CALL_TAGS[self.n] if self.n < len(CALL_TAGS) else f"call{self.n}"
-            self.n += 1
-            if tag == "settle_check":
+            tag = self._tag
+            if tag not in POLISHED:
                 return res, resid, code
+            t = time.perf_counter()
             cols = list(sq.col_names)
-            lb = np.array([sq.cells[c][2] for c in cols], dtype=float)
-            ub = np.array([sq.cells[c][3] for c in cols], dtype=float)
-            lb[~np.isfinite(lb)] = -1e20  # as driver._newton
-            ub[~np.isfinite(ub)] = 1e20
-            reltol = float(os.environ.get("EQUILIBRIA_GTAP_TR_RELTOL", "0") or 0.0)
-            ftol = float(os.environ.get("EQUILIBRIA_GTAP_TR_FTOL", "1e-7"))
+            try:
+                lb = np.array([sq.cells[c][2] for c in cols], dtype=float)
+                ub = np.array([sq.cells[c][3] for c in cols], dtype=float)
+                lb[~np.isfinite(lb)] = -1e20  # as driver._newton
+                ub[~np.isfinite(ub)] = 1e20
+                reltol = float(os.environ.get("EQUILIBRIA_GTAP_TR_RELTOL", "0") or 0.0)
+                ftol = float(os.environ.get("EQUILIBRIA_GTAP_TR_FTOL", "1e-7"))
 
-            def F(z):
-                return ss.F(np.clip(z, lb, ub))
+                def F(z):
+                    return ss.F(np.clip(z, lb, ub))
 
-            def J(z):
-                return ss.J(np.clip(z, lb, ub))
+                def J(z):
+                    return ss.J(np.clip(z, lb, ub))
 
-            self.calls[tag] = polish_call(
-                F,
-                J,
-                ss.fscale() if reltol > 0 else None,
-                np.asarray(res.x, dtype=float),
-                _ref_values(self.final, cols),
-                lb,
-                ub,
-                reltol=reltol,
-                ftol=ftol,
-                linsolve=self.linsolve,
-            )
+                info = polish_call(
+                    F,
+                    J,
+                    ss.fscale() if reltol > 0 else None,
+                    np.asarray(res.x, dtype=float),
+                    _ref_values(self.final, cols),
+                    lb,
+                    ub,
+                    reltol=reltol,
+                    ftol=ftol,
+                    linsolve=self.linsolve,
+                    names=cols,
+                )
+            except Exception as e:  # e.g. a column the reference does not have
+                info = {"passed": False, "error": f"{type(e).__name__}: {e}"}
+            info["n_polished_columns"] = len(cols)
+            self.calls[tag] = info
             self.columns[tag] = cols
-            self._pending = tag
+            self._pending = tag if "error" not in info else None
+            self.polish_s += time.perf_counter() - t
             return res, resid, code
 
         return _newton
 
     def wrap_post_solve(self, post_solve):
-        """After the real post-solve of a polished call, the same post-solve on two
-        copies, from our polished point and from the reference's: the report variables
-        (pfa, pfy, pm, ...) and the welfare tail are derived from the solution."""
+        """After the real post-solve of a polished call, the same post-solve on copies:
+        from our polished point and from the reference's (the cells compared polished:
+        the report variables pfa, pfy, pm, ... and the welfare tail derive from the
+        solution), and from the reference's RAW point, which must reproduce the
+        reference's raw derived cells within ``RTOL`` (``post_raw_*``): the family
+        post-solve then derives them as Pyomo's did."""
 
         def _post(mp, period, **kw):
             tag, self._pending = self._pending, None
@@ -380,25 +525,70 @@ class PolishRecorder:
                 return post_solve(mp, period, **kw)
             pre = mp.copy()
             out = post_solve(mp, period, **kw)
+            t = time.perf_counter()
             info = self.calls[tag]
-            a = post_solve(pre.copy(), period, **{**kw, "x": info["x_ours_polished"]})
-            b = post_solve(pre.copy(), period, **{**kw, "x": info["x_ref_polished"]})
-            cells = []
-            for name, v in out.vars.items():
-                va, vb, v0 = (
-                    a.vars[name].value,
-                    b.vars[name].value,
-                    pre.vars[name].value,
+            try:
+                runs = [
+                    post_solve(pre.copy(), period, **{**kw, "x": info[k]})
+                    for k in ("x_ours_polished", "x_ref_polished", "x_ref_raw")
+                ]
+                a, b, c = runs
+                cells = []
+                for name, v in out.vars.items():
+                    v0 = pre.vars[name].value
+                    with np.errstate(invalid="ignore"):
+                        changed = ~_same(v.value, v0)
+                        for r in runs:
+                            changed |= ~_same(r.vars[name].value, v0)
+                    idx = np.flatnonzero((v.period == period) & changed)
+                    if len(idx):
+                        keys = [v.keys[i] for i in idx.tolist()]
+                        cells.append(
+                            (
+                                name,
+                                keys,
+                                a.vars[name].value[idx].copy(),
+                                b.vars[name].value[idx].copy(),
+                                c.vars[name].value[idx].copy(),
+                            )
+                        )
+                self.cells[tag] = cells
+                colset = {_split(col) for col in self.columns.get(tag, [])}
+                rels, worst, missing = [], [], 0
+                for name, keys, _, _, vc in cells:
+                    fv = self.final.vars.get(name)
+                    if fv is None:
+                        missing += len(keys)
+                        continue
+                    pos = {tuple(map(str, k)): i for i, k in enumerate(fv.keys)}
+                    for k, x in zip(keys, vc, strict=True):
+                        sk = tuple(map(str, k))
+                        if (name, sk) in colset:
+                            continue  # a column: x_ref_raw itself
+                        i = pos.get(sk)
+                        if i is None:
+                            missing += 1
+                            continue
+                        r = float(_rel(np.array([x]), np.array([fv.value[i]]))[0])
+                        rels.append(r)
+                        worst.append((r, name, list(k), float(x), float(fv.value[i])))
+                worst.sort(key=lambda w: -w[0])
+                info["n_polished_columns"] = len(self.columns.get(tag, []))
+                info["n_polished_cells"] = sum(len(k) for _, k, *_ in cells)
+                info["post_raw_cells"] = len(rels)
+                info["post_raw_max_rel"] = max(rels, default=0.0)
+                info["post_raw_violations"] = sum(r > RTOL for r in rels) + missing
+                info["post_raw_worst"] = [
+                    {"rel": r, "var": n, "key": k, "ours": a_, "reference": b_}
+                    for r, n, k, a_, b_ in worst[:WORST_STEP]
+                ]
+                info["passed"] = bool(
+                    info["passed"] and info["post_raw_violations"] == 0
                 )
-                with np.errstate(invalid="ignore"):
-                    m = (v.period == period) & (
-                        ~_same(v.value, v0) | ~_same(va, v0) | ~_same(vb, v0)
-                    )
-                idx = np.flatnonzero(m)
-                if len(idx):
-                    keys = [v.keys[i] for i in idx.tolist()]
-                    cells.append((name, keys, va[idx].copy(), vb[idx].copy()))
-            self.cells[tag] = cells
+            except Exception as e:
+                info["passed"] = False
+                info["error"] = f"post-solve: {type(e).__name__}: {e}"
+            self.polish_s += time.perf_counter() - t
             return out
 
         return _post
@@ -484,7 +674,7 @@ def report(
         and all(c == 1 for k, c in codes.items() if k != "base")
         and all(r["code"] == 1 for r in ref_nit.values())
     )
-    calls = rec.calls if rec is not None else {}
+    calls = cross_check_calls(rec.calls, ref) if rec is not None else {}
     pol = compare(*polished_photos(res.mp, final, rec)) if rec is not None else out
     gate = polished_gate(
         raw_over=out["over_1e9"],
@@ -497,6 +687,7 @@ def report(
         calls=calls,
     )
     periods: dict[str, dict] = {}
+    skip = ("x_ours_polished", "x_ref_polished", "x_ref_raw")
     for p in PERIODS:
         periods[p] = {
             "raw_max_rel": out["max_rel_by_period"].get(p, 0.0),
@@ -504,24 +695,20 @@ def report(
         }
         info = calls.get(p)
         if info is not None:
-            periods[p].update(
-                {
-                    k: info[k]
-                    for k in (
-                        "residual_ours",
-                        "residual_reference",
-                        "residual_scaled_ours",
-                        "residual_scaled_reference",
-                        "residual_ok_ours",
-                        "residual_ok_reference",
-                        "passed",
-                    )
-                }
-            )
-            periods[p]["call_raw_max_rel"] = info["raw_max_rel"]
-            periods[p]["call_polished_max_rel"] = info["polished_max_rel"]
+            periods[p]["polished"] = True
+            periods[p].update({k: v for k, v in info.items() if k not in skip})
+            periods[p]["call_raw_max_rel"] = info.get("raw_max_rel")
+            periods[p]["call_polished_max_rel"] = info.get("polished_max_rel")
         else:
             periods[p]["polished"] = False  # not solved here: compared raw
+    periods["settle_check"] = {
+        "polished": False,  # settled.pkl has no full end point; base compared raw
+        "code": res.settle["check"].get("code"),
+        "nit": res.settle["check"].get("nit"),
+        "residual_ours": res.settle["check"].get("residual"),
+    }
+    timing = dict(getattr(res, "timing", {}))
+    timing["polish_s"] = rec.polish_s if rec is not None else 0.0
     return {
         "dataset": dataset,
         "gate_passed": bool(gate),
@@ -536,8 +723,10 @@ def report(
         "polished_max_rel": pol["max_rel"],
         "polished_worst_cells": pol["worst_cells"],
         "polished_over_1e9": pol["over_1e9"],
+        "polished_max_rel_by_component": pol["max_rel_by_component"],
+        "fixed_ub_lb": "raw: polishing changes values only",
         "periods": periods,
-        "timing": getattr(res, "timing", {}),
+        "timing": timing,
     }
 
 
@@ -617,9 +806,10 @@ def run(
     final = load(ref / "final.pkl")
     linsolve = (os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE") or "direct").lower()
     rec = PolishRecorder(final, linsolve)
-    newton, post = driver._newton, post_mod.post_solve
+    newton, post, period = driver._newton, post_mod.post_solve, driver._solve_period
     driver._newton = rec.wrap(newton)
     post_mod.post_solve = rec.wrap_post_solve(post)
+    driver._solve_period = rec.wrap_solve_period(period)
     try:
         t = time.perf_counter()
         res, code = _solve_shock(dataset, ifsub, savf, solve_nlp=True, backend="family")
@@ -627,10 +817,12 @@ def run(
     finally:
         driver._newton = newton
         post_mod.post_solve = post
+        driver._solve_period = period
     out = report(res, code, final, ref, dataset, rec)
     out.update(
         wall_s=wall,
         wall_min=wall / 60,
+        family_wall_s=wall - rec.polish_s,  # the run without the ladder's polish
         peak_rss_gb=peak_rss_gb(),
         sha=_git_sha(),
         linsolve=os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE"),

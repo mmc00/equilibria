@@ -308,6 +308,7 @@ def test_polished_points_that_differ_fail():
 def test_polished_gate_rules_the_report():
     s = _script()
     ok = {"passed": True}
+    both = {"check": ok, "shock": ok}
     base = {
         "raw_over": 3,
         "polished_over": 0,
@@ -315,15 +316,30 @@ def test_polished_gate_rules_the_report():
         "ub_diff": 0,
         "lb_diff": 0,
     }
-    assert s.polished_gate(**base, structure=[], codes_ok=True, calls={"check": ok})
+    assert s.polished_gate(**base, structure=[], codes_ok=True, calls=both)
     assert not s.polished_gate(
-        **{**base, "polished_over": 1}, structure=[], codes_ok=True, calls={"c": ok}
+        **{**base, "polished_over": 1}, structure=[], codes_ok=True, calls=both
     )
     assert not s.polished_gate(
-        **base, structure=[], codes_ok=True, calls={"check": {"passed": False}}
+        **base, structure=[], codes_ok=True, calls={**both, "shock": {"passed": False}}
     )
     assert not s.polished_gate(**base, structure=[], codes_ok=True, calls={})
-    assert not s.polished_gate(**base, structure=[], codes_ok=False, calls={"c": ok})
+    assert not s.polished_gate(**base, structure=[], codes_ok=False, calls=both)
+
+
+def test_polished_gate_needs_exactly_check_and_shock():
+    s = _script()
+    ok = {"passed": True}
+    base = {
+        "raw_over": 0,
+        "polished_over": 0,
+        "fixed_diff": 0,
+        "ub_diff": 0,
+        "lb_diff": 0,
+    }
+    kw = {**base, "structure": [], "codes_ok": True}
+    assert not s.polished_gate(**kw, calls={"check": ok})
+    assert not s.polished_gate(**kw, calls={"check": ok, "shock": ok, "call3": ok})
 
 
 def test_report_has_raw_and_polished_fields(ran):
@@ -375,3 +391,263 @@ def test_polished_photos_take_the_post_solve_cells_of_both_sides():
     assert out["over_1e9"] == 0 and out["max_rel"] == 0.0
     assert theirs.vars["pfy"].value[1] == 5.0  # untouched cell keeps its raw value
     assert final.vars["pfy"].value[0] == 1.0  # the photos themselves are not modified
+
+
+# ── fix round 1: polish steps, consistency, residual cross-check, post-solve ─
+
+
+def test_polish_reports_the_step_of_each_side():
+    F, J = _weak()
+    v = np.array([1.0, -1.0])
+    s = _script()
+    big = np.full(2, 1e20)
+    out = s.polish_call(
+        F,
+        J,
+        np.ones(2),
+        np.ones(2) + 1e-6 * v,
+        np.ones(2) - 1e-6 * v,
+        -big,
+        big,
+        reltol=1e-6,
+        ftol=1e-7,
+        linsolve="direct",
+        names=["a[r,shock]", "b[r,shock]"],
+    )
+    assert out["step_rel_ours"] == pytest.approx(1e-6, rel=1e-3)
+    assert out["step_rel_reference"] == pytest.approx(1e-6, rel=1e-3)
+    w = out["step_worst_ours"][0]
+    assert w["col"] in ("a[r,shock]", "b[r,shock]") and w["rel"] > 0
+
+
+def test_raw_gap_explained_by_the_steps_has_no_violations():
+    F, J = _weak()
+    v = np.array([1.0, -1.0])
+    out = _polish(F, J, np.ones(2) + 1e-6 * v, np.ones(2) - 1e-6 * v)
+    assert out["consistency_violations"] == 0
+
+
+def test_raw_gap_not_explained_by_the_steps_is_a_violation():
+    import scipy.sparse as sp
+
+    def F(x):
+        return np.array([x[0] ** 2 - 1.0])
+
+    def J(x):
+        return sp.csr_matrix(np.array([[2.0 * x[0]]]))
+
+    out = _polish(F, J, [1.0 + 1e-8], [-1.0 - 1e-8])
+    assert out["consistency_violations"] == 1
+    assert out["passed"] is False
+
+
+def test_residual_cross_check_tolerance():
+    s = _script()
+    assert s.crosscheck_residual(3.897036984779e-8, 3.897036987554614e-08)
+    assert s.crosscheck_residual(1.41016e-12, 1.41015e-12)  # noise near zero: atol
+    assert not s.crosscheck_residual(3.9e-8, 3.0e-8)
+    assert not s.crosscheck_residual(2e-6, 1e-6)
+
+
+def test_cross_check_against_the_reference_s_file(tmp_path):
+    s = _script()
+    (tmp_path / "005_S_shock.json").write_text(
+        json.dumps(
+            {"trace_f_inf": [0.6, 3.897e-8], "trace_f_scaled_inf": [0.18, 3.896e-8]}
+        )
+    )
+    good = {
+        "passed": True,
+        "residual_reference": 3.897e-8,
+        "residual_scaled_reference": 3.896e-8,
+    }
+    out = s.cross_check_calls({"shock": dict(good)}, tmp_path)
+    assert out["shock"]["crosscheck_ok"] is True and out["shock"]["passed"] is True
+    assert out["shock"]["pyomo_residual"] == 3.897e-8
+    bad = {**good, "residual_reference": 5e-8}
+    out = s.cross_check_calls({"shock": bad}, tmp_path)
+    assert out["shock"]["crosscheck_ok"] is False and out["shock"]["passed"] is False
+    out = s.cross_check_calls({"check": dict(good)}, tmp_path)  # no 004 S file
+    assert out["check"]["passed"] is False and "error" in out["check"]
+
+
+def test_singular_jacobian_is_recorded_not_raised():
+    import scipy.sparse as sp
+
+    s = _script()
+    big = np.full(2, 1e20)
+    out = s.polish_call(
+        lambda x: np.array([x[0] + x[1] - 2.0, x[0] + x[1] - 2.0]),
+        lambda x: sp.csr_matrix(np.ones((2, 2))),
+        np.ones(2),
+        np.ones(2),
+        np.ones(2),
+        -big,
+        big,
+        reltol=1e-6,
+        ftol=1e-7,
+        linsolve="direct",
+    )
+    assert out["passed"] is False and out["error"]
+
+
+def test_nan_residual_is_recorded_not_raised():
+    F, J = _weak()
+    out = _polish(lambda x: np.array([np.nan, 0.0]), J, np.ones(2), np.ones(2))
+    assert out["passed"] is False and "error" in out
+
+
+class _FV:
+    def __init__(self, keys, value):
+        self.keys = keys
+        self.value = np.array(value, dtype=float)
+        self.fixed = np.zeros(len(keys), dtype=bool)
+        self.lb = np.full(len(keys), -np.inf)
+        self.ub = np.full(len(keys), np.inf)
+        self.period = np.array([k[-1] for k in keys], dtype=object)
+
+    def pos(self, k):
+        return self.keys.index(k)
+
+
+class _FMP:
+    def __init__(self, vars_):
+        self.vars = vars_
+
+    def copy(self):
+        return _FMP(
+            {n: _FV(list(v.keys), v.value.copy()) for n, v in self.vars.items()}
+        )
+
+
+def _fake_post(mp, period, *, x, sq=None, **kw):
+    mp.vars["x"].value[0] = x[0]  # the column
+    mp.vars["d"].value[0] = 2.0 * x[0]  # derived from it
+    return mp
+
+
+def _post_recorder(final_d):
+    s = _script()
+    final = _FMP(
+        {"x": _FV([("r", "shock")], [1.0]), "d": _FV([("r", "shock")], [final_d])}
+    )
+    rec = s.PolishRecorder(final, "direct")
+    rec.calls["shock"] = {
+        "passed": True,
+        "x_ours_polished": np.array([1.5]),
+        "x_ref_polished": np.array([1.5]),
+        "x_ref_raw": np.array([1.0]),
+    }
+    rec.columns["shock"] = ["x[r,shock]"]
+    rec._pending = "shock"
+    mp = _FMP({"x": _FV([("r", "shock")], [0.0]), "d": _FV([("r", "shock")], [0.0])})
+    out = rec.wrap_post_solve(_fake_post)(mp, "shock", x=np.array([1.0]), sq=object())
+    return rec, out
+
+
+def test_wrap_post_solve_reproduces_the_reference_derived_cells():
+    rec, out = _post_recorder(final_d=2.0)
+    info = rec.calls["shock"]
+    assert out.vars["d"].value[0] == 2.0  # the real post-solve ran on ``mp``
+    assert info["post_raw_max_rel"] == 0.0 and info["post_raw_violations"] == 0
+    assert info["passed"] is True
+    cells = {r[0]: (r[2][0], r[3][0]) for r in rec.cells["shock"]}
+    assert cells["d"] == (3.0, 3.0)  # both sides from their polished x
+    assert info["n_polished_columns"] == 1 and info["n_polished_cells"] == 2
+
+
+def test_wrap_post_solve_flags_a_derived_cell_off_the_reference():
+    rec, _ = _post_recorder(final_d=2.0 + 1e-6)
+    info = rec.calls["shock"]
+    assert info["post_raw_violations"] == 1 and info["passed"] is False
+
+
+def test_calls_are_tagged_by_the_driver_period_tag():
+    import types
+
+    s = _script()
+    rec = s.PolishRecorder(_FMP({}), "direct")
+    seen = []
+
+    def solve_period(run, mp, period, **kw):
+        seen.append(rec._tag)
+        return mp, {}
+
+    wrapped = rec.wrap_solve_period(solve_period)
+    wrapped(None, None, "check", tag="settle_check")
+    wrapped(None, None, "check")
+    wrapped(None, None, "shock")
+    assert seen == ["settle_check", "check", "shock"] and rec._tag is None
+    del types
+
+
+def test_missing_reference_column_is_recorded_not_raised():
+    import types
+
+    s = _script()
+    rec = s.PolishRecorder(_FMP({"x": _FV([("r", "shock")], [1.0])}), "direct")
+
+    class SS:
+        def F(self, z):
+            return np.zeros(2)
+
+        def J(self, z):
+            return np.eye(2)
+
+        def fscale(self):
+            return np.ones(2)
+
+    sq = types.SimpleNamespace(
+        col_names=["x[r,shock]", "gone[r,shock]"],
+        cells={
+            "x[r,shock]": (0, 0, -np.inf, np.inf),
+            "gone[r,shock]": (0, 0, -np.inf, np.inf),
+        },
+    )
+    res = types.SimpleNamespace(x=np.ones(2))
+    rec._tag = "shock"
+    rec.wrap(lambda ss, sq: (res, 0.0, 1))(SS(), sq)
+    assert (
+        rec.calls["shock"]["passed"] is False and "gone" in rec.calls["shock"]["error"]
+    )
+
+
+def test_report_without_a_recorder_fails_the_gate(ran):
+    s, _, _, ref = ran
+    import types
+
+    from equilibria.family.prep_capture import load
+
+    final = load(ref / "final.pkl")
+    res = types.SimpleNamespace(
+        mp=_mp_of(final),
+        results={
+            "base": {"code": 1},
+            "check": {"code": 1, "nit": 2},
+            "shock": {"code": 1, "nit": 3},
+        },
+        settle={"check": {"code": 1, "nit": 2}},
+    )
+    out = s.report(res, 1, final, ref, "gtap7_3x3", None)
+    assert out["gate_passed"] is False
+
+
+def test_report_json_has_the_fix_round_fields(ran):
+    _, _, out, _ = ran
+    for p in ("check", "shock"):
+        c = out["periods"][p]
+        assert c["polished"] is True
+        for k in (
+            "step_rel_ours",
+            "step_rel_reference",
+            "consistency_violations",
+            "crosscheck_ok",
+            "pyomo_residual",
+            "post_raw_max_rel",
+            "n_polished_columns",
+            "n_polished_cells",
+        ):
+            assert k in c, k
+    assert out["periods"]["settle_check"]["polished"] is False
+    assert "polished_max_rel_by_component" in out
+    assert out["timing"]["polish_s"] >= 0 and "family_wall_s" in out
