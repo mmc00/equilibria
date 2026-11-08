@@ -37,6 +37,15 @@ GAMS_MODEL_DIR = DATA_ROOT / "gtap7" / "gams"
 # The scripts that generate GAMS results live with the model, so the model
 # folder hash every result records covers them too.
 GAMS_TOOLS_DIR = GAMS_MODEL_DIR / "tools"
+# Drivers that only list the jobs and run, for each, a command its source.yaml
+# records whole. Adding a dataset to a list changes no recorded result, so they
+# are not inputs: no record hashes them and none is checked against them.
+JOB_LISTS = frozenset(
+    {
+        "gtap7/gams/tools/regenerate_gams.py",
+        "gtap7/gempack/tools/regenerate_gempack.py",
+    }
+)
 
 _ALLOWED = frozenset(
     {
@@ -327,6 +336,19 @@ def own_files(folder: Path) -> list[Path]:
     ]
 
 
+def _is_job_list(path: Path, root: Path) -> bool:
+    try:
+        return path.relative_to(root).as_posix() in JOB_LISTS
+    except ValueError:
+        return False
+
+
+def input_files(folder: Path, root: Path = DATA_ROOT) -> list[Path]:
+    """The files of ``folder`` a result records as its inputs: own_files() less
+    the job lists (JOB_LISTS)."""
+    return [p for p in own_files(folder) if not _is_job_list(p, root)]
+
+
 def check_tree(root: Path = DATA_ROOT, *, allow_pending: bool = False) -> list[str]:
     """Every problem under ``root``, one message each; empty when clean.
 
@@ -420,6 +442,8 @@ def _check_inputs(root: Path, where: Path, inputs: Mapping[str, Any]) -> list[st
         files = {"": hashes} if isinstance(hashes, str) else hashes
         for rel, expected in files.items():
             f = base / rel if rel else base
+            if _is_job_list(f, root):
+                continue  # recorded before JOB_LISTS existed; not an input
             if not f.exists():
                 msgs.append(f"{where}: input {name} {f.relative_to(root)} is missing")
             elif sha256_file(f) != expected:
