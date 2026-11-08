@@ -10,6 +10,9 @@ compares the three periods with ``<reference>/final.pkl`` (default
 capFix). Refuses a reference whose S files carry another ``closure`` (none = ifsub=1
 capFix gtap).
 
+Run with the MUMPS Python, from the worktree, so it does not import the main checkout:
+``PYTHONPATH=<worktree>/src:<worktree> <python with pymumps> scripts/family/parity_ladder.py DATASET``.
+
 Gate (exit 1 when it fails; user answer 8, 2026-11-07, the polished-root gate, with the
 fix-round-1 checks). The solved calls of the main loop, tagged by the driver's own
 ``_solve_period`` tag, must be exactly ``check`` and ``shock``. For each:

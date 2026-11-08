@@ -4,6 +4,9 @@
         [--out DIR]
         [--ifsub {0,1}] [--savf {capFix,capFlex}] [--mode gtap] [--keep {all,gate}]
 
+Run it with ``PYTHONPATH=<worktree>/src:<worktree>`` set (without it the MUMPS Python
+imports the main checkout instead of this worktree).
+
 Same child run as ``capture_prep.py`` (``_solve_shock`` of the requested closure,
 (1, capFix) by default, ``solve_nlp=True``, under ``NEWTON_MUMPS``) into
 ``~/.cache/equilibria/family/reference/<dataset>/<closure_tag>/`` by default

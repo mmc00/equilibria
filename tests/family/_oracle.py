@@ -136,6 +136,7 @@ def _stamped_copy(p: Any, closure: Any, dataset: str, if_sub: bool) -> Any:
 
         gdx = _reference_gdx(dataset, int(if_sub))
     finally:
+        # ``_diff_core`` (and the parity module) stay in sys.modules after this restore
         sys.path[:] = saved
     if gdx is None or not gdx.exists():
         pytest.skip(f"no GAMS reference GDX for {dataset}")
