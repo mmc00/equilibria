@@ -440,14 +440,15 @@ def test_prepare_run_leaves_the_freeze_count_alone_by_default(monkeypatch):
 
     seen = {}
     params, _keep = _stub_prepare_run(monkeypatch, seen)
-    gc.unfreeze()
-    before = gc.get_freeze_count()
-    try:
-        drv.prepare_run(params, None, "R", jax_cache=False)
-        assert gc.get_freeze_count() == before
-        assert seen["at_mp_build"] == before
-    finally:
-        gc.unfreeze()
+    # a spy, not gc.get_freeze_count(): an automatic gen-2 collection can change the count
+    frozen = []
+    real_now = drv._gc_freeze_now
+    monkeypatch.setattr(
+        drv, "_gc_freeze_now", lambda e=True: (frozen.append(e), real_now(e))
+    )
+    monkeypatch.setattr(gc, "freeze", lambda: frozen.append("gc.freeze"))
+    drv.prepare_run(params, None, "R", jax_cache=False)
+    assert frozen == [False]  # asked with freezing off; gc.freeze never reached
 
 
 def test_solve_family_passes_freeze_from_env(monkeypatch):
