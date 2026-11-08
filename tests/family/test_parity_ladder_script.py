@@ -651,3 +651,34 @@ def test_report_json_has_the_fix_round_fields(ran):
     assert out["periods"]["settle_check"]["polished"] is False
     assert "polished_max_rel_by_component" in out
     assert out["timing"]["polish_s"] >= 0 and "family_wall_s" in out
+
+
+def test_report_after_a_failed_polish_writes_the_json(ran, tmp_path):
+    """A call recorded ``passed: False, error`` has no polished points: the report
+    keeps its raw cells, fails the gate and the JSON is still written."""
+    import types
+
+    from equilibria.family.prep_capture import load
+
+    s, _, _, ref = ran
+    final = load(ref / "final.pkl")
+    res = types.SimpleNamespace(
+        mp=_mp_of(final),
+        results={
+            "base": {"code": 1},
+            "check": {"code": 1, "nit": 2},
+            "shock": {"code": 1, "nit": 3},
+        },
+        settle={"check": {"code": 1, "nit": 2}},
+    )
+    rec = s.PolishRecorder(final, "direct")
+    for tag in ("check", "shock"):
+        rec.calls[tag] = {"passed": False, "error": "RuntimeError: singular"}
+        rec.columns[tag] = []
+    out = s.report(res, 1, final, ref, "gtap7_3x3", rec)
+    f = tmp_path / "r.json"
+    f.write_text(json.dumps(out, indent=1, default=str))
+    back = json.loads(f.read_text())
+    assert back["gate_passed"] is False
+    assert back["periods"]["shock"]["error"] == "RuntimeError: singular"
+    assert back["polished_max_rel"] == back["raw_max_rel"]  # nothing was polished

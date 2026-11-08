@@ -53,6 +53,12 @@ and polished max rel and, per polished call, the residuals, steps, consistency, 
 and post-solve fields, plus a raw ``settle_check`` entry. ``timing.polish_s`` is the
 ladder's own polish time and ``family_wall_s`` the run without it. Newton iteration counts
 are reported (ours vs the reference S files), never a gate.
+
+Limits of what the gate certifies:
+* the family F is checked against Pyomo only through the max-norm residual at the
+  reference end point (iii), so rows that live only in the shock are certified down to
+  Pyomo's max residual there (~3.9e-8 at 20x41), not row by row below it;
+* the settle is not polished, so the base period is compared raw.
 """
 
 from __future__ import annotations
@@ -635,15 +641,18 @@ def _with_cells(vars_: dict, cells: list[tuple], side: int) -> dict:
 def polished_photos(mp, final, rec: PolishRecorder):
     """``(mp, final)`` with each solved call's cells at their polished values: the
     columns and what the post-solve derives from them (``rec.cells``), else the
-    columns alone."""
+    columns alone. A call whose polish failed (``error``, no polished points) keeps its
+    raw cells; its ``passed: False`` already fails the gate."""
     import types
 
     ours, theirs = dict(mp.vars), dict(final.vars)
     for tag, info in rec.calls.items():
+        if "error" in info:
+            continue
         if tag in rec.cells:
             ours = _with_cells(ours, rec.cells[tag], 2)
             theirs = _with_cells(theirs, rec.cells[tag], 3)
-        else:
+        elif "x_ours_polished" in info:
             cols = rec.columns[tag]
             ours = _with_values(ours, cols, info["x_ours_polished"])
             theirs = _with_values(theirs, cols, info["x_ref_polished"])
