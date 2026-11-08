@@ -185,8 +185,10 @@ changes:
 - file: tools/regenerate_gams.py
   change: added
   what: runs the matrix of local GAMS jobs under write_source (moved from scripts/gtap/)
-  why: generates GAMS results from this model, so it lives with it and the model-folder
-    sha256 every result records covers it (phase 2b, maintainer 2026-10-30)
+  why: 'generates GAMS results from this model, so it lives with it (phase 2b, maintainer
+    2026-10-30). It only lists the jobs, each recorded with its whole command, so it
+    is in sources.JOB_LISTS and no result hashes it; adding a dataset leaves the other
+    results verified (maintainer 2026-11-07)'
   commit: 55c915a, this change
 - file: tools/neos_job.py
   change: added
@@ -258,6 +260,6 @@ outputs:
   tools/nus333_bundle.py: cd215e1944853b2f9c50bdd63d1741cc152a10647f70874ec7430dbb92a2a2c6
   tools/regen_gams_reference.py: f816612856449809cfd925110821fbbe2e717e66543f633a742a49a358a5b5ee
   tools/regen_nus333.py: d55522291bf4fdd1a5503a663c690ec949292e4408e916bf58ee841e18450c21
-  tools/regenerate_gams.py: f08ebf23befbbc1003f143afcd714b9cb92f880cee334288b2b6984a5844e4e3
+  tools/regenerate_gams.py: 5a22598c5f958181d9bba1c2f5ef1b306acc1a8f0b7764be8a59d8fe5972bb8e
 status: verified
 notes: ''

@@ -99,7 +99,9 @@ def test_tools_change_the_model_hash(tmp_path: Path) -> None:
     copy = tmp_path / "gams"
     shutil.copytree(GAMS_MODEL_DIR, copy)
     before = _model_hashes(copy)
-    tool = copy / "tools" / "regenerate_gams.py"
+    # regen_gams_reference.py solves each job; the job list itself (JOB_LISTS) is
+    # not a result input, see test_sources_job_lists.py
+    tool = copy / "tools" / "regen_gams_reference.py"
     tool.write_text(tool.read_text() + "\n# edited\n")
     assert _model_hashes(copy) != before
 

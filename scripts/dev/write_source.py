@@ -37,6 +37,7 @@ from equilibria.sources import (
     SOURCE_FILE,
     check_derived,
     load_source,
+    input_files,
     own_files,
     sha256_file,
 )
@@ -152,9 +153,12 @@ def _hashed(path: Path, root: Path) -> dict[str, Any]:
     p = path.resolve()
     return {
         "path": p.relative_to(root).as_posix(),
-        # a folder: every file, so an edited include makes it stale
+        # a folder: every file but the job lists, so an edited include makes it stale
         "sha256": (
-            {f.relative_to(p).as_posix(): sha256_file(f) for f in own_files(p)}
+            {
+                f.relative_to(p).as_posix(): sha256_file(f)
+                for f in input_files(p, root.resolve())
+            }
             if p.is_dir()
             else sha256_file(p)
         ),
