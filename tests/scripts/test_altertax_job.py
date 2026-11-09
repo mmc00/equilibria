@@ -70,6 +70,8 @@ def test_recorded_parameters(dataset: str, parameters: str) -> None:
     )
     worst = job.check_rates(folder / "updated.har", DATA_ROOT / "gtap7" / dataset / "basedata.har")
     assert worst < 1e-4
+    for name in ("updated.har", "decomp.har", "sl4dump.har", *job.EXTRA_OUTPUTS):
+        assert (folder / name).stat().st_size > 0, name
 
 
 @pytest.mark.parametrize("dataset", DATASETS)

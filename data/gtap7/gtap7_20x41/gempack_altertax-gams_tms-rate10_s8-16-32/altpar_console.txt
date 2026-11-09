@@ -147,7 +147,7 @@ programa o archivo por lotes ejecutable.
    [Set has size 5.]
  Set 'ENDWT'
    [Set has size 3.]
- [CPU for reads, formulas etc is 0.02 seconds.]
+ [CPU for reads, formulas etc is 0.00 seconds.]
  Elapsed time for reads, formulas etc is: less than one second.
    (1 character strings, each of length 1 read. Header "SVFM")
  
@@ -207,7 +207,7 @@ programa o archivo por lotes ejecutable.
   Formula for 'ENDOWFLAG'
  Writing ENDOWFLAG(ENDW,ENDWT)
  (Written real array, size 5x3, header "EFLG".)
- [CPU for reads, formulas etc is 0.00 seconds.]
+ [CPU for reads, formulas etc is 0.02 seconds.]
  Elapsed time for reads, formulas etc is: less than one second.
  [CPU for all of this 0-step calculation is 0.02 seconds.]
  Elapsed time for all this 0-step calculation is: less than one second.
@@ -218,4 +218,4 @@ programa o archivo por lotes ejecutable.
   (The program has completed without error.)
   (The program has completed without warnings.)
   
-  Total elapsed time is:  1 seconds.
+  Total elapsed time is: less than one second.

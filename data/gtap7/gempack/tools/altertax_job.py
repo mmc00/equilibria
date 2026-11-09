@@ -51,6 +51,7 @@ STEPS = "8 16 32"
 PRM_NAME = "parameters.prm"
 SHOCK_NAME = "tms_rate10.shk"
 INPUTS = ("sets.har", "basedata.har", "default.prm")
+EXTRA_OUTPUTS = ("summary.har", "volume.har")  # GTAPSUM and GTAPVOL of run.cmf
 
 # Headers of parameters=gams taken from what altparv7 wrote; the rest stay default.prm.
 GAMS_FROM_ALTPAR = ("ESBV", "ESBT", "ESBC", "ETRE", "ESBD", "ESBM", "EFLG")
@@ -296,6 +297,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"FAILED {name}: sltoht produced no sl4dump", file=sys.stderr)
             return 1
         written = collect_job(run_dir, TAG, out)
+        # collect_job's list predates these two; a missing one fails the job
+        for file in EXTRA_OUTPUTS:
+            shutil.copy2(run_dir / file, out / file)
+            written.append(file)
         shutil.copy2(prm, out / PRM_NAME)
         shutil.copy2(run_dir / SHOCK_NAME, out / SHOCK_NAME)
         shutil.copy2(altpar_console, out / altpar_console.name)

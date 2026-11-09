@@ -72,7 +72,7 @@
  altertax
  (Opened, as binary, existing file 'altertax.sl4'.)
   
-  !  This file was created at 10:14:27 on 09-NOV-2026 by the program
+  !  This file was created at 11:22:14 on 09-NOV-2026 by the program
   !    <gtapv7.for 09-SEP-2020> [gtapv7.tab]
   !  which accesses some of the routines in the GEMPACK software release
   !    <GEMPACK Release 12.1.003   January 2020>

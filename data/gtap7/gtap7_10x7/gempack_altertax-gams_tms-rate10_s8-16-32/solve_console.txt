@@ -1047,7 +1047,7 @@ programa o archivo por lotes ejecutable.
   Formula for 'C00487'
   Formula for 'C00488'
   Formula for 'C00489'
- [CPU for reads, formulas etc is 0.08 seconds.]
+ [CPU for reads, formulas etc is 0.06 seconds.]
  Elapsed time for reads, formulas etc is: less than one second.
  
   (Writing the Solution Coefficients (SLC) file.)
@@ -2383,7 +2383,7 @@ programa o archivo por lotes ejecutable.
      (Number of nonzeros is 7, all on the LHS.)
  [CPU for equations is 0.00 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.09 seconds.]
+ [CPU for formulas and equations is 0.08 seconds.]
  Elapsed time for formulas and equations is: less than one second.
  
   CUMULATIVELY-RETAINED ENDOGENOUS
@@ -2435,10 +2435,10 @@ programa o archivo por lotes ejecutable.
   [Add about 5-10 megabytes for the memory used by the code.]
   [Total memory currently allocated for Coefficients and Updated
    Coefficients is about        0.2 and        0.0 MB respectively.]
-   [CPU time for MA48B is 0.02 seconds.]
+   [CPU time for MA48B is 0.03 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 118100.)
-  [CPU time for LU decomposition is 0.05 seconds.]
+  [CPU time for LU decomposition is 0.06 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
@@ -2446,10 +2446,10 @@ programa o archivo por lotes ejecutable.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Second cumulative solution obtained.)
-  [CPU time for MA48C/MA28I is 0.00 seconds.]
+  [CPU time for MA48C/MA28I is 0.02 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Third cumulative solution obtained.)
- [CPU for simulation is 0.09 seconds.]
+ [CPU for simulation is 0.12 seconds.]
  Elapsed time for simulation is: less than one second.
  Elapsed time to do up to first solve (this subinterval) is
    less than one second.
@@ -2577,7 +2577,7 @@ programa o archivo por lotes ejecutable.
  
   (Writing the Data Work file.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 1 is 0.19 seconds.]
+  [CPU for step 1 is 0.20 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 1 is: less than one second.
  
@@ -2610,27 +2610,27 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.02 seconds.]
+   [CPU time for GPLU analysis is 0.03 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 118100.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 2 of this 9-pass calculation.)
-  [CPU for backsolve is 0.00 seconds.]
+  [CPU for backsolve is 0.02 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 2 of this 9-pass calculation.)
-  [CPU for update is 0.02 seconds.]
-  [CPU for step 2 is 0.03 seconds.]
+  [CPU for update is 0.00 seconds.]
+  [CPU for step 2 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 2 is: less than one second.
  
@@ -2663,18 +2663,18 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.02 seconds.]
+   [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 118100.)
   [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
-  [CPU time for MA48C/MA28I is 0.00 seconds.]
+  [CPU time for MA48C/MA28I is 0.02 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 3 of this 9-pass calculation.)
@@ -2683,7 +2683,7 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 3 of this 9-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 3 is 0.02 seconds.]
+  [CPU for step 3 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 3 is: less than one second.
  
@@ -2731,24 +2731,24 @@ programa o archivo por lotes ejecutable.
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 4 of this 9-pass calculation.)
-  [CPU for backsolve is 0.02 seconds.]
+  [CPU for backsolve is 0.00 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 4 of this 9-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 4 is 0.03 seconds.]
+  [CPU for step 4 is 0.02 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 4 is: less than one second.
  
   --->  Beginning pass number 5 of 9-pass calculation.
   [Copying all updated values for use in this pass.]
- [CPU for reads, formulas etc is 0.00 seconds.]
+ [CPU for reads, formulas etc is 0.02 seconds.]
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
  [CPU for equations is 0.00 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.00 seconds.]
+ [CPU for formulas and equations is 0.02 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 41368 nonzeros in those parts of
       the equations calculated for this step.)
@@ -2771,18 +2771,18 @@ programa o archivo por lotes ejecutable.
   Failed Reusing pivots in subblock 212 for pivot 1309 out of 2231
      The pivot elements stability of 0.10000 is less than GPLUHarwellReuseU
   Only part of previous pivots have been reused
-   [CPU time for GPLU analysis is 0.02 seconds.]
+   [CPU time for GPLU analysis is 0.03 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
-  [CPU time for MA48C/MA28I is 0.00 seconds.]
+  [CPU time for MA48C/MA28I is 0.02 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.05 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 5 of this 9-pass calculation.)
@@ -2790,20 +2790,20 @@ programa o archivo por lotes ejecutable.
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 5 of this 9-pass calculation.)
-  [CPU for update is 0.02 seconds.]
-  [CPU for step 5 is 0.03 seconds.]
+  [CPU for update is 0.00 seconds.]
+  [CPU for step 5 is 0.06 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 5 is: less than one second.
  
   --->  Beginning pass number 6 of 9-pass calculation.
   [Copying all updated values for use in this pass.]
- [CPU for reads, formulas etc is 0.00 seconds.]
+ [CPU for reads, formulas etc is 0.02 seconds.]
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
  [CPU for equations is 0.00 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.00 seconds.]
+ [CPU for formulas and equations is 0.02 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 41368 nonzeros in those parts of
       the equations calculated for this step.)
@@ -2824,18 +2824,18 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.00 seconds.]
+  [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.02 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 6 of this 9-pass calculation.)
@@ -2844,7 +2844,7 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 6 of this 9-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 6 is 0.02 seconds.]
+  [CPU for step 6 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 6 is: less than one second.
  
@@ -2888,18 +2888,18 @@ programa o archivo por lotes ejecutable.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 7 of this 9-pass calculation.)
   [CPU for backsolve is 0.00 seconds.]
-  Elapsed time for backsolve is: less than one second.
+  Elapsed time for backsolve is:  1 seconds.
  
   (Beginning the update after pass 7 of this 9-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 7 is 0.02 seconds.]
-  Elapsed time for update is: less than one second.
-  Elapsed time for step 7 is: less than one second.
+  [CPU for step 7 is 0.05 seconds.]
+  Elapsed time for update is:  1 seconds.
+  Elapsed time for step 7 is:  1 seconds.
  
   --->  Beginning pass number 8 of 9-pass calculation.
   [Copying all updated values for use in this pass.]
@@ -2930,15 +2930,15 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.02 seconds.]
+   [CPU time for GPLU analysis is 0.03 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
-  [CPU time for MA48C/MA28I is 0.02 seconds.]
+  [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
  [CPU for simulation is 0.03 seconds.]
@@ -2960,9 +2960,9 @@ programa o archivo por lotes ejecutable.
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
- [CPU for equations is 0.00 seconds.]
+ [CPU for equations is 0.02 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.00 seconds.]
+ [CPU for formulas and equations is 0.02 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 41368 nonzeros in those parts of
       the equations calculated for this step.)
@@ -2986,15 +2986,15 @@ programa o archivo por lotes ejecutable.
    [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.00 seconds.]
+   [CPU time for MA48B is 0.02 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 9 of this 9-pass calculation.)
@@ -3004,14 +3004,14 @@ programa o archivo por lotes ejecutable.
   (Beginning the update after pass 9 of this 9-pass calculation.)
  
   (Writing the UC5/6/7 file.)
-  [CPU for update is 0.02 seconds.]
-  [CPU for step 9 is 0.03 seconds.]
+  [CPU for update is 0.03 seconds.]
+  [CPU for step 9 is 0.08 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 9 is: less than one second.
  Elapsed time to do after-first-LU-decomp part
-  of this 9-pass calculation is: less than one second.
- [CPU for all of this 8-step calculation is 0.39 seconds.]
- Elapsed time for all this 8-step calculation is: less than one second.
+  of this 9-pass calculation is:  1 seconds.
+ [CPU for all of this 8-step calculation is 0.58 seconds.]
+ Elapsed time for all this 8-step calculation is:  1 seconds.
  
   --->  Beginning pass number 1 of 17-pass calculation.
  [CPU for simulation is 0.00 seconds.]
@@ -3020,12 +3020,12 @@ programa o archivo por lotes ejecutable.
   (Beginning the backsolve after pass 1 of this 17-pass calculation.)
  
   (Reading pre-sim values from the current SLC file.)
-  [CPU for backsolve is 0.06 seconds.]
+  [CPU for backsolve is 0.08 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 1 of this 17-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 1 is 0.06 seconds.]
+  [CPU for step 1 is 0.08 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 1 is: less than one second.
  
@@ -3061,15 +3061,15 @@ programa o archivo por lotes ejecutable.
    [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.00 seconds.]
+   [CPU time for MA48B is 0.02 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 2 of this 17-pass calculation.)
@@ -3078,19 +3078,19 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 2 of this 17-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 2 is 0.02 seconds.]
+  [CPU for step 2 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 2 is: less than one second.
  
   --->  Beginning pass number 3 of 17-pass calculation.
   [Copying all updated values for use in this pass.]
- [CPU for reads, formulas etc is 0.00 seconds.]
+ [CPU for reads, formulas etc is 0.02 seconds.]
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
  [CPU for equations is 0.00 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.00 seconds.]
+ [CPU for formulas and equations is 0.02 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 41368 nonzeros in those parts of
       the equations calculated for this step.)
@@ -3111,27 +3111,27 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.00 seconds.]
+  [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
-  [CPU time for MA48C/MA28I is 0.02 seconds.]
+  [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.03 seconds.]
+ [CPU for simulation is 0.02 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 3 of this 17-pass calculation.)
-  [CPU for backsolve is 0.00 seconds.]
+  [CPU for backsolve is 0.02 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 3 of this 17-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 3 is 0.03 seconds.]
+  [CPU for step 3 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 3 is: less than one second.
  
@@ -3167,24 +3167,24 @@ programa o archivo por lotes ejecutable.
    [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.00 seconds.]
+   [CPU time for MA48B is 0.02 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 4 of this 17-pass calculation.)
-  [CPU for backsolve is 0.00 seconds.]
+  [CPU for backsolve is 0.02 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 4 of this 17-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 4 is 0.02 seconds.]
+  [CPU for step 4 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 4 is: less than one second.
  
@@ -3220,12 +3220,12 @@ programa o archivo por lotes ejecutable.
    [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.00 seconds.]
+   [CPU time for MA48B is 0.02 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
-  [CPU time for MA48C/MA28I is 0.02 seconds.]
+  [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
  [CPU for simulation is 0.03 seconds.]
@@ -3278,19 +3278,19 @@ programa o archivo por lotes ejecutable.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
   [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
-  [CPU time for MA48C/MA28I is 0.02 seconds.]
+  [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
  [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 6 of this 17-pass calculation.)
-  [CPU for backsolve is 0.00 seconds.]
+  [CPU for backsolve is 0.02 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 6 of this 17-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 6 is 0.03 seconds.]
+  [CPU for step 6 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 6 is: less than one second.
  
@@ -3323,18 +3323,18 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.00 seconds.]
+  [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
-  [CPU time for MA48C/MA28I is 0.02 seconds.]
+  [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.03 seconds.]
+ [CPU for simulation is 0.02 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 7 of this 17-pass calculation.)
@@ -3343,7 +3343,7 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 7 of this 17-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 7 is 0.03 seconds.]
+  [CPU for step 7 is 0.02 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 7 is: less than one second.
  
@@ -3376,18 +3376,18 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.02 seconds.]
+   [CPU time for GPLU analysis is 0.03 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 8 of this 17-pass calculation.)
@@ -3396,7 +3396,7 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 8 of this 17-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 8 is 0.02 seconds.]
+  [CPU for step 8 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 8 is: less than one second.
  
@@ -3429,18 +3429,18 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.02 seconds.]
+   [CPU time for GPLU analysis is 0.03 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 9 of this 17-pass calculation.)
@@ -3449,7 +3449,7 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 9 of this 17-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 9 is 0.02 seconds.]
+  [CPU for step 9 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 9 is: less than one second.
  
@@ -3459,7 +3459,7 @@ programa o archivo por lotes ejecutable.
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
- [CPU for equations is 0.02 seconds.]
+ [CPU for equations is 0.00 seconds.]
  Elapsed time for equations is: less than one second.
  [CPU for formulas and equations is 0.02 seconds.]
  Elapsed time for formulas and equations is: less than one second.
@@ -3482,10 +3482,10 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.02 seconds.]
+   [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
   [CPU time for LU decomposition is 0.02 seconds.]
@@ -3497,12 +3497,12 @@ programa o archivo por lotes ejecutable.
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 10 of this 17-pass calculation.)
-  [CPU for backsolve is 0.00 seconds.]
+  [CPU for backsolve is 0.02 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 10 of this 17-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 10 is 0.03 seconds.]
+  [CPU for step 10 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 10 is: less than one second.
  
@@ -3538,15 +3538,15 @@ programa o archivo por lotes ejecutable.
    [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.00 seconds.]
+   [CPU time for MA48B is 0.02 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 11 of this 17-pass calculation.)
@@ -3555,7 +3555,7 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 11 of this 17-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 11 is 0.02 seconds.]
+  [CPU for step 11 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 11 is: less than one second.
  
@@ -3588,29 +3588,29 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.02 seconds.]
+   [CPU time for GPLU analysis is 0.03 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 12 of this 17-pass calculation.)
-  [CPU for backsolve is 0.02 seconds.]
-  Elapsed time for backsolve is:  1 seconds.
+  [CPU for backsolve is 0.00 seconds.]
+  Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 12 of this 17-pass calculation.)
-  [CPU for update is 0.00 seconds.]
-  [CPU for step 12 is 0.03 seconds.]
-  Elapsed time for update is:  1 seconds.
-  Elapsed time for step 12 is:  1 seconds.
+  [CPU for update is 0.02 seconds.]
+  [CPU for step 12 is 0.05 seconds.]
+  Elapsed time for update is: less than one second.
+  Elapsed time for step 12 is: less than one second.
  
   --->  Beginning pass number 13 of 17-pass calculation.
   [Copying all updated values for use in this pass.]
@@ -3649,10 +3649,10 @@ programa o archivo por lotes ejecutable.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
   [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
-  [CPU time for MA48C/MA28I is 0.00 seconds.]
+  [CPU time for MA48C/MA28I is 0.02 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 13 of this 17-pass calculation.)
@@ -3661,7 +3661,7 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 13 of this 17-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 13 is 0.02 seconds.]
+  [CPU for step 13 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 13 is: less than one second.
  
@@ -3697,19 +3697,19 @@ programa o archivo por lotes ejecutable.
    [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.00 seconds.]
+   [CPU time for MA48B is 0.02 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 14 of this 17-pass calculation.)
-  [CPU for backsolve is 0.02 seconds.]
+  [CPU for backsolve is 0.00 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 14 of this 17-pass calculation.)
@@ -3747,18 +3747,18 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.02 seconds.]
+   [CPU time for GPLU analysis is 0.03 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 15 of this 17-pass calculation.)
@@ -3766,8 +3766,8 @@ programa o archivo por lotes ejecutable.
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 15 of this 17-pass calculation.)
-  [CPU for update is 0.00 seconds.]
-  [CPU for step 15 is 0.02 seconds.]
+  [CPU for update is 0.02 seconds.]
+  [CPU for step 15 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 15 is: less than one second.
  
@@ -3777,9 +3777,9 @@ programa o archivo por lotes ejecutable.
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
- [CPU for equations is 0.02 seconds.]
+ [CPU for equations is 0.00 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.02 seconds.]
+ [CPU for formulas and equations is 0.00 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 41368 nonzeros in those parts of
       the equations calculated for this step.)
@@ -3800,10 +3800,10 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.02 seconds.]
+   [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
   [CPU time for LU decomposition is 0.02 seconds.]
@@ -3815,7 +3815,7 @@ programa o archivo por lotes ejecutable.
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 16 of this 17-pass calculation.)
-  [CPU for backsolve is 0.00 seconds.]
+  [CPU for backsolve is 0.02 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 16 of this 17-pass calculation.)
@@ -3861,27 +3861,27 @@ programa o archivo por lotes ejecutable.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
   [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
-  [CPU time for MA48C/MA28I is 0.00 seconds.]
+  [CPU time for MA48C/MA28I is 0.02 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 17 of this 17-pass calculation.)
-  [CPU for backsolve is 0.02 seconds.]
+  [CPU for backsolve is 0.00 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 17 of this 17-pass calculation.)
  
   (Writing the UC5/6/7 file.)
-  [CPU for update is 0.00 seconds.]
-  [CPU for step 17 is 0.03 seconds.]
+  [CPU for update is 0.02 seconds.]
+  [CPU for step 17 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 17 is: less than one second.
  Elapsed time to do after-first-LU-decomp part
-  of this 17-pass calculation is:  1 seconds.
- [CPU for all of this 16-step calculation is 0.45 seconds.]
- Elapsed time for all this 16-step calculation is:  1 seconds.
+  of this 17-pass calculation is: less than one second.
+ [CPU for all of this 16-step calculation is 0.69 seconds.]
+ Elapsed time for all this 16-step calculation is: less than one second.
  
   --->  Beginning pass number 1 of 33-pass calculation.
  [CPU for simulation is 0.00 seconds.]
@@ -3890,12 +3890,12 @@ programa o archivo por lotes ejecutable.
   (Beginning the backsolve after pass 1 of this 33-pass calculation.)
  
   (Reading pre-sim values from the current SLC file.)
-  [CPU for backsolve is 0.05 seconds.]
+  [CPU for backsolve is 0.06 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 1 of this 33-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 1 is 0.05 seconds.]
+  [CPU for step 1 is 0.06 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 1 is: less than one second.
  
@@ -3905,9 +3905,9 @@ programa o archivo por lotes ejecutable.
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
- [CPU for equations is 0.00 seconds.]
+ [CPU for equations is 0.02 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.00 seconds.]
+ [CPU for formulas and equations is 0.02 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 41368 nonzeros in those parts of
       the equations calculated for this step.)
@@ -3931,24 +3931,24 @@ programa o archivo por lotes ejecutable.
    [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.02 seconds.]
+   [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.03 seconds.]
+  [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.03 seconds.]
+ [CPU for simulation is 0.02 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 2 of this 33-pass calculation.)
-  [CPU for backsolve is 0.00 seconds.]
+  [CPU for backsolve is 0.02 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 2 of this 33-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 2 is 0.03 seconds.]
+  [CPU for step 2 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 2 is: less than one second.
  
@@ -3982,28 +3982,28 @@ programa o archivo por lotes ejecutable.
   Reusing strong connect permutations
   ReUse of pivots successful
    [CPU time for GPLU analysis is 0.02 seconds.]
-   Elapsed time for  GPLU analysis is: less than one second.
+   Elapsed time for  GPLU analysis is:  1 seconds.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
   [CPU time for LU decomposition is 0.02 seconds.]
-  Elapsed time for LU decomposition is: less than one second.
-  [CPU time for MA48C/MA28I is 0.00 seconds.]
+  Elapsed time for LU decomposition is:  1 seconds.
+  [CPU time for MA48C/MA28I is 0.02 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
- Elapsed time for simulation is: less than one second.
+ [CPU for simulation is 0.03 seconds.]
+ Elapsed time for simulation is:  1 seconds.
  
   (Beginning the backsolve after pass 3 of this 33-pass calculation.)
   [CPU for backsolve is 0.00 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 3 of this 33-pass calculation.)
-  [CPU for update is 0.02 seconds.]
+  [CPU for update is 0.00 seconds.]
   [CPU for step 3 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
-  Elapsed time for step 3 is: less than one second.
+  Elapsed time for step 3 is:  1 seconds.
  
   --->  Beginning pass number 4 of 33-pass calculation.
   [Copying all updated values for use in this pass.]
@@ -4034,18 +4034,18 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.02 seconds.]
+   [CPU time for GPLU analysis is 0.03 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 4 of this 33-pass calculation.)
@@ -4054,7 +4054,7 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 4 of this 33-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 4 is 0.02 seconds.]
+  [CPU for step 4 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 4 is: less than one second.
  
@@ -4064,9 +4064,9 @@ programa o archivo por lotes ejecutable.
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
- [CPU for equations is 0.00 seconds.]
+ [CPU for equations is 0.02 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.00 seconds.]
+ [CPU for formulas and equations is 0.02 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 41368 nonzeros in those parts of
       the equations calculated for this step.)
@@ -4107,7 +4107,7 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 5 of this 33-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 5 is 0.03 seconds.]
+  [CPU for step 5 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 5 is: less than one second.
  
@@ -4155,12 +4155,12 @@ programa o archivo por lotes ejecutable.
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 6 of this 33-pass calculation.)
-  [CPU for backsolve is 0.00 seconds.]
+  [CPU for backsolve is 0.02 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 6 of this 33-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 6 is 0.02 seconds.]
+  [CPU for step 6 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 6 is: less than one second.
  
@@ -4170,9 +4170,9 @@ programa o archivo por lotes ejecutable.
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
- [CPU for equations is 0.02 seconds.]
+ [CPU for equations is 0.00 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.02 seconds.]
+ [CPU for formulas and equations is 0.00 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 41368 nonzeros in those parts of
       the equations calculated for this step.)
@@ -4193,18 +4193,18 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.02 seconds.]
+   [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
   [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
-  [CPU time for MA48C/MA28I is 0.00 seconds.]
+  [CPU time for MA48C/MA28I is 0.02 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 7 of this 33-pass calculation.)
@@ -4246,22 +4246,22 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.02 seconds.]
+   [CPU time for GPLU analysis is 0.03 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115980.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 8 of this 33-pass calculation.)
-  [CPU for backsolve is 0.02 seconds.]
+  [CPU for backsolve is 0.00 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 8 of this 33-pass calculation.)
@@ -4276,9 +4276,9 @@ programa o archivo por lotes ejecutable.
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
- [CPU for equations is 0.00 seconds.]
+ [CPU for equations is 0.02 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.00 seconds.]
+ [CPU for formulas and equations is 0.02 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 41368 nonzeros in those parts of
       the equations calculated for this step.)
@@ -4314,12 +4314,12 @@ programa o archivo por lotes ejecutable.
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 9 of this 33-pass calculation.)
-  [CPU for backsolve is 0.02 seconds.]
+  [CPU for backsolve is 0.00 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 9 of this 33-pass calculation.)
-  [CPU for update is 0.00 seconds.]
-  [CPU for step 9 is 0.03 seconds.]
+  [CPU for update is 0.02 seconds.]
+  [CPU for step 9 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 9 is: less than one second.
  
@@ -4420,7 +4420,7 @@ programa o archivo por lotes ejecutable.
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 11 of this 33-pass calculation.)
-  [CPU for backsolve is 0.00 seconds.]
+  [CPU for backsolve is 0.02 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 11 of this 33-pass calculation.)
@@ -4461,15 +4461,15 @@ programa o archivo por lotes ejecutable.
    [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.02 seconds.]
+   [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.03 seconds.]
+  [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.03 seconds.]
+ [CPU for simulation is 0.02 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 12 of this 33-pass calculation.)
@@ -4511,18 +4511,18 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.00 seconds.]
+  [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
-  [CPU time for MA48C/MA28I is 0.00 seconds.]
+  [CPU time for MA48C/MA28I is 0.02 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 13 of this 33-pass calculation.)
@@ -4531,7 +4531,7 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 13 of this 33-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 13 is 0.02 seconds.]
+  [CPU for step 13 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 13 is: less than one second.
  
@@ -4572,14 +4572,14 @@ programa o archivo por lotes ejecutable.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
   [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
-  [CPU time for MA48C/MA28I is 0.00 seconds.]
+  [CPU time for MA48C/MA28I is 0.02 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 14 of this 33-pass calculation.)
-  [CPU for backsolve is 0.02 seconds.]
+  [CPU for backsolve is 0.00 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 14 of this 33-pass calculation.)
@@ -4620,15 +4620,15 @@ programa o archivo por lotes ejecutable.
    [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.00 seconds.]
+   [CPU time for MA48B is 0.02 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 15 of this 33-pass calculation.)
@@ -4637,7 +4637,7 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 15 of this 33-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 15 is 0.02 seconds.]
+  [CPU for step 15 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 15 is: less than one second.
  
@@ -4670,18 +4670,18 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.02 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 16 of this 33-pass calculation.)
@@ -4690,7 +4690,7 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 16 of this 33-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 16 is 0.02 seconds.]
+  [CPU for step 16 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 16 is: less than one second.
  
@@ -4723,18 +4723,18 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.02 seconds.]
+   [CPU time for GPLU analysis is 0.03 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 17 of this 33-pass calculation.)
@@ -4743,17 +4743,17 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 17 of this 33-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 17 is 0.02 seconds.]
+  [CPU for step 17 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 17 is: less than one second.
  
   --->  Beginning pass number 18 of 33-pass calculation.
   [Copying all updated values for use in this pass.]
- [CPU for reads, formulas etc is 0.00 seconds.]
+ [CPU for reads, formulas etc is 0.02 seconds.]
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
- [CPU for equations is 0.02 seconds.]
+ [CPU for equations is 0.00 seconds.]
  Elapsed time for equations is: less than one second.
  [CPU for formulas and equations is 0.02 seconds.]
  Elapsed time for formulas and equations is: less than one second.
@@ -4776,15 +4776,15 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.00 seconds.]
+  [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
-  [CPU time for MA48C/MA28I is 0.02 seconds.]
+  [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
  [CPU for simulation is 0.02 seconds.]
@@ -4795,8 +4795,8 @@ programa o archivo por lotes ejecutable.
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 18 of this 33-pass calculation.)
-  [CPU for update is 0.00 seconds.]
-  [CPU for step 18 is 0.03 seconds.]
+  [CPU for update is 0.02 seconds.]
+  [CPU for step 18 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 18 is: less than one second.
  
@@ -4844,12 +4844,12 @@ programa o archivo por lotes ejecutable.
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 19 of this 33-pass calculation.)
-  [CPU for backsolve is 0.00 seconds.]
+  [CPU for backsolve is 0.02 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 19 of this 33-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 19 is 0.02 seconds.]
+  [CPU for step 19 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 19 is: less than one second.
  
@@ -4950,12 +4950,12 @@ programa o archivo por lotes ejecutable.
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 21 of this 33-pass calculation.)
-  [CPU for backsolve is 0.00 seconds.]
+  [CPU for backsolve is 0.02 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 21 of this 33-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 21 is 0.02 seconds.]
+  [CPU for step 21 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 21 is: less than one second.
  
@@ -4965,9 +4965,9 @@ programa o archivo por lotes ejecutable.
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
- [CPU for equations is 0.02 seconds.]
+ [CPU for equations is 0.00 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.02 seconds.]
+ [CPU for formulas and equations is 0.00 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 41368 nonzeros in those parts of
       the equations calculated for this step.)
@@ -4988,18 +4988,18 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.02 seconds.]
+   [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
   [CPU time for LU decomposition is 0.02 seconds.]
   Elapsed time for LU decomposition is: less than one second.
-  [CPU time for MA48C/MA28I is 0.00 seconds.]
+  [CPU time for MA48C/MA28I is 0.02 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 22 of this 33-pass calculation.)
@@ -5052,7 +5052,7 @@ programa o archivo por lotes ejecutable.
   [CPU time for MA48C/MA28I is 0.02 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.05 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 23 of this 33-pass calculation.)
@@ -5061,7 +5061,7 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 23 of this 33-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 23 is 0.05 seconds.]
+  [CPU for step 23 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 23 is: less than one second.
  
@@ -5097,15 +5097,15 @@ programa o archivo por lotes ejecutable.
    [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.00 seconds.]
+   [CPU time for MA48B is 0.02 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 24 of this 33-pass calculation.)
@@ -5114,7 +5114,7 @@ programa o archivo por lotes ejecutable.
  
   (Beginning the update after pass 24 of this 33-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 24 is 0.02 seconds.]
+  [CPU for step 24 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 24 is: less than one second.
  
@@ -5124,9 +5124,9 @@ programa o archivo por lotes ejecutable.
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
- [CPU for equations is 0.02 seconds.]
+ [CPU for equations is 0.00 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.02 seconds.]
+ [CPU for formulas and equations is 0.00 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 41368 nonzeros in those parts of
       the equations calculated for this step.)
@@ -5147,18 +5147,18 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
    [CPU time for MA48B is 0.02 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 25 of this 33-pass calculation.)
@@ -5200,10 +5200,10 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.02 seconds.]
+   [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
   [CPU time for LU decomposition is 0.02 seconds.]
@@ -5230,9 +5230,9 @@ programa o archivo por lotes ejecutable.
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
- [CPU for equations is 0.00 seconds.]
+ [CPU for equations is 0.02 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.00 seconds.]
+ [CPU for formulas and equations is 0.02 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 41368 nonzeros in those parts of
       the equations calculated for this step.)
@@ -5268,24 +5268,24 @@ programa o archivo por lotes ejecutable.
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 27 of this 33-pass calculation.)
-  [CPU for backsolve is 0.00 seconds.]
+  [CPU for backsolve is 0.02 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 27 of this 33-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 27 is 0.02 seconds.]
+  [CPU for step 27 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 27 is: less than one second.
  
   --->  Beginning pass number 28 of 33-pass calculation.
   [Copying all updated values for use in this pass.]
- [CPU for reads, formulas etc is 0.02 seconds.]
+ [CPU for reads, formulas etc is 0.00 seconds.]
  Elapsed time for reads, formulas etc is: less than one second.
  
   [Starting TGCSM2W submatrices]
  [CPU for equations is 0.00 seconds.]
  Elapsed time for equations is: less than one second.
- [CPU for formulas and equations is 0.02 seconds.]
+ [CPU for formulas and equations is 0.00 seconds.]
  Elapsed time for formulas and equations is: less than one second.
   (There are now 41368 nonzeros in those parts of
       the equations calculated for this step.)
@@ -5306,10 +5306,10 @@ programa o archivo por lotes ejecutable.
   Reusing permutations for zero free diagonal
   Reusing strong connect permutations
   ReUse of pivots successful
-   [CPU time for GPLU analysis is 0.00 seconds.]
+   [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.02 seconds.]
+   [CPU time for MA48B is 0.00 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
   [CPU time for LU decomposition is 0.02 seconds.]
@@ -5321,7 +5321,7 @@ programa o archivo por lotes ejecutable.
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 28 of this 33-pass calculation.)
-  [CPU for backsolve is 0.00 seconds.]
+  [CPU for backsolve is 0.02 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 28 of this 33-pass calculation.)
@@ -5427,12 +5427,12 @@ programa o archivo por lotes ejecutable.
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 30 of this 33-pass calculation.)
-  [CPU for backsolve is 0.00 seconds.]
+  [CPU for backsolve is 0.02 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 30 of this 33-pass calculation.)
   [CPU for update is 0.00 seconds.]
-  [CPU for step 30 is 0.02 seconds.]
+  [CPU for step 30 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
   Elapsed time for step 30 is: less than one second.
  
@@ -5468,16 +5468,16 @@ programa o archivo por lotes ejecutable.
    [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.02 seconds.]
-   Elapsed time for MA48B is:  1 seconds.
+   [CPU time for MA48B is 0.00 seconds.]
+   Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.03 seconds.]
-  Elapsed time for LU decomposition is:  1 seconds.
-  [CPU time for MA48C/MA28I is 0.00 seconds.]
+  [CPU time for LU decomposition is 0.02 seconds.]
+  Elapsed time for LU decomposition is: less than one second.
+  [CPU time for MA48C/MA28I is 0.02 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
  [CPU for simulation is 0.03 seconds.]
- Elapsed time for simulation is:  1 seconds.
+ Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 31 of this 33-pass calculation.)
   [CPU for backsolve is 0.00 seconds.]
@@ -5487,7 +5487,7 @@ programa o archivo por lotes ejecutable.
   [CPU for update is 0.00 seconds.]
   [CPU for step 31 is 0.03 seconds.]
   Elapsed time for update is: less than one second.
-  Elapsed time for step 31 is:  1 seconds.
+  Elapsed time for step 31 is: less than one second.
  
   --->  Beginning pass number 32 of 33-pass calculation.
   [Copying all updated values for use in this pass.]
@@ -5521,19 +5521,19 @@ programa o archivo por lotes ejecutable.
    [CPU time for GPLU analysis is 0.02 seconds.]
    Elapsed time for  GPLU analysis is: less than one second.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.00 seconds.]
+   [CPU time for MA48B is 0.02 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
+  [CPU time for LU decomposition is 0.03 seconds.]
   Elapsed time for LU decomposition is: less than one second.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
+ [CPU for simulation is 0.03 seconds.]
  Elapsed time for simulation is: less than one second.
  
   (Beginning the backsolve after pass 32 of this 33-pass calculation.)
-  [CPU for backsolve is 0.02 seconds.]
+  [CPU for backsolve is 0.00 seconds.]
   Elapsed time for backsolve is: less than one second.
  
   (Beginning the update after pass 32 of this 33-pass calculation.)
@@ -5572,18 +5572,18 @@ programa o archivo por lotes ejecutable.
   Reusing strong connect permutations
   ReUse of pivots successful
    [CPU time for GPLU analysis is 0.02 seconds.]
-   Elapsed time for  GPLU analysis is: less than one second.
+   Elapsed time for  GPLU analysis is:  1 seconds.
   [Calling MA48BG.]
-   [CPU time for MA48B is 0.00 seconds.]
+   [CPU time for MA48B is 0.02 seconds.]
    Elapsed time for MA48B is: less than one second.
   (Minimum size of MMNZ and MMNZ1 to allow LU decomposition by MA48 is 115981.)
-  [CPU time for LU decomposition is 0.02 seconds.]
-  Elapsed time for LU decomposition is: less than one second.
+  [CPU time for LU decomposition is 0.03 seconds.]
+  Elapsed time for LU decomposition is:  1 seconds.
   [CPU time for MA48C/MA28I is 0.00 seconds.]
   [CPU time for solution accuracy check is 0.00 seconds.]
   (Cumulative solution obtained.)
- [CPU for simulation is 0.02 seconds.]
- Elapsed time for simulation is: less than one second.
+ [CPU for simulation is 0.03 seconds.]
+ Elapsed time for simulation is:  1 seconds.
  
   (Beginning the backsolve after pass 33 of this 33-pass calculation.)
   [CPU for backsolve is 0.00 seconds.]
@@ -5593,13 +5593,13 @@ programa o archivo por lotes ejecutable.
  
   (Writing the UC5/6/7 file.)
   [CPU for update is 0.02 seconds.]
-  [CPU for step 33 is 0.03 seconds.]
+  [CPU for step 33 is 0.05 seconds.]
   Elapsed time for update is: less than one second.
-  Elapsed time for step 33 is: less than one second.
+  Elapsed time for step 33 is:  1 seconds.
  Elapsed time to do after-first-LU-decomp part
-  of this 33-pass calculation is:  1 seconds.
- [CPU for all of this 32-step calculation is 0.89 seconds.]
- Elapsed time for all this 32-step calculation is:  1 seconds.
+  of this 33-pass calculation is:  2 seconds.
+ [CPU for all of this 32-step calculation is 1.16 seconds.]
+ Elapsed time for all this 32-step calculation is:  2 seconds.
  
   ---> Beginning the extrapolation.
  
@@ -6123,7 +6123,7 @@ programa o archivo por lotes ejecutable.
  
   [Finished the Post-sim Job.]
   
-  [Total CPU is 1.94 seconds.]
+  [Total CPU is 2.73 seconds.]
  
   (Minimum values for successful completion seem to be:
     MMNZ=118100, MMNZ1=118100, MMNZ2=118100.)

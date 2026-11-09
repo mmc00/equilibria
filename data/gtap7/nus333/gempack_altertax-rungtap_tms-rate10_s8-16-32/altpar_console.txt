@@ -218,4 +218,4 @@ programa o archivo por lotes ejecutable.
   (The program has completed without error.)
   (The program has completed without warnings.)
   
-  Total elapsed time is: less than one second.
+  Total elapsed time is:  1 seconds.

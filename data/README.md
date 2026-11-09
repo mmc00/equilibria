@@ -220,7 +220,9 @@ with `--datasets 9x10 gtap7_20x41 nus333`. `nus333` uses the condensed
   in the GAMS altertax model, `rate% 10` in RunGTAP). It is not `tm = uniform 10`.
 - **Investment differs from GAMS in both**: `gtapv7.tab` has no ESUBI, so it is
   Leontief where GAMS altertax is Cobb-Douglas.
-- `parameters.prm` and `tms_rate10.shk` are kept next to the results.
+- `parameters.prm` and `tms_rate10.shk` are kept next to the results, with
+  `summary.har` (GTAPSUM) and `volume.har` (GTAPVOL), which the matrix records
+  do not keep.
 
 ```python
 reference("gtap7_3x3", "gempack", mode="altertax", parameters="gams")

@@ -207,11 +207,11 @@ programa o archivo por lotes ejecutable.
   Formula for 'ENDOWFLAG'
  Writing ENDOWFLAG(ENDW,ENDWT)
  (Written real array, size 5x3, header "EFLG".)
- [CPU for reads, formulas etc is 0.00 seconds.]
+ [CPU for reads, formulas etc is 0.02 seconds.]
  Elapsed time for reads, formulas etc is: less than one second.
- [CPU for all of this 0-step calculation is 0.00 seconds.]
+ [CPU for all of this 0-step calculation is 0.02 seconds.]
  Elapsed time for all this 0-step calculation is: less than one second.
-  [Total CPU is 0.02 seconds.]
+  [Total CPU is 0.09 seconds.]
  
   (Inputs have been taken from the Command file "<work>\altpar.cmf")
  

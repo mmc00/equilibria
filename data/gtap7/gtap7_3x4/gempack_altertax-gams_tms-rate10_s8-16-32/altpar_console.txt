@@ -211,11 +211,11 @@ programa o archivo por lotes ejecutable.
  Elapsed time for reads, formulas etc is: less than one second.
  [CPU for all of this 0-step calculation is 0.02 seconds.]
  Elapsed time for all this 0-step calculation is: less than one second.
-  [Total CPU is 0.05 seconds.]
+  [Total CPU is 0.06 seconds.]
  
   (Inputs have been taken from the Command file "<work>\altpar.cmf")
  
   (The program has completed without error.)
   (The program has completed without warnings.)
   
-  Total elapsed time is:  1 seconds.
+  Total elapsed time is: less than one second.

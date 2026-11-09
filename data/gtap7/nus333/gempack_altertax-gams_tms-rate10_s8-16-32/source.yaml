@@ -16,7 +16,7 @@ generated_from:
     path: gtap7/gempack
     sha256:
       tools/_job_cli.py: e7f25cc85890c54cc879fae36c6e2e132bdfc5b8f8d3a9b307a772b449f7dd5d
-      tools/altertax_job.py: 08b351e485f7234ef04d7f8d0815f14c1592f8e5d5a433b17b23288ba2cd8562
+      tools/altertax_job.py: d462b9cdc54f6682d013ef4ae88aec25816f88cb4dd3c6c4cc20f1960c743b1b
       tools/burfisher_job.py: 653c50361576302a9a1f55ab704d607b60b9800594cf5bc5c2db5fe906425ed4
       tools/cmf/9x10_tm10_dpsaveswap.cmf: 97842333032392ea8e0e543b9520465829a33488c1dab68657176f72a6032a1f
       tools/cmf/gtap7_20x41_tm10_dpsaveswap.cmf: fba601626927290a341865a55e99e52320135180286fe34fcc72a277aebc8154
@@ -162,22 +162,24 @@ command: '''C:\Documentos\proyectos\equilibria\.venv\Scripts\python.exe'' ''C:\D
   --dataset nus333 --parameters gams --out ''C:\Documentos\proyectos\equilibria\data\gtap7\nus333\gempack_altertax-gams_tms-rate10_s8-16-32''
   --gtapv7 ''C:\runGTAP375\gtapv7.exe'' --altparv7 ''C:\runGTAP375\altparv7.exe''
   --sltoht ''C:\GP\sltoht.exe'' --expect-release 12.1.003 --release altparv7.exe=12.1.003'
-equilibria_commit: f2a51c9c
+equilibria_commit: 7da90526
 exit:
   code: 0
 outputs:
-  altpar_console.txt: c1ba4874791b184ccd9017cb9c9a4eb0b1ce57bf318b5f2c58929578fe7cbb57
-  decomp.har: 4429dca43dcbb1991e67411c6129e2f7a40153f5a1be42309c1aa1e6307c86a1
+  altpar_console.txt: f69f8b812465d2f979d24d09fbf0af06b9e0f4fcfa11b8b06e1b1b72e20ecdd3
+  decomp.har: e6377d801a093b084e0cb7cb490a27d68ced521e2d2cddb5f9f0aa97a37eaf9c
   parameters.prm: 5fbb5578634d6d26a289045ccd586173af5785444691f3762fc8f46fba54ce1c
   run.cmf: 1f54b8b94cb8742a59c624d8239c29aca2d532ee7d1970f36124c2734fd017fb
-  sl4dump.har: 7fd7d91f184720181f0241dd368dd9cd8df812164258a41012fd209595e1f0c3
-  sltoht_console.txt: a95695d8c24c186f43eb70cf771fe0a6219e778cfd52eba6f21ae596b05663b9
-  solve_console.txt: cbe7f9d2c86c91b3e6fd911196e22f462c5add78c426cca07a0085ddfbe2dff4
+  sl4dump.har: 477a7559388dcf4fd2852743f1f897b0e314880c98900600919d27298eba1e32
+  sltoht_console.txt: 2006f698992fdf3e8247f1dea3d81b422a14cf6831e2fb5c67e9dfb07b12d7d0
+  solve_console.txt: 970fe724a2ab0fab6b09b8d2c19e1f0572e3445af290ea30b2f3178be23a7a4e
+  summary.har: 51a7de354233bcd5e40e1f5d2d020246eb5d87316d2d0b9027d998771c1ee93b
   tms_rate10.shk: 5ae4c2d481840d0d83c555f27eeae5115c0f4ae69f75ff16815643f59aa63364
-  updated.har: 1b845c7f182a641ce2fa0258f6851fff16c1142243486a9da5ec6e1cd858eba7
+  updated.har: a8b00a320c4cf422e653088a73dff39076db5776a9502aa1b1ebf769d452aac5
+  volume.har: 4c98590200c9407b32f9986f76c821e95ca6aadb5d4b7610c2fb994555173fb5
 run:
-  date: '2026-11-09T11:00:37-06:00'
-  duration_s: 8.054
+  date: '2026-11-09T11:29:56-06:00'
+  duration_s: 13.963
   machine:
     os: Windows 11 (10.0.26200)
     cpu: 13th Gen Intel(R) Core(TM) i7-1365U
