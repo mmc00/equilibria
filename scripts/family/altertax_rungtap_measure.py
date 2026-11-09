@@ -67,36 +67,10 @@ def measure(dataset: str, trade_balance: str) -> dict:
         "shock_residual": res.get("residual"),
         "outputs": [],
     }
+    cmp = gates.compare_all(run, ref)  # sl4dump folder: no waivers, labels off
+    out["outputs"] = cmp["outputs"]
+    out["waivers"] = cmp["waivers"]
     sl4 = gates.read_sl4(ref / gates.SL4_DUMP)
-    gem = gempack_changes(sl4)
-    jobs = {
-        "levels": lambda: gates.report_levels_from_pct(run, sl4),
-        "updated": lambda: gates.report_updated(
-            updated_headers(run), read_har(str(ref / "updated.har")), labels=False
-        ),
-        "summary": lambda: gates.report_summary(
-            summary_headers(run), read_har(str(ref / "summary.har")), labels=False
-        ),
-        "volume": lambda: gates.report_volume(
-            run, volume_headers(run), read_har(str(ref / "volume.har")), labels=False
-        ),
-        "decomp": lambda: gates.report_decomp(
-            decomp_headers(run), read_har(str(ref / "decomp.har")), labels=False
-        ),
-        "pct": lambda: gates.report_pct(run, pct_changes(run), gem),
-    }
-    for name, job in jobs.items():
-        try:
-            out["outputs"].append(job())
-        except Exception as e:  # a gate that cannot run is a finding, not a stop
-            out["outputs"].append(
-                {
-                    "output": name,
-                    "pass": False,
-                    "error": f"{type(e).__name__}: {e}",
-                    "trace": traceback.format_exc()[-1500:],
-                }
-            )
     # closure diagnostics straight from the reference's own % changes
     out["gempack_closure"] = {
         k: sl4.changes[k].values.tolist()

@@ -51,10 +51,11 @@ def load_tms_shock(
             f"{path}: shape {raw.shape} does not fit (COMM, REG, REG) = "
             f"{(len(comm), len(reg), len(reg))} of {d / 'sets.har'}"
         )
-    # The text lines hold the SOURCE index across (fastest), then the commodity, the
-    # destination slowest: the file is tms(s, c, d) in Fortran order although the header
-    # names the dimensions (COMM, REG, REG). Measured on nus333 and gtap7_10x7: only this
-    # order gives 10 * rate / (1 + rate) against baserate.har for every cell.
+    # Standard GEMPACK spreadsheet layout of tms(c, s, d): one block per destination d,
+    # rows = commodities c, columns = source regions s (so the file reads as a stack of
+    # (c x s) tables, d slowest), whatever order the header's dimensions are named in.
+    # Verified on nus333 and gtap7_10x7: only this reading gives 10 * rate / (1 + rate)
+    # against baserate.har for every cell (and matches sl4dump's tms to 1.8e-7).
     flat = raw.ravel()
     arr = flat.reshape(len(reg), len(comm), len(reg)).transpose(1, 2, 0)  # (c, s, d)
     cells = {

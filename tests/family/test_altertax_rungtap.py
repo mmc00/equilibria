@@ -167,3 +167,26 @@ def test_ratio_levels_gate_on_nus333(env):
     sl4 = gates.read_sl4(folder("nus333") / "sl4dump.har")
     rec = gates.report_levels_from_pct(run, sl4)
     assert rec["pass"] and rec["max"] <= gates.TOL_LEVELS and rec["cells"] > 100
+
+
+def test_compare_all_runs_on_a_rungtap_folder(env):
+    """The one entry point finds sl4dump.har for the levels and the pct gates, applies no
+    waivers and does not compare long-name labels."""
+    run = _ratio_run(env, "nus333")
+    cmp = gates.compare_all(run, folder("nus333"))
+    assert [o["output"] for o in cmp["outputs"]] == [
+        "levels", "updated", "summary", "volume", "decomp", "pct",
+    ]  # fmt: skip
+    assert cmp["waivers"]["applied"] is False
+    assert next(o for o in cmp["outputs"] if o["output"] == "levels")["pass"]
+    upd = next(o for o in cmp["outputs"] if o["output"] == "updated")
+    assert upd["structure_problems"] == ["XXHS"]
+
+
+def test_solved_run_keeps_the_prm_mobility(env):
+    """After a solve with altertax_closure() (capital_mobility='sluggish') the sets are the
+    .prm's: every factor mobile, none sluggish."""
+    run = _ratio_run(env, "nus333")
+    p = load_altertax_params(DATA / "nus333", folder("nus333") / "parameters.prm")
+    assert run.params.sets.mf == p.sets.mf == run.params.sets.f
+    assert run.params.sets.sf == p.sets.sf == []

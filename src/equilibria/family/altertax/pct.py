@@ -144,7 +144,13 @@ def read_sl4dump(path: Path) -> Sl4Changes:
     solution) in the shape ``read_sl4_changes`` returns. Headers ``0001...`` hold one
     variable each: its name is the first word of ``long_name`` (``"qo # output of ... #"``)
     and every variable is read as a percent change (``kind == "p"``); a variable with a
-    zero-sized set (``qesf``) has no cells. Level-only and creation headers are skipped."""
+    zero-sized set (``qesf``) has no cells. Level-only and creation headers are skipped.
+
+    Limitation: the HAR does not say whether a variable is a percent change or an
+    ordinary change (``Variable (change)`` of the tab, e.g. ``del_tbal``, ``del_tbalry``,
+    ``EV``): all are labelled ``"p"``. The gates read only the percent variables of
+    ``gtap7.yaml`` and ``pop``/``pfactwld``/``to``, so the label is harmless there; do not
+    read the change variables of this result as percentages."""
     from equilibria.babel.har.reader import read_har
     from equilibria.babel.har.sl4_levels import is_leva_header
 

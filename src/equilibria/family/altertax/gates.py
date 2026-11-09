@@ -808,7 +808,7 @@ def report_levels_from_pct(run: AltertaxRun, gem_pct) -> dict:
 
 
 def report_levels(run: AltertaxRun, gempack_dir: Path, basedata: Path | None) -> dict:
-    found = find_files(gempack_dir, {"levels": LEVELS_FILES})["levels"]
+    found = find_files(gempack_dir, {"levels": LEVELS_FILES + (SL4_DUMP,)})["levels"]
     if found.name == SL4_DUMP:
         return report_levels_from_pct(run, read_sl4(found))
     report = _levels.compare_levels(run, gempack_dir, basedata)
@@ -880,20 +880,31 @@ def json_safe(obj: Any) -> Any:
     return obj
 
 
-def compare_all(run: AltertaxRun, gempack_dir: Path) -> dict:
+def compare_all(
+    run: AltertaxRun, gempack_dir: Path, labels: bool | None = None
+) -> dict:
     """The six outputs of ``run`` against a GEMPACK run folder: ``{"outputs": [...],
     "pass": bool, "waivers": ...}``. A missing GEMPACK file is a ``FileNotFoundError``
-    naming it. The known-miss waivers apply only to the nus333 ALTAX reference."""
+    naming it. The known-miss waivers apply only to the nus333 ALTAX reference.
+    ``labels`` (compare header long names): ``None`` = off for a RunGTAP folder (its
+    solution is a ``sl4dump.har``, its tab words the data headers differently), on
+    otherwise."""
     files = gempack_files(gempack_dir)
+    if labels is None:
+        labels = files["pct (solution.sl4)"].name != SL4_DUMP
     basedata = Path(run.dataset_dir) / "basedata.har"
     sl4 = read_sl4(files["pct (solution.sl4)"])
     waivers = waivers_for(run.dataset_dir, sl4)
     outputs = [
         report_levels(run, gempack_dir, basedata),
-        report_updated(updated_headers(run), read_har(str(files["updated"]))),
-        report_summary(summary_headers(run), read_har(str(files["summary"])), waivers),
-        report_volume(run, volume_headers(run), read_har(str(files["volume"]))),
-        report_decomp(decomp_headers(run), read_har(str(files["decomp"])), waivers),
+        report_updated(updated_headers(run), read_har(str(files["updated"])), labels),
+        report_summary(
+            summary_headers(run), read_har(str(files["summary"])), waivers, labels
+        ),
+        report_volume(run, volume_headers(run), read_har(str(files["volume"])), labels),
+        report_decomp(
+            decomp_headers(run), read_har(str(files["decomp"])), waivers, labels
+        ),
         report_pct(run, pct_changes(run), gempack_changes(sl4), waivers),
     ]
     return {

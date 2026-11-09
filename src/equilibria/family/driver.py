@@ -133,7 +133,8 @@ def default_cache_root() -> Path:
 
 @dataclass
 class FamilyRun:
-    """What every solve call of one run reads and never changes."""
+    """What every solve call of one run reads. Constant, except ``savf_targets``, which
+    the ``trade_balance="ratio"`` iterations set around each shock solve and reset."""
 
     params: Any
     closure: Any  # the driver's base_closure (the recipe and the squaring read it)
