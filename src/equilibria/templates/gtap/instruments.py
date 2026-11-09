@@ -41,8 +41,10 @@ INSTRUMENT_EQS: dict[str, tuple[str, ...]] = {
 # Bajo ifSUB la fila de INSTRUMENT_EQS se apaga y el instrumento entra inline (macro
 # M_*) en otra fila de la misma celda: M_PM lleva imptx a eq_xweq.  Cuenta solo si
 # esa fila viva LEE la Var (bajo ifSUB=0 eq_xweq lee la Var pm, no imptx).
+# M_PP lleva prdtx_rai a eq_peq (x[r,a,i] contra ps/M_PP, misma celda).
 INLINE_EQS: dict[str, tuple[str, ...]] = {
     "imptx": ("eq_xweq",),
+    "prdtx_rai": ("eq_peq",),
 }
 
 # Tasas de impuesto: la cota es la potencia 1+t > 0 (un subsidio, t<0, es valido).

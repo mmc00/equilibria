@@ -313,6 +313,9 @@ def _gams_bounds(c: _Ctx) -> None:
         v.ub[cells] = np.inf
 
 
+_CD_SKIPPED_ROWS = frozenset({"eq_ev", "eq_cv"})  # absent under Cobb-Douglas
+
+
 def _mute_welfare_if_asked(c: _Ctx) -> None:
     """Fix the inert welfare leaves and drop their rows; walras stays free in gtap."""
     if not c.mute_welfare:
@@ -320,6 +323,10 @@ def _mute_welfare_if_asked(c: _Ctx) -> None:
     from equilibria.templates.gtap.gtap_multiperiod_driver import _WELFARE_LEAVES
 
     for eqn, vn in _WELFARE_LEAVES:
+        if eqn in _CD_SKIPPED_ROWS and eqn not in c.mp.rows:
+            # all regions Cobb-Douglas (altertax): the block skips eq_ev/eq_cv and
+            # ev/cv are fixed at build, as ``_mute_welfare_tail`` skips a missing row
+            continue
         eq, v = c.mp.row(eqn), c.mp.var(vn)
         vt, et = _table(v, c.period), _table(eq, c.period)
         keep_row = c.mode == "gtap" and vn == "walras"
