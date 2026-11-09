@@ -112,6 +112,9 @@ class _Period:
         margin = mp_margin_params(run.params, run.params.sets)
         self.amgm = margin["amgm"][1]
         self.tmarg = margin["tmarg"][1]
+        from equilibria.blocks.gtap._derived_params import fctts_data
+
+        self.fctts = fctts_data(run.params, run.params.sets)
         self._cache: dict[str, dict[tuple[str, ...], float]] = {}
         self._vars = mp.vars
 
@@ -163,9 +166,25 @@ def _final(agent: str, kind: str) -> Callable[[_Period, str, str], float]:
     return f
 
 
+def _factor_price(P: _Period, pvar: str, r: str, e: str, a: str) -> float:
+    """``pf`` is the basic price (``EVFB``). ``pfa`` (producer price) and ``pfy`` (after
+    income tax) are report vars that ``post_solve`` rewrites only at the shock period, so
+    they are rebuilt from the live ``pf`` with the macros ``M_PFA = pf*(1+fctts+fcttx)``
+    and ``M_PFY = pf*(1-kappaf)`` (``_ifsub_macros``)."""
+    from equilibria.blocks.gtap import _ifsub_macros as mac
+
+    pf = _g(P["pf"], (r, e, a))
+    if pvar == "pf":
+        return pf
+    if pvar == "pfa":
+        return pf * (1.0 + P.fctts.get((r, e, a), 0.0) + _g(P["fcttx"], (r, e, a)))
+    return pf * (1.0 - mac.kappaf_value(P.p, r, e, a))
+
+
 def _factor(pvar: str) -> Callable[[_Period, str, str, str], float]:
     def f(P: _Period, e: str, a: str, r: str) -> float:
-        return _g(P[pvar], (r, e, a)) * _g(P["xf"], (r, e, a)) / P.unscale(r, a)
+        price = _factor_price(P, pvar, r, e, a)
+        return price * _g(P["xf"], (r, e, a)) / P.unscale(r, a)
 
     return f
 
@@ -186,9 +205,37 @@ def _make(basic: bool) -> Callable[[_Period, str, str, str], float]:
     return f
 
 
+def _trade_prices(P: _Period, s: str, c: str, d: str) -> dict[str, float]:
+    """``pefob``/``pmcif``/``pm`` of exporter ``s``, commodity ``c``, importer ``d`` from
+    the macros of ``_ifsub_macros`` (``M_PEFOB``, ``M_PWMG``, ``M_PMCIF``, ``M_PM``),
+    on the live ``pe``/``ptmg``/``imptx``. The report vars ``pefob``/``pmcif``/``pm``
+    are not read: ``post_solve`` rewrites them only at the shock period, so at check they
+    keep their benchmark seed and shock-minus-check would mix two definitions."""
+    from equilibria.blocks.gtap import _ifsub_macros as mac
+
+    p = P.p
+    pefob = (
+        1.0 + mac._safe(p, "taxes.rtxs", (s, c, d)) + mac.etax_value(p, s, c, d)
+    ) * (_g(P["pe"], (s, c, d)))
+    # lambdamg is a unit shifter in ALTERTAX (1 in every cell, never shocked)
+    pwmg = sum(
+        P.amgm.get((m, s, c, d), 0.0)
+        * _g(P["ptmg"], (m,))
+        / (_g(P["lambdamg"], (m, s, c, d)) + 1e-12)
+        for m in p.sets.marg
+    )
+    pmcif = pefob + pwmg * P.tmarg.get((s, c, d), 0.0)
+    pm = (
+        (1.0 + _g(P["imptx"], (s, c, d)) + mac.mtax_value(p, d, c, s))
+        * pmcif
+        / mac.chipm_value(p, s, c, d)
+    )
+    return {"pefob": pefob, "pmcif": pmcif, "pm": pm}
+
+
 def _trade(pvar: str) -> Callable[[_Period, str, str, str], float]:
     def f(P: _Period, c: str, s: str, d: str) -> float:
-        return _g(P[pvar], (s, c, d)) * _g(P["xw"], (s, c, d)) / IN_SCALE
+        return _trade_prices(P, s, c, d)[pvar] * _g(P["xw"], (s, c, d)) / IN_SCALE
 
     return f
 
@@ -222,7 +269,8 @@ def _vtwr(P: _Period, m: str, c: str, s: str, d: str) -> float:
     ``amgm``, the margin rate ``tmarg`` (``xwmg = tmarg * xw``) and ``xw``."""
     amgm = P.amgm.get((m, s, c, d), 0.0)
     tmarg = P.tmarg.get((s, c, d), 0.0)
-    return _g(P["ptmg"], (m,)) * amgm * tmarg * _g(P["xw"], (s, c, d)) / IN_SCALE
+    lam = _g(P["lambdamg"], (m, s, c, d)) + 1e-12  # as ``_xmgm`` of ifsub_arrays
+    return _g(P["ptmg"], (m,)) * amgm * tmarg * _g(P["xw"], (s, c, d)) / lam / IN_SCALE
 
 
 _VALUE: dict[str, Callable[..., float]] = {

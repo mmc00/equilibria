@@ -102,12 +102,28 @@ def test_updated_loads(altax_run, tmp_path):
     assert p.benchmark.vdfb
 
 
-def test_headers_carry_the_shock(altax_run, headers, gempack):
-    """Cells where GEMPACK's change (updated minus basedata) is above ~8 float32 ulps
-    and 5x our solve noise (check minus basedata): ours (shock minus check) has the same sign and is within 20% of it."""
+# (header, cell) -> measured cause; cells where the two sides legitimately differ
+SHOCK_DELTA_EXCLUSIONS: dict[tuple[str, tuple[int, ...]], str] = {
+    ("MAKB", (0, 0, 0)): (
+        "MAKB[AGR,AGR,USA], the shocked cell: GEMPACK moves -0.25 (8 float32 ulps), "
+        "ours -0.405. MAKB = MAKS * (1 + prdtx_rai) holds exactly on our side "
+        "(power 1.0024391 -> 1.0024511, +1.2000e-5, the 0.0012% shock); GEMPACK's own "
+        "MAKB/MAKS goes 1.0024391 -> 1.0024517 (+1.26e-5, beyond float32 resolution of "
+        "~1e-7), i.e. its MAKB is 5.6e-7 relative off its own MAKS and the stated shock. "
+        "MAKB is a difference of two 1.2e-5 moves (price up, quantity down), so that "
+        "5.6e-7 shows as 0.155 of 0.25. MAKS agrees to 1%, and the level agrees to "
+        "1e-6. Not a sigma artefact: with sigma 1.02 ours moves to -0.443, away from "
+        "GEMPACK."
+    ),
+}
+
+
+def shock_delta_failures(altax_run, headers, gempack):
+    """Cells where EITHER side's change is above 8 float32 ulps (GEMPACK: updated minus
+    basedata; ours: shock minus check): the signs agree and ours is within 20% of
+    GEMPACK's. Returns ``(checked per header, failures)``."""
     base = read_har(str(nus333_dir() / "basedata.har"))
     chk = headers_at(altax_run, "check")
-    ulp = float(np.finfo(np.float32).eps)
     checked: dict[str, int] = {}
     bad = []
     for name, ha in headers.items():
@@ -118,13 +134,18 @@ def test_headers_carry_the_shock(altax_run, headers, gempack):
         dg = g - b
         dm = np.asarray(ha.array, dtype=np.float64) - chk[name].array
         for ix in np.ndindex(g.shape):
-            if abs(dg[ix]) <= 8 * ulp * max(abs(g[ix]), abs(b[ix])):
-                continue
-            # below 5x the solve noise (check minus base) the change is not measurable
-            if abs(dg[ix]) < 5 * abs(chk[name].array[ix] - b[ix]):
+            thr = 8 * float(np.spacing(np.float32(max(abs(g[ix]), abs(b[ix])))))
+            if max(abs(dg[ix]), abs(dm[ix])) <= thr:
                 continue
             checked[name] = checked.get(name, 0) + 1
             if not (dm[ix] * dg[ix] > 0 and abs(dm[ix] - dg[ix]) <= 0.2 * abs(dg[ix])):
-                bad.append((name, ix, float(dg[ix]), float(dm[ix])))
+                bad.append((name, ix, float(dg[ix]), float(dm[ix]), thr))
+    return checked, bad
+
+
+def test_headers_carry_the_shock(altax_run, headers, gempack):
+    checked, bad = shock_delta_failures(altax_run, headers, gempack)
     assert {"VTWR", "MAKS", "VDFB", "EVFP"} <= set(checked), checked
-    assert not bad, bad
+    assert all(why.strip() for why in SHOCK_DELTA_EXCLUSIONS.values())
+    assert not [x for x in bad if (x[0], x[1]) not in SHOCK_DELTA_EXCLUSIONS], bad
+    assert {(x[0], x[1]) for x in bad} >= set(SHOCK_DELTA_EXCLUSIONS)  # none is stale
