@@ -115,8 +115,15 @@ def test_shock_is_the_book_cell():
     assert ALTAX_SHOCK == {"prdtx_rai": {("USA", "AGR", "AGR"): 0.0012}}
 
 
-def test_bad_shock_cell_raises(env):
-    with pytest.raises((KeyError, ValueError)):
+def test_bad_shock_cell_raises(monkeypatch):
+    """Raises on the cell itself, before ``solve_gtap_family`` is reached."""
+    import equilibria.family.altertax.run as run_mod
+
+    def no_solve(*a, **k):
+        raise AssertionError("solve_gtap_family was reached")
+
+    monkeypatch.setattr(run_mod, "solve_gtap_family", no_solve)
+    with pytest.raises(ValueError, match="'NOPE' is not in the r set"):
         solve_altertax(
             nus333_dir(), shock={"prdtx_rai": {("NOPE", "AGR", "USA"): 0.0012}}
         )

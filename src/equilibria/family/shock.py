@@ -29,13 +29,25 @@ from equilibria.family.fscale import row_leaves
 from equilibria.family.mp_arrays import MPArrays, RowArr, VarArr
 from equilibria.family.prep_recipe import _table
 from equilibria.templates.gtap.instruments import (
-    INLINE_EQS,
+    INLINE_EQS as PYOMO_INLINE_EQS,
+)
+from equilibria.templates.gtap.instruments import (
     INSTRUMENT_EQS,
     check_shock_value,
     is_free_cell,
     period_key,
 )
 from equilibria.templates.gtap.shocks import gempack_kind, shocked
+
+# Family-local: rows that read an instrument inline under ifSUB=1. The Pyomo route's map
+# (``PYOMO_INLINE_EQS``) has only imptx and rejects prdtx_rai under ifSUB=1; the array
+# route also accepts it, because M_PP (``_m_pp`` in blocks/gtap/production_supply.py)
+# carries ``prdtx_rai[r,a,i]`` into ``eq_peq[r,a,i]`` while ``eq_pp_rai`` is off.
+# A documented divergence from Pyomo, needed by ALTERTAX (``to(AGR,AGR,USA)``).
+INLINE_EQS: dict[str, tuple[str, ...]] = {
+    **PYOMO_INLINE_EQS,
+    "prdtx_rai": ("eq_peq",),
+}
 
 
 def _flat(sys: Any, name: str, cell: tuple) -> int:

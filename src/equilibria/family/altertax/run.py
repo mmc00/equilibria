@@ -30,10 +30,12 @@ class AltertaxRun:
     minutes: float
 
 
-# Armington (esubm) and supply (sigmas = 1/esubq) elasticities that ``altertax.prm`` sets
-# to exactly 1: ``eq_pmteq`` and ``eq_xs`` are CES rows with exponent 1 - sigma, and the
-# blocks drop them at sigma = 1 (a free ``pmt`` and ``ps`` per commodity and region: the
-# system is not square). Same treatment as the production nests of #192 (cal.gms).
+# Elasticities that ``altertax.prm`` sets to exactly 1, which the 1.01 guard of #192
+# (cal.gms, as for the production nests) must also cover: ``esubm`` (``eq_pmteq``) and
+# ``sigmas`` = 1/esubq (``eq_xs``) are CES rows with exponent 1 - sigma that the blocks
+# drop at sigma = 1 (a free ``pmt`` and ``ps`` per cell: the system is not square);
+# ``esubd`` (the domestic/imported Armington nest) leaves ``pa`` undetermined at 1, and
+# check drifts away from base.
 UNIT_TRADE_ELASTICITIES = ("esubd", "esubm", "sigmas")
 
 
@@ -65,21 +67,6 @@ def load_altertax_params(
         p.shares.calibrate(p.benchmark, p.elasticities, p.sets, p.taxes)
         p._calibrate()
     return p
-
-
-def set_production_sigma(params: GTAPParameters, sigma: float) -> None:
-    """``sigmap``/``sigmand``/``sigmav`` forced to ``sigma`` (the sigma-effect probe)."""
-    for nest in (
-        params.elasticities.sigmap,
-        params.elasticities.sigmand,
-        params.elasticities.sigmav,
-    ):
-        for key in nest:
-            nest[key] = sigma
-    params.shares.calibrate(
-        params.benchmark, params.elasticities, params.sets, params.taxes
-    )
-    params._calibrate()
 
 
 def _check_cells(params: GTAPParameters, shock: dict) -> None:

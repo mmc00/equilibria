@@ -59,6 +59,21 @@ def _set_env() -> None:
     os.environ["EQUILIBRIA_FAMILY_CACHE"] = tempfile.mkdtemp(prefix="altax_cache_")
 
 
+def set_production_sigma(params, sigma: float) -> None:
+    """``sigmap``/``sigmand``/``sigmav`` forced to ``sigma`` (the sigma-effect probe)."""
+    for nest in (
+        params.elasticities.sigmap,
+        params.elasticities.sigmand,
+        params.elasticities.sigmav,
+    ):
+        for key in nest:
+            nest[key] = sigma
+    params.shares.calibrate(
+        params.benchmark, params.elasticities, params.sets, params.taxes
+    )
+    params._calibrate()
+
+
 def worst_by_variable(report, top: int = 10) -> dict:
     """``{variable: {cells, max, worst: [10 cells]}}`` of a ``compare`` Report."""
     by: dict[str, list] = {}
@@ -71,7 +86,13 @@ def worst_by_variable(report, top: int = 10) -> dict:
             "cells": len(cs),
             "max": cs[0].d,
             "worst": [
-                {"period": c.period, "index": list(c.index), "eq": c.a, "gempack": c.b, "d": c.d}
+                {
+                    "period": c.period,
+                    "index": list(c.index),
+                    "eq": c.a,
+                    "gempack": c.b,
+                    "d": c.d,
+                }
                 for c in cs[:top]
             ],
         }
@@ -178,11 +199,12 @@ def main() -> None:
     from equilibria.family.altertax.levels import family_levels
     from equilibria.family.altertax.run import (
         load_altertax_params,
-        set_production_sigma,
         solve_altertax,
     )
 
-    cg = _load("compare_gempack_levels", ROOT / "scripts/gtap/compare_gempack_levels.py")
+    cg = _load(
+        "compare_gempack_levels", ROOT / "scripts/gtap/compare_gempack_levels.py"
+    )
     d = nus333_dir()
     basedata = d / "basedata.har"
     sha = subprocess.run(
@@ -215,10 +237,14 @@ def main() -> None:
                 "cells": rep.overall["cells"],
                 "max": rep.overall["max"],
                 "max_variable": rep.overall["max_variable"],
-                "pct_within": {repr(k): v for k, v in rep.overall["pct_within"].items()},
+                "pct_within": {
+                    repr(k): v for k, v in rep.overall["pct_within"].items()
+                },
             },
         }
-        print(f"{tag}: codes={run.codes} min={run.minutes:.2f} max_vs_gempack={rep.overall['max']:.3g}")
+        print(
+            f"{tag}: codes={run.codes} min={run.minutes:.2f} max_vs_gempack={rep.overall['max']:.3g}"
+        )
 
     go("s1.01", load_altertax_params(d))
     p = load_altertax_params(d)
@@ -239,8 +265,15 @@ def main() -> None:
         for ir, reg in enumerate(regs):
             p.elasticities.esubc[(reg, act)] = float(arr[ia, ir])
     go("s1.01+esubc", p)
-    esubc_change = level_diff(runs["s1.01"]["levels"], runs["s1.01+esubc"]["levels"], "shock")
-    esubc_max = max(_max(esubc_change), _max(level_diff(runs["s1.01"]["levels"], runs["s1.01+esubc"]["levels"], "check")))
+    esubc_change = level_diff(
+        runs["s1.01"]["levels"], runs["s1.01+esubc"]["levels"], "shock"
+    )
+    esubc_max = max(
+        _max(esubc_change),
+        _max(
+            level_diff(runs["s1.01"]["levels"], runs["s1.01+esubc"]["levels"], "check")
+        ),
+    )
 
     # diagnostic: investment demand across commodities as Leontief (esubi = 0). Not the
     # route's setting: the file has ESBI = 1. Measured to see whether the worst cells
@@ -258,7 +291,9 @@ def main() -> None:
             period: level_diff(runs[x]["levels"], runs[y]["levels"], period)
             for period in ("check", "shock")
         }
-        pairs[f"{x}_vs_{y}"]["move"] = moves_between(runs[x]["levels"], runs[y]["levels"])
+        pairs[f"{x}_vs_{y}"]["move"] = moves_between(
+            runs[x]["levels"], runs[y]["levels"]
+        )
 
     for r in runs.values():
         del r["levels"]  # the JSON keeps the diffs, not 4 copies of the levels

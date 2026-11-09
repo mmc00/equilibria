@@ -29,7 +29,9 @@ from tests.family.test_prep_recipe import ROUTE, _closure, _params
 from tests.family.test_squared_system import _route_closure
 
 # (dataset, ifSUB): ifSUB=0 only on 3x3, where it accepts the instruments that
-# ifSUB=1 rejects (fcttx, kappaf, exptx, prdtx_rai, lambdamg).
+# ifSUB=1 rejects (fcttx, kappaf, exptx, prdtx_rai, lambdamg). Under ifSUB=1 the array
+# route also accepts prdtx_rai (family/shock.py INLINE_EQS: M_PP puts it into eq_peq),
+# which Pyomo rejects: the one documented divergence (``ARRAYS_ACCEPT_MORE``).
 DATASETS = (
     ("gtap7_3x3", 1),
     ("gtap7_10x7", 1),
@@ -284,9 +286,27 @@ def case(request, tmp_path_factory):
     return out
 
 
-def _compare_table(a: dict, b: dict) -> tuple[list[str], dict[str, tuple[int, int]]]:
+# Instruments the arrays accept under ifSUB=1 where Pyomo rejects wholesale (ALTERTAX).
+ARRAYS_ACCEPT_MORE = frozenset({"prdtx_rai"})
+
+
+def _compare_table(
+    a: dict, b: dict, ifsub: int = 0
+) -> tuple[list[str], dict[str, tuple[int, int]]]:
     bad, counts = [], {}
     for name in a:
+        if ifsub == 1 and name in ARRAYS_ACCEPT_MORE:
+            # documented divergence: arrays may accept what Pyomo rejects, never the
+            # reverse, and must accept something
+            counts[name] = (sum(b[name].values()), len(b[name]) - sum(b[name].values()))
+            bad += [
+                f"{name}{c}: pyomo accepts, arrays reject"
+                for c in a[name]
+                if a[name][c] and not b[name][c]
+            ]
+            if not any(a[name].values()) and not any(b[name].values()):
+                bad.append(f"{name}: arrays accept no cell under ifSUB=1")
+            continue
         ok = sum(a[name].values())
         counts[name] = (ok, len(a[name]) - ok)
         bad += [
@@ -301,7 +321,7 @@ def _compare_table(a: dict, b: dict) -> tuple[list[str], dict[str, tuple[int, in
 def test_accept_reject_equals_pyomo(case, stage, capsys):
     pyo = case[f"{stage}_pyomo"]
     arr = case["user_arrays" if stage == "user" else "prep_arrays"]
-    bad, counts = _compare_table(pyo, arr)
+    bad, counts = _compare_table(pyo, arr, case["ifsub"])
     with capsys.disabled():
         print(
             f"\n[{case['ds']} ifsub={case['ifsub']} {stage}] accepted/rejected per instrument:",
@@ -312,11 +332,20 @@ def test_accept_reject_equals_pyomo(case, stage, capsys):
     assert counts["imptx"][1] > 0, "imptx: nothing rejected (the missing cell)"
 
 
+def test_arrays_accept_prdtx_rai_under_ifsub1_pyomo_rejects(case):
+    """ALTERTAX shocks ``to`` = ``prdtx_rai`` under ifSUB=1: the arrays accept the cells
+    whose ``eq_peq`` is live, Pyomo rejects them all (unchanged)."""
+    if case["ifsub"] != 1:
+        pytest.skip("ifSUB=0: prdtx_rai is live in both routes")
+    assert not any(case["user_pyomo"]["prdtx_rai"].values())
+    assert any(case["user_arrays"]["prdtx_rai"].values())
+
+
 def test_ifsub0_accepts_and_rejects_the_ifsub_instruments(case):
     """Under ifSUB=0 the instruments ifSUB=1 rejects wholesale are live, with real
     rejected cells, and the arrays agree with Pyomo on every one of them."""
     if case["ifsub"] != 0:
-        pytest.skip("ifSUB=1: these instruments are rejected outright")
+        pytest.skip("ifSUB=1: Pyomo rejects these instruments outright")
     bad, counts = _compare_table(case["user_pyomo"], case["user_arrays"])
     assert not bad, bad[:8]
     for name in ("fcttx", "kappaf", "exptx", "prdtx_rai", "lambdamg"):
@@ -328,7 +357,9 @@ def test_ifsub0_accepts_and_rejects_the_ifsub_instruments(case):
 
 def test_accept_reject_equals_pyomo_with_rows_off(case, capsys):
     """Real cells rejected: rows of the inline path off, ``xft`` fixed, ``eq_va`` off."""
-    bad, counts = _compare_table(case["stress_pyomo"], case["stress_arrays"])
+    bad, counts = _compare_table(
+        case["stress_pyomo"], case["stress_arrays"], case["ifsub"]
+    )
     with capsys.disabled():
         print(
             f"\n[{case['ds']} ifsub={case['ifsub']} stress] accepted/rejected:",
