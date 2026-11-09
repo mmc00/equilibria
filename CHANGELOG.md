@@ -9,6 +9,29 @@ commit log.
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-11-08
+
+The release the GTAP paper's tables are measured on.
+
+### Added
+- `equilibria doctor` checks the installation a solve needs (#218, #219).
+- End-of-solve summary panel (Walras, residuals, worst equations), a warning
+  when a solved variable rests on its floor, and the same output on the
+  `equilibria` logger (#217).
+- GAMS NLP references for gtap7_15x10 and their gate rows (#220).
+
+### Fixed
+- The CDE household share recalibration uses GAMS's denominator: 15x10
+  altertax ifSUB=0 NLP check 53% → 100% (#221).
+- Altertax Armington shares (`alphad`/`alpham`) keep their base calibration,
+  as in GAMS, instead of being re-derived every period: 15x10 altertax
+  ifSUB=0 NLP shock 99.45% → 100% (#222).
+
+### Changed
+- Version tags publish to PyPI with Trusted Publishing (#216).
+- Job-list drivers are no longer hashed as inputs of the results they run
+  (#220).
+
 ## [0.6.2a1] — 2026-11-05 (pre-release)
 
 First release on PyPI, an early alpha: the API can still change before
