@@ -56,7 +56,8 @@ UPDATED_FILES = _levels.UPDATED_NAMES  # same file for the levels and the update
 SUMMARY_FILES = ("summary.har", "altax_summary.har")
 DECOMP_FILES = ("decomp.har", "altax_decomp.har")
 VOLUME_FILES = ("volume.har", "altax_volume.har")
-SL4_FILES = _levels.SL4_NAMES
+SL4_DUMP = "sl4dump.har"  # RunGTAP folders: % changes only, no levels, no .sl4
+SL4_FILES = _levels.SL4_NAMES + (SL4_DUMP,)
 LEVELS_FILES = _levels.LEVELS_NAMES + _levels.SL4_NAMES  # sl4levels.har, else the .sl4
 
 THRESHOLD_ULPS = (
@@ -94,10 +95,15 @@ def find_files(folder: Path, groups: dict[str, tuple[str, ...]]) -> dict[str, Pa
 
 
 def read_sl4(path: Path):
-    """``read_sl4_changes`` of a ``.sl4`` or ``.sl4.gz``."""
+    """``read_sl4_changes`` of a ``.sl4`` or ``.sl4.gz``; a ``.har`` is a ``sl4dump.har``
+    (RunGTAP folders), read by :func:`equilibria.family.altertax.pct.read_sl4dump`."""
     from equilibria.babel.har.sl4 import read_sl4_changes
 
     path = Path(path)
+    if path.suffix == ".har":
+        from equilibria.family.altertax.pct import read_sl4dump
+
+        return read_sl4dump(path)
     if path.suffix != ".gz":
         return read_sl4_changes(path)
     with tempfile.TemporaryDirectory() as d:
@@ -155,9 +161,17 @@ def _cell(header: str, ix: Any, ours: float, gem: float, gap: float) -> dict:
 
 
 def structure_problems(
-    ours: dict[str, HeaderArray], gem: dict[str, HeaderArray], names: Iterable[str]
+    ours: dict[str, HeaderArray],
+    gem: dict[str, HeaderArray],
+    names: Iterable[str],
+    *,
+    labels: bool = True,
 ) -> list[str]:
-    """Headers whose sets, shape, coefficient or long name differ from GEMPACK's."""
+    """Headers whose sets, shape, coefficient or long name differ from GEMPACK's.
+    ``labels=False`` leaves the long name out: RunGTAP's ``gtapv7.tab`` words the long
+    names of the data headers differently from Burfisher's (``VDFB``: "expenditure on
+    domestic c by act. a in r at basic prices" against "domestic purchases, by firms, at
+    basic prices"); sets, shape and coefficient name are still compared."""
     bad = []
     for name in names:
         a, b = ours[name], gem[name]
@@ -165,7 +179,8 @@ def structure_problems(
             a.set_names != b.set_names
             or a.set_elements != b.set_elements
             or a.array.shape != b.array.shape
-            or (a.coeff_name, a.long_name) != (b.coeff_name, b.long_name)
+            or a.coeff_name != b.coeff_name
+            or (labels and a.long_name != b.long_name)
         ):
             bad.append(name)
     return bad
@@ -201,10 +216,10 @@ def updated_failures(ours, gem) -> dict[str, tuple[float, tuple]]:
     }
 
 
-def report_updated(ours, gem) -> dict:
+def report_updated(ours, gem, labels: bool = True) -> dict:
     names = [n for n in UPDATED_HEADERS if n not in TEXT_HEADERS]
     gaps = gaps_by_header(ours, gem, names)
-    bad_struct = structure_problems(ours, gem, UPDATED_HEADERS)
+    bad_struct = structure_problems(ours, gem, UPDATED_HEADERS, labels=labels)
     mx = max((g[0] for g in gaps.values()), default=0.0)
     ok = not updated_failures(ours, gem) and not bad_struct
     return _record(
@@ -314,12 +329,14 @@ def summary_failures(ours, gem, names) -> dict[str, tuple[float, tuple]]:
     }
 
 
-def report_summary(ours, gem, waivers: Waivers = NO_WAIVERS) -> dict:
+def report_summary(
+    ours, gem, waivers: Waivers = NO_WAIVERS, labels: bool = True
+) -> dict:
     checks = [n for n in SUMMARY_HEADERS if n not in SUMMARY_LEVELS]
     bad_levels = summary_failures(ours, gem, SUMMARY_LEVELS)
     bad_checks = summary_failures(ours, gem, checks)
     unexpected = sorted(set(bad_checks) - waivers.summary)
-    bad_struct = structure_problems(ours, gem, SUMMARY_HEADERS)
+    bad_struct = structure_problems(ours, gem, SUMMARY_HEADERS, labels=labels)
     gaps = gaps_by_header(ours, gem, SUMMARY_LEVELS)
     mx = max(g[0] for g in gaps.values())
     return _record(
@@ -375,7 +392,7 @@ def volume_compare(name, ours, gem, level):
     return len(above), rel_bad, abs_bad
 
 
-def report_volume(run: AltertaxRun, ours, gem) -> dict:
+def report_volume(run: AltertaxRun, ours, gem, labels: bool = True) -> dict:
     bases = volume_bases(run)
     above, abs_bad = [], []
     for name in VOLUME_HEADERS:
@@ -387,7 +404,7 @@ def report_volume(run: AltertaxRun, ours, gem) -> dict:
         abs_bad += b
     bad = [c for c in above if not c[5]]
     worst = sorted(above, key=lambda c: c[4], reverse=True)[:10]
-    bad_struct = structure_problems(ours, gem, VOLUME_HEADERS)
+    bad_struct = structure_problems(ours, gem, VOLUME_HEADERS, labels=labels)
     return _record(
         "volume",
         {"TOL_CHANGE": TOL_CHANGE, "threshold_ulps": THRESHOLD_ULPS},
@@ -521,7 +538,9 @@ def ev_gaps(ours, gem) -> list[float]:
     return [rel_diff(m, x, x, ABS_FLOOR) for m, x in zip(ev, g, strict=True)]
 
 
-def report_decomp(ours, gem, waivers: Waivers = NO_WAIVERS) -> dict:
+def report_decomp(
+    ours, gem, waivers: Waivers = NO_WAIVERS, labels: bool = True
+) -> dict:
     """Gate: EV of each region and each header's regional totals above the noise floor at
     TOL_CHANGE (controller ruling 2026-11-09); cell-level components are reported, not
     gated. Totals in ``waivers.decomp`` pass while they keep their sign and stay within
@@ -558,7 +577,7 @@ def report_decomp(ours, gem, waivers: Waivers = NO_WAIVERS) -> dict:
         key=lambda d: d["gap"],
         reverse=True,
     )[:10]
-    bad_struct = structure_problems(ours, gem, DECOMP_HEADERS)
+    bad_struct = structure_problems(ours, gem, DECOMP_HEADERS, labels=labels)
     ev_ok = max(ev) <= TOL_CHANGE
     return _record(
         "decomp",
@@ -723,7 +742,75 @@ def levels_ok(report) -> bool:
     )
 
 
+def level_gap(post: float, pre: float, pct: float) -> float:
+    """Relative gap of a post level against ``pre * (1 + pct / 100)`` (``rel_diff`` with
+    the ``ABS_FLOOR`` of the gtap7 map)."""
+    ref = pre * (1.0 + pct / 100.0)
+    return abs(post - ref) / max(abs(ref), ABS_FLOOR)
+
+
+def report_levels_from_pct(run: AltertaxRun, gem_pct) -> dict:
+    """Levels gate when the reference folder has no GEMPACK levels (RunGTAP's
+    ``sl4dump.har`` holds % changes only): GEMPACK's post level is taken as
+    ``pre * (1 + pct / 100)`` with ``pre`` the family CHECK level (which reproduces the
+    base: ``CHECK_TOL`` gate of ``test_check_reproduces_base``), and compared with the
+    family SHOCK level at ``TOL_LEVELS``. Every compared variable of ``gtap7.yaml`` with a
+    GEMPACK % change is covered, in equilibria's own units; zero-base cells are excluded
+    as in the pct gate. This is the pct gate restated in levels, not an independent
+    measurement of GEMPACK's levels."""
+    from equilibria.blocks.gtap._derived_params import xscale_data
+    from equilibria.family.altertax import pct as _pct
+
+    cg = _levels.load_compare_script()
+    lv = _levels.family_levels(run.result.mp, cg.EQ_VARS)
+    side = cg.equilibria_side(lv, dict(xscale_data(run.params, run.params.sets)))
+    gem = _pct.gempack_changes(gem_pct)
+    zero = zero_base_cells(run)
+    rows = _pct.gtap7_rows()
+    gaps: list[tuple[float, str, tuple, float, float]] = []
+    for name, cells in gem.items():
+        row = rows.get(name)
+        if row is None or name in _pct.FIXED:
+            continue
+        perm = [row.a.dims.index(d) for d in row.b.dims]
+        pos = {
+            tuple(idx[p] for p in perm): idx
+            for (period, idx) in side.levels[row.a.var]
+            if period == "check"
+        }
+        for cell, g in cells.items():
+            if cell in zero.get(name, ()) or cell not in pos:
+                continue
+            idx = pos[cell]
+            pre = side.levels[row.a.var][("check", idx)]
+            post = side.levels[row.a.var][("shock", idx)]
+            gaps.append(
+                (level_gap(post, pre, g), name, cell, post, pre * (1 + g / 100))
+            )
+    gaps.sort(key=lambda t: (t[0] != t[0], t[0]), reverse=True)
+    mx = gaps[0][0] if gaps else float("nan")
+    worst = [
+        {"variable": n, "cell": list(c), "ours": o, "gempack": r, "gap": d}
+        for d, n, c, o, r in gaps[:10]
+    ]
+    return _record(
+        "levels",
+        {"TOL_LEVELS": TOL_LEVELS},
+        mx,
+        "relative (post = check * (1 + GEMPACK pct / 100))",
+        worst,
+        bool(gaps) and mx <= TOL_LEVELS,
+        known_miss=[],
+        cells=len(gaps),
+        cells_over_tol=sum(1 for g in gaps if not g[0] <= TOL_LEVELS),
+        source="sl4dump.har percent changes (no GEMPACK levels in the folder)",
+    )
+
+
 def report_levels(run: AltertaxRun, gempack_dir: Path, basedata: Path | None) -> dict:
+    found = find_files(gempack_dir, {"levels": LEVELS_FILES})["levels"]
+    if found.name == SL4_DUMP:
+        return report_levels_from_pct(run, read_sl4(found))
     report = _levels.compare_levels(run, gempack_dir, basedata)
     worst = sorted(report.cells, key=lambda c: (c.d != c.d, c.d), reverse=True)[:10]
     mx = report.overall["max"]
@@ -773,7 +860,7 @@ def gempack_files(gempack_dir: Path) -> dict[str, Path]:
             "decomp": DECOMP_FILES,
             "volume": VOLUME_FILES,
             "pct (solution.sl4)": SL4_FILES,
-            "levels": LEVELS_FILES,
+            "levels": LEVELS_FILES + (SL4_DUMP,),
         },
     )
 

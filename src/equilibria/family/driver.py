@@ -147,6 +147,9 @@ class FamilyRun:
     # derived once per run, filled by the first solve call that needs them
     # regions whose savf the shock holds nominal (``nominal_trade_balance``); () = off
     nominal_savf: tuple[str, ...] = ()
+    # {region: value} the held savf takes in the shock (``trade_balance="ratio"``); None
+    # = the check's value
+    savf_targets: Any = field(default=None, repr=False)
     residual_region: str = ""  # the resolved residual region of the run
     cell_index: Any = field(default=None, repr=False)
     adjacency: dict = field(default_factory=dict, repr=False)
@@ -370,6 +373,7 @@ def _solve_period_inner(
             shock=shock if period == "shock" else None,
             shock_levels=shock_levels,
             nominal_savf=run.nominal_savf,
+            savf_targets=run.savf_targets,
         )
     if period == "base":  # skip_base_solve: the base is the calibrated benchmark
         with phase("post_solve"):
@@ -479,7 +483,7 @@ def solve_gtap_family(
     shock_levels: bool = False,
     cache_root: Path | None = None,
     jax_cache: bool = True,
-    nominal_trade_balance: bool = False,
+    nominal_trade_balance: bool | str = False,
 ) -> FamilyResult:
     """Calibrated base, check and shock on arrays: ``_solve_shock``'s route without Pyomo.
 
@@ -492,7 +496,16 @@ def solve_gtap_family(
 
     ``nominal_trade_balance`` (default off, ALTERTAX's GEMPACK ``del_tbal = 0``): in the
     shock ``savf`` of every non-residual region is held at its check value and its
-    ``eq_savf`` row is dropped, instead of ``savf = pigbl * savf_bar`` (real)."""
+    ``eq_savf`` row is dropped, instead of ``savf = pigbl * savf_bar`` (real).
+    ``"ratio"`` is GEMPACK's ``del_tbalry(r) = 0`` instead: the same hook, but ``savf[r]``
+    keeps its ratio to world income, ``savf_shock = savf_check * W / W_check`` with
+    ``W = sum(regy)``; ``W`` depends on the solution, so the shock is solved again at the
+    updated targets until ``W`` stops moving (``RATIO_TOL``)."""
+    if nominal_trade_balance not in (False, True, "nominal", "ratio"):
+        raise ValueError(
+            f"nominal_trade_balance={nominal_trade_balance!r}: expected False, True, "
+            "'nominal' or 'ratio'"
+        )
     check_supported(
         if_sub=bool(getattr(closure, "if_sub", False)),
         savf_flag=str(getattr(closure, "savf_flag", "capFix")),
@@ -539,6 +552,63 @@ def solve_gtap_family(
         activate(prev)
 
 
+RATIO_TOL = 1e-12  # relative change of world income that ends the ratio iterations
+RATIO_MAX_ITER = 25
+
+
+def _world_income(mp: MPArrays, period: str) -> float:
+    v = mp.vars["regy"]
+    return float(sum(v.value[i] for i in np.flatnonzero(v.period == period)))
+
+
+def _ratio_iterations(
+    run: FamilyRun, cur: MPArrays, result: dict, shock: Any, shock_levels: bool
+) -> tuple[MPArrays, dict]:
+    """GEMPACK ``del_tbalry(r) = 0`` on top of the nominal hook: ``savf[r]`` of every
+    non-residual region is held at ``savf_check[r] * W / W_check`` (``W`` = world income =
+    ``sum(regy)``), the level form of ``INCOMEWLD * del_tbalry = TB * y - TBAL * ywld``
+    with ``del_tbalry = 0`` (gtapv7.tab, E_del_tbalry). The first solve held the check's
+    value (``W`` at the check); each further solve uses the ``W`` of the previous one, until
+    the relative change of ``W`` is below ``RATIO_TOL``. Returns the last arrays and stats
+    (``nit`` is summed over the solves; ``ratio_iterations`` counts them)."""
+    sv = cur.vars["savf"]
+    chk = {
+        k[0]: float(sv.value[i])
+        for i, k in enumerate(sv.keys)
+        if sv.period[i] == "check" and k[0] in run.nominal_savf
+    }
+    w_chk = _world_income(cur, "check")
+    w = _world_income(cur, "shock")
+    nit = int(result.get("nit", 0))
+    try:
+        for k in range(RATIO_MAX_ITER):
+            run.savf_targets = {r: x * w / w_chk for r, x in chk.items()}
+            cur, result = _solve_period(
+                run,
+                cur,
+                "shock",
+                base_calibrated=True,
+                solve_check=True,
+                shock=shock,
+                shock_levels=shock_levels,
+            )
+            nit += int(result.get("nit", 0))
+            w_new = _world_income(cur, "shock")
+            done = abs(w_new - w) <= RATIO_TOL * abs(w_new)
+            w = w_new
+            if done or int(result["code"]) != 1:
+                break
+        else:
+            raise RuntimeError(
+                f"trade_balance='ratio': world income did not settle in "
+                f"{RATIO_MAX_ITER} solves"
+            )
+    finally:
+        run.savf_targets = None
+    result = {**result, "nit": nit, "ratio_iterations": k + 1}
+    return cur, result
+
+
 def _solve_family(
     params,
     closure,
@@ -564,6 +634,7 @@ def _solve_family(
     )
     if nominal_trade_balance:
         run.nominal_savf = tuple(r for r in run.regions if r != run.residual_region)
+    ratio = nominal_trade_balance == "ratio"
     timing["prepare_s"] = time.perf_counter() - t0
     # records, cross records and MPArrays are now loaded and long-lived: hide them
     # from the full passes too (the entry-point freeze predates them)
@@ -586,6 +657,10 @@ def _solve_family(
             shock=shock,
             shock_levels=shock_levels,
         )
+        if ratio and period == "shock":
+            cur, results[period] = _ratio_iterations(
+                run, cur, results[period], shock, shock_levels
+            )
         timing[f"{period}_s"] = time.perf_counter() - t
     timing["total_s"] = time.perf_counter() - t0
     return FamilyResult(

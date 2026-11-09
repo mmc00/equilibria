@@ -27,7 +27,7 @@ from pathlib import Path
 
 import numpy as np
 
-from equilibria.babel.har.sl4 import Sl4Changes
+from equilibria.babel.har.sl4 import Sl4Change, Sl4Changes
 from equilibria.babel.har.symbols import HeaderArray
 from equilibria.babel.har.writer import write_har
 from equilibria.compare import Mapping
@@ -137,6 +137,27 @@ def zero_base_cells(run: AltertaxRun, pre: str = "check") -> dict[str, set]:
     its price-difference formula there (``E_qes2`` holds for every cell regardless of the
     weight), so these cells are not comparable and are excluded from the gate."""
     return _changes(run, pre, pre)[1]
+
+
+def read_sl4dump(path: Path) -> Sl4Changes:
+    """The % changes of a ``sl4dump.har`` (``sltoht`` HAR output of the cumulative
+    solution) in the shape ``read_sl4_changes`` returns. Headers ``0001...`` hold one
+    variable each: its name is the first word of ``long_name`` (``"qo # output of ... #"``)
+    and every variable is read as a percent change (``kind == "p"``); a variable with a
+    zero-sized set (``qesf``) has no cells. Level-only and creation headers are skipped."""
+    from equilibria.babel.har.reader import read_har
+    from equilibria.babel.har.sl4_levels import is_leva_header
+
+    out: dict[str, Sl4Change] = {}
+    for hid, ha in read_har(str(path)).items():
+        if not is_leva_header(hid):
+            continue
+        name = ha.long_name.split("#", 1)[0].strip()
+        elems = [[str(e).strip() for e in es] for es in ha.set_elements]
+        arr = np.asarray(ha.array, dtype=np.float64)
+        shape = tuple(len(e) for e in elems)
+        out[name] = Sl4Change(elems, "p", arr.reshape(shape) if arr.size else arr)
+    return Sl4Changes(out, {})
 
 
 def gempack_changes(changes: Sl4Changes | Pct) -> Pct:

@@ -1,0 +1,154 @@
+"""Measure the ALTERTAX array route against a RunGTAP AlterTax reference (10 % tms shock).
+
+    python scripts/family/altertax_rungtap_measure.py <dataset> [--trade-balance ratio|nominal]
+                                                       [--out DIR]
+
+``<dataset>`` is a folder of ``data/gtap7`` (``nus333``, ``gtap7_10x7``); the reference is its
+``gempack_altertax-rungtap_tms-rate10_s8-16-32`` folder (``parameters.prm``, ``tms_rate10.shk``,
+``sl4dump.har`` and the four GEMPACK ``.har`` outputs). Solves with the folder's parameters
+and shock, then runs every gate of ``family.altertax.gates`` that can be evaluated against
+that folder, one by one (a failing or erroring gate does not stop the others), and writes
+``<dataset>_<trade_balance>.json`` into DIR (default: the current directory).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import tempfile
+import traceback
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
+
+REF = "gempack_altertax-rungtap_tms-rate10_s8-16-32"
+
+
+def _set_env() -> None:
+    from tests.family._prep import _newton_mumps
+
+    for k, v in {**_newton_mumps(), "EQUILIBRIA_GTAP_TR_LINSOLVE": "direct"}.items():
+        os.environ.setdefault(k, v)
+    os.environ.setdefault(
+        "EQUILIBRIA_FAMILY_CACHE", tempfile.mkdtemp(prefix="altax_rg_cache_")
+    )
+
+
+def measure(dataset: str, trade_balance: str) -> dict:
+    from equilibria.babel.har import read_har
+    from equilibria.family.altertax import gates
+    from equilibria.family.altertax.decomp import decomp_headers
+    from equilibria.family.altertax.pct import gempack_changes, pct_changes
+    from equilibria.family.altertax.run import load_altertax_params, solve_altertax
+    from equilibria.family.altertax.shocks import load_tms_shock
+    from equilibria.family.altertax.summary import summary_headers
+    from equilibria.family.altertax.updated import updated_headers
+    from equilibria.family.altertax.volume import volume_headers
+
+    d = ROOT / "data" / "gtap7" / dataset
+    ref = d / REF
+    prm = ref / "parameters.prm"
+    shock = load_tms_shock(ref / "tms_rate10.shk")
+    params = load_altertax_params(d, prm)
+    run = solve_altertax(
+        d, prm=prm, shock=shock, trade_balance=trade_balance, params=params
+    )
+    res = run.result.results["shock"]
+    out: dict = {
+        "dataset": dataset,
+        "trade_balance": trade_balance,
+        "codes": run.codes,
+        "minutes": run.minutes,
+        "shock_nit": res.get("nit"),
+        "ratio_iterations": res.get("ratio_iterations"),
+        "shock_residual": res.get("residual"),
+        "outputs": [],
+    }
+    sl4 = gates.read_sl4(ref / gates.SL4_DUMP)
+    gem = gempack_changes(sl4)
+    jobs = {
+        "levels": lambda: gates.report_levels_from_pct(run, sl4),
+        "updated": lambda: gates.report_updated(
+            updated_headers(run), read_har(str(ref / "updated.har")), labels=False
+        ),
+        "summary": lambda: gates.report_summary(
+            summary_headers(run), read_har(str(ref / "summary.har")), labels=False
+        ),
+        "volume": lambda: gates.report_volume(
+            run, volume_headers(run), read_har(str(ref / "volume.har")), labels=False
+        ),
+        "decomp": lambda: gates.report_decomp(
+            decomp_headers(run), read_har(str(ref / "decomp.har")), labels=False
+        ),
+        "pct": lambda: gates.report_pct(run, pct_changes(run), gem),
+    }
+    for name, job in jobs.items():
+        try:
+            out["outputs"].append(job())
+        except Exception as e:  # a gate that cannot run is a finding, not a stop
+            out["outputs"].append(
+                {
+                    "output": name,
+                    "pass": False,
+                    "error": f"{type(e).__name__}: {e}",
+                    "trace": traceback.format_exc()[-1500:],
+                }
+            )
+    # closure diagnostics straight from the reference's own % changes
+    out["gempack_closure"] = {
+        k: sl4.changes[k].values.tolist()
+        for k in ("del_tbalry", "del_tbal", "ywld", "cgdslack")
+        if k in sl4.changes
+    }
+    from equilibria.family.driver import _world_income
+
+    mp = run.result.mp
+    w0, w1 = _world_income(mp, "check"), _world_income(mp, "shock")
+    sv = mp.vars["savf"]
+    out["ours_ywld_pct"] = 100.0 * (w1 / w0 - 1.0)
+    out["ours_savf_over_income_change"] = {
+        k[0]: float(sv.value[i]) / w1
+        - float(sv.value[sv.keys.index((k[0], "check"))]) / w0
+        for i, k in enumerate(sv.keys)
+        if k[-1] == "shock" and k[0] != run.params.sets.r[-1]
+    }
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("dataset")
+    ap.add_argument("--trade-balance", default="ratio", choices=("ratio", "nominal"))
+    ap.add_argument("--out", default=".")
+    a = ap.parse_args()
+    _set_env()
+    from equilibria.family.altertax.gates import json_safe
+
+    res = measure(a.dataset, a.trade_balance)
+    path = Path(a.out) / f"{a.dataset}_{a.trade_balance}.json"
+    path.write_text(json.dumps(json_safe(res), indent=1, allow_nan=False, default=str))
+    print(path)
+    print(
+        "codes",
+        res["codes"],
+        "minutes",
+        round(res["minutes"], 2),
+        "ratio_it",
+        res["ratio_iterations"],
+    )
+    for o in res["outputs"]:
+        print(
+            o["output"] if "output" in o else o.get("error"),
+            "max",
+            o.get("max"),
+            "pass",
+            o["pass"],
+        )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

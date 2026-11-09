@@ -62,20 +62,25 @@ def apply_unit_stand_in(
 
 
 def load_altertax_params(
-    dataset_dir: Path, prm: str = "altertax.prm", *, unit_sigma: float = 1.01
+    dataset_dir: Path, prm: str | Path = "altertax.prm", *, unit_sigma: float = 1.01
 ) -> GTAPParameters:
     """``GTAPParameters`` of the nus333 package with ``prm`` as the parameter file.
+
+    ``prm`` is a name inside ``dataset_dir`` or, when no such file exists there, a path
+    (e.g. the ``parameters.prm`` of a RunGTAP reference folder). The factor mobility sets
+    come from its ``EFLG`` header (``GTAPSets.load_from_har``), not from the closure.
 
     The production nests ``sigmap``/``sigmand``/``sigmav`` come out of the loader at 1.01
     (#192); ``esubm`` and ``sigmas`` equal to 1 are set to ``unit_sigma`` here and the
     shares recalibrated (the loader's last two steps)."""
     d = Path(dataset_dir)
+    prm_path = d / prm if (d / prm).exists() else Path(prm)
     baserate = d / "baserate.har"
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=d / "basedata.har",
         sets_path=d / "sets.har",
-        default_path=d / prm,
+        default_path=prm_path,
         baserate_path=baserate if baserate.exists() else None,
     )
     changed = apply_unit_stand_in(p, unit_sigma, recalibrate=False)
@@ -113,13 +118,23 @@ def _check_cells(params: GTAPParameters, shock: dict) -> None:
 def solve_altertax(
     dataset_dir: Path,
     *,
-    prm: str = "altertax.prm",
+    prm: str | Path = "altertax.prm",
     shock: dict = ALTAX_SHOCK,
     cache_root: Path | None = None,
     params: GTAPParameters | None = None,
+    trade_balance: str = "nominal",
 ) -> AltertaxRun:
     """Base, check and shock of ALTERTAX on ``dataset_dir`` (``params`` overrides the
-    load, e.g. with other elasticities)."""
+    load, e.g. with other elasticities).
+
+    ``trade_balance`` is the closure of the external balance of every non-residual region:
+    ``"nominal"`` (default, ``altax.exp`` of nus333 Burfisher: ``del_tbal = 0``) holds
+    ``savf`` at its check value; ``"ratio"`` (RunGTAP's ``del_tbalry = 0``) holds
+    ``savf / world income``. The residual region (``cgdslack``) is the same in both."""
+    if trade_balance not in ("nominal", "ratio"):
+        raise ValueError(
+            f"trade_balance={trade_balance!r}: expected 'nominal' or 'ratio'"
+        )
     p = load_altertax_params(dataset_dir, prm) if params is None else params
     _check_cells(p, shock)
     t0 = time.perf_counter()
@@ -129,8 +144,9 @@ def solve_altertax(
         ALTAX_RESIDUAL_REGION,
         shock=shock,
         cache_root=cache_root,
-        # GEMPACK's del_tbal(USA) = 0: the nominal balance, not savf = pigbl * savf_bar
-        nominal_trade_balance=True,
+        # GEMPACK's del_tbal(USA) = 0: the nominal balance, not savf = pigbl * savf_bar;
+        # "ratio": del_tbalry(r) = 0 (savf / world income)
+        nominal_trade_balance=trade_balance,
     )
     minutes = (time.perf_counter() - t0) / 60.0
     codes = {k: int(res.results[k]["code"]) for k in ("check", "shock")}
