@@ -68,11 +68,15 @@ def _ratio(pre: dict, post: dict, key: tuple[str, ...]) -> float:
     return 0.0 if x0 == 0.0 else _g(post, key) / x0 - 1.0
 
 
-def volume_bases(run: AltertaxRun, period: str = "check") -> dict[str, np.ndarray]:
+def volume_bases(
+    run: AltertaxRun,
+    period: str = "check",
+    db: dict[str, HeaderArray] | None = None,
+) -> dict[str, np.ndarray]:
     """``BV`` of every ``DQ`` header: the value coefficients at ``period`` (``check``)."""
     v = {
         k: np.asarray(h.array, dtype=np.float64)
-        for k, h in headers_at(run, period).items()
+        for k, h in (headers_at(run, period) if db is None else db).items()
     }
     vdb = v["VDPB"] + v["VDGB"] + v["VDIB"] + v["VDFB"].sum(axis=1)
     marg = [list(run.params.sets.i).index(m) for m in run.params.sets.marg]
@@ -104,7 +108,8 @@ def volume_headers(
     A, B = _Period(run, pre), _Period(run, post)
     els = _elements(run)
     comm, acts, reg, endw = els["COMM"], els["ACTS"], els["REG"], els["ENDW"]
-    bv = volume_bases(run, pre)
+    vd = headers_at(run, pre)
+    bv = volume_bases(run, pre, vd)
 
     def rt(var: str, key: tuple[str, ...]) -> float:
         return _ratio(A[var], B[var], key)
@@ -133,7 +138,6 @@ def volume_headers(
              for ci, c in enumerate(comm)]
         )  # fmt: skip
     # qds (E_qds, 2128): share-weighted sum of the domestic purchases by agent
-    vd = headers_at(run, pre)
     dqid = np.array(
         [[np.asarray(vd["VDIB"].array)[ci, ri] * rt("xda", (r, c, "inv"))
           for ri, r in enumerate(reg)] for ci, c in enumerate(comm)]

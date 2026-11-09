@@ -14,3 +14,5 @@ TOL_VOLUME = 1e-4  # volume tables
 TOL_PCT = 1e-6
 # check reproduces base: |check - base| <= CHECK_TOL * max(1, |base|)
 CHECK_TOL = 5e-6
+# floor of the relative metric ``rel_diff`` (every variable of compare/maps/gtap7.yaml)
+ABS_FLOOR = 1.0e-6

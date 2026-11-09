@@ -13,7 +13,7 @@ import pytest
 
 from equilibria.babel.har.reader import read_har
 from equilibria.compare.measure import rel_diff
-from equilibria.family.altertax.tolerances import TOL_VOLUME
+from equilibria.family.altertax.tolerances import ABS_FLOOR, TOL_VOLUME
 from equilibria.family.altertax.volume import (
     VOLUME_HEADERS,
     volume_bases,
@@ -23,7 +23,6 @@ from equilibria.family.altertax.volume import (
 from tests.family._prep import ROOT
 
 FIXTURE = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg/altax_volume.har"
-ABS_FLOOR = 1.0e-6  # every variable of src/equilibria/compare/maps/gtap7.yaml
 THRESHOLD_ULPS = 8
 EXPECTED = [
     "DQXS",
@@ -89,10 +88,11 @@ def test_volume_shapes_match_gempack(headers, gempack):
         assert (a.coeff_name, a.long_name) == (b.coeff_name, b.long_name), name
 
 
-def test_volume_within_float32_resolution_of_gempack(altax_run, headers, gempack):
-    """Measured ceiling: every cell agrees with GEMPACK within ``THRESHOLD_ULPS`` float32
-    ulp of its level (worst measured: 2.1 ulp), and above that bound the signs agree. This
-    is all a float32 oracle can certify for these changes, see the xfail below."""
+def test_volume_smoke_within_ulp_bound(altax_run, headers, gempack):
+    """Smoke-level bound, NOT a certification: every cell is within ``THRESHOLD_ULPS``
+    float32 ulp of its level of GEMPACK's value and has its sign above that bound. The
+    bound is loose (8 ulp is 6-50% of these changes), so it catches wrong signs, wrong
+    cells and gross errors only; the real gate is the xfail below."""
     bases = volume_bases(altax_run)
     above, sign_bad, abs_bad = {}, [], []
     for name in EXPECTED:
@@ -111,21 +111,22 @@ def test_volume_within_float32_resolution_of_gempack(altax_run, headers, gempack
         above[name] = n
     assert not abs_bad, (above, abs_bad)
     assert not sign_bad, (above, sign_bad)
-    # the comparison must really bite: most headers have cells above the noise bound
     assert sum(v > 0 for v in above.values()) >= 8, above
 
 
-# The cells above the noise bound do NOT meet TOL_VOLUME (1e-4 relative). Measured cause:
-# the shock is 0.0012% on one output tax, so a volume change is ~1e-5 of its level, which is
-# 1e2 float32 ulp of the level (gem |change| / ulp32(level) <= 225); GEMPACK's float32
-# solution therefore resolves a change to 1 ulp / change ~ 0.5-1% at best, and the
-# differences are 0.3-2.1 ulp. DQO and DQC share the same 0.9011% relative difference (one
-# shared xp(AGR,USA) quantity), i.e. a common-mode single-precision error, not a formula
-# difference. Meeting 1e-4 would need a change of 1e4 ulp. The strict gate is kept (not
-# loosened) and expected to fail; it turns into an error if it ever passes.
+# The 21 cells above the noise bound miss TOL_VOLUME (1e-4 relative) by 0.19-1.26%. The
+# gap is ours, not GEMPACK's float32: GEMPACK's volume.har equals BV * q(altax.sl4) / 100
+# to 5e-7 and the .sl4 has 4-6 significant figures. Measured cause (sweep of every
+# stand-in elasticity, 1.0025/1.005/1.01/1.02, see the Task 6 report): the gap is linear in
+# sigma - 1, where 1.01 stands in for the unit elasticities of altertax.prm (~0.9% of the
+# change per 0.01 of sigma - 1; DQO/DQC -0.901% at 1.01, -0.464% at 1.005, extrapolating
+# to -3e-4 at sigma = 1; AGR in USA is made by AGR only, so qc = qo). Import and trade
+# cells (DQXS(0,0,1), DQGM(0,1), DQFM(0,2,1), DQPM(0,1)) keep 0.2-0.36% at sigma -> 1,
+# unexplained. The strict gate is kept, not loosened; it errors if it ever passes.
 @pytest.mark.xfail(
     strict=True,
-    reason="TOL_VOLUME=1e-4 is below the float32 resolution (~1/130 ulp) of GEMPACK changes",
+    reason="TOL_VOLUME not met: 1.01 stand-in for sigma=1 (~0.9% per 0.01) + unexplained "
+    "0.2-0.36% on import/trade cells at sigma->1",
 )
 def test_volume_values_meet_tol_volume(altax_run, headers, gempack):
     bases = volume_bases(altax_run)
