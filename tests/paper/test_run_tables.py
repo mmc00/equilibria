@@ -49,3 +49,21 @@ def test_dry_run_no_corre_nada(capsys) -> None:
         "compare_gempack_levels.py" in printed
         and "compare_burfisher_gempack.py" in printed
     )
+
+
+NOTEBOOK_EXERCISES = ["TBL65B", "TBL94", "ME3C", "ME9A"]
+
+
+def test_notebook_exercises_run_one_process_each() -> None:
+    """Their closures are built in a notebook with @overwrite, which leaks into
+    the next exercise solved in the same process: on 2026-11-08 TBL94 came out
+    at 64% within 0.1% after TBL65B, against 100% alone. One command per
+    exercise keeps each in its own process."""
+    by_name = {s.name: s for s in _mod().steps(Path("out"))}
+    for name, against in (
+        ("table3a_notebooks", "gempack"),
+        ("table3_notebooks", "gams"),
+    ):
+        cmds = by_name[name].cmds
+        assert [c[c.index(against) + 1] for c in cmds] == NOTEBOOK_EXERCISES, name
+        assert all("notebook_exercises.py" in c[1] for c in cmds), name

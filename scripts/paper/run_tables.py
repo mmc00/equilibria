@@ -57,6 +57,9 @@ def _updated(dataset: str) -> str:
     return str((rec / "updated.har").relative_to(ROOT))
 
 
+# Their closures are built in a notebook (@overwrite): see scripts/paper/notebook_exercises.py.
+NOTEBOOK_EXERCISES = ["TBL65B", "TBL94", "ME3C", "ME9A"]
+
 TABLE2 = {  # dataset -> solver de la Tabla 2
     "3x3": "path",
     "3x4": "path",
@@ -97,6 +100,26 @@ def steps(out: Path) -> list[Step]:
         )
     ]  # fmt: skip
     refs = out / "gams_burfisher"
+    nb = "scripts/paper/notebook_exercises.py"
+    nb_files = [nb, "examples/notebooks/gtap7/burfisher"]
+    # One command per exercise: each @overwrite closure in its own process.
+    nb_gempack = [
+        [py, nb, "gempack", exp, "--json", str(out / f"table3a_{exp}.json")]
+        for exp in NOTEBOOK_EXERCISES
+    ]
+    nb_gams = [
+        [
+            py,
+            nb,
+            "gams",
+            exp,
+            "--gams-dir",
+            str(refs),
+            "--json",
+            str(out / f"table3_{exp}.json"),
+        ]
+        for exp in NOTEBOOK_EXERCISES
+    ]
     return [
         Step("table1", "Tabla 1: paridad con GAMS (MCP y NLP)",
              [[py, "scripts/gtap/run_parity_gates.py"]], ["scripts/gtap/run_parity_gates.py"]),
@@ -105,12 +128,18 @@ def steps(out: Path) -> list[Step]:
              [[py, "scripts/gtap/compare_burfisher_gempack.py",
                "--gempack-dir", "gragg", "--json", str(out / "table3a.json")]],
              ["scripts/gtap/compare_burfisher_gempack.py", *_gragg_runs(), _rel("nus333")]),
+        Step("table3a_notebooks",
+             "Tabla 3a: los 4 ejercicios con cierre por notebook contra GEMPACK",
+             nb_gempack, nb_files),
         Step("table3_refs", "Referencias GAMS de la Tabla 3 (necesita GAMS)",
              [[py, "scripts/gtap/gen_burfisher_gams.py", str(refs)]],
              ["scripts/gtap/gen_burfisher_gams.py"]),
         Step("table3", "Tabla 3: ejercicios del libro contra GAMS",
              [[py, "scripts/gtap/run_burfisher.py", "--gams-dir", str(refs),
                "--json", str(out / "table3.json")]], ["scripts/gtap/run_burfisher.py"]),
+        Step("table3_notebooks",
+             "Tabla 3: los 4 ejercicios con cierre por notebook contra GAMS",
+             nb_gams, nb_files),
         Step("tbl65b_me3c", "TBL65B y ME3C (cierres por notebook)",
              [[py, "-m", "pytest", "-q", "tests/templates/gtap/test_nus333_tbl65b_unemployment.py"]],
              ["tests/templates/gtap/test_nus333_tbl65b_unemployment.py"]),
