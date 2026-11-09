@@ -22,7 +22,6 @@ import numpy as np
 import pytest
 
 from equilibria.babel.har.reader import read_har
-from equilibria.compare.measure import rel_diff
 from equilibria.family.altertax.decomp import (
     CHANGE_SHAPES,
     DECOMP_HEADERS,
@@ -30,19 +29,32 @@ from equilibria.family.altertax.decomp import (
     decomp_headers,
     write_decomp_har,
 )
+from equilibria.family.altertax.gates import (
+    DECOMP_KNOWN_MISS as KNOWN_MISS,
+)
+from equilibria.family.altertax.gates import (
+    NOISE,
+    decomp_scale,
+    ev_gaps,
+    miss_is_bounded,
+    structure_problems,
+)
+from equilibria.family.altertax.gates import (
+    decomp_compare as _compare,
+)
+from equilibria.family.altertax.gates import (
+    total_gaps as _total_gaps,
+)
 from equilibria.family.altertax.summary import numeric_headers
-from equilibria.family.altertax.tolerances import ABS_FLOOR, TOL_CHANGE
+from equilibria.family.altertax.tolerances import TOL_CHANGE
 from tests.family._prep import ROOT
 
 FIXTURE = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg/altax_decomp.har"
-NOISE = 1e-6  # relative to max|EV| of the region (user 2026-11-09)
 EXPECTED = [
     "A", "A1", "A2", "A21", "A211", "A22", "A221", "A222", "A22F", "A22P", "A22G",
     "A22I", "A23", "A231", "A24", "A241", "A25", "A251", "B1", "B2", "C1", "C11",
     "C12", "C13", "C14", "C15", "C16", "C17", "E1", "F1",
 ]  # fmt: skip
-# the columns of the explanatory-factor headers that are tax rates (levels, not changes)
-RATE_COLS = ("taxrateb", "taxrateu")
 
 
 @pytest.fixture(scope="module")
@@ -58,38 +70,7 @@ def headers(altax_run):
 @pytest.fixture(scope="module")
 def scale(gempack):
     """max|EV| of each region: the largest |component| of its WELFARE row."""
-    return np.abs(np.asarray(gempack["A"].array, dtype=np.float64)).max(axis=1)
-
-
-def _region_scale(ha, ix, scale):
-    """Scale of cell ``ix``: the largest scale of the regions it is indexed by."""
-    pos = [i for i, n in enumerate(ha.set_names) if n == "REG"]
-    return max(scale[ix[i]] for i in pos) if pos else scale.max()
-
-
-def _compare(name, ours_ha, gem_ha, scale):
-    """(cells above the noise threshold, relative failures, absolute failures)."""
-    ours = np.asarray(ours_ha.array, dtype=np.float64)
-    gem = np.asarray(gem_ha.array, dtype=np.float64)
-    last = gem_ha.set_elements[-1] if gem_ha.set_names else []
-    above, rel_bad, abs_bad = 0, [], []
-    for ix in np.ndindex(ours.shape):
-        m, g = float(ours[ix]), float(gem[ix])
-        thr = NOISE * _region_scale(gem_ha, ix, scale)
-        col = last[ix[-1]] if gem_ha.set_names and gem_ha.set_names[-1] == "COL" else ""
-        if col in RATE_COLS:
-            # a tax rate is a level: relative at TOL_CHANGE, no noise threshold
-            if rel_diff(m, g, g, ABS_FLOOR) > TOL_CHANGE:
-                rel_bad.append((name, ix, m, g, rel_diff(m, g, g, ABS_FLOOR)))
-            above += 1
-        elif max(abs(m), abs(g)) > thr:
-            above += 1
-            ok = m * g > 0 and rel_diff(m, g, g, ABS_FLOOR) <= TOL_CHANGE
-            if not ok:
-                rel_bad.append((name, ix, m, g, rel_diff(m, g, g, ABS_FLOOR)))
-        elif abs(m - g) > thr:
-            abs_bad.append((name, ix, m, g, thr))
-    return above, rel_bad, abs_bad
+    return decomp_scale(gempack)
 
 
 def test_decomp_headers(headers):
@@ -98,12 +79,7 @@ def test_decomp_headers(headers):
 
 
 def test_decomp_shapes_match_gempack(headers, gempack):
-    for name in EXPECTED:
-        a, b = headers[name], gempack[name]
-        assert a.set_names == b.set_names, name
-        assert a.set_elements == b.set_elements, name
-        assert a.array.shape == b.array.shape, name
-        assert (a.coeff_name, a.long_name) == (b.coeff_name, b.long_name), name
+    assert not structure_problems(headers, gempack, EXPECTED)
 
 
 def _check_gate(headers, gempack, scale):
@@ -178,87 +154,14 @@ def test_formulas_reproduce_gempack_from_its_own_changes(sl4_headers, gempack, s
     _check_gate(sl4_headers, gempack, scale)
 
 
-def _regional_totals(name, ha):
-    """``{(header, part, region): total}``: the sum over every dimension but the region
-    of a header's welfare columns. ``COL`` headers give ``welcnt`` and ``dvol`` (the tax
-    rates are levels); the trade tax headers attribute a cell to the region the CNT uses
-    (``xtax``/export: the source, axis 1; ``mtax``/import: the destination, axis 2)."""
-    arr = np.asarray(ha.array, dtype=np.float64)
-    regs = ha.set_elements[ha.set_names.index("REG")]
-    parts = []  # (label, array, region axis)
-    if name == "A23":
-        parts = [("xtax", arr[..., 0], 1), ("mtax", arr[..., 1], 2)]
-    elif name == "A231":
-        for c, lab in enumerate(("welcnt", "dvol")):
-            parts += [(f"{lab}/export", arr[:, :, :, c, 1], 1)]
-            parts += [(f"{lab}/import", arr[:, :, :, c, 0], 2)]
-    elif ha.set_names[-1] == "COL":
-        ax = ha.set_names.index("REG")
-        parts = [(lab, arr[..., c], ax) for c, lab in enumerate(("welcnt", "dvol"))]
-    else:
-        parts = [("", arr, ha.set_names.index("REG"))]
-    out = {}
-    for lab, a, ax in parts:
-        tot = a.sum(axis=tuple(i for i in range(a.ndim) if i != ax))
-        for r, t in zip(regs, tot, strict=True):
-            out[(name, lab, r)] = float(t)
-    return out
-
-
-def _total_gaps(headers, gempack, scale):
-    """Relative gap of every regional total above the noise floor (``NOISE * max|EV|``)."""
-    floor = NOISE * scale.max()
-    gaps = {}  # two-sided: a total above the floor on EITHER side is gated
-    for name in EXPECTED:
-        if name.startswith("C"):
-            continue  # exogenous at zero: no cell above the floor
-        ours = _regional_totals(name, headers[name])
-        gem = _regional_totals(name, gempack[name])
-        for k, g in gem.items():
-            m = ours[k]
-            if max(abs(g), abs(m)) > floor:
-                gaps[k] = (m, g, rel_diff(m, g, g, ABS_FLOOR) if m * g > 0 else np.inf)
-    return gaps
-
-
-# Regional totals that miss TOL_CHANGE with the nominal trade balance closure, with the
-# signed error (ours - GEMPACK) / |GEMPACK| measured at the 1.01 stand-in. Sweeps of the
-# stand-in (sigma 1.01 / 1.005 / 1.0025, in %), the gap being linear in sigma - 1 where it
-# is the stand-in:
-#   A21 USA   -3.82 / -1.79 / -0.78      A24 ROW  -53.3 / -26.7 / -13.5 (6e-4 of EV)
-#   A222 USA  +3.91 / +2.31 / +1.51      A23 xtax ROW  -4.08 / -1.95 / -0.83 (-> ~+0.3 at 1)
-#   A231 dvol/export ROW  -3.59 / -1.72 / -0.73 (-> ~0 at 1)
-#   A23 mtax USA  -30.8 / -14.5 / -6.3 (-> ~+2 at 1: mostly the stand-in, borderline)
-# All of these are the stand-in except one. A231 dvol/import USA (-338 / -160 / -70 %,
-# -> ~+18 % at sigma = 1) is an OPEN small-cell model residual, not the stand-in: it is the
-# near-cancelling sum of three +-1.3e-2 cells (~4e-4 of EV) driven by the MFG ROW -> USA
-# dvol (+186 % at 1.01, +39 % at 1.0025, ~-10 % at sigma = 1: -4.0e-3 vs GEMPACK -4.4e-3),
-# the same family as Task 6's trade residual (DQXS/DQFM import cells at sigma -> 1).
-# ``test_known_misses_are_bounded`` keeps each within 1.5x of its measured error (same
-# sign), and still a miss: it fails when one starts to pass or gets worse.
-KNOWN_MISS = {
-    ("A21", "", "USA"): -0.0382,
-    ("A211", "welcnt", "USA"): -0.0382,
-    ("A222", "", "USA"): +0.0391,
-    ("A22I", "welcnt", "USA"): +0.0391,
-    ("A22I", "dvol", "USA"): +0.0286,
-    ("A24", "", "ROW"): -0.5326,
-    ("A241", "welcnt", "ROW"): -0.5326,
-    ("A23", "mtax", "USA"): -0.3082,
-    ("A231", "welcnt/import", "USA"): -0.3082,
-    ("A23", "xtax", "ROW"): -0.0408,
-    ("A231", "welcnt/export", "ROW"): -0.0408,
-    ("A231", "dvol/export", "ROW"): -0.0359,
-    ("A231", "dvol/import", "USA"): -3.3757,  # open residual, see above
-}
+# _regional_totals, _total_gaps and KNOWN_MISS (with the measured cause of every miss)
+# live in equilibria.family.altertax.gates.
 
 
 def test_ev_by_region_within_tol_change(headers, gempack):
     """EV of each region (sum of the WELFARE row, EV_ALT of line 3820) vs GEMPACK's."""
-    ev = np.asarray(headers["A"].array, dtype=np.float64).sum(axis=1)
-    gem = np.asarray(gempack["A"].array, dtype=np.float64).sum(axis=1)
-    gap = [rel_diff(m, g, g, ABS_FLOOR) for m, g in zip(ev, gem, strict=True)]
-    assert max(gap) <= TOL_CHANGE, (ev, gem, gap)
+    gap = ev_gaps(headers, gempack)
+    assert max(gap) <= TOL_CHANGE, gap
 
 
 # End-to-end gate (user 2026-11-09 and controller ruling): TOL_CHANGE on the EV of each
@@ -282,7 +185,7 @@ def test_known_misses_are_bounded(headers, gempack, scale):
         err = (m - g) / abs(g)
         if rel <= TOL_CHANGE:
             bad.append((k, "now within TOL_CHANGE, remove it", err))
-        elif err * ref <= 0 or abs(err) > 1.5 * abs(ref):
+        elif not miss_is_bounded(err, ref):
             bad.append((k, "error changed sign or grew beyond 1.5x", err, ref))
     assert not bad, bad
 
@@ -400,7 +303,7 @@ def test_unchanged_check_raises():
     from equilibria.family.altertax.decomp import _require_unchanged as _check
 
     def _require_unchanged(a, b):
-        _check(a, b)  # type: ignore[arg-type]  # duck-typed stand-in for _Period
+        _check(a, b)  # duck-typed stand-in for _Period
 
     class P:
         def __init__(self, vals, names=_UNCHANGED):

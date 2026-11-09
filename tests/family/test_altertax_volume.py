@@ -12,8 +12,16 @@ import numpy as np
 import pytest
 
 from equilibria.babel.har.reader import read_har
-from equilibria.compare.measure import rel_diff
-from equilibria.family.altertax.tolerances import ABS_FLOOR, TOL_CHANGE
+from equilibria.family.altertax.gates import (
+    THRESHOLD_ULPS,
+    structure_problems,
+)
+from equilibria.family.altertax.gates import (
+    ulp32 as _ulp32,
+)
+from equilibria.family.altertax.gates import (
+    volume_compare as _compare,
+)
 from equilibria.family.altertax.volume import (
     VOLUME_HEADERS,
     volume_bases,
@@ -23,7 +31,6 @@ from equilibria.family.altertax.volume import (
 from tests.family._prep import ROOT
 
 FIXTURE = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg/altax_volume.har"
-THRESHOLD_ULPS = 8
 EXPECTED = [
     "DQXS",
     "DQDS",
@@ -50,42 +57,13 @@ def headers(altax_run):
     return volume_headers(altax_run)
 
 
-def _ulp32(x):
-    return np.spacing(
-        np.abs(np.asarray(x, dtype=np.float64)).astype(np.float32)
-    ).astype(np.float64)
-
-
-def _compare(name, ours, gem, level):
-    """(cells above threshold, relative failures, absolute failures below it)."""
-    ours = np.asarray(ours, dtype=np.float64)
-    gem = np.asarray(gem, dtype=np.float64)
-    thr = THRESHOLD_ULPS * _ulp32(level)
-    above, rel_bad, abs_bad = 0, [], []
-    for ix in np.ndindex(ours.shape):
-        m, g = float(ours[ix]), float(gem[ix])
-        if max(abs(m), abs(g)) > thr[ix]:
-            above += 1
-            ok = m * g > 0 and rel_diff(m, g, g, ABS_FLOOR) <= TOL_CHANGE
-            if not ok:
-                rel_bad.append((name, ix, m, g, rel_diff(m, g, g, ABS_FLOOR)))
-        elif abs(m - g) > thr[ix]:
-            abs_bad.append((name, ix, m, g, float(thr[ix])))
-    return above, rel_bad, abs_bad
-
-
 def test_volume_headers(headers):
     assert list(VOLUME_HEADERS) == EXPECTED
     assert set(headers) == set(EXPECTED)
 
 
 def test_volume_shapes_match_gempack(headers, gempack):
-    for name in EXPECTED:
-        a, b = headers[name], gempack[name]
-        assert a.set_names == b.set_names, name
-        assert a.set_elements == b.set_elements, name
-        assert a.array.shape == b.array.shape, name
-        assert (a.coeff_name, a.long_name) == (b.coeff_name, b.long_name), name
+    assert not structure_problems(headers, gempack, EXPECTED)
 
 
 def test_volume_smoke_within_ulp_bound(altax_run, headers, gempack):

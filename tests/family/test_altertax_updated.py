@@ -8,8 +8,14 @@ import pytest
 
 from equilibria._local_refs import nus333_dir
 from equilibria.babel.har.reader import read_har
-from equilibria.compare.measure import rel_diff
-from equilibria.family.altertax.tolerances import TOL_UPDATED
+from equilibria.family.altertax.gates import (
+    TEXT_HEADERS,
+    structure_problems,
+    updated_failures,
+)
+from equilibria.family.altertax.gates import (
+    worst_gap as _worst,
+)
 from equilibria.family.altertax.updated import (
     UPDATED_HEADERS,
     headers_at,
@@ -19,8 +25,7 @@ from equilibria.family.altertax.updated import (
 from tests.family._prep import ROOT
 
 FIXTURE = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg/altax_updated.har"
-ABS_FLOOR = 1.0e-6  # every variable of src/equilibria/compare/maps/gtap7.yaml
-TEXT = ("XXHS",)
+TEXT = TEXT_HEADERS
 
 
 @pytest.fixture(scope="module")
@@ -33,36 +38,17 @@ def headers(altax_run):
     return updated_headers(altax_run)
 
 
-def _worst(a, b):
-    a = np.asarray(a, dtype=float)
-    b = np.asarray(b, dtype=float)
-    d = np.vectorize(lambda x, y: rel_diff(x, y, y, ABS_FLOOR))(a, b)
-    i = np.unravel_index(int(np.nanargmax(d)), d.shape) if d.size else ()
-    return float(d[i]) if d.size else 0.0, i
-
-
 def test_updated_headers(headers):
     assert set(headers) == set(UPDATED_HEADERS)
     assert len(UPDATED_HEADERS) == 33
 
 
 def test_updated_har_shapes_match_gempack(headers, gempack):
-    for name in UPDATED_HEADERS:
-        a, b = headers[name], gempack[name]
-        assert a.set_names == b.set_names, name
-        assert a.set_elements == b.set_elements, name
-        assert a.array.shape == b.array.shape, name
-        assert (a.coeff_name, a.long_name) == (b.coeff_name, b.long_name), name
+    assert not structure_problems(headers, gempack, UPDATED_HEADERS)
 
 
 def test_updated_matches_gempack(headers, gempack):
-    bad = {}
-    for name in UPDATED_HEADERS:
-        if name in TEXT:
-            continue
-        d, i = _worst(headers[name].array, gempack[name].array)
-        if not d <= TOL_UPDATED:
-            bad[name] = (d, i)
+    bad = updated_failures(headers, gempack)  # gate: TOL_UPDATED
     assert not bad, bad
 
 

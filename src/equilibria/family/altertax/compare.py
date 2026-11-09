@@ -13,7 +13,7 @@ _ROOT = Path(__file__).resolve().parents[4]
 
 # the committed fixture names first, then GEMPACK's own run-folder names
 LEVELS_NAMES = ("sl4levels_altax.har", "altax_sl4levels.har", "sl4levels.har")
-UPDATED_NAMES = ("altax.upd", "updated.har")
+UPDATED_NAMES = ("altax.upd", "updated.har", "altax_updated.har")
 
 
 def load_compare_script():

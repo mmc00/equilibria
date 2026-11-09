@@ -20,6 +20,21 @@ import pytest
 
 from equilibria.babel.har.reader import read_har
 from equilibria.babel.har.sl4 import read_sl4_changes, read_sl4_levels
+from equilibria.family.altertax.gates import (
+    PCT_KNOWN_MISS as KNOWN_MISS,
+)
+from equilibria.family.altertax.gates import (
+    ZERO_BASE,
+    miss_is_bounded,
+    pct_compared,
+    pct_failures,
+)
+from equilibria.family.altertax.gates import (
+    pct_passes as _passes,
+)
+from equilibria.family.altertax.gates import (
+    pct_rel as _rel,
+)
 from equilibria.family.altertax.pct import (
     FIXED,
     gempack_changes,
@@ -51,16 +66,6 @@ def gempack(sl4):
 @pytest.fixture(scope="module")
 def ours(altax_run):
     return pct_changes(altax_run)
-
-
-def _passes(m: float, g: float) -> bool:
-    if abs(m - g) > max(TOL_CHANGE * abs(g), TOL_PCT):
-        return False
-    return not (abs(g) > 10 * TOL_PCT and m * g <= 0)
-
-
-def _rel(m: float, g: float) -> float:
-    return (m - g) / max(abs(g), TOL_PCT)
 
 
 # --- the .sl4 reader ---------------------------------------------------------------
@@ -183,70 +188,16 @@ def test_pct_finite(ours):
         assert all(np.isfinite(x) for x in cells.values()), name
 
 
-# Cells whose base flow is 0 (EVFB(LAND, MFG|SER, USA|ROW) = 0 in basedata.har: 8 cells, qes
-# and qfe of LAND in MFG and SER of both regions) are excluded by rule. A % change on a zero
-# flow is undefined; we report 0, GEMPACK reports the value of its price formula: E_qes2 holds
-# for every cell regardless of the weight, and the 0.0013 comes from -ETRAE * (pes - pe) on a
-# zero flow (qe itself is 0 in the .sl4). GEMPACK's own volume change DQFE = qfe / 100 * BEVFB
-# zeroes it. Four of the 8 would pass anyway through the absolute floor (ROW).
-ZERO_BASE = {
-    ("qes", ("LAND", "MFG", "USA")),
-    ("qes", ("LAND", "SER", "USA")),
-    ("qfe", ("LAND", "MFG", "USA")),
-    ("qfe", ("LAND", "SER", "USA")),
-    ("qes", ("LAND", "MFG", "ROW")),
-    ("qes", ("LAND", "SER", "ROW")),
-    ("qfe", ("LAND", "MFG", "ROW")),
-    ("qfe", ("LAND", "SER", "ROW")),
-}
-
-# Measured misses of the ALTERTAX shock at the 1.01 stand-in for the unit elasticities
-# (user 2026-11-09: kept). Values are the relative error (ours - gem) / max(|gem|, TOL_PCT).
-# - pfactor (USA +4.52, ROW -4.52): ~3e-5 pp. Sigma sweep of altertax.prm's unit elasticities
-#   (1.01, 1.001, 1.0001), pfactor USA 2.50e-5, 2.91e-4, 2.95e-3 pp and ROW -8.8e-6, -1.0e-4,
-#   -1.0e-3. It fits a + b / (sigma - 1) with b = +2.95e-7 (USA), -1.04e-7 (ROW) and
-#   a = -4.2e-6 (USA), +1.5e-6 (ROW), against GEMPACK -7.1e-6 and +2.5e-6: a deterministic
-#   term of our near-unit CES formulation, independent of the solver tolerance (TR_FTOL 1e-13
-#   and RELTOL 1e-12 leave it unchanged). It is NOT the Fisher/Divisia numeraire difference
-#   (about 1e-12 pp here). OPEN LEAD: the origin of the b / (sigma - 1) term is not found.
-# - pgdp (USA -0.17, ROW +0.42), qgdp (USA +4.62, ROW -2.43): ~1e-6 pp. Flat in sigma (pgdp
-#   USA 1.93e-5, 1.99e-5, 2.00e-5 against GEMPACK 2.31e-5; qgdp USA 4.02e-6, 4.07e-6, 4.07e-6
-#   against 7.2e-7: b is 5e-11 and 3e-12), so the stand-in is not their cause: a residual of
-#   the model at the 1e-6 pp scale, unexplained.
-# - qpm(AGR,USA), qms(AGR,USA), qxs(AGR,ROW,USA): the small-cell trade residual of ROW->USA
-#   imports of AGR (same family as Task 6's DQXS and Task 7's A23 residuals): qms and qxs
-#   (identical, one flow) -4.50e-5 vs -4.75e-5 at 1.01, -5.32e-5 at 1.001, -5.39e-5 at 1.0001
-#   (does not converge); qpm 2.79e-5, 2.03e-5, 1.96e-5 vs 1.91e-5 (converges: the stand-in).
-KNOWN_MISS = {
-    ("pfactor", ("USA",)): +4.5248,
-    ("pfactor", ("ROW",)): -4.5248,
-    ("pgdp", ("USA",)): -0.1665,
-    ("pgdp", ("ROW",)): +0.4180,
-    ("qgdp", ("USA",)): +4.6243,
-    ("qgdp", ("ROW",)): -2.4310,
-    ("qpm", ("AGR", "USA")): +0.4643,
-    ("qms", ("AGR", "USA")): +0.0530,
-    ("qxs", ("AGR", "ROW", "USA")): +0.0530,
-}
+# ZERO_BASE (the 8 excluded cells) and KNOWN_MISS (the 9 measured misses, with their
+# causes) live in equilibria.family.altertax.gates.
 
 
 def _compared(ours, gempack):
-    """``{(var, cell): (ours, gem)}`` of the mapped variables, zero-base cells excluded."""
-    return {
-        (n, k): (ours[n][k], g)
-        for n, cells in gempack.items()
-        if n in ours
-        for k, g in cells.items()
-        if (n, k) not in ZERO_BASE
-    }
+    return pct_compared(ours, gempack, ZERO_BASE)
 
 
 def _failures(ours, gempack):
-    return {
-        key: _rel(m, g)
-        for key, (m, g) in _compared(ours, gempack).items()
-        if not _passes(m, g)
-    }
+    return pct_failures(ours, gempack, ZERO_BASE)
 
 
 def test_zero_base_cells_are_the_eight_excluded(altax_run):
@@ -277,7 +228,7 @@ def test_known_misses_are_bounded(ours, gempack):
             bad.append((key, "now within tolerance, remove it"))
             continue
         err = fails[key]
-        if err * ref <= 0 or abs(err) > 1.5 * abs(ref):
+        if not miss_is_bounded(err, ref):
             bad.append((key, "error changed sign or grew beyond 1.5x", err, ref))
     assert not bad, bad
 

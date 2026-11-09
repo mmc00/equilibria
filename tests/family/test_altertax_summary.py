@@ -8,7 +8,18 @@ import numpy as np
 import pytest
 
 from equilibria.babel.har.reader import read_har
-from equilibria.compare.measure import rel_diff
+from equilibria.family.altertax.gates import (
+    NOISE_UNMATCHED,
+    SUMMARY_LEVELS,
+    structure_problems,
+    summary_failures,
+)
+from equilibria.family.altertax.gates import (
+    ulp32 as _ulp32,
+)
+from equilibria.family.altertax.gates import (
+    worst_gap as _worst,
+)
 from equilibria.family.altertax.summary import (
     SUMMARY_HEADERS,
     input_database,
@@ -17,13 +28,12 @@ from equilibria.family.altertax.summary import (
     summary_headers,
     write_summary_har,
 )
-from equilibria.family.altertax.tolerances import CHECK_TOL, TOL_SUMMARY
+from equilibria.family.altertax.tolerances import CHECK_TOL
 from equilibria.family.altertax.updated import headers_at
 from tests.family._prep import ROOT
 
 FIXTURE = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg/altax_summary.har"
-ABS_FLOOR = 1.0e-6  # every variable of src/equilibria/compare/maps/gtap7.yaml
-LEVELS = ("GDPE", "COST", "GDPI", "SALE")
+LEVELS = SUMMARY_LEVELS
 EXPECTED = [
     "GDPE",
     "COST",
@@ -57,14 +67,6 @@ def headers(altax_run):
     return summary_headers(altax_run)
 
 
-def _worst(a, b):
-    a = np.asarray(a, dtype=float)
-    b = np.asarray(b, dtype=float)
-    d = np.vectorize(lambda x, y: rel_diff(x, y, y, ABS_FLOOR))(a, b)
-    i = np.unravel_index(int(np.nanargmax(d)), d.shape) if d.size else ()
-    return float(d[i]) if d.size else 0.0, i
-
-
 def _flows(db):
     """The flow each residual checks, per header family (gtapv7.tab 5268-5322):
     VCB (VMC*), VCIF (TRC*), VTMUSE (VTC*), sum_s VMSB (MPC*), MAKEB (VOC*)."""
@@ -95,48 +97,22 @@ def _abs_residual(name, arr, flows):
     return arr * flows[name[:3]] / 100.0 if name[-1] in "PSQ" else arr
 
 
-def _ulp32(x):
-    return np.spacing(np.abs(x).astype(np.float32)).astype(np.float64)
-
-
 def test_summary_headers(headers):
     assert list(SUMMARY_HEADERS) == EXPECTED
     assert set(headers) == set(EXPECTED)
 
 
 def test_summary_shapes_match_gempack(headers, gempack):
-    for name in EXPECTED:
-        a, b = headers[name], gempack[name]
-        assert a.set_names == b.set_names, name
-        assert a.set_elements == b.set_elements, name
-        assert a.array.shape == b.array.shape, name
-        assert (a.coeff_name, a.long_name) == (b.coeff_name, b.long_name), name
+    assert not structure_problems(headers, gempack, EXPECTED)
 
 
 def test_summary_levels_match_gempack(headers, gempack):
-    bad = {}
-    for name in LEVELS:
-        d, i = _worst(headers[name].array, gempack[name].array)
-        if not d <= TOL_SUMMARY:
-            bad[name] = (d, i)
+    bad = summary_failures(headers, gempack, LEVELS)  # gate: TOL_SUMMARY
     assert not bad, bad
 
 
-# Accounting checks that are float32 residuals of GEMPACK's data and sums, so they are
-# zero or a few ulp of the flow F they check (ulp32(F) is cell dependent) and a relative
-# metric against them is meaningless: the headers below are NOT matched at TOL_SUMMARY
-# and the test below fails if one starts to be. Measured cause per header:
-#  * VMCK/VMCP/VTCK/VTCP (pre): GEMPACK's order of float32 accumulation of VCB, MAKEBCOM
-#    and VTMUSE is not reproducible (a sequential float32 sum of the same basedata gives 3
-#    of 6 VMCK cells, by chance); in float64 the data residual is another small number.
-#  * VMCQ/TRCQ/VTCQ/MPCQ (post): GEMPACK's residuals on the updated data against the
-#    exact ~0 of the float64 model. TRCQ and MPCQ are the input dataset's own float32
-#    imbalance carried through GEMPACK's update (TRCK cells 3, 6, 7 equal TRCQ; float64 on
-#    altax_updated.har reproduces them), not GEMPACK computing noise; VMCQ and VTCQ are
-#    accumulation-order noise as VMCK and VTCK.
-NOISE_UNMATCHED = frozenset(
-    ["VMCK", "VMCP", "VTCK", "VTCP", "VMCQ", "TRCQ", "VTCQ", "MPCQ"]
-)
+# NOISE_UNMATCHED (the headers that are float32 residuals of GEMPACK's data, with the
+# measured cause of each) lives in equilibria.family.altertax.gates.
 PRE_RESIDUALS = [
     "VMCK",
     "VMCP",
@@ -152,13 +128,7 @@ PRE_RESIDUALS = [
 Q_RESIDUALS = ["VMCQ", "TRCQ", "VTCQ", "MPCQ", "VOCQ"]
 
 
-def _failing(headers, gempack, names):
-    bad = {}
-    for name in names:
-        d, i = _worst(headers[name].array, gempack[name].array)
-        if not d <= TOL_SUMMARY:
-            bad[name] = (d, i)
-    return bad
+_failing = summary_failures
 
 
 def test_summary_checks_match_gempack(headers, gempack):
