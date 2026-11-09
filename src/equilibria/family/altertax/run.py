@@ -109,7 +109,13 @@ def solve_altertax(
     _check_cells(p, shock)
     t0 = time.perf_counter()
     res = solve_gtap_family(
-        p, altertax_closure(), ALTAX_RESIDUAL_REGION, shock=shock, cache_root=cache_root
+        p,
+        altertax_closure(),
+        ALTAX_RESIDUAL_REGION,
+        shock=shock,
+        cache_root=cache_root,
+        # GEMPACK's del_tbal(USA) = 0: the nominal balance, not savf = pigbl * savf_bar
+        nominal_trade_balance=True,
     )
     minutes = (time.perf_counter() - t0) / 60.0
     codes = {k: int(res.results[k]["code"]) for k in ("check", "shock")}

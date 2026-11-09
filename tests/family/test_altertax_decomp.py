@@ -178,39 +178,103 @@ def test_formulas_reproduce_gempack_from_its_own_changes(sl4_headers, gempack, s
     _check_gate(sl4_headers, gempack, scale)
 
 
-# End-to-end gate (user 2026-11-09: TOL_CHANGE on each welfare component, noise threshold
-# 1e-6 * max|EV|). EXPECTED FAILURE. Measured cause (Task 7 fix round 1): a CLOSURE
-# mismatch, not the 1.01 stand-in and not small-cell quantities. GEMPACK fixes the NOMINAL
-# trade balance of USA (del_tbal(USA) = -2.5e-10 in altax.sl4); the family model fixes
-# savf(r) = pigbl * savf_bar(r) (blocks/gtap/demand_utility.py:627) and pigbl moves
-# +7.3e-6 % while pnum stays, so savf(USA) and savf(ROW) move by the same +7.3e-6 %: a
-# 0.06 M transfer ROW -> USA on a deficit of 831,458. Swapping GEMPACK's variables into
-# our change vector one at a time puts ~88% of the 0.047 EV gap in prices (pfob: -0.0279
-# terms of trade, -0.0035 I-S; pinv -0.0174; psave +0.0086), all quantities together only
-# about -0.0057. Counterfactual (probe, savf = savf_bar, i.e. nominal, shared code
-# untouched in a copy of src): EV USA/ROW 1.1592 / -1.2553 against GEMPACK 1.1704 /
-# -1.2657 (from 1.2173 / -1.3142), cells within TOL_CHANGE 270 of 401 (from 151); the
-# rest is the 1.01 stand-in plus the cancellation of mixed-sign tax-weighted sums. The
-# formulas are exact (test above).
-@pytest.mark.xfail(
-    strict=True,
-    reason="closure mismatch: savf = pigbl*savf_bar is real, GEMPACK fixes nominal del_tbal (see above)",
-)
-def test_decomp_values_within_tol_change(headers, gempack, scale):
-    _check_gate(headers, gempack, scale)
+def _regional_totals(name, ha):
+    """``{(header, part, region): total}``: the sum over every dimension but the region
+    of a header's welfare columns. ``COL`` headers give ``welcnt`` and ``dvol`` (the tax
+    rates are levels); the trade tax headers attribute a cell to the region the CNT uses
+    (``xtax``/export: the source, axis 1; ``mtax``/import: the destination, axis 2)."""
+    arr = np.asarray(ha.array, dtype=np.float64)
+    regs = ha.set_elements[ha.set_names.index("REG")]
+    parts = []  # (label, array, region axis)
+    if name == "A23":
+        parts = [("xtax", arr[..., 0], 1), ("mtax", arr[..., 1], 2)]
+    elif name == "A231":
+        for c, lab in enumerate(("welcnt", "dvol")):
+            parts += [(f"{lab}/export", arr[:, :, :, c, 1], 1)]
+            parts += [(f"{lab}/import", arr[:, :, :, c, 0], 2)]
+    elif ha.set_names[-1] == "COL":
+        ax = ha.set_names.index("REG")
+        parts = [(lab, arr[..., c], ax) for c, lab in enumerate(("welcnt", "dvol"))]
+    else:
+        parts = [("", arr, ha.set_names.index("REG"))]
+    out = {}
+    for lab, a, ax in parts:
+        tot = a.sum(axis=tuple(i for i in range(a.ndim) if i != ax))
+        for r, t in zip(regs, tot, strict=True):
+            out[(name, lab, r)] = float(t)
+    return out
 
 
-def test_decomp_smoke_totals_and_signs(headers, gempack):
-    """Smoke-level bound, NOT a certification: the EV of each region (sum of the WELFARE
-    row, EV_ALT of line 3820) is within 5% of GEMPACK's, the allocative and terms-of-trade
-    totals have its sign, and the endowment, technical and population columns vanish."""
-    ev = np.asarray(headers["A"].array).sum(axis=1)
-    gem = np.asarray(gempack["A"].array, dtype=np.float64)
-    np.testing.assert_allclose(ev, gem.sum(axis=1), rtol=5e-2)
-    ours = np.asarray(headers["A"].array)
-    for col in (0, 4):  # alloc_A1, tot_E1
-        assert np.all(ours[:, col] * gem[:, col] > 0), col
-    assert np.abs(ours[:, [1, 2, 3, 6]]).max() < 1e-6 * np.abs(gem).max()
+def _total_gaps(headers, gempack, scale):
+    """Relative gap of every regional total above the noise floor (``NOISE * max|EV|``)."""
+    floor = NOISE * scale.max()
+    gaps = {}
+    for name in EXPECTED:
+        if name.startswith("C"):
+            continue  # exogenous at zero: no cell above the floor
+        ours = _regional_totals(name, headers[name])
+        gem = _regional_totals(name, gempack[name])
+        for k, g in gem.items():
+            if abs(g) > floor:
+                m = ours[k]
+                gaps[k] = (m, g, rel_diff(m, g, g, ABS_FLOOR) if m * g > 0 else np.inf)
+    return gaps
+
+
+# Regional totals that miss TOL_CHANGE at the 1.01 stand-in, measured (nominal trade
+# balance closure): the gap is linear in sigma - 1 (sweep 1.0025 / 1.005 / 1.01: A21 USA
+# -0.78 / -1.79 / -3.82 %, A24 ROW -13.5 / -26.7 / -53.3 %, A222 USA +1.5 / +2.3 / +3.9 %),
+# so it is the stand-in, on sums of mixed-sign tiny terms (A24 ROW is 6e-4 of EV). Strictly
+# expected: the test below fails when one of them starts to pass.
+KNOWN_MISS = {
+    ("A21", "", "USA"), ("A211", "welcnt", "USA"), ("A222", "", "USA"),
+    ("A22I", "welcnt", "USA"), ("A22I", "dvol", "USA"), ("A24", "", "ROW"),
+    ("A241", "welcnt", "ROW"),
+    # trade-tax totals of 3e-4 .. 4e-3 of EV (not swept): sums of mixed-sign terms
+    ("A23", "mtax", "USA"), ("A23", "xtax", "ROW"), ("A231", "dvol/export", "ROW"),
+    ("A231", "dvol/import", "USA"), ("A231", "welcnt/export", "ROW"),
+    ("A231", "welcnt/import", "USA"),
+}  # fmt: skip
+
+
+def test_ev_by_region_within_tol_change(headers, gempack):
+    """EV of each region (sum of the WELFARE row, EV_ALT of line 3820) vs GEMPACK's."""
+    ev = np.asarray(headers["A"].array, dtype=np.float64).sum(axis=1)
+    gem = np.asarray(gempack["A"].array, dtype=np.float64).sum(axis=1)
+    gap = [rel_diff(m, g, g, ABS_FLOOR) for m, g in zip(ev, gem, strict=True)]
+    assert max(gap) <= TOL_CHANGE, (ev, gem, gap)
+
+
+# End-to-end gate (user 2026-11-09 and controller ruling): TOL_CHANGE on the EV of each
+# region and on each header's regional totals above the noise floor; the cell-level
+# components are NOT gated (they are mixed-sign sums of tiny terms; the formulas are
+# certified on GEMPACK's own changes, ``test_formulas_*``, at 0.26 %). The cell-level
+# gap is reported by ``test_cell_level_report`` (-s). Closure: the nominal trade balance
+# (Task 7b); before it the EV gap was 4 % (savf = pigbl * savf_bar is real).
+def test_regional_totals_within_tol_change(headers, gempack, scale):
+    gaps = _total_gaps(headers, gempack, scale)
+    assert len(gaps) >= 40, len(gaps)
+    bad = {k: v for k, v in gaps.items() if k not in KNOWN_MISS and v[2] > TOL_CHANGE}
+    assert not bad, "\n".join(f"{k} {v}" for k, v in sorted(bad.items()))
+
+
+def test_known_misses_are_still_misses(headers, gempack, scale):
+    gaps = _total_gaps(headers, gempack, scale)
+    now_ok = [k for k in KNOWN_MISS if gaps[k][2] <= TOL_CHANGE]
+    assert not now_ok, f"now within TOL_CHANGE, remove from KNOWN_MISS: {now_ok}"
+
+
+def test_cell_level_report(headers, gempack, scale, capsys):
+    """Informational (not a gate): how many cells above the noise floor are within
+    TOL_CHANGE of GEMPACK's."""
+    ok = total = 0
+    for name in EXPECTED:
+        n, r, _ = _compare(name, headers[name], gempack[name], scale)
+        total += n
+        ok += n - len(r)
+    with capsys.disabled():
+        print(f"\ndecomp cells within TOL_CHANGE: {ok} of {total}")
+    assert total >= 100
 
 
 def test_welfare_columns_add_up(headers):

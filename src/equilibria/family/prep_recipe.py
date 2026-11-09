@@ -147,6 +147,7 @@ class _Ctx:
     backend: Any = None  # single-period recording: which instrument cells a row reads
     shock: Any = None  # user shock {instrument: {cell: pct}} (shock period)
     shock_levels: bool = False  # the numbers of ``shock`` are levels, not percents
+    nominal_savf: tuple[str, ...] = ()  # regions whose savf the shock holds nominal
 
     def exo(self, name: str, v: VarArr) -> np.ndarray:
         """Cells of ``name`` that are exogenous instruments (the driver never frees,
@@ -416,6 +417,22 @@ def _default_tariff(c: _Ctx) -> None:
     apply_shock(mp, c.backend, {"imptx": cells})
 
 
+def _nominal_trade_balance(c: _Ctx) -> None:
+    """Nominal trade balance (GEMPACK ``del_tbal(r) = 0``): in the shock, ``savf[r]`` of
+    each region in ``nominal_savf`` stays at the value it was seeded with (the check) and
+    its ``eq_savf`` row (``savf = pigbl * savf_bar``, a REAL balance that follows pigbl)
+    is off. One free variable and one row leave together: the system stays square. A
+    no-op without ``nominal_savf``, so every other closure is untouched."""
+    if not c.nominal_savf:
+        return
+    savf, eq = c.mp.var("savf"), c.mp.row("eq_savf")
+    vtab, rtab = _table(savf, c.period), _table(eq, c.period)
+    for r in c.nominal_savf:
+        savf.fixed[vtab[(r,)]] = True
+        if (r,) in rtab:
+            eq.active[rtab[(r,)]] = False
+
+
 _RECIPES = {
     ("base", "gtap"): (_seed_from_settled, _freeze_inactive, _replicate_sp_reference),
     ("check", "gtap"): (
@@ -440,6 +457,7 @@ _RECIPES = {
         _mute_welfare_if_asked,
         _fnm_pf,
         _default_tariff,
+        _nominal_trade_balance,
     ),
 }
 
@@ -468,6 +486,7 @@ def run_recipe(
     backend: Any = None,
     shock: Any = None,
     shock_levels: bool = False,
+    nominal_savf: tuple[str, ...] = (),
 ) -> MPArrays:
     """``mp`` after the recipe of ``period`` (base, check or shock; gtap), as new arrays.
 
@@ -506,6 +525,7 @@ def run_recipe(
         backend,
         shock,
         shock_levels,
+        tuple(nominal_savf),
     )
     if not ctx.mp.exogenous:  # a photo's arrays lack what ``MPArrays.build`` sets
         ctx.mp.exogenous = sp_ref.exogenous

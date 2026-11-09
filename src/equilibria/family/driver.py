@@ -145,6 +145,8 @@ class FamilyRun:
     regions: list[str]
     if_sub: bool
     # derived once per run, filled by the first solve call that needs them
+    # regions whose savf the shock holds nominal (``nominal_trade_balance``); () = off
+    nominal_savf: tuple[str, ...] = ()
     cell_index: Any = field(default=None, repr=False)
     adjacency: dict = field(default_factory=dict, repr=False)
 
@@ -365,6 +367,7 @@ def _solve_period_inner(
             cross=run.cross,
             shock=shock if period == "shock" else None,
             shock_levels=shock_levels,
+            nominal_savf=run.nominal_savf,
         )
     if period == "base":  # skip_base_solve: the base is the calibrated benchmark
         with phase("post_solve"):
@@ -474,6 +477,7 @@ def solve_gtap_family(
     shock_levels: bool = False,
     cache_root: Path | None = None,
     jax_cache: bool = True,
+    nominal_trade_balance: bool = False,
 ) -> FamilyResult:
     """Calibrated base, check and shock on arrays: ``_solve_shock``'s route without Pyomo.
 
@@ -482,7 +486,11 @@ def solve_gtap_family(
     does; ``None`` leaves the default +10 % import tariff. ``ref_gdx`` is not read under
     capFix; under capFlex it gives ``risk`` (``family.capflex``) and is required (a
     missing file raises ``NotImplementedError`` before any work). capFlex also needs
-    ``gdxdump`` on PATH and ``scripts/gtap`` (``_diff_core``) importable."""
+    ``gdxdump`` on PATH and ``scripts/gtap`` (``_diff_core``) importable.
+
+    ``nominal_trade_balance`` (default off, ALTERTAX's GEMPACK ``del_tbal = 0``): in the
+    shock ``savf`` of every non-residual region is held at its check value and its
+    ``eq_savf`` row is dropped, instead of ``savf = pigbl * savf_bar`` (real)."""
     check_supported(
         if_sub=bool(getattr(closure, "if_sub", False)),
         savf_flag=str(getattr(closure, "savf_flag", "capFix")),
@@ -518,6 +526,7 @@ def solve_gtap_family(
                 timing,
                 timer,
                 ref_gdx,
+                nominal_trade_balance,
             )
     finally:
         activate(prev)
@@ -534,6 +543,7 @@ def _solve_family(
     timing,
     timer,
     ref_gdx=None,
+    nominal_trade_balance=False,
 ) -> FamilyResult:
     t0 = time.perf_counter()
     run, mp = prepare_run(
@@ -545,6 +555,11 @@ def _solve_family(
         freeze=_gc_freeze_from_env(),
         ref_gdx=ref_gdx,
     )
+    if nominal_trade_balance:
+        from equilibria.templates.gtap.residual_region import resolve_residual_region
+
+        res_r = resolve_residual_region(params, params.sets, closure, residual_region)
+        run.nominal_savf = tuple(r for r in run.regions if r != str(res_r))
     timing["prepare_s"] = time.perf_counter() - t0
     # records, cross records and MPArrays are now loaded and long-lived: hide them
     # from the full passes too (the entry-point freeze predates them)

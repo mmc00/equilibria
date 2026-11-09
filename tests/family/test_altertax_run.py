@@ -127,3 +127,27 @@ def test_altertax_params_have_esubi_zero():
     p = load_altertax_params(nus333_dir())
     assert p.elasticities.esubi
     assert all(v == 0.0 for v in p.elasticities.esubi.values())
+
+
+def test_trade_balance_nominal(altax_run):
+    """GEMPACK's ``del_tbal("USA") = 0`` (altax.exp): the nominal balance of the
+    non-residual region is held, so savf[USA] is the same in check and shock, to the bit,
+    while pigbl (which a real ``savf = pigbl * savf_bar`` would carry into savf) moves."""
+    v = altax_run.result.mp.vars
+    savf, pigbl = v["savf"], v["pigbl"]
+
+    def at(var, key, period):
+        return float(var.value[var.keys.index((*key, period))])
+
+    assert at(savf, ("USA",), "shock") == at(savf, ("USA",), "check")
+    assert at(pigbl, (), "shock") != at(pigbl, (), "check")
+
+
+def test_capfix_family_closure_keeps_real_savf():
+    """Default off: a plain ``solve_gtap_family`` carries no nominal-balance option."""
+    import inspect
+
+    from equilibria.family.driver import solve_gtap_family
+
+    param = inspect.signature(solve_gtap_family).parameters["nominal_trade_balance"]
+    assert param.default is False
