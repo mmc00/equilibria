@@ -9,6 +9,21 @@ commit log.
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-11-09
+
+Fixes to the paper's replication package; no change to any number.
+
+### Fixed
+- `scripts/gtap/run_parity_gates.py` ends green outside a git checkout
+  (the replication zip has no `.git`): Table A1 no longer reports FAILED
+  after its tests pass.
+
+### Added
+- `scripts/paper/notebook_exercises.py` and the `run_tables.py` steps
+  `table3a_notebooks` and `table3_notebooks`: the Table A2/A3 rows of
+  TBL65B, TBL94, ME3C and ME9A (closures built in a notebook) are now
+  measured from the repository, one exercise per process.
+
 ## [0.6.2] — 2026-11-08
 
 The release the GTAP paper's tables are measured on.
