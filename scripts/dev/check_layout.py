@@ -155,6 +155,8 @@ ALLOWED_EXACT: set[str] = {
     "docs/site/examples_src/README.rst",
     # GENERATE_* is a fixture-generation how-to. Deliberate name.
     "scripts/gtap/GENERATE_MISSING_LEVELS_FIXTURES.md",
+    # GitHub reads the sponsor button only from this exact name.
+    ".github/FUNDING.yml",
 }
 ALLOWED_PREFIXES: tuple[str, ...] = (
     "src/equilibria/templates/data/pep/",
