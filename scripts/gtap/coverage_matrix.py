@@ -315,17 +315,21 @@ _MCP_ROWS: list[Row] = [
         "sl4dump_gtap7_15x10_tm10.har", stage_floors=(("shock", 97.0),), mode="pure", reference="gempack"),
     Row("gtap7_15x10", "mcp", 1, ("shock",), None, "measured @ runtime", "local",
         "sl4dump_gtap7_15x10_tm10.har", stage_floors=(("shock", 97.0),), mode="pure", reference="gempack"),
-    # --- ALTERTAX on the JAX family route against GEMPACK (Burfisher altax), local ---
-    # scripts/family/run_altertax.py --compare: updated/summary/volume/decomp/pct/levels vs
-    # a GEMPACK run folder. The per-output gates live in family/altertax/gates.py (levels,
-    # updated, summary 1e-4 relative; volume/decomp/pct at TOL_CHANGE 2e-2 on the change,
-    # pct also 1e-6 pp absolute floor, known misses listed in compare.json). gap_min is the
-    # coarse row floor (cells inside the levels tolerance); ifsub=1 is the GTAPv7 default.
-    Row("nus333", "altertax", 1, ("check", "shock"), 99.0, "levels max <= 1e-4 (all cells)", "local",
-        "scripts/family/run_altertax.py --compare tests/fixtures/gtap7_gempack/burfisher_gragg",
-        reference="gempack"),
 ]
 ROWS.extend(_MCP_ROWS)
+
+# --- ALTERTAX on the JAX family route against GEMPACK (Burfisher altax), local ---
+# scripts/family/run_altertax.py --compare: updated/summary/volume/decomp/pct/levels vs a
+# GEMPACK run folder. The CONTRACT is the per-output gates of family/altertax/gates.py
+# (levels, updated, summary 1e-4 relative; volume/decomp/pct at TOL_CHANGE 2e-2 on the
+# change, pct also a 1e-6 pp floor; known misses only for this nus333 reference). gap_min
+# below is a PLACEHOLDER the schema requires of an "altertax" row: no test consumes it as
+# a floor for this row. ifsub=1 is the GTAPv7 default.
+ROWS.append(
+    Row("nus333", "altertax", 1, ("check", "shock"), 99.0, "gates.py contract: see comment", "local",
+        "scripts/family/run_altertax.py --compare tests/fixtures/gtap7_gempack/burfisher_gragg",
+        reference="gempack")
+)
 
 
 def nl_rows() -> list[Row]:

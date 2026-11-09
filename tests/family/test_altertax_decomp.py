@@ -303,7 +303,7 @@ def test_unchanged_check_raises():
     from equilibria.family.altertax.decomp import _require_unchanged as _check
 
     def _require_unchanged(a, b):
-        _check(a, b)  # duck-typed stand-in for _Period
+        _check(a, b)  # type: ignore[arg-type]  # duck-typed stand-in for _Period
 
     class P:
         def __init__(self, vals, names=_UNCHANGED):

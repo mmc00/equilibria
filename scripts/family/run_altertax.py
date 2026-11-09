@@ -57,6 +57,22 @@ def _solver_env() -> None:
         os.environ.setdefault(k, v)
 
 
+OUTPUTS = ("updated.har", "summary.har", "decomp.har", "volume.har", "pct.har")
+
+
+def _clean(out: Path) -> None:
+    """Remove the files an earlier run left in ``out`` (outputs and ``compare.json``)."""
+    for name in (*OUTPUTS, "compare.json"):
+        (out / name).unlink(missing_ok=True)
+
+
+def _write_json(path: Path, obj: dict) -> None:
+    """Valid JSON: a non-finite number (an infinite gap) is written as ``null``."""
+    from equilibria.family.altertax.gates import json_safe
+
+    path.write_text(json.dumps(json_safe(obj), indent=2, allow_nan=False) + "\n")
+
+
 def load_shock(args: argparse.Namespace) -> dict:
     """The shock of the run: Burfisher's ``altax.exp`` (nus333). Phase C: a
     ``--shock-file`` would be parsed here and returned instead."""
@@ -107,23 +123,33 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {e}", file=sys.stderr)
             return 2
     shock = load_shock(args)
-    run = solve_altertax(ds, prm=args.prm, shock=shock)
-    results = run.result.results
     out = args.out
     out.mkdir(parents=True, exist_ok=True)
-    info = {
+    info: dict = {
         "dataset": str(ds),
         "prm": args.prm,
         "shock": {
             k: {",".join(c): v for c, v in cells.items()} for k, cells in shock.items()
         },
+    }
+    try:
+        run = solve_altertax(ds, prm=args.prm, shock=shock)
+    except Exception as e:  # noqa: BLE001 - any failure of the solve is "not solved"
+        _clean(out)
+        info |= {"codes": {}, "solved": False, "error": f"{type(e).__name__}: {e}"}
+        _write_json(out / "run.json", info)
+        print(f"error: ALTERTAX did not solve: {info['error']}", file=sys.stderr)
+        return 3
+    results = run.result.results
+    info |= {
         "codes": run.codes,
         "nit": {k: results[k].get("nit") for k in run.codes},
         "residual": {k: results[k].get("residual") for k in run.codes},
         "minutes": run.minutes,
         "solved": all(c == 1 for c in run.codes.values()),
     }
-    (out / "run.json").write_text(json.dumps(info, indent=2) + "\n")
+    _clean(out)  # nothing stale from an earlier run survives this one
+    _write_json(out / "run.json", info)
     bad = [k for k, c in run.codes.items() if c != 1]
     if bad:
         print(
@@ -142,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     cmp = gates.compare_all(run, args.compare)
     cmp["gempack_dir"] = str(args.compare)
-    (out / "compare.json").write_text(json.dumps(cmp, indent=2, default=float) + "\n")
+    _write_json(out / "compare.json", cmp)
     for o in cmp["outputs"]:
         print(
             f"  {o['output']:8s} max {o['max_kind'].split()[0]} gap {o['max']:.3e}  "

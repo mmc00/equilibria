@@ -40,6 +40,27 @@ class AltertaxRun:
 UNIT_TRADE_ELASTICITIES = ("esubd", "esubm", "sigmas")
 
 
+def apply_unit_stand_in(
+    params: GTAPParameters, unit_sigma: float = 1.01, *, recalibrate: bool = True
+) -> int:
+    """Set every unit ``esubd``/``esubm``/``sigmas`` (:data:`UNIT_TRADE_ELASTICITIES`) to
+    ``unit_sigma`` (the 1.01 stand-in) and, with ``recalibrate``, recalibrate the shares.
+    Returns the number of elasticities changed."""
+    changed = 0
+    for name in UNIT_TRADE_ELASTICITIES:
+        table = getattr(params.elasticities, name)
+        for key, value in table.items():
+            if value == 1.0:
+                table[key] = unit_sigma
+                changed += 1
+    if changed and recalibrate:
+        params.shares.calibrate(
+            params.benchmark, params.elasticities, params.sets, params.taxes
+        )
+        params._calibrate()
+    return changed
+
+
 def load_altertax_params(
     dataset_dir: Path, prm: str = "altertax.prm", *, unit_sigma: float = 1.01
 ) -> GTAPParameters:
@@ -57,13 +78,7 @@ def load_altertax_params(
         default_path=d / prm,
         baserate_path=baserate if baserate.exists() else None,
     )
-    changed = 0
-    for name in UNIT_TRADE_ELASTICITIES:
-        table = getattr(p.elasticities, name)
-        for key, value in table.items():
-            if value == 1.0:
-                table[key] = unit_sigma
-                changed += 1
+    changed = apply_unit_stand_in(p, unit_sigma, recalibrate=False)
     # GEMPACK GTAPv7 E_qia (gtapv7.tab, lines ~1717-1720): qia(c,r) = qinv(r), investment
     # demand across commodities is Leontief and ESBI is not read. ``altertax.prm`` carries
     # ESBI = 1, so the ALTERTAX entry point sets esubi = 0 in every region.

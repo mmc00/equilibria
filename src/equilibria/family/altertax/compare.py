@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import gzip
 import importlib.util
+import shutil
+import tempfile
 from pathlib import Path
 
 from equilibria.compare import Report
@@ -13,7 +16,9 @@ _ROOT = Path(__file__).resolve().parents[4]
 
 # the committed fixture names first, then GEMPACK's own run-folder names
 LEVELS_NAMES = ("sl4levels_altax.har", "altax_sl4levels.har", "sl4levels.har")
-UPDATED_NAMES = ("altax.upd", "updated.har", "altax_updated.har")
+# the solution itself, when no levels .har was exported (``from_har`` reads a ``.sl4``)
+SL4_NAMES = ("solution.sl4", "altax.sl4", "solution.sl4.gz", "altax.sl4.gz")
+UPDATED_NAMES = ("updated.har", "altax_updated.har", "altax.upd")
 
 
 def load_compare_script():
@@ -46,13 +51,24 @@ def compare_levels(
     """Compare check (pre) and shock (post) levels with ``sl4levels`` + ``.upd`` found
     in ``gempack_dir``. ``basedata`` defaults to the nus333 ``basedata.har``."""
     from equilibria._local_refs import nus333_dir
-    from equilibria.blocks.gtap._derived_params import xscale_data
 
     d = Path(gempack_dir)
-    har = _find(d, LEVELS_NAMES)
+    har = _find(d, LEVELS_NAMES + SL4_NAMES)
     upd = _find(d, UPDATED_NAMES)
     base = Path(basedata) if basedata is not None else nus333_dir() / "basedata.har"
     cg = load_compare_script()
+    with tempfile.TemporaryDirectory() as tmp:
+        if har.suffix == ".gz":  # an .sl4.gz is read unzipped
+            plain = Path(tmp) / har.stem
+            with gzip.open(har, "rb") as src, plain.open("wb") as dst:
+                shutil.copyfileobj(src, dst)
+            har = plain
+        return _levels_report(cg, run, har, base, upd)
+
+
+def _levels_report(cg, run: AltertaxRun, har: Path, base: Path, upd: Path) -> Report:
+    from equilibria.blocks.gtap._derived_params import xscale_data
+
     levels = family_levels(run.result.mp, cg.EQ_VARS)
     xscale = dict(xscale_data(run.params, run.params.sets))
     return cg.run(levels, xscale, har, base, upd)

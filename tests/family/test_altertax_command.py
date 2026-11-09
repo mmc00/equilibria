@@ -133,6 +133,81 @@ def test_no_outputs_when_unsolved(tmp_path):
     assert not (out / "compare.json").exists()
 
 
+def test_command_uses_its_own_solver_defaults(tmp_path):
+    """No solver variable is injected: ``_solver_env`` supplies the Newton settings."""
+    out = tmp_path / "out"
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.startswith("EQUILIBRIA_GTAP_") and k != "EQUILIBRIA_FAMILY_CACHE"
+    }
+    p = subprocess.run(
+        [sys.executable, str(SCRIPT), str(nus333_dir()), "--out", str(out)],
+        env={
+            **env,
+            "EQUILIBRIA_FAMILY_CACHE": str(tmp_path / "cache"),
+            "PYTHONPATH": os.pathsep.join([str(ROOT / "src"), str(ROOT)]),
+        },
+        capture_output=True,
+        text=True,
+        timeout=480,
+    )
+    assert p.returncode == 0, p.stderr[-2000:]
+    assert json.loads((out / "run.json").read_text())["codes"] == {
+        "check": 1,
+        "shock": 1,
+    }
+
+
+def test_unsolved_removes_stale_outputs(tmp_path):
+    """An earlier run's files do not survive a run that does not solve."""
+    out = tmp_path / "out"
+    out.mkdir()
+    for name in (*OUTPUT_NAMES, "compare.json"):
+        (out / name).write_text("stale")
+    p = _run(
+        [nus333_dir(), "--out", out],
+        tmp_path / "cache",
+        {"EQUILIBRIA_GTAP_SCIPY_MAXITER": "1"},
+    )
+    assert p.returncode != 0
+    assert not list(out.glob("*.har")) and not (out / "compare.json").exists()
+
+
+def test_exception_in_the_solve_is_written_to_run_json(tmp_path):
+    """A failure inside the solve (here a missing sets file) is exit 3 with the error in
+    run.json, not a traceback and no outputs."""
+    bad = tmp_path / "ds"
+    shutil.copytree(nus333_dir(), bad)
+    (bad / "sets.har").unlink()
+    out = tmp_path / "out"
+    p = _run([bad, "--out", out], tmp_path / "cache")
+    assert p.returncode == 3, p.stderr[-1500:]
+    run = json.loads((out / "run.json").read_text())
+    assert run["solved"] is False and run["error"]
+    assert not list(out.glob("*.har"))
+
+
+def test_json_safe_writes_null_for_infinity():
+    from equilibria.family.altertax.gates import json_safe
+
+    out = json_safe({"a": float("inf"), "b": [float("nan"), 1.0], "c": (2,)})
+    assert out == {"a": None, "b": [None, 1.0], "c": [2]}
+    json.dumps(out, allow_nan=False)
+
+
+def test_compare_json_records_waivers_exclusions_and_the_reference(solved):
+    out, p = solved
+    assert p.returncode == 0, p.stderr[-2000:]
+    cmp = json.loads((out / "compare.json").read_text())
+    assert cmp["waivers"]["reference"] == "burfisher-nus333-altax"
+    assert cmp["waivers"]["applied"] is True
+    lv = next(o for o in cmp["outputs"] if o["output"] == "levels")
+    assert "excluded" in lv and lv["exclusions"]
+    for e in lv["exclusions"]:
+        assert {"variable", "where", "cells", "why"} <= set(e) and e["why"].strip()
+
+
 def test_updated_replicates_with_default_prm(solved, tmp_path, monkeypatch):
     """The user's base data replicates: ``updated.har`` loaded with nus333 ``default.prm``
     and solved with no shock gives codes 1 and the check period equals base within
@@ -146,7 +221,7 @@ def test_updated_replicates_with_default_prm(solved, tmp_path, monkeypatch):
     )
     from equilibria.family.altertax.compare import load_compare_script
     from equilibria.family.altertax.levels import family_levels
-    from equilibria.family.altertax.run import UNIT_TRADE_ELASTICITIES
+    from equilibria.family.altertax.run import apply_unit_stand_in
     from equilibria.family.driver import solve_gtap_family
     from equilibria.templates.gtap import GTAPParameters
 
@@ -162,16 +237,7 @@ def test_updated_replicates_with_default_prm(solved, tmp_path, monkeypatch):
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
-    # the stand-in of the route (see run.load_altertax_params) where default.prm has 1.0
-    for name in UNIT_TRADE_ELASTICITIES:
-        table = getattr(params.elasticities, name)
-        for key, value in table.items():
-            if value == 1.0:
-                table[key] = 1.01
-    params.shares.calibrate(
-        params.benchmark, params.elasticities, params.sets, params.taxes
-    )
-    params._calibrate()
+    apply_unit_stand_in(params)  # the 1.01 stand-in of the route, recalibrated
     res = solve_gtap_family(
         params,
         altertax_closure(),

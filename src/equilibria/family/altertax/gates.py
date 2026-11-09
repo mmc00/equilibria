@@ -6,17 +6,23 @@ levels); each returns plain data (gaps, failing cells) and ``report_*`` turns it
 record the command writes to ``compare.json``. Tolerances come from
 :mod:`equilibria.family.altertax.tolerances`.
 
-Extension point for a GEMPACK folder of another dataset (3x3 ... 20x41): the known-miss
-lists below are keyed by cell and are nus333-specific; a key that does not occur in the
-folder is simply not applied.
+Waivers. The known-miss tables (``PCT_KNOWN_MISS``, ``DECOMP_KNOWN_MISS``,
+``NOISE_UNMATCHED``) were measured on ONE experiment: nus333 with Burfisher's ALTAX shock.
+Their keys are region/commodity names that 3x3, 3x4, 5x5 or 20x41 share, so they must never
+apply by key alone. ``waivers_for(dataset_dir, sl4)`` returns them only when the input data
+is the nus333 ``basedata.har`` (SHA-256) AND the GEMPACK solution's shock is
+``to(AGR,AGR,USA) = 0.0012``; otherwise it returns ``NO_WAIVERS`` and every miss fails the
+gate. ``compare.json`` records which was used (``waivers``).
 """
 
 from __future__ import annotations
 
 import gzip
+import hashlib
 import shutil
 import tempfile
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -46,12 +52,12 @@ from equilibria.family.altertax.volume import (
 )
 
 # --- GEMPACK run-folder names: GEMPACK's own first, then the burfisher fixture names ----
-UPDATED_FILES = ("updated.har", "altax_updated.har", "altax.upd")
+UPDATED_FILES = _levels.UPDATED_NAMES  # same file for the levels and the updated gates
 SUMMARY_FILES = ("summary.har", "altax_summary.har")
 DECOMP_FILES = ("decomp.har", "altax_decomp.har")
 VOLUME_FILES = ("volume.har", "altax_volume.har")
-SL4_FILES = ("solution.sl4", "altax.sl4", "solution.sl4.gz", "altax.sl4.gz")
-LEVELS_FILES = _levels.LEVELS_NAMES
+SL4_FILES = _levels.SL4_NAMES
+LEVELS_FILES = _levels.LEVELS_NAMES + _levels.SL4_NAMES  # sl4levels.har, else the .sl4
 
 THRESHOLD_ULPS = (
     8  # volume: cells above 8 float32 ulp of the level are compared relatively
@@ -213,6 +219,74 @@ def report_updated(ours, gem) -> dict:
     )
 
 
+# --- waivers: known misses of the nus333 ALTAX reference ---------------------------------
+
+# SHA-256 of ``data/gtap7/nus333/basedata.har``: the identity of the input data.
+NUS333_BASEDATA_SHA256 = (
+    "13e784b73f1fbf8ecdabc803c0454290aa5fb097f74bb5c59f0659511f841543"
+)
+NUS333_ALTAX_SHOCK = {("AGR", "AGR", "USA"): 0.0012}  # ``to`` of altax.exp
+REFERENCE_ID = "burfisher-nus333-altax"
+
+
+@dataclass(frozen=True)
+class Waivers:
+    """The measured misses that may pass: ``summary`` headers (float32 noise), ``decomp``
+    regional totals and ``pct`` cells with their measured relative error. ``reference`` is
+    the id of the reference they were measured on, ``None`` for none."""
+
+    reference: str | None = None
+    summary: frozenset = frozenset()
+    decomp: dict = field(default_factory=dict)
+    pct: dict = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return {
+            "reference": self.reference,
+            "applied": self.reference is not None,
+            "summary_headers": sorted(self.summary),
+            "decomp_totals": len(self.decomp),
+            "pct_cells": len(self.pct),
+        }
+
+
+NO_WAIVERS = Waivers()
+
+
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with Path(path).open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def is_nus333_altax_reference(dataset_dir: Path, sl4: Any) -> bool:
+    """True iff the input data is the nus333 ``basedata.har`` and the GEMPACK solution is
+    the ALTAX experiment (``to`` is zero but ``AGR,AGR,USA`` = 0.0012)."""
+    base = Path(dataset_dir) / "basedata.har"
+    if not base.exists() or _sha256(base) != NUS333_BASEDATA_SHA256:
+        return False
+    to = sl4.changes.get("to")
+    if to is None:
+        return False
+    cells = {
+        tuple(to.set_elements[d][i] for d, i in enumerate(ix)): float(to.values[ix])
+        for ix in np.ndindex(to.values.shape)
+        if to.values[ix] != 0.0
+    }
+    return set(cells) == set(NUS333_ALTAX_SHOCK) and all(
+        abs(cells[k] - v) <= 1e-9 for k, v in NUS333_ALTAX_SHOCK.items()
+    )
+
+
+def waivers_for(dataset_dir: Path, sl4: Any) -> Waivers:
+    """``NUS333_ALTAX_WAIVERS`` for the nus333 ALTAX reference, else ``NO_WAIVERS``."""
+    if is_nus333_altax_reference(dataset_dir, sl4):
+        return NUS333_ALTAX_WAIVERS
+    return NO_WAIVERS
+
+
 # --- summary.har ----------------------------------------------------------------------
 
 # Accounting checks that are float32 residuals of GEMPACK's data and sums, so they are
@@ -240,11 +314,11 @@ def summary_failures(ours, gem, names) -> dict[str, tuple[float, tuple]]:
     }
 
 
-def report_summary(ours, gem) -> dict:
+def report_summary(ours, gem, waivers: Waivers = NO_WAIVERS) -> dict:
     checks = [n for n in SUMMARY_HEADERS if n not in SUMMARY_LEVELS]
     bad_levels = summary_failures(ours, gem, SUMMARY_LEVELS)
     bad_checks = summary_failures(ours, gem, checks)
-    unexpected = sorted(set(bad_checks) - NOISE_UNMATCHED)
+    unexpected = sorted(set(bad_checks) - waivers.summary)
     bad_struct = structure_problems(ours, gem, SUMMARY_HEADERS)
     gaps = gaps_by_header(ours, gem, SUMMARY_LEVELS)
     mx = max(g[0] for g in gaps.values())
@@ -255,7 +329,7 @@ def report_summary(ours, gem) -> dict:
         "relative",
         worst_cells(ours, gem, SUMMARY_LEVELS),
         not bad_levels and not unexpected and not bad_struct,
-        known_miss=sorted(set(bad_checks) & NOISE_UNMATCHED),
+        known_miss=sorted(set(bad_checks) & waivers.summary),
         failing_unexpected=unexpected,
         structure_problems=bad_struct,
     )
@@ -447,10 +521,10 @@ def ev_gaps(ours, gem) -> list[float]:
     return [rel_diff(m, x, x, ABS_FLOOR) for m, x in zip(ev, g, strict=True)]
 
 
-def report_decomp(ours, gem) -> dict:
+def report_decomp(ours, gem, waivers: Waivers = NO_WAIVERS) -> dict:
     """Gate: EV of each region and each header's regional totals above the noise floor at
     TOL_CHANGE (controller ruling 2026-11-09); cell-level components are reported, not
-    gated. Totals in ``DECOMP_KNOWN_MISS`` pass while they keep their sign and stay within
+    gated. Totals in ``waivers.decomp`` pass while they keep their sign and stay within
     1.5x of their measured error."""
     scale = decomp_scale(gem)
     ev = ev_gaps(ours, gem)
@@ -467,8 +541,8 @@ def report_decomp(ours, gem) -> dict:
             "gap": float(rel),
             "error": err,
         }
-        if k in DECOMP_KNOWN_MISS and miss_is_bounded(err, DECOMP_KNOWN_MISS[k]):
-            known.append(rec | {"measured": DECOMP_KNOWN_MISS[k]})
+        if k in waivers.decomp and miss_is_bounded(err, waivers.decomp[k]):
+            known.append(rec | {"measured": waivers.decomp[k]})
         else:
             failing.append(rec)
     cells = ok_cells = 0
@@ -581,7 +655,7 @@ def pct_failures(ours, gempack, zero=ZERO_BASE):
     }
 
 
-def report_pct(run: AltertaxRun, ours, gem) -> dict:
+def report_pct(run: AltertaxRun, ours, gem, waivers: Waivers = NO_WAIVERS) -> dict:
     """Gate per cell: ``|ours - gem| <= max(TOL_CHANGE * |gem|, TOL_PCT)`` and the same
     sign where ``|gem| > 10 * TOL_PCT``. Zero-base cells of this run are excluded."""
     zero = {(n, k) for n, cells in zero_base_cells(run).items() for k in cells}
@@ -597,8 +671,8 @@ def report_pct(run: AltertaxRun, ours, gem) -> dict:
             "gempack": g,
             "error": err,
         }
-        if key in PCT_KNOWN_MISS and miss_is_bounded(err, PCT_KNOWN_MISS[key]):
-            known.append(rec | {"measured": PCT_KNOWN_MISS[key]})
+        if key in waivers.pct and miss_is_bounded(err, waivers.pct[key]):
+            known.append(rec | {"measured": waivers.pct[key]})
         else:
             failing.append(rec)
     errs = sorted(
@@ -623,16 +697,29 @@ def report_pct(run: AltertaxRun, ours, gem) -> dict:
     )
 
 
+NUS333_ALTAX_WAIVERS = Waivers(
+    REFERENCE_ID, NOISE_UNMATCHED, DECOMP_KNOWN_MISS, PCT_KNOWN_MISS
+)
+
+
 # --- levels ---------------------------------------------------------------------------
 
 
 def levels_ok(report) -> bool:
-    """Levels gate: cells compared, max gap within TOL_LEVELS, no cell missing on a side."""
+    """Levels gate: cells compared, max gap within TOL_LEVELS, no cell missing or unmatched
+    on a side, pre and post both compared, ``base`` the only family-only period and no
+    GEMPACK-only one, and every exclusion carries its reason."""
     return (
         report.overall["cells"] > 0
         and report.overall["max"] <= TOL_LEVELS
         and report.overall["missing_in_a"] == report.overall["missing_in_b"] == 0
         and not report.unmatched
+        and {"pre", "post"} <= set(report.periods_compared)
+        and report.periods_only_in_a == ["base"]
+        and not report.periods_only_in_b
+        and all(e.why.strip() for e in report.exclusions)
+        and all(x.why.strip() for x in report.excluded_cells)
+        and all(why.strip() for why in report.excluded.values())
     )
 
 
@@ -659,7 +746,14 @@ def report_levels(run: AltertaxRun, gempack_dir: Path, basedata: Path | None) ->
             for c in worst
         ],
         levels_ok(report),
-        known_miss=[{"variable": e.variable, "why": e.why} for e in report.exclusions],
+        known_miss=[],
+        exclusions=[
+            {"variable": e.variable, "where": e.where, "cells": e.cells, "why": e.why}
+            for e in report.exclusions
+        ],
+        excluded=dict(report.excluded),
+        excluded_cells=len(report.excluded_cells),
+        periods_compared=list(report.periods_compared),
         cells=report.overall["cells"],
     )
 
@@ -684,21 +778,39 @@ def gempack_files(gempack_dir: Path) -> dict[str, Path]:
     )
 
 
+def json_safe(obj: Any) -> Any:
+    """``obj`` with every non-finite float replaced by ``None`` (valid JSON)."""
+    if isinstance(obj, float):
+        return obj if np.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [json_safe(v) for v in obj]
+    if isinstance(obj, np.floating):
+        return json_safe(float(obj))
+    if isinstance(obj, np.integer):
+        return int(obj)
+    return obj
+
+
 def compare_all(run: AltertaxRun, gempack_dir: Path) -> dict:
     """The six outputs of ``run`` against a GEMPACK run folder: ``{"outputs": [...],
-    "pass": bool}``. A missing GEMPACK file is a ``FileNotFoundError`` naming it."""
+    "pass": bool, "waivers": ...}``. A missing GEMPACK file is a ``FileNotFoundError``
+    naming it. The known-miss waivers apply only to the nus333 ALTAX reference."""
     files = gempack_files(gempack_dir)
     basedata = Path(run.dataset_dir) / "basedata.har"
+    sl4 = read_sl4(files["pct (solution.sl4)"])
+    waivers = waivers_for(run.dataset_dir, sl4)
     outputs = [
         report_levels(run, gempack_dir, basedata),
         report_updated(updated_headers(run), read_har(str(files["updated"]))),
-        report_summary(summary_headers(run), read_har(str(files["summary"]))),
+        report_summary(summary_headers(run), read_har(str(files["summary"])), waivers),
         report_volume(run, volume_headers(run), read_har(str(files["volume"]))),
-        report_decomp(decomp_headers(run), read_har(str(files["decomp"]))),
-        report_pct(
-            run,
-            pct_changes(run),
-            gempack_changes(read_sl4(files["pct (solution.sl4)"])),
-        ),
+        report_decomp(decomp_headers(run), read_har(str(files["decomp"])), waivers),
+        report_pct(run, pct_changes(run), gempack_changes(sl4), waivers),
     ]
-    return {"outputs": outputs, "pass": all(o["pass"] for o in outputs)}
+    return {
+        "outputs": outputs,
+        "pass": all(o["pass"] for o in outputs),
+        "waivers": waivers.to_dict(),
+    }
