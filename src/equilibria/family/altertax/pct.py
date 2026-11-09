@@ -13,8 +13,8 @@ GAMS names). The equilibria side of each row (including the derived ones such as
 scales cancel in a ratio, so ``divide_by`` is ignored. The closure's fixed variables that
 map one to one (``pop``, ``pfactwld``, ``to``) are added from :data:`FIXED`: they change by
 0, except ``to``, which carries the shock. The other fixed GEMPACK variables are many to
-one (``tfd``, ``tgd``... share ``dintx_tgt``) or have no equilibria cell and are reported by
-:func:`unmapped`.
+one (``tfd``, ``tgd``... share ``dintx_tgt``) or have no equilibria cell: they are not
+emitted (see :func:`pct_changes`).
 
 A reader for a ``.sl4`` is :func:`equilibria.babel.har.sl4.read_sl4_changes`;
 :func:`gempack_changes` turns it, or any ``{var: {cell: pct}}`` dict (e.g. one read from a
@@ -87,22 +87,28 @@ def pct_dims(name: str) -> tuple[str, ...]:
     return tuple(_SET[d] for d in gtap7_rows()[name].b.dims)
 
 
-def pct_changes(run: AltertaxRun, pre: str = "check", post: str = "shock") -> Pct:
-    """``{GEMPACK variable: {cell: 100 * (post / pre - 1)}}``; cells in GEMPACK order."""
+def _changes(run: AltertaxRun, pre: str, post: str) -> tuple[Pct, dict[str, set]]:
+    """``(% changes, cells whose pre value is 0)``: the second has no change to report."""
     cg = load_compare_script()
     levels = family_levels(run.result.mp, cg.EQ_VARS)
     from equilibria.blocks.gtap._derived_params import xscale_data
 
     side = cg.equilibria_side(levels, dict(xscale_data(run.params, run.params.sets)))
     out: Pct = {}
+    zero: dict[str, set] = {}
     for name, row in gtap7_rows().items():
+        if name in FIXED:  # pfactwld: FIXED overrides the gtap7.yaml row (pwfact)
+            continue
         cells = side.levels[row.a.var]
         perm = [row.a.dims.index(d) for d in row.b.dims]
-        out[name] = {
-            tuple(idx[p] for p in perm): _ratio(cells[(pre, idx)], cells[(post, idx)])
-            for (period, idx) in cells
-            if period == pre
-        }
+        out[name], zero[name] = {}, set()
+        for period, idx in cells:
+            if period != pre:
+                continue
+            key = tuple(idx[p] for p in perm)
+            out[name][key] = _ratio(cells[(pre, idx)], cells[(post, idx)])
+            if cells[(pre, idx)] == 0.0:
+                zero[name].add(key)
     A, B = _Period(run, pre), _Period(run, post)
     for name, (var, perm, _) in FIXED.items():
         one = 1.0 if name in POWER else 0.0
@@ -110,7 +116,27 @@ def pct_changes(run: AltertaxRun, pre: str = "check", post: str = "shock") -> Pc
             tuple(k[p] for p in perm): _ratio(one + x, one + B[var][k])
             for k, x in A[var].items()
         }
-    return out
+    return out, {n: c for n, c in zero.items() if c}
+
+
+def pct_changes(run: AltertaxRun, pre: str = "check", post: str = "shock") -> Pct:
+    """``{GEMPACK variable: {cell: 100 * (post / pre - 1)}}``; cells in GEMPACK order.
+
+    Emitted: the 31 compared rows of ``gtap7.yaml`` plus the closure's fixed variables
+    ``pop``, ``pfactwld`` and ``to`` (:data:`FIXED`). The other fixed GEMPACK variables
+    (``tfd``, ``tgd``, ``tm``, ``tx``, ``atm``... many to one with equilibria's
+    ``dintx_tgt``/``imptx``/``lambdamg``, or with no equilibria cell) are NOT emitted:
+    they change by 0 in GEMPACK too, but no cell-by-cell answer exists for them here.
+    A cell whose ``pre`` value is 0 reports 0 (see :func:`zero_base_cells`)."""
+    return _changes(run, pre, post)[0]
+
+
+def zero_base_cells(run: AltertaxRun, pre: str = "check") -> dict[str, set]:
+    """Cells (by GEMPACK variable) whose ``pre`` flow is 0, where :func:`pct_changes`
+    reports 0. A % change on a zero flow is undefined: GEMPACK still reports the value of
+    its price-difference formula there (``E_qes2`` holds for every cell regardless of the
+    weight), so these cells are not comparable and are excluded from the gate."""
+    return _changes(run, pre, pre)[1]
 
 
 def gempack_changes(changes: Sl4Changes | Pct) -> Pct:

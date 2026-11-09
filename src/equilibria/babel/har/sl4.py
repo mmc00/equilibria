@@ -8,7 +8,6 @@ convencion del ``.har`` de niveles que escribe ``export_sl4_levels.py``.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -141,38 +140,28 @@ class Sl4Changes:
     unplaced: dict[str, str]
 
 
-_SHOCK_RE = re.compile(
-    r"(?im)^\s*shock\s+(\w+)\s*(?:\(([^)]*)\))?\s*=\s*([-+0-9.eE]+)\s*;"
-)
-
-
-def _shocks(lines: np.ndarray) -> dict[str, dict[tuple[str, ...], float]]:
-    """``Shock v("a","b") = x;`` statements of the command file kept in ``CMDF``."""
-    out: dict[str, dict[tuple[str, ...], float]] = {}
-    for var, cell, val in _SHOCK_RE.findall("\n".join(str(x) for x in lines)):
-        key = tuple(x.strip().strip("\"'") for x in cell.split(",")) if cell else ()
-        out.setdefault(var, {})[key] = float(val)
-    return out
-
-
 def read_sl4_changes(path: str | Path) -> Sl4Changes:
     """Cumulative changes of every variable of a GEMPACK solution, read from the ``.sl4``.
 
     ``CUMS`` holds only the cumulatively-retained endogenous components, ``CMND`` per
     variable, from ``PCUM`` (1-based), in FORTRAN order. A fully exogenous variable
-    (``CMND == 0``) changes by 0 except where the command file shocks it (``Shock
-    v("a","b") = x;`` kept in ``CMDF``; any other shock form is an error). A variable
+    (``CMND == 0``) changes by 0 except at its shocked components, read from the file's
+    own arrays: ``SHCK`` counts them, ``PSHK`` (1-based) is where its values start in
+    ``SHOC`` and ``SHCL`` lists their 1-based positions within the variable, in
+    variable order (omitted when every component is shocked). A shock count that does
+    not match the positions found is an error, never a silent zero. A variable
     with some but not all components endogenous cannot be placed and is reported in
     ``unplaced``.
     """
     headers, names, sets_of = _layout(
-        path, ("CMND", "PCUM", "CUMS", "VCTP", "VNCP", "SHCK", "CMDF")
+        path, ("CMND", "PCUM", "CUMS", "VCTP", "VNCP", "SHCK", "PSHK", "SHOC", "SHCL")
     )
     col = _col(headers)
     n_comp, n_cum, start = col("VNCP"), col("CMND"), col("PCUM")
     kind, n_shock = col("VCTP"), col("SHCK")
     cums = col("CUMS").astype(np.float64)
-    shocks = _shocks(col("CMDF"))
+    start_shock, shock_values, shock_list = col("PSHK"), col("SHOC"), col("SHCL")
+    next_listed = 0  # SHCL is consumed in variable order
     out: dict[str, Sl4Change] = {}
     unplaced: dict[str, str] = {}
     for i, name in enumerate(names):
@@ -189,17 +178,37 @@ def read_sl4_changes(path: str | Path) -> Sl4Changes:
                 raise ValueError(f"{path}: the results of {name!r} leave CUMS")
             values = cums[p0 : p0 + n].reshape(shape, order="F")
         elif n_cum[i] == 0 or n == 0:
-            values = np.zeros(shape)
-            for cell, x in shocks.get(name, {}).items():
-                values[tuple(sets_of[i][d].index(e) for d, e in enumerate(cell))] = x
-            placed = len(shocks.get(name, {}))
-            if int(n_shock[i]) != 0 and placed == 0:
-                raise ValueError(
-                    f"{path}: {name!r} is shocked but no Shock statement was found"
-                )
+            flat = np.zeros(n)
+            k_shock = int(n_shock[i])
+            if k_shock:
+                if k_shock > n:
+                    raise ValueError(
+                        f"{path}: {name!r} has {k_shock} shocks for {n} cells"
+                    )
+                if k_shock == n:
+                    pos = np.arange(n)
+                else:
+                    pos = shock_list[next_listed : next_listed + k_shock] - 1
+                    next_listed += k_shock
+                v0 = int(start_shock[i]) - 1
+                vals = shock_values[v0 : v0 + k_shock]
+                if (
+                    len(pos) != k_shock
+                    or len(vals) != k_shock
+                    or int(np.max(pos)) >= n
+                    or int(np.min(pos)) < 0
+                ):
+                    raise ValueError(
+                        f"{path}: the shocks of {name!r} (SHCK={k_shock}) are not placeable"
+                    )
+                flat[pos] = vals
+            values = flat.reshape(shape, order="F")
         else:
+            if int(n_shock[i]) and int(n_shock[i]) < n:
+                next_listed += int(n_shock[i])  # keep SHCL aligned for later variables
             unplaced[name] = (
-                f"{int(n_cum[i])} of {n} components endogenous: the list of which ones "
+                f"{int(n_cum[i])} of {n} components endogenous"
+                f"{' and some shocked' if n_shock[i] else ''}: the list of which ones "
                 "is not decoded"
             )
             continue
