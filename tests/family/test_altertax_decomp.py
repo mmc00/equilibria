@@ -2,9 +2,9 @@
 
 Two gates. ``test_formulas_*`` feeds GEMPACK's own cumulative changes (``altax.sl4``) and
 updated data (``altax_updated.har``) to ``decomp_from_changes``: it certifies the
-transcription of WELVIEW. ``test_decomp_values_*`` feeds the family model's changes: it
-is the end-to-end gate and is an expected failure (strict) because the changes of the
-family model differ from GEMPACK's in the small cells, see the comment above it.
+transcription of WELVIEW. ``test_ev_*`` / ``test_regional_totals_*`` feed the family model's changes: the
+end-to-end gate is the EV of each region and each header's regional totals at TOL_CHANGE
+(the cell level is only reported), see the comment above ``KNOWN_MISS``.
 
 Every welfare component is a change: ``0.01 * EVSCALFACT * (tax revenue) * (% change of a
 quantity)`` of a ~1e-5 shock, so GEMPACK's float32 values carry noise relative to the scale
@@ -208,33 +208,49 @@ def _regional_totals(name, ha):
 def _total_gaps(headers, gempack, scale):
     """Relative gap of every regional total above the noise floor (``NOISE * max|EV|``)."""
     floor = NOISE * scale.max()
-    gaps = {}
+    gaps = {}  # two-sided: a total above the floor on EITHER side is gated
     for name in EXPECTED:
         if name.startswith("C"):
             continue  # exogenous at zero: no cell above the floor
         ours = _regional_totals(name, headers[name])
         gem = _regional_totals(name, gempack[name])
         for k, g in gem.items():
-            if abs(g) > floor:
-                m = ours[k]
+            m = ours[k]
+            if max(abs(g), abs(m)) > floor:
                 gaps[k] = (m, g, rel_diff(m, g, g, ABS_FLOOR) if m * g > 0 else np.inf)
     return gaps
 
 
-# Regional totals that miss TOL_CHANGE at the 1.01 stand-in, measured (nominal trade
-# balance closure): the gap is linear in sigma - 1 (sweep 1.0025 / 1.005 / 1.01: A21 USA
-# -0.78 / -1.79 / -3.82 %, A24 ROW -13.5 / -26.7 / -53.3 %, A222 USA +1.5 / +2.3 / +3.9 %),
-# so it is the stand-in, on sums of mixed-sign tiny terms (A24 ROW is 6e-4 of EV). Strictly
-# expected: the test below fails when one of them starts to pass.
+# Regional totals that miss TOL_CHANGE with the nominal trade balance closure, with the
+# signed error (ours - GEMPACK) / |GEMPACK| measured at the 1.01 stand-in. Sweeps of the
+# stand-in (sigma 1.01 / 1.005 / 1.0025, in %), the gap being linear in sigma - 1 where it
+# is the stand-in:
+#   A21 USA   -3.82 / -1.79 / -0.78      A24 ROW  -53.3 / -26.7 / -13.5 (6e-4 of EV)
+#   A222 USA  +3.91 / +2.31 / +1.51      A23 xtax ROW  -4.08 / -1.95 / -0.83 (-> ~+0.3 at 1)
+#   A231 dvol/export ROW  -3.59 / -1.72 / -0.73 (-> ~0 at 1)
+#   A23 mtax USA  -30.8 / -14.5 / -6.3 (-> ~+2 at 1: mostly the stand-in, borderline)
+# All of these are the stand-in except one. A231 dvol/import USA (-338 / -160 / -70 %,
+# -> ~+18 % at sigma = 1) is an OPEN small-cell model residual, not the stand-in: it is the
+# near-cancelling sum of three +-1.3e-2 cells (~4e-4 of EV) driven by the MFG ROW -> USA
+# dvol (+186 % at 1.01, +39 % at 1.0025, ~-10 % at sigma = 1: -4.0e-3 vs GEMPACK -4.4e-3),
+# the same family as Task 6's trade residual (DQXS/DQFM import cells at sigma -> 1).
+# ``test_known_misses_are_bounded`` keeps each within 1.5x of its measured error (same
+# sign), and still a miss: it fails when one starts to pass or gets worse.
 KNOWN_MISS = {
-    ("A21", "", "USA"), ("A211", "welcnt", "USA"), ("A222", "", "USA"),
-    ("A22I", "welcnt", "USA"), ("A22I", "dvol", "USA"), ("A24", "", "ROW"),
-    ("A241", "welcnt", "ROW"),
-    # trade-tax totals of 3e-4 .. 4e-3 of EV (not swept): sums of mixed-sign terms
-    ("A23", "mtax", "USA"), ("A23", "xtax", "ROW"), ("A231", "dvol/export", "ROW"),
-    ("A231", "dvol/import", "USA"), ("A231", "welcnt/export", "ROW"),
-    ("A231", "welcnt/import", "USA"),
-}  # fmt: skip
+    ("A21", "", "USA"): -0.0382,
+    ("A211", "welcnt", "USA"): -0.0382,
+    ("A222", "", "USA"): +0.0391,
+    ("A22I", "welcnt", "USA"): +0.0391,
+    ("A22I", "dvol", "USA"): +0.0286,
+    ("A24", "", "ROW"): -0.5326,
+    ("A241", "welcnt", "ROW"): -0.5326,
+    ("A23", "mtax", "USA"): -0.3082,
+    ("A231", "welcnt/import", "USA"): -0.3082,
+    ("A23", "xtax", "ROW"): -0.0408,
+    ("A231", "welcnt/export", "ROW"): -0.0408,
+    ("A231", "dvol/export", "ROW"): -0.0359,
+    ("A231", "dvol/import", "USA"): -3.3757,  # open residual, see above
+}
 
 
 def test_ev_by_region_within_tol_change(headers, gempack):
@@ -258,10 +274,32 @@ def test_regional_totals_within_tol_change(headers, gempack, scale):
     assert not bad, "\n".join(f"{k} {v}" for k, v in sorted(bad.items()))
 
 
-def test_known_misses_are_still_misses(headers, gempack, scale):
+def test_known_misses_are_bounded(headers, gempack, scale):
     gaps = _total_gaps(headers, gempack, scale)
-    now_ok = [k for k in KNOWN_MISS if gaps[k][2] <= TOL_CHANGE]
-    assert not now_ok, f"now within TOL_CHANGE, remove from KNOWN_MISS: {now_ok}"
+    bad = []
+    for k, ref in KNOWN_MISS.items():
+        m, g, rel = gaps[k]
+        err = (m - g) / abs(g)
+        if rel <= TOL_CHANGE:
+            bad.append((k, "now within TOL_CHANGE, remove it", err))
+        elif err * ref <= 0 or abs(err) > 1.5 * abs(ref):
+            bad.append((k, "error changed sign or grew beyond 1.5x", err, ref))
+    assert not bad, bad
+
+
+def test_zero_components_stay_zero(headers, gempack):
+    """The endowment, technical change and population columns (and the B, C headers) are
+    zero in GEMPACK's real shock; so are they here (float noise below 1e-6 of EV)."""
+    tol = NOISE * np.abs(np.asarray(gempack["A"].array, dtype=np.float64)).max()
+    for name in ("B1", "B2", *[n for n in EXPECTED if n.startswith("C")]):
+        assert np.abs(np.asarray(gempack[name].array, dtype=np.float64)).max() <= tol, (
+            name
+        )
+        assert np.abs(np.asarray(headers[name].array)).max() <= tol, name
+    ours, gem = np.asarray(headers["A"].array), np.asarray(gempack["A"].array, float)
+    for col in (1, 2, 3, 6):  # ENDWB1 tech_C1 pop_D1 pref_G1
+        assert np.abs(gem[:, col]).max() <= tol, col
+        assert np.abs(ours[:, col]).max() <= tol, col
 
 
 def test_cell_level_report(headers, gempack, scale, capsys):

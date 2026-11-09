@@ -148,8 +148,8 @@ def _ratio(pre: dict, post: dict, key: tuple[str, ...]) -> float:
 
 
 def _div(num: np.ndarray, den: np.ndarray) -> np.ndarray:
-    """``num / den`` with 0 where ``den = 0`` (``Zerodivide default 0``, line 4437).
-    GEMPACK's postsim block resets ``nonzero_by_zero`` to 0.5 (line 4451); only the E1
+    """``num / den`` with 0 where ``den = 0`` (``Zerodivide default 0``, lines 4326-4327).
+    GEMPACK's postsim block resets ``nonzero_by_zero`` to 0.5 (line 4523); only the E1
     value denominator could hit it and it is never zero here, so 0 is used throughout."""
     out = np.zeros(np.broadcast(num, den).shape)
     np.divide(num, den, out=out, where=den != 0.0)

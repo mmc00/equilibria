@@ -147,6 +147,7 @@ class FamilyRun:
     # derived once per run, filled by the first solve call that needs them
     # regions whose savf the shock holds nominal (``nominal_trade_balance``); () = off
     nominal_savf: tuple[str, ...] = ()
+    residual_region: str = ""  # the resolved residual region of the run
     cell_index: Any = field(default=None, repr=False)
     adjacency: dict = field(default_factory=dict, repr=False)
 
@@ -247,6 +248,7 @@ def prepare_run(
         masks=masks,
         regions=[str(r) for r in params.sets.r],
         if_sub=bool(getattr(closure, "if_sub", False)),
+        residual_region=str(residual_region),
     )
     return run, mp
 
@@ -502,6 +504,11 @@ def solve_gtap_family(
         shock_steps=None,
         shock_method="nonlinear",
     )
+    if nominal_trade_balance and getattr(closure, "savf_flag", "capFix") != "capFix":
+        raise NotImplementedError(
+            "nominal_trade_balance replaces the capFix eq_savf row; savf_flag="
+            f"{getattr(closure, 'savf_flag', None)!r} has none to replace"
+        )
     if getattr(closure, "savf_flag", "capFix") == "capFlex":
         require_ref_gdx(ref_gdx)
     timing: dict[str, float] = {}
@@ -556,10 +563,7 @@ def _solve_family(
         ref_gdx=ref_gdx,
     )
     if nominal_trade_balance:
-        from equilibria.templates.gtap.residual_region import resolve_residual_region
-
-        res_r = resolve_residual_region(params, params.sets, closure, residual_region)
-        run.nominal_savf = tuple(r for r in run.regions if r != str(res_r))
+        run.nominal_savf = tuple(r for r in run.regions if r != run.residual_region)
     timing["prepare_s"] = time.perf_counter() - t0
     # records, cross records and MPArrays are now loaded and long-lived: hide them
     # from the full passes too (the entry-point freeze predates them)
