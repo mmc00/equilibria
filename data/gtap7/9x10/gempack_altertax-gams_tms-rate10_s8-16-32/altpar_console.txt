@@ -1,0 +1,221 @@
+ 
+ <ALTPARv7.for 09-SEP-2020 (a TABLO-generated program)>
+   This program accesses some of the routines in the GEMPACK software release
+ <GEMPACK Release 12.1.003   January 2020>
+  
+ Licence file: C:\GP\licen.gem
+  
+     -------------------------------------------------------
+    !            GEMPACK Software System Licence            !
+    !  Source Code Licence for the GEMPACK Software System  !
+    !                 Licence No.  GFM-1415                 !
+    !          Licence for Release 11.0 of GEMPACK          !
+    !               Ministry of Foreign Trade               !
+    !             PO Box 297-1007 Centro Colon,             !
+    !                      Costa Rica                       !
+     -------------------------------------------------------
+ 
+ 
+     << COPYRIGHT 1987-2018: CoPS/Impact and KPSOFT >>
+ 
+  Current directory is: <work>
+  
+ 
+  Full path name of running EXE is: C:\runGTAP375\altparv7.exe
+  Fortran compiler = GF64   version 6.4.0 64 bit
+  BLAS library: OpenBlas
+  OPENMP number of threads: 10
+  Gempack source corresponds to revision 1156.
+"wmic" no se reconoce como un comando interno o externo,
+programa o archivo por lotes ejecutable.
+  Operating System is Unknwon/ Error retrieving info
+ 
+ 
+  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 
+ 
+                    TABLO-GENERATED PROGRAM OPTIONS
+               ( --> indicates those in effect )
+ 
+       BAT Run in batch              STI Take inputs from a Stored-input file
+       BPR Brief prompts             SIF Store inputs on a file
+       LOG Output to log file        ASI Add to incomplete Stored-input file
+                                     CMF Take inputs from a Command file
+       EAA Echo all activity           SVX Select variables on XAC file (later)
+   --> CPU Report CPU times            RQF Required figures agreement (extrap)
+       NRP Don't reuse pivots        NIR Don't do solution iterative refinement
+                                 --> IZ1 Ignore zero coefficients in step 1
+                                     KZ2 Keep zero coefficients in steps 2,3 etc
+       NEQ Do no equations           NWE Don't warn how well equations solved
+       NDS Do no displays            SSI Several subintervals; extrap after each
+       NWR Do no writes              M28 Use MA28 routines (rather than MA48)
+       NAS Do no assertions          SUI Save updated formula(initial) data
+       NUD Do no final updates              Extra Options Screen
+       NSM Don't do simulation              --------------------
+       NWT Use Newton's method      DTO Display, Terminal/Text write Options
+       CR  Check-on-read options
+ 
+  Select an option   :  <opt>      Deselect an option      : -<opt>
+  Help for an option : ?<opt>      Help on all options     : ??
+  Redisplay options  : /           Finish option selection : Carriage return
+  
+ (Opened, as text, existing file 'altpar.cmf'.)
+  (Taking inputs from a command file.)
+ (Opened, as text, existing file 'altpar.cmf'.)
+ 
+  !  (There is no CREATION information on this file.)
+  
+ 
+  --> Reading the Command file.
+  
+ aux files = C:\runGTAP375\altparv7 ;
+ file GTAPSETS = sets.har ;
+ file ALTERPAR = altertax.prm ;
+ 
+  (Finished reading the command file.)
+ 
+  Auxiliary Statement File
+  ---------------------
+ (Opened, as binary, existing file 'C:\runGTAP375\altparv7.axs'.)
+ 
+  Auxiliary Table File
+  -----------------
+ (Opened, as header, existing file 'C:\runGTAP375\altparv7.axt'.)
+ 
+  !  This file was created at 14:47:02 on 09-SEP-2020 by the program
+  !    <TABLO  Version 7.0   August 2018>
+  !  which accesses some of the routines in the GEMPACK software release
+  !    <GEMPACK Release 12.1.003   January 2020>
+  !  [The program which created this file was compiled with GF64.]
+  
+ Auxiliary Table File was created by TABLO at 14:47:02 on 09-SEP-2020
+ [TABLO file used here is "ALTPARv7.tab".]
+ [No TABLO STI file used when TABLO was run.]
+ 
+  Using Gempack optimized version of LU decompositions
+  With this option active several old options are obsolete.
+  These options concern: Markowitz pivots, and those starting with pivots, MA48 and MA28.
+ 
+  Search depth for LU is set to 32
+  Column Filter threshold is set to 5.0000001E-02
+  Harwell paramter for reuse is set to -1.000000
+ 
+ [This TG-program was created by TABLO at 14:47:02 on 09-SEP-2020.]
+ When TABLO was run, GPDIR="C:\GP"
+ 
+  [Starting to check "extra" statements on the Command file.]
+  
+ 
+  [Finished checking "extra" statements on the Command file.]
+  
+ 
+ ++++++++++++++++++++++++++++++++++++++++++++++++++
+  This program was written by the GEMPACK program TABLO 
+  as described in the Information file
+  'ALTPARv7.inf
+ 
+  This run of the TABLO-generated program
+      o can carry out 16 WRITEs
+ 
+ ++++++++++++++++++++++++++++++++++++++++++++++++++
+ (Range test of initial values will produce warnings.)
+ 
+  (Data file with logical name 'GTAPSETS')
+ (Opened, as header, existing file 'sets.har'.)
+ 
+  !  This file was created at 19:08:11 on 25-JUN-2017 by the program
+  !    <GEMSIM v4.4 Jan 2016> [CleanUp-JGEA-data.tab]
+  !  which accesses some of the routines in the GEMPACK software release
+  !    <GEMPACK Release 11.4.003   January 2016>
+  !  [The program which created this file was compiled with IF64.]
+  
+ 
+  (Data file with logical name 'ALTERPAR')
+ (Opened new header file 'altertax.prm'.)
+ 
+  --->  Beginning the preliminary pass (aimed at sets and subsets).
+ Set 'REG'
+ (Opened, as header, existing file 'sets.har'.)
+   [Set has size 10.]
+ Set 'COMM'
+   [Set has size 10.]
+ Set 'MARG'
+   [Set has size 1.]
+ Set 'ACTS'
+   [Set has size 9.]
+ Set 'ENDW'
+   [Set has size 5.]
+ Set 'ENDWT'
+   [Set has size 3.]
+ [CPU for reads, formulas etc is 0.00 seconds.]
+ Elapsed time for reads, formulas etc is: less than one second.
+   (1 character strings, each of length 1 read. Header "SVFM")
+ 
+  Total memory currently used for all arrays is approximately 0.01 megabytes.
+  [Add about 5-10 megabytes for the memory used by the code.]
+  [Total memory currently allocated for Coefficients and Updated
+   Coefficients is about        0.0 and        0.0 MB respectively.]
+ 
+  --->  Beginning the reads, formulas (etc).
+  Formula for 'SUBPAR'
+  Formula for 'INCPAR'
+  Formula for 'ESUBD'
+  Formula for 'ESUBM'
+  Formula for 'ESUBVA'
+  Formula for 'ETRAE'
+  Formula for 'RORFLEX'
+  Formula for 'RORDELTA'
+  Formula for 'ESUBC'
+  Formula for 'ESUBT'
+  Formula for 'ESUBI'
+  Formula for 'ESUBS'
+  Formula for 'ESUBG'
+  Formula for 'ETRAQ'
+  Formula for 'ESUBQ'
+ (Opened, for writing, header file 'altertax.prm'.)
+ Writing SUBPAR(COMM,REG)
+ (Written real array, size 10x10, header "SUBP".)
+ Writing INCPAR(COMM,REG)
+ (Written real array, size 10x10, header "INCP".)
+ Writing ESUBD(COMM,REG)
+ (Written real array, size 10x10, header "ESBD".)
+ Writing ESUBM(COMM,REG)
+ (Written real array, size 10x10, header "ESBM".)
+ Writing ESUBVA(ACTS,REG)
+ (Written real array, size 9x10, header "ESBV".)
+ Writing ETRAE(ENDW,REG)
+ (Written real array, size 5x10, header "ETRE".)
+ Writing RORFLEX(REG)
+ (Written real array, size 10, header "RFLX".)
+ Writing RORDELTA
+ (Written integer array, size 1, header "RDLT".)
+ Writing ESUBC(ACTS,REG)
+ (Written real array, size 9x10, header "ESBC".)
+ Writing ESUBT(ACTS,REG)
+ (Written real array, size 9x10, header "ESBT".)
+ Writing ESUBI(REG)
+ (Written real array, size 10, header "ESBI".)
+ Writing ESUBS(MARG)
+ (Written real array, size 1, header "ESBS".)
+ Writing ESUBG(REG)
+ (Written real array, size 10, header "ESBG".)
+ Writing ETRAQ(ACTS,REG)
+ (Written real array, size 9x10, header "ETRQ".)
+ Writing ESUBQ(COMM,REG)
+ (Written real array, size 10x10, header "ESBQ".)
+  Formula for 'ENDOWFLAG'
+  Formula for 'ENDOWFLAG'
+ Writing ENDOWFLAG(ENDW,ENDWT)
+ (Written real array, size 5x3, header "EFLG".)
+ [CPU for reads, formulas etc is 0.02 seconds.]
+ Elapsed time for reads, formulas etc is: less than one second.
+ [CPU for all of this 0-step calculation is 0.02 seconds.]
+ Elapsed time for all this 0-step calculation is: less than one second.
+  [Total CPU is 0.03 seconds.]
+ 
+  (Inputs have been taken from the Command file "<work>\altpar.cmf")
+ 
+  (The program has completed without error.)
+  (The program has completed without warnings.)
+  
+  Total elapsed time is: less than one second.

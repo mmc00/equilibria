@@ -32,6 +32,8 @@ data/
       gams_nlp_gtap_ifsub1_fbep-header/      GDX
       gams_mcp_gtap_ifsub1_fbep-header/      GDX
       gempack_tm10_s8-16-32_capflex/         updated.har, sl4dump.har, run.cmf
+      gempack_altertax-rungtap_tms-rate10_s8-16-32/   RunGTAP's AlterTax button
+      gempack_altertax-gams_tms-rate10_s8-16-32/      the same with GAMS altertax's parameters
       sltoht_tm10_s8-16-32_capflex/          step 2: solution.sl4, sl4levels.har
       gemsim_levels6_tm10_s8-16-32_capflex/  step 4: six more levels
     gtap7_10x7/ ...
@@ -198,6 +200,30 @@ reference("gtap7_3x3", "gempack", shock=10, steps="8-16-32", closure="capFlex")
 reference("nus333", "gemsim", experiment="me9c", method="gragg")
 reference("gtap7_20x41", "gemsim", shock=10, steps="8-16-32", closure="capFix",
           tab="gtapv7_levels")
+```
+
+### Altertax
+
+`gempack/tools/regenerate_altertax.py` makes two references per dataset, both
+solved with RunGTAP's altertax closure and Gragg 8-16-32. By default it covers
+the datasets with a GAMS altertax reference (`gtap7_{3x3,3x4,5x5,10x7,15x10}`);
+`gtap7_20x41`, `9x10` and `nus333` have none to compare against and were made
+with `--datasets 9x10 gtap7_20x41 nus333`. `nus333` uses the condensed
+`gtapv7.exe` here, not the `gtapuv7.exe` of the book's RunGTAP version.
+
+| `parameters` | What it is |
+|---|---|
+| `rungtap` | The file RunGTAP's Tools..AlterTax uses (`altparv7.exe`): Cobb-Douglas throughout, ESBD = ESBM = 1, all factors mobile, the CDE turned off |
+| `gams` | `default.prm` with the values of `comp_altertax.gms`: ESBV, ESBT, ESBC = 1, ESBD = ESBM = 0.95, ETRE = -1, all factors sluggish |
+
+- **Shock**: `tms-rate10`, the tariff rate times 1.1 on every flow (`imptx * 1.1`
+  in the GAMS altertax model, `rate% 10` in RunGTAP). It is not `tm = uniform 10`.
+- **Investment differs from GAMS in both**: `gtapv7.tab` has no ESUBI, so it is
+  Leontief where GAMS altertax is Cobb-Douglas.
+- `parameters.prm` and `tms_rate10.shk` are kept next to the results.
+
+```python
+reference("gtap7_3x3", "gempack", mode="altertax", parameters="gams")
 ```
 
 ## Using a reference in a test

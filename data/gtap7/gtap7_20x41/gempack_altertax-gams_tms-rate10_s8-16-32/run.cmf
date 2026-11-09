@@ -1,0 +1,83 @@
+! altertax closure, tms rate +10% on every flow - GEMPACK / GTAPv7
+Auxiliary files = C:\runGTAP375\gtapv7 ;
+
+file GTAPSETS = sets.har ;
+file GTAPDATA = basedata.har ;
+file GTAPPARM = parameters.prm ;
+file GTAPSUM  = summary.har ;
+file WELVIEW  = decomp.har ;
+file GTAPVOL  = volume.har ;
+Updated file GTAPDATA = updated_altertax.har ;
+
+Method = Gragg ;
+Steps  = 8 16 32 ;
+Automatic accuracy = no ;
+Subintervals = 1 ;
+
+Verbal Description =
+altertax closure, tariff rate up 10pct on every flow ;
+
+Exogenous
+          pop
+          psaveslack pfactwld
+          profitslack incomeslack endwslack
+          tradslack
+          ams atm atf ats atd
+          aosec aoreg avasec avareg
+          aintsec aintreg aintall
+          afcom afsec afreg afecom afesec afereg
+          aoall afall afeall
+          au dppriv dpgov dpsave
+          to tinc
+          tpreg tm tms tx txs
+          qe
+          qesf
+          del_tbalry("USA")
+          del_tbalry("CAN")
+          del_tbalry("MEX")
+          del_tbalry("EU_28")
+          del_tbalry("GBR")
+          del_tbalry("CHE")
+          del_tbalry("RUS")
+          del_tbalry("TUR")
+          del_tbalry("CHN")
+          del_tbalry("JPN")
+          del_tbalry("KOR")
+          del_tbalry("IND")
+          del_tbalry("IDN")
+          del_tbalry("THA")
+          del_tbalry("VNM")
+          del_tbalry("AUS")
+          del_tbalry("NZL")
+          del_tbalry("ARG")
+          del_tbalry("BRA")
+          del_tbalry("CHL")
+          del_tbalry("COL")
+          del_tbalry("PER")
+          del_tbalry("URY")
+          del_tbalry("PRY")
+          del_tbalry("SEAsia")
+          del_tbalry("EastAsia")
+          del_tbalry("SouthAsia")
+          del_tbalry("CentralAmer")
+          del_tbalry("Caribbean")
+          del_tbalry("SAU")
+          del_tbalry("ARE")
+          del_tbalry("ISR")
+          del_tbalry("EGY")
+          del_tbalry("MENA")
+          del_tbalry("ZAF")
+          del_tbalry("NGA")
+          del_tbalry("SSA")
+          del_tbalry("EFTA")
+          del_tbalry("EasternEur")
+          del_tbalry("CentralAsia")
+          cgdslack("ROW") ;
+Rest Endogenous ;
+
+shock tms(COMM,REG,REG) = select from file tms_rate10.shk ;
+
+CPU = yes ;
+NDS = yes ;
+log file = yes ;
+Extrapolation accuracy file = NO ;

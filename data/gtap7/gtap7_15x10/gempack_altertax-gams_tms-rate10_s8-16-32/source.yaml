@@ -1,0 +1,84 @@
+kind: result
+model: gtap7
+dataset: gtap7_15x10
+tool: gempack
+tool_version: 12.1.003
+variant:
+  mode: altertax
+  parameters: gams
+  shock: tms-rate10
+  steps: 8-16-32
+  closure: altertax
+phases:
+- shock
+generated_from:
+  model:
+    path: gtap7/gempack
+    sha256:
+      tools/_job_cli.py: e7f25cc85890c54cc879fae36c6e2e132bdfc5b8f8d3a9b307a772b449f7dd5d
+      tools/altertax_job.py: 08b351e485f7234ef04d7f8d0815f14c1592f8e5d5a433b17b23288ba2cd8562
+      tools/burfisher_job.py: 653c50361576302a9a1f55ab704d607b60b9800594cf5bc5c2db5fe906425ed4
+      tools/cmf/9x10_tm10_dpsaveswap.cmf: 97842333032392ea8e0e543b9520465829a33488c1dab68657176f72a6032a1f
+      tools/cmf/gtap7_20x41_tm10_dpsaveswap.cmf: fba601626927290a341865a55e99e52320135180286fe34fcc72a277aebc8154
+      tools/cmf/nus333_tm10_dpsaveswap.cmf: ac916d48f03c5c02db91be028377765e9e6672c0c89c627f88465076053e8d0b
+      tools/export_sl4_levels.py: d3fe47958ee23e21c778b467a650007edcfe0b08390fec1af0a5ce97f3ea1c45
+      tools/gemsim_job.py: 5feb9074e7e0fda993dbe0b9ac6a3553be42e9301dc959b10889a0467bee65c5
+      tools/levels_job.py: aa4073da35de5ab1504cb3bc3e555b2f0c05bf9f80eed1f88d6be3f77d733d5d
+      tools/make_levels_tab.py: 52e58f847f0033b2dcc3c223cbdf99993638633d4a524057adf71d1c583bb80a
+      tools/regenerate_altertax.py: fc82331149bc76f5e981f96444c3707dd9043ef18d6b8c363f5bd1ff17f6cd17
+      tools/regenerate_gempack.py: ecb1099c39fb686315c0b5a2e7935d6a7481578475688980aa84f6345d5b94a6
+      tools/regenerate_paper.py: 80f057d8c274ee06d1d34a09b369eedc2e54b05f341a8bd1e9b23f53553222b6
+      tools/release_check.py: 7ef240328c439d32ff203b6a30d4a84f39266c6a4b082d314977c34866241b5e
+      tools/run_gempack_matrix.py: dad828823ecafc5b55022454e35d83e0a0d5e200ee6e5e5d4ca1acc16af0ff6d
+      tools/swap_job.py: 850f58385cceba171d9451ac5d89b75f6d1d2e32c455e93a423a990357a33902
+      tools/target_shocks.py: 983253cd6adac881107450837959cde36a371a1d2e2ec819f967c61fa015f4cc
+  data:
+    path: gtap7/gtap7_15x10
+    sha256:
+      basedata.har: 979b94b12ecffbb62d0bc4b818a6d08a94d9bc827e62731738f0e95eb745c135
+      baserate.har: 853efaa312b4dee0c6f8f62c5cb57a1919d1c757c68aadabd35f4b16979697d7
+      default.prm: 1b1461e68e558b5b37033a6e3c9c69d27ac7bed66c5c2254f031e301fb732431
+      sets.har: 98c17a64decbf2ee6c8fab761a914798b94943984e5017f7d3be32d4b293d703
+      v7_consolidated.gdx: 608d27bfffe0f8abfbb3176611c99ee9ff9a86ccf6d8363c50b6dedde1f2ca19
+external:
+  gtapv7.exe:
+    path: C:\runGTAP375\gtapv7.exe
+    sha256: 0d298829f9f56836798c6280fee0711fa9c099de169d41962eeed9b4f729420a
+    release: 12.1.003
+  altparv7.exe:
+    path: C:\runGTAP375\altparv7.exe
+    sha256: 6f63c4770bc9facb5fb77ce447f26f7698dccbba6300e4ae0b1b851453733c90
+    release: 12.1.003
+  sltoht.exe:
+    path: C:\GP\sltoht.exe
+    sha256: 8f9b37c53d42cae5272fc70576abb0f5bd4c62ea0fa97896c25e8d6f02a91d20
+    release: 11.3.004
+solver:
+  name: gtapv7
+command: '''C:\Documentos\proyectos\equilibria\.venv\Scripts\python.exe'' ''C:\Documentos\proyectos\equilibria\data\gtap7\gempack\tools\altertax_job.py''
+  --dataset gtap7_15x10 --parameters gams --out ''C:\Documentos\proyectos\equilibria\data\gtap7\gtap7_15x10\gempack_altertax-gams_tms-rate10_s8-16-32''
+  --gtapv7 ''C:\runGTAP375\gtapv7.exe'' --altparv7 ''C:\runGTAP375\altparv7.exe''
+  --sltoht ''C:\GP\sltoht.exe'' --expect-release 12.1.003 --release altparv7.exe=12.1.003'
+equilibria_commit: f2a51c9c
+exit:
+  code: 0
+outputs:
+  altpar_console.txt: 5b5dafd1bb80199a37ec8908ec0e4fbcbb91dc6165e7095e856090594ad4d2cb
+  decomp.har: 45639f6fd70649677077d782babf02ada90f714edfd78095a60ebfb5172d8eda
+  parameters.prm: 107726da319fd64436f8e02ae1a16ffcd8253961c1ac79c502698c7b515af824
+  run.cmf: d2d68ed6d70aced12f086c923bafd557537642b85dbd3d8b9d7fcc566bc17a82
+  sl4dump.har: ef87f432f0e6dcfc1a805d42c00e31ab2db4c7a1ed2474705e2b9dc9ba256403
+  sltoht_console.txt: 6eaaf58c1ecdb6bb5044f090e0217ec7657775a365e9ac1f600674a8c11688c2
+  solve_console.txt: 9d1e04e10b4022b8e7a485371ce8505d1dc927f9933e37f9526fe2228f39d01c
+  tms_rate10.shk: 913f7b08bb9cb2d1ed9d40fed55458bacbbdc6f99b28278a39a0464640f4e1e4
+  updated.har: ae68731c618660318168fd6442785cac69ca535d274a9e027fb39e2aff7e420f
+run:
+  date: '2026-11-09T10:16:00-06:00'
+  duration_s: 11.136
+  machine:
+    os: Windows 11 (10.0.26200)
+    cpu: 13th Gen Intel(R) Core(TM) i7-1365U
+    cores: 10
+    ram_gb: 31.4
+status: verified
+notes: ''
