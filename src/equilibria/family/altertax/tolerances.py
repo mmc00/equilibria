@@ -1,6 +1,7 @@
 """Tolerances of the ALTERTAX gates against GEMPACK, approved by the user 2026-11-09.
 
-Relative ones are ``|a - b| / max(1, |b|)``, as the gtap7 map applies them. Every Phase B
+Relative ones are ``rel_diff`` with the gtap7 map's ``abs_floor`` of 1e-6:
+``|a - b| / max(|b|, 1e-6)``. Every Phase B
 test imports them from here. ``TOL_DECOMP`` is deliberately not defined: the decomposition
 is measured first (Task 7) and the user sets it.
 """

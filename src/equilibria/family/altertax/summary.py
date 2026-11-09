@@ -218,12 +218,16 @@ def summary_from_database(db: dict[str, HeaderArray]) -> dict[str, HeaderArray]:
     return out
 
 
+def numeric_headers(har: dict[str, HeaderArray]) -> dict[str, HeaderArray]:
+    """The float (value) headers of a HAR, without version and history text headers."""
+    return {k: h for k, h in har.items() if np.asarray(h.array).dtype.kind == "f"}
+
+
 def input_database(
     run: AltertaxRun, basedata: Path | None = None
 ) -> dict[str, HeaderArray]:
     """Numeric value headers of the input ``basedata.har`` (default of ``run.dataset_dir``)."""
-    har = read_har(str(basedata or run.dataset_dir / "basedata.har"))
-    return {k: h for k, h in har.items() if np.asarray(h.array).dtype.kind == "f"}
+    return numeric_headers(read_har(str(basedata or run.dataset_dir / "basedata.har")))
 
 
 def summary_headers(
