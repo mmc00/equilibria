@@ -27,3 +27,21 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list) -> None:
             and item.get_closest_marker("slow") is not None
         ):
             item.add_marker(skip)
+
+
+@pytest.fixture(scope="module")
+def altax_run(tmp_path_factory):
+    """One ``solve_altertax(nus333_dir())`` per module, shared by the Phase B tests."""
+    pytest.importorskip("pyomo")
+    from equilibria._local_refs import nus333_dir
+    from equilibria.family.altertax.run import solve_altertax
+    from tests.family._prep import _newton_mumps
+
+    mp = pytest.MonkeyPatch()
+    for k, v in {**_newton_mumps(), "EQUILIBRIA_GTAP_TR_LINSOLVE": "direct"}.items():
+        mp.setenv(k, v)
+    mp.setenv("EQUILIBRIA_FAMILY_CACHE", str(tmp_path_factory.mktemp("altax_cache")))
+    try:
+        yield solve_altertax(nus333_dir(), cache_root=tmp_path_factory.mktemp("c2"))
+    finally:
+        mp.undo()

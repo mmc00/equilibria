@@ -16,17 +16,10 @@ import pytest
 from equilibria._local_refs import nus333_dir
 from equilibria.family.altertax.levels import family_levels
 from equilibria.family.altertax.run import ALTAX_SHOCK, solve_altertax
+from equilibria.family.altertax.tolerances import CHECK_TOL
 from tests.family._prep import ROOT, _newton_mumps
 
 pytest.importorskip("pyomo")
-
-# The brief asked for 1e-9. Measured: the benchmark carries ~1e-8 of float32 noise in its
-# shares and the nests at sigma = 1.01 amplify it by 1 / |1 - sigma| = 100, so check
-# departs from base by up to 1.2e-6 (xiagg ROW); the amplification falls with |1 - sigma|
-# (7e-8 at 1.1, 4e-8 at 2.0, the floor default.prm shows at 6e-8). 5e-6 bounds the
-# measured 1.2e-6 and stays orders below any real closure or numeraire mismatch
-# (without the esubd guard the same cells departed by 3e-2).
-CHECK_TOL = 5e-6
 
 
 def _eq_vars() -> tuple[str, ...]:
@@ -127,3 +120,12 @@ def test_bad_shock_cell_raises(monkeypatch):
         solve_altertax(
             nus333_dir(), shock={"prdtx_rai": {("NOPE", "AGR", "USA"): 0.0012}}
         )
+
+
+def test_altertax_params_have_esubi_zero():
+    """GTAPv7 E_qia (gtapv7.tab ~1717): qia(c,r) = qinv(r), Leontief; ESBI is not read."""
+    from equilibria.family.altertax.run import load_altertax_params
+
+    p = load_altertax_params(nus333_dir())
+    assert p.elasticities.esubi
+    assert all(v == 0.0 for v in p.elasticities.esubi.values())

@@ -63,6 +63,13 @@ def load_altertax_params(
             if value == 1.0:
                 table[key] = unit_sigma
                 changed += 1
+    # GEMPACK GTAPv7 E_qia (gtapv7.tab, lines ~1717-1720): qia(c,r) = qinv(r), investment
+    # demand across commodities is Leontief and ESBI is not read. ``altertax.prm`` carries
+    # ESBI = 1, so the ALTERTAX entry point sets esubi = 0 in every region.
+    for key in p.elasticities.esubi:
+        if p.elasticities.esubi[key] != 0.0:
+            p.elasticities.esubi[key] = 0.0
+            changed += 1
     if changed:
         p.shares.calibrate(p.benchmark, p.elasticities, p.sets, p.taxes)
         p._calibrate()
