@@ -35,7 +35,7 @@ VCIF     pmcif[s,c,d] * xw[s,c,d]                   577
 VMSB     pm[s,c,d] * xw[s,c,d]                      588
 VST      pd[r,m] * xda[r,m,tmg]                     603
 DPSM     DPARSUM: constant, see ``_dpsm``           1479
-VTWR     ptmg[m] * xmgm[m,s,c,d]                    1883
+VTWR     ptmg[m] * amgm * tmarg * xw[s,c,d]        1883
 VKB      pi[r] * kstock[r]                          2377
 =======  =========================================  =========
 
@@ -107,6 +107,11 @@ class _Period:
         self.p = run.params
         self.xscale = dict(xscale_data(run.params, run.params.sets))
         self.period = period
+        from equilibria.family.post_solve import mp_margin_params
+
+        margin = mp_margin_params(run.params, run.params.sets)
+        self.amgm = margin["amgm"][1]
+        self.tmarg = margin["tmarg"][1]
         self._cache: dict[str, dict[tuple[str, ...], float]] = {}
         self._vars = mp.vars
 
@@ -167,8 +172,10 @@ def _factor(pvar: str) -> Callable[[_Period, str, str, str], float]:
 
 def _make(basic: bool) -> Callable[[_Period, str, str, str], float]:
     """``MAKES`` (supplier price ``p_rai``) and ``MAKEB`` (basic price, output tax
-    inclusive: ``p_rai * (1 + prdtx_rai)``). ``pp_rai`` is not used: it is a Var no
-    equation defines. ``x`` carries ``inScale`` only, not ``xscale``."""
+    inclusive: ``p_rai * (1 + prdtx_rai)``, the macro of ``ifsub_arrays.py``). ``pp_rai``
+    is not read: it is a report var that ``post_solve`` overwrites only at the shock
+    period (stale at check in one cell, driver-parity behaviour). ``x`` carries
+    ``inScale`` only, not ``xscale``."""
 
     def f(P: _Period, c: str, a: str, r: str) -> float:
         price = _g(P["p_rai"], (r, a, c))
@@ -209,7 +216,13 @@ def _vst(P: _Period, m: str, r: str) -> float:
 
 
 def _vtwr(P: _Period, m: str, c: str, s: str, d: str) -> float:
-    return _g(P["ptmg"], (m,)) * _g(P["xmgm"], (m, s, c, d)) / IN_SCALE
+    """``ptmg[m] * amgm[m,s,c,d] * tmarg[s,c,d] * xw[s,c,d]``. The report vars ``xmgm`` and
+    ``xwmg`` are not recomputed at the shock period under ifSUB (stale: equal at check and
+    shock while ``xw`` moves), so the margin quantity is rebuilt from the margin share
+    ``amgm``, the margin rate ``tmarg`` (``xwmg = tmarg * xw``) and ``xw``."""
+    amgm = P.amgm.get((m, s, c, d), 0.0)
+    tmarg = P.tmarg.get((s, c, d), 0.0)
+    return _g(P["ptmg"], (m,)) * amgm * tmarg * _g(P["xw"], (s, c, d)) / IN_SCALE
 
 
 _VALUE: dict[str, Callable[..., float]] = {
@@ -319,12 +332,10 @@ def updated_headers(
     run: AltertaxRun, basedata: Path | None = None
 ) -> dict[str, HeaderArray]:
     """The 33 headers of the updated database at the shock period, in
-    :data:`UPDATED_HEADERS` order. ``basedata`` (default: the nus333 ``basedata.har``)
+    :data:`UPDATED_HEADERS` order. ``basedata`` (default: ``run.dataset_dir / "basedata.har"``)
     supplies ``DVER`` and ``DPSM``."""
     if basedata is None:
-        from equilibria._local_refs import nus333_dir
-
-        basedata = nus333_dir() / "basedata.har"
+        basedata = run.dataset_dir / "basedata.har"
     have = {**headers_at(run, "shock"), **_copied(Path(basedata)), "XXHS": _history()}
     return {name: have[name] for name in UPDATED_HEADERS}
 

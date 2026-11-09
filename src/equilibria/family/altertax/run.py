@@ -28,6 +28,7 @@ class AltertaxRun:
     result: FamilyResult
     codes: dict[str, int]
     minutes: float
+    dataset_dir: Path
 
 
 # Elasticities that ``altertax.prm`` sets to exactly 1, which the 1.01 guard of #192
@@ -112,4 +113,4 @@ def solve_altertax(
     )
     minutes = (time.perf_counter() - t0) / 60.0
     codes = {k: int(res.results[k]["code"]) for k in ("check", "shock")}
-    return AltertaxRun(p, res, codes, minutes)
+    return AltertaxRun(p, res, codes, minutes, Path(dataset_dir))

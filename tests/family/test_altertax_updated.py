@@ -9,7 +9,7 @@ import pytest
 from equilibria._local_refs import nus333_dir
 from equilibria.babel.har.reader import read_har
 from equilibria.compare.measure import rel_diff
-from equilibria.family.altertax.tolerances import CHECK_TOL, TOL_UPDATED
+from equilibria.family.altertax.tolerances import TOL_UPDATED
 from equilibria.family.altertax.updated import (
     UPDATED_HEADERS,
     headers_at,
@@ -73,11 +73,9 @@ def test_check_period_reproduces_basedata(altax_run):
     bad = {}
     for name, ha in chk.items():
         d, i = _worst(ha.array, base[name].array)
-        if not d <= TOL_UPDATED:
+        if not d <= 1e-5:
             bad[name] = (d, i)
     assert not bad, bad
-    # the data are consistent with the check tolerance on the base: nothing is far off
-    assert CHECK_TOL < TOL_UPDATED
 
 
 def test_outputs_finite(headers):
@@ -102,3 +100,31 @@ def test_updated_loads(altax_run, tmp_path):
         baserate_path=d / "baserate.har",
     )
     assert p.benchmark.vdfb
+
+
+def test_headers_carry_the_shock(altax_run, headers, gempack):
+    """Cells where GEMPACK's change (updated minus basedata) is above ~8 float32 ulps
+    and 5x our solve noise (check minus basedata): ours (shock minus check) has the same sign and is within 20% of it."""
+    base = read_har(str(nus333_dir() / "basedata.har"))
+    chk = headers_at(altax_run, "check")
+    ulp = float(np.finfo(np.float32).eps)
+    checked: dict[str, int] = {}
+    bad = []
+    for name, ha in headers.items():
+        if name not in chk:
+            continue
+        g = np.asarray(gempack[name].array, dtype=np.float64)
+        b = np.asarray(base[name].array, dtype=np.float64)
+        dg = g - b
+        dm = np.asarray(ha.array, dtype=np.float64) - chk[name].array
+        for ix in np.ndindex(g.shape):
+            if abs(dg[ix]) <= 8 * ulp * max(abs(g[ix]), abs(b[ix])):
+                continue
+            # below 5x the solve noise (check minus base) the change is not measurable
+            if abs(dg[ix]) < 5 * abs(chk[name].array[ix] - b[ix]):
+                continue
+            checked[name] = checked.get(name, 0) + 1
+            if not (dm[ix] * dg[ix] > 0 and abs(dm[ix] - dg[ix]) <= 0.2 * abs(dg[ix])):
+                bad.append((name, ix, float(dg[ix]), float(dm[ix])))
+    assert {"VTWR", "MAKS", "VDFB", "EVFP"} <= set(checked), checked
+    assert not bad, bad
