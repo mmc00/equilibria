@@ -11,6 +11,7 @@
 [![Documentation](https://img.shields.io/badge/docs-sphinx-blue.svg)](https://equilibria.readthedocs.io/)
 [![DOI](https://zenodo.org/badge/1143895755.svg)](https://doi.org/10.5281/zenodo.23675339)
 [![Coverage](https://codecov.io/gh/mmc00/equilibria/branch/main/graph/badge.svg)](https://codecov.io/gh/mmc00/equilibria)
+[![Sponsor](https://img.shields.io/github/sponsors/mmc00?label=Sponsor&logo=GitHub)](https://github.com/sponsors/mmc00)
 
 *Build CGE models from modular blocks — like LEGO for economists — and check them against GAMS and GEMPACK.*
 
@@ -239,6 +240,23 @@ prek run --all-files
 Hooks are fast hygiene only (format / lint / type, no solver). Use `prek`, not
 `pre-commit` — same config, faster runner. See [CONTRIBUTING.md](CONTRIBUTING.md)
 for the `ty` ratchet and the separate parity gates.
+
+---
+
+## Support equilibria
+
+equilibria is free, open-source software maintained by one person. If it is
+useful to you or your team, you can support its development through
+[GitHub Sponsors](https://github.com/sponsors/mmc00). Sponsorship helps keep it
+maintained, documented and easy to install, add new models, publish the
+validation against GAMS and GEMPACK openly, and pay for the computing time that
+large models need.
+
+The software is free; the data are not always: GTAP models need a GTAP Data Base
+license from the [Center for Global Trade Analysis](https://www.gtap.agecon.purdue.edu/).
+
+If your team needs a CGE model built, adapted or validated, consulting is also
+available: write through the [Sponsors profile](https://github.com/sponsors/mmc00).
 
 ---
 
