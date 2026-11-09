@@ -138,7 +138,7 @@ _META: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
 DECOMP_HEADERS: tuple[str, ...] = tuple(m[0] for m in _META)
 
 # variables of ALTERTAX that are exogenous at zero change: see the module docstring
-_UNCHANGED = ("axp", "lambdaf", "lambdava", "lambdam", "lambdamg", "pop")
+_UNCHANGED = ("axp", "aft", "lambdaf", "lambdava", "lambdam", "lambdamg", "pop")
 
 
 def _ratio(pre: dict, post: dict, key: tuple[str, ...]) -> float:
@@ -148,7 +148,9 @@ def _ratio(pre: dict, post: dict, key: tuple[str, ...]) -> float:
 
 
 def _div(num: np.ndarray, den: np.ndarray) -> np.ndarray:
-    """``num / den`` with 0 where ``den = 0`` (``Zerodivide default 0``, line 4437)."""
+    """``num / den`` with 0 where ``den = 0`` (``Zerodivide default 0``, line 4437).
+    GEMPACK's postsim block resets ``nonzero_by_zero`` to 0.5 (line 4451); only the E1
+    value denominator could hit it and it is never zero here, so 0 is used throughout."""
     out = np.zeros(np.broadcast(num, den).shape)
     np.divide(num, den, out=out, where=den != 0.0)
     return out
@@ -157,7 +159,9 @@ def _div(num: np.ndarray, den: np.ndarray) -> np.ndarray:
 def _require_unchanged(A: _Period, B: _Period) -> None:
     for var in _UNCHANGED:
         if var not in A._vars:
-            continue
+            raise KeyError(
+                f"decomp.har needs the variable {var!r} to check it is unchanged"
+            )
         a, b = A[var], B[var]
         for k, x in a.items():
             if abs(b.get(k, x) - x) > 1e-12 * max(1.0, abs(x)):
@@ -262,7 +266,10 @@ def decomp_from_changes(
     """The WELVIEW headers from value coefficients before (``v``) and after (``w``) the
     change, the cumulative percent changes (``changes``, see ``CHANGE_SHAPES``) and the
     set elements. The formulas of the module docstring; the changes may come from the
-    family model (:func:`model_changes`) or from any other solution of the same model."""
+    family model (:func:`model_changes`) or from any other solution of the same model.
+
+    Valid for SMALL shocks only: each CNT is one step ``COEF(pre) * q%`` of what GEMPACK
+    integrates along the multistep path with the coefficient updated at every step."""
     comm, acts, reg, endw, marg = (
         els[k] for k in ("COMM", "ACTS", "REG", "ENDW", "MARG")
     )
@@ -337,7 +344,10 @@ def decomp_from_changes(
     pxwreg = _div((vxw * pxw).sum(axis=0), vxwreg)
     pxwcom = _div((vxw * pxw).sum(axis=1), vxwcom)
     pxwwld = float((vxwreg * pxwreg).sum() / vxwld)
-    pt = ptmg  # pt(m) (E_pt, line 1979): the family model's margin price ptmg
+    # APPROXIMATION: GEMPACK's pt(m) is sum_r VTSUPPSHR * pds(m,r) (E_pt, line 1979); the
+    # family model's margin price ptmg is used. Measured: pt differs by -14% from GEMPACK's
+    # and moves the terms-of-trade total by about -0.0005 (of EV ~ 1).
+    pt = ptmg
     vmwdcr = vfob.sum(axis=1).copy()  # VMWDCRALL(c,s)
     for k, ci in enumerate(mi):
         vmwdcr[ci] += vtmcomm[k]

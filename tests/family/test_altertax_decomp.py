@@ -179,18 +179,22 @@ def test_formulas_reproduce_gempack_from_its_own_changes(sl4_headers, gempack, s
 
 
 # End-to-end gate (user 2026-11-09: TOL_CHANGE on each welfare component, noise threshold
-# 1e-6 * max|EV|). EXPECTED FAILURE, measured cause: the family model's cumulative changes
-# differ from GEMPACK's in the small cells (qca of ROW SER -1.63e-6 % against -1.50e-6 %,
-# qxs(MFG,ROW,USA) of the opposite sign, ...: 8% to several x on changes of 1e-6 %), which
-# the volume gate leaves out (below 8 ulp32 of the level) and which the tax-weighted
-# welfare sums of mixed sign magnify (A24 ROW LABOR -116%, A22I -499%). It is NOT the
-# 1.01 stand-in: the gap of those cells does not shrink towards sigma = 1 (Task 7 report,
-# sigma sweep 1.0025 / 1.005 / 1.01 / 1.02). The totals are within 4-6% (EV by region, see
-# the smoke test) and the formulas are exact (test above): the gap is in the model's
-# response in the small cells, to be investigated.
+# 1e-6 * max|EV|). EXPECTED FAILURE. Measured cause (Task 7 fix round 1): a CLOSURE
+# mismatch, not the 1.01 stand-in and not small-cell quantities. GEMPACK fixes the NOMINAL
+# trade balance of USA (del_tbal(USA) = -2.5e-10 in altax.sl4); the family model fixes
+# savf(r) = pigbl * savf_bar(r) (blocks/gtap/demand_utility.py:627) and pigbl moves
+# +7.3e-6 % while pnum stays, so savf(USA) and savf(ROW) move by the same +7.3e-6 %: a
+# 0.06 M transfer ROW -> USA on a deficit of 831,458. Swapping GEMPACK's variables into
+# our change vector one at a time puts ~88% of the 0.047 EV gap in prices (pfob: -0.0279
+# terms of trade, -0.0035 I-S; pinv -0.0174; psave +0.0086), all quantities together only
+# about -0.0057. Counterfactual (probe, savf = savf_bar, i.e. nominal, shared code
+# untouched in a copy of src): EV USA/ROW 1.1592 / -1.2553 against GEMPACK 1.1704 /
+# -1.2657 (from 1.2173 / -1.3142), cells within TOL_CHANGE 270 of 401 (from 151); the
+# rest is the 1.01 stand-in plus the cancellation of mixed-sign tax-weighted sums. The
+# formulas are exact (test above).
 @pytest.mark.xfail(
     strict=True,
-    reason="family changes differ from GEMPACK's in small cells (see above)",
+    reason="closure mismatch: savf = pigbl*savf_bar is real, GEMPACK fixes nominal del_tbal (see above)",
 )
 def test_decomp_values_within_tol_change(headers, gempack, scale):
     _check_gate(headers, gempack, scale)
@@ -286,6 +290,29 @@ def test_explanatory_welcnt_equals_summary(headers):
         np.asarray(headers["A241"].array)[..., 0].sum(axis=1),
         np.asarray(headers["A24"].array),
     )
+
+
+def test_unchanged_check_raises():
+    """A moved exogenous variable, or a missing one, is an error, not a wrong zero."""
+    from equilibria.family.altertax.decomp import _UNCHANGED
+    from equilibria.family.altertax.decomp import _require_unchanged as _check
+
+    def _require_unchanged(a, b):
+        _check(a, b)  # type: ignore[arg-type]  # duck-typed stand-in for _Period
+
+    class P:
+        def __init__(self, vals, names=_UNCHANGED):
+            self._vars = set(names)
+            self.vals = vals
+
+        def __getitem__(self, name):
+            return {(): self.vals.get(name, 1.0)}
+
+    _require_unchanged(P({}), P({}))
+    with pytest.raises(NotImplementedError, match="aft"):
+        _require_unchanged(P({}), P({"aft": 1.1}))
+    with pytest.raises(KeyError, match="aft"):
+        _require_unchanged(P({}, [n for n in _UNCHANGED if n != "aft"]), P({}))
 
 
 def test_zero_shock_gives_exact_zeros(altax_run):
