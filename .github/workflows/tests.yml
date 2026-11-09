@@ -13,6 +13,47 @@ on:
         type: boolean
 
 jobs:
+  # Which kind of PR is this? A PR that only touches documentation (docs/, the
+  # root *.md files, FUNDING.yml, CITATION.cff) does not need the solver and
+  # parity jobs: they take about an hour and cannot change with a text edit.
+  # Such a PR still runs the docs tests (links and page examples, in
+  # python-tests), docs-build, pre-commit and the layout and commit checks.
+  # Pushes to main and manual runs always run everything. main has no
+  # required checks, so a skipped job does not block a merge.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Did the PR change anything besides documentation?
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          files=$(git diff --name-only "$BASE...$HEAD")
+          echo "$files"
+          other=$(printf '%s\n' "$files" \
+            | grep -v -E '^(docs/|[^/]+\.md$|\.github/FUNDING\.yml$|CITATION\.cff$)' \
+            | grep -v '^$' || true)
+          # An empty diff is treated as code: run everything rather than guess.
+          if [ -z "$files" ] || [ -n "$other" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            echo "Documentation only: the solver and parity jobs are skipped."
+          fi
+
   filename-policy:
     runs-on: ubuntu-latest
     steps:
@@ -38,6 +79,7 @@ jobs:
         run: python scripts/dev/check_commit_msg.py --range "origin/${{ github.base_ref }}..HEAD"
 
   python-tests:
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -62,8 +104,15 @@ jobs:
       # `not needs_gdxdump` es la mitad de una particion: gdxdump-tests corre
       # `needs_gdxdump and not gams and not slow`. Cambiar una exige la otra.
       - name: Run tests (excluding GAMS-marked and slow)
+        if: needs.changes.outputs.code == 'true'
         run: |
           uv run pytest -ra -m "not gams and not slow and not needs_gdxdump" tests
+
+      # Documentation-only PR: only the docs tests (links, page examples).
+      - name: Run docs tests (documentation-only PR)
+        if: needs.changes.outputs.code != 'true'
+        run: |
+          uv run pytest -ra -m "not gams and not slow and not needs_gdxdump" tests/docs
 
   # Los tests needs_gdxdump (paridad GTAP7 MCP/NLP, altertax, ifsub, F3.5...)
   # leen GDX de referencia con `gdxdump`, que viene con GAMS. Sin el, el guard
@@ -77,6 +126,8 @@ jobs:
   # paralelo: son ~19 min en CI (10 en una Mac) y mas que doblarian
   # python-tests (~10 min).
   gdxdump-tests:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -112,6 +163,8 @@ jobs:
           uv run pytest -ra -m "needs_gdxdump and not gams and not slow" tests
 
   structural-gates:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -152,6 +205,8 @@ jobs:
             output/ci_structural_parity_report.json
 
   structural-cri-contract-gate:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -222,6 +277,8 @@ jobs:
             output/ci_cri_contract_report.json
 
   structural-cri-fixed-pass-gate:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -293,6 +350,8 @@ jobs:
             output/ci_cri_fixed_pass_report.json
 
   structural-cri-solver-dynamics-gate:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -376,6 +435,8 @@ jobs:
             output/ci_cri_solver_dynamics_report.json
 
   structural-solver-dynamics-gate:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -451,6 +512,8 @@ jobs:
             output/ci_solver_dynamics_report.json
 
   gtap7-nl-parity:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -528,6 +591,8 @@ jobs:
   # tests con solver se saltan solos por sus guards) y el dataset gtap7_10x7
   # esta commiteado (228K), asi que no descarga nada.
   model-signature-cross-platform:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false        # que un runner rojo no oculte el estado de los otros
       matrix:
