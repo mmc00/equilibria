@@ -1,3 +1,7 @@
 # source.yaml files hash exact bytes (ADR-0010): git must never convert line
 # endings here, or a record written on Windows fails everywhere else.
 * -text
+
+# Reference solutions and model sources of other tools (GAMS, GEMPACK): not the
+# project's own code, so GitHub's language bar leaves them out.
+* linguist-vendored
