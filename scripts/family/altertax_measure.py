@@ -7,8 +7,8 @@ Three equilibria runs of the same experiment (``altax.exp``: ``to("AGR","AGR","U
 - ``s1.02-prod``: ``sigmap``/``sigmand``/``sigmav`` forced to 1.02, the rest as above;
 - ``s1.02-all``: all of them at 1.02.
 
-Plus ``s1.01+esubc`` (esubc filled from ESBC) and ``diag-esubi0`` (investment as Leontief,
-a diagnostic that is not the route's setting).
+Plus ``s1.01+esubc`` (esubc filled from ESBC). ``esubi = 0`` (Leontief investment, E_qia)
+is part of every run since ``load_altertax_params`` sets it.
 
 Each is compared to GEMPACK with ``compare_gempack_levels.run`` (levels, the check as the
 pre and the shock as the post), and the runs are compared to each other (the effect of
@@ -27,7 +27,6 @@ Writes ``family_altertax_nus333_<sha>.json`` into DIR (default
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
 import subprocess
@@ -44,17 +43,10 @@ HAR = FIXTURES / "sl4levels_altax.har"
 UPDATED = FIXTURES / "altax.upd"
 
 
-def _load(name: str, path: Path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None and spec.loader is not None
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
 def _set_env() -> None:
-    cg = _load("perf_budget_20x41", ROOT / "scripts/gtap/perf_budget_20x41.py")
-    for k, v in cg.NEWTON_MUMPS.items():
+    from tests.family._prep import _newton_mumps
+
+    for k, v in _newton_mumps().items():
         os.environ.setdefault(k, v)
     os.environ["EQUILIBRIA_FAMILY_CACHE"] = tempfile.mkdtemp(prefix="altax_cache_")
 
@@ -195,18 +187,15 @@ def main() -> None:
 
     from equilibria._local_refs import nus333_dir
     from equilibria.babel.har.reader import read_har
-    from equilibria.blocks.gtap._derived_params import xscale_data
+    from equilibria.family.altertax.compare import compare_levels, load_compare_script
     from equilibria.family.altertax.levels import family_levels
     from equilibria.family.altertax.run import (
         load_altertax_params,
         solve_altertax,
     )
 
-    cg = _load(
-        "compare_gempack_levels", ROOT / "scripts/gtap/compare_gempack_levels.py"
-    )
+    eq_vars = load_compare_script().EQ_VARS
     d = nus333_dir()
-    basedata = d / "basedata.har"
     sha = subprocess.run(
         ["git", "-C", str(ROOT), "rev-parse", "--short=8", "HEAD"],
         capture_output=True,
@@ -217,9 +206,8 @@ def main() -> None:
 
     def go(tag: str, params) -> None:
         run = solve_altertax(d, params=params)
-        levels = family_levels(run.result.mp, cg.EQ_VARS)
-        xscale = dict(xscale_data(run.params, run.params.sets))
-        rep = cg.run(levels, xscale, HAR, basedata, UPDATED)
+        levels = family_levels(run.result.mp, eq_vars)
+        rep = compare_levels(run, FIXTURES)
         runs[tag] = {
             "codes": run.codes,
             "minutes": run.minutes,
@@ -274,16 +262,6 @@ def main() -> None:
             level_diff(runs["s1.01"]["levels"], runs["s1.01+esubc"]["levels"], "check")
         ),
     )
-
-    # diagnostic: investment demand across commodities as Leontief (esubi = 0). Not the
-    # route's setting: the file has ESBI = 1. Measured to see whether the worst cells
-    # (qid, qim of AGR in USA) come from it.
-    p = load_altertax_params(d)
-    for key in p.elasticities.esubi:
-        p.elasticities.esubi[key] = 0.0
-    p.shares.calibrate(p.benchmark, p.elasticities, p.sets, p.taxes)
-    p._calibrate()
-    go("diag-esubi0", p)
 
     pairs = {}
     for x, y in (("s1.01", "s1.02-prod"), ("s1.01", "s1.02-all")):

@@ -12,13 +12,17 @@ from equilibria.family.altertax.run import AltertaxRun
 _ROOT = Path(__file__).resolve().parents[4]
 
 # the committed fixture names first, then GEMPACK's own run-folder names
-LEVELS_NAMES = ("altax_sl4levels.har", "sl4levels_altax.har", "sl4levels.har")
+LEVELS_NAMES = ("sl4levels_altax.har", "altax_sl4levels.har", "sl4levels.har")
 UPDATED_NAMES = ("altax.upd", "updated.har")
 
 
 def load_compare_script():
     """``scripts/gtap/compare_gempack_levels.py`` as a module (``run``, ``EQ_VARS``)."""
     path = _ROOT / "scripts" / "gtap" / "compare_gempack_levels.py"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{path} not found: compare_levels needs the repo checkout's scripts/ folder"
+        )
     spec = importlib.util.spec_from_file_location("compare_gempack_levels", path)
     if spec is None or spec.loader is None:
         raise ImportError(path)

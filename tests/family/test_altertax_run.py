@@ -23,12 +23,9 @@ pytest.importorskip("pyomo")
 
 
 def _eq_vars() -> tuple[str, ...]:
-    path = ROOT / "scripts" / "gtap" / "compare_gempack_levels.py"
-    spec = importlib.util.spec_from_file_location("compare_gempack_levels", path)
-    assert spec is not None and spec.loader is not None
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod.EQ_VARS
+    from equilibria.family.altertax.compare import load_compare_script
+
+    return load_compare_script().EQ_VARS
 
 
 @pytest.fixture(scope="module")
@@ -43,7 +40,8 @@ def env(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def spied_run(env):
-    """``solve_altertax`` on nus333 with the Pyomo entry points spied."""
+    """``solve_altertax`` on nus333 with the Pyomo entry points spied (its own solve: the
+    spies must be installed before it runs, which the shared ``altax_run`` cannot do)."""
     import pyomo.contrib.pynumero.interfaces.pyomo_nlp as pn
     import pyomo.core.expr.visitor as visitor
     from pyomo.environ import ConcreteModel
