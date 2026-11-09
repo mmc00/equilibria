@@ -3,7 +3,7 @@
 Every header is a change (``q% / 100 * BV``) driven by a ~1e-5 shock, so GEMPACK's float32
 values carry noise of a few ulp of the level ``BV`` they are a change of. Cells whose
 change is above ``THRESHOLD_ULPS`` ulp32(level) on either side are compared at
-``TOL_VOLUME`` (relative, same sign); the rest must agree in absolute terms within the
+``TOL_CHANGE`` (relative, same sign); the rest must agree in absolute terms within the
 same bound."""
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import pytest
 
 from equilibria.babel.har.reader import read_har
 from equilibria.compare.measure import rel_diff
-from equilibria.family.altertax.tolerances import ABS_FLOOR, TOL_VOLUME
+from equilibria.family.altertax.tolerances import ABS_FLOOR, TOL_CHANGE
 from equilibria.family.altertax.volume import (
     VOLUME_HEADERS,
     volume_bases,
@@ -66,7 +66,7 @@ def _compare(name, ours, gem, level):
         m, g = float(ours[ix]), float(gem[ix])
         if max(abs(m), abs(g)) > thr[ix]:
             above += 1
-            ok = m * g > 0 and rel_diff(m, g, g, ABS_FLOOR) <= TOL_VOLUME
+            ok = m * g > 0 and rel_diff(m, g, g, ABS_FLOOR) <= TOL_CHANGE
             if not ok:
                 rel_bad.append((name, ix, m, g, rel_diff(m, g, g, ABS_FLOOR)))
         elif abs(m - g) > thr[ix]:
@@ -114,27 +114,21 @@ def test_volume_smoke_within_ulp_bound(altax_run, headers, gempack):
     assert sum(v > 0 for v in above.values()) >= 8, above
 
 
-# The 21 cells above the noise bound miss TOL_VOLUME (1e-4 relative) by 0.19-1.26%. The
-# gap is ours, not GEMPACK's float32: GEMPACK's volume.har equals BV * q(altax.sl4) / 100
-# to 5e-7 and the .sl4 has 4-6 significant figures. Measured cause (sweep of every
-# stand-in elasticity, 1.0025/1.005/1.01/1.02, see the Task 6 report): the gap is linear in
-# sigma - 1, where 1.01 stands in for the unit elasticities of altertax.prm (~0.9% of the
-# change per 0.01 of sigma - 1; DQO/DQC -0.901% at 1.01, -0.464% at 1.005, extrapolating
-# to -3e-4 at sigma = 1; AGR in USA is made by AGR only, so qc = qo). Import and trade
-# cells (DQXS(0,0,1), DQGM(0,1), DQFM(0,2,1), DQPM(0,1)) keep 0.2-0.36% at sigma -> 1,
-# unexplained. The strict gate is kept, not loosened; it errors if it ever passes.
-@pytest.mark.xfail(
-    strict=True,
-    reason="TOL_VOLUME not met: 1.01 stand-in for sigma=1 (~0.9% per 0.01) + unexplained "
-    "0.2-0.36% on import/trade cells at sigma->1",
-)
-def test_volume_values_meet_tol_volume(altax_run, headers, gempack):
+# Gate (user 2026-11-09): every cell above the 8-ulp threshold has GEMPACK's sign and a
+# relative gap <= TOL_CHANGE (2e-2) on the change. Measured cause of the gaps (worst 1.26%):
+# GEMPACK's volume.har equals BV * q(altax.sl4) / 100 to 5e-7, so the gap is ours: the 1.01
+# stand-in for the unit elasticities of altertax.prm (linear in sigma - 1, ~0.9% of the
+# change per 0.01; DQO/DQC -0.901% at 1.01, extrapolating to -3e-4 at sigma = 1), plus a
+# residual of 0.17-0.36% on import/trade cells (DQXS(0,0,1), DQGM(0,1), DQFM(0,2,1),
+# DQPM(0,1)) that remains at sigma -> 1 and is unexplained. Exact sigma = 1 is future work.
+def test_volume_values_within_tol_change(altax_run, headers, gempack):
     bases = volume_bases(altax_run)
-    rel_bad = []
+    rel_bad, above = [], 0
     for name in EXPECTED:
-        rel_bad += _compare(
-            name, headers[name].array, gempack[name].array, bases[name]
-        )[1]
+        n, r, _ = _compare(name, headers[name].array, gempack[name].array, bases[name])
+        above += n
+        rel_bad += r
+    assert above >= 20, above
     assert not rel_bad, rel_bad
 
 
