@@ -26,13 +26,13 @@
    reason: "Tradeables market clearing (eq_xs / eq_xdeq / eq_xweq) has no slack term; tradslack = 0 by construction."}
 - {gempack: ams, equilibria: lambdam, kind: fixed_var,
    reason: "Import-augmenting technical change by source (commodity, source, destination): second-level Armington shifter lambdam, ShockBlock instrument."}
-- {gempack: atm, equilibria: lambdamg, kind: fixed_param,
-   reason: "Shipping technical change by mode. equilibria keeps only the combined shifter lambdamg(m,r,i,rp) = atall (atm+atf+ats+atd collapsed), a Param at 1 in the data; the four GEMPACK components share this one row."}
-- {gempack: atf, equilibria: lambdamg, kind: fixed_param,
+- {gempack: atm, equilibria: lambdamg, kind: fixed_var,
+   reason: "Shipping technical change by mode. equilibria keeps only the combined shifter lambdamg(m,r,i,rp) = atall (atm+atf+ats+atd collapsed), a Var of the arrays (fixed cells, ShockBlock instrument, GEMPACK_KIND pct); the four GEMPACK components share this one row."}
+- {gempack: atf, equilibria: lambdamg, kind: fixed_var,
    reason: "Shipping technical change by commodity: collapsed into lambdamg (see atm)."}
-- {gempack: ats, equilibria: lambdamg, kind: fixed_param,
+- {gempack: ats, equilibria: lambdamg, kind: fixed_var,
    reason: "Shipping technical change by source region: collapsed into lambdamg (see atm)."}
-- {gempack: atd, equilibria: lambdamg, kind: fixed_param,
+- {gempack: atd, equilibria: lambdamg, kind: fixed_var,
    reason: "Shipping technical change by destination region: collapsed into lambdamg (see atm)."}
 - {gempack: aosec, equilibria: null, kind: by_construction,
    reason: "Pyomo carries axpsec as a Var fixed at 0 (fix_technology); the family arrays have no cell for it: only the all-level instrument axp lives in the ShockBlock. Fixed at 0 and absent from the rows, so exogenous by construction."}
@@ -43,17 +43,17 @@
 - {gempack: avareg, equilibria: null, kind: by_construction,
    reason: "Pyomo carries avareg as a Var fixed at 0 (fix_technology); the family arrays have no cell for it: only the all-level instrument lambdava lives in the ShockBlock. Fixed at 0 and absent from the rows, so exogenous by construction."}
 - {gempack: aintsec, equilibria: null, kind: by_construction,
-   reason: "Pyomo carries andsec as a Var fixed at 0 (fix_technology); the family arrays have no cell for it: only the all-level instrument lambdand lives in the ShockBlock. Fixed at 0 and absent from the rows, so exogenous by construction."}
+   reason: "Pyomo carries andsec as a Var fixed at 0 (fix_technology); the family arrays have no cell for it: the all-level shift (lambdand) is a model parameter (params.shifts), not a ShockBlock instrument. Fixed at 0 and absent from the rows, so exogenous by construction."}
 - {gempack: aintreg, equilibria: null, kind: by_construction,
-   reason: "Pyomo carries andreg as a Var fixed at 0 (fix_technology); the family arrays have no cell for it: only the all-level instrument lambdand lives in the ShockBlock. Fixed at 0 and absent from the rows, so exogenous by construction."}
-- {gempack: aintall, equilibria: null, kind: by_construction,
-   reason: "Pyomo carries andall as a Var fixed at 0 (fix_technology); the family arrays have no cell for it: only the all-level instrument lambdand lives in the ShockBlock. Fixed at 0 and absent from the rows, so exogenous by construction."}
+   reason: "Pyomo carries andreg as a Var fixed at 0 (fix_technology); the family arrays have no cell for it: the all-level shift (lambdand) is a model parameter (params.shifts), not a ShockBlock instrument. Fixed at 0 and absent from the rows, so exogenous by construction."}
+- {gempack: aintall, equilibria: lambdand, kind: fixed_param,
+   reason: "Composite intermediate input augmenting technical change by activity and region: lambdand, a shift parameter (params.shifts.lambdand, 1 in the data), not an array Var; Pyomo andall is fixed at 0 and has no array cell."}
 - {gempack: afcom, equilibria: null, kind: by_construction,
-   reason: "Pyomo carries aiocom as a Var fixed at 0 (fix_technology); the family arrays have no cell for it: only the all-level instrument lambdaio lives in the ShockBlock. Fixed at 0 and absent from the rows, so exogenous by construction."}
+   reason: "Pyomo carries aiocom as a Var fixed at 0 (fix_technology); the family arrays have no cell for it: the all-level shift (lambdaio) is a model parameter (params.shifts), not a ShockBlock instrument. Fixed at 0 and absent from the rows, so exogenous by construction."}
 - {gempack: afsec, equilibria: null, kind: by_construction,
-   reason: "Pyomo carries aiosec as a Var fixed at 0 (fix_technology); the family arrays have no cell for it: only the all-level instrument lambdaio lives in the ShockBlock. Fixed at 0 and absent from the rows, so exogenous by construction."}
+   reason: "Pyomo carries aiosec as a Var fixed at 0 (fix_technology); the family arrays have no cell for it: the all-level shift (lambdaio) is a model parameter (params.shifts), not a ShockBlock instrument. Fixed at 0 and absent from the rows, so exogenous by construction."}
 - {gempack: afreg, equilibria: null, kind: by_construction,
-   reason: "Pyomo carries aioreg as a Var fixed at 0 (fix_technology); the family arrays have no cell for it: only the all-level instrument lambdaio lives in the ShockBlock. Fixed at 0 and absent from the rows, so exogenous by construction."}
+   reason: "Pyomo carries aioreg as a Var fixed at 0 (fix_technology); the family arrays have no cell for it: the all-level shift (lambdaio) is a model parameter (params.shifts), not a ShockBlock instrument. Fixed at 0 and absent from the rows, so exogenous by construction."}
 - {gempack: afecom, equilibria: null, kind: by_construction,
    reason: "Pyomo carries afecom as a Var fixed at 0 (fix_technology); the family arrays have no cell for it: only the all-level instrument lambdaf lives in the ShockBlock. Fixed at 0 and absent from the rows, so exogenous by construction."}
 - {gempack: afesec, equilibria: null, kind: by_construction,
@@ -78,7 +78,7 @@
    reason: "Power of tax on commodity c supplied by activity a in r: prdtx_rai(r,a,c), ShockBlock instrument (run_burfisher maps to -> prdtx_rai). The altax.exp shock to(AGR,AGR,USA) enters here."}
 - {gempack: tinc, equilibria: kappaf, kind: fixed_var,
    reason: "Income tax on endowments: kappaf (power 1/(1-kappaf), GEMPACK_KIND power_kappa)."}
-- {gempack: tpreg, equilibria: dintx_tgt, kind: fixed_var,
+- {gempack: tpreg, equilibria: 'dintx_tgt, mintx_tgt', kind: fixed_var,
    reason: "Source-generic shifter on private consumption tax: private household rows of dintx/mintx (targets dintx_tgt / mintx_tgt, agent hhd); both rows share one GEMPACK variable."}
 - {gempack: tm, equilibria: imptx, kind: fixed_var,
    reason: "Source-generic change in import tax: imptx(exporter,i,importer) held at the check level for every source."}
@@ -92,8 +92,8 @@
    reason: "Supply of mobile and sluggish endowments: xft = aft * (pft/pabs)^etaf with etaf = 0 for all factors (gtap mode), so fixing the instrument aft fixes xft. Equivalent to fixing qe only because etaf = 0."}
 - {gempack: qesf, equilibria: null, kind: absent,
    reason: "Fixed (specific) endowment by activity. equilibria has no per-activity endowment supply variable: specific factors are fixed through the region-factor xft (aft, etaf = 0) and xf(r,f,a) is determined by eq_xfeq. Whether that reproduces qesf exogenous in nus333 (no NatRes/Land sluggish split issue) is to be checked against GEMPACK levels in Task 2."}
-- {gempack: atall, equilibria: lambdamg, kind: fixed_param,
-   reason: "Combined shipping technical change (mode, commodity, source, destination): lambdamg."}
+- {gempack: atall, equilibria: lambdamg, kind: fixed_var,
+   reason: "Combined shipping technical change (mode, commodity, source, destination): lambdamg, ShockBlock instrument Var."}
 - {gempack: avaall, equilibria: lambdava, kind: fixed_var,
    reason: "Value-added augmenting technical change by activity and region: ShockBlock instrument lambdava (Pyomo avaall is fixed at 0 and has no array cell)."}
 - {gempack: tfe, equilibria: fcttx, kind: fixed_var,

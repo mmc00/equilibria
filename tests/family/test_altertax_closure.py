@@ -34,7 +34,8 @@ def test_closure_map_covers_exp():
     assert "pfactwld" in have
     by = {row["gempack"]: row for row in rows}
     for name in ('del_tbal("USA")', 'cgdslack("ROW")'):
-        assert by[name]["kind"] != "absent" or by[name]["reason"].strip()
+        assert by[name]["kind"] != "absent"
+        assert by[name]["reason"].strip()
 
 
 def test_every_row_has_reason():
@@ -69,4 +70,18 @@ def test_fixed_var_rows_name_a_variable_of_the_arrays():
     mp = MPArrays.from_photo(pairs(capture_dir("gtap7_3x3"))[0][0])
     for row in load_closure_map():
         if row["kind"] == "fixed_var":
-            assert row["equilibria"].split("[")[0] in mp.vars, row
+            for name in row["equilibria"].split(", "):
+                assert name.split("[")[0] in mp.vars, row
+
+
+def test_fixed_param_rows_are_not_array_vars():
+    """A ``fixed_param`` row is a model parameter: it is not a Var of the arrays."""
+    from equilibria.family.mp_arrays import MPArrays
+    from equilibria.family.prep_capture import pairs
+    from tests.family._prep import capture_dir
+
+    mp = MPArrays.from_photo(pairs(capture_dir("gtap7_3x3"))[0][0])
+    rows = [r for r in load_closure_map() if r["kind"] == "fixed_param"]
+    assert rows
+    for row in rows:
+        assert row["equilibria"].split("[")[0] not in mp.vars, row

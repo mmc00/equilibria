@@ -14,6 +14,8 @@ def family_levels(
     with the period, as the Pyomo ``model_levels`` keys do)."""
     out: dict[str, dict[tuple[str, ...], float]] = {}
     for n in names:
+        if n not in mp.vars:
+            raise KeyError(f"family_levels: variable {n!r} is not in the arrays")
         v = mp.vars[n]
         out[n] = {tuple(k): float(x) for k, x in zip(v.keys, v.value, strict=True)}
     return out

@@ -17,6 +17,8 @@ from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 # nus333 has two regions (USA, ROW). In altax.exp del_tbal("USA") is exogenous (USA's
 # savf fixed under capFix) and cgdslack("ROW") is exogenous: ROW is the region whose
 # balance is left free, so ROW is the residual region of the capital account.
+# The closure carries no residual region: Task 2 passes it explicitly, as
+# ``solve_gtap_family(params, altertax_closure(), ALTAX_RESIDUAL_REGION, ...)``.
 ALTAX_RESIDUAL_REGION = "ROW"
 
 MAP_PATH = Path(__file__).with_name("closure_map.yaml")
@@ -48,7 +50,8 @@ def parse_exp_exogenous(exp_path: Path) -> list[str]:
 def altertax_closure() -> GTAPClosureConfig:
     """The route's closure (``_solve_shock``'s) under the name ``altertax_gempack``:
     ``prep_square`` refuses the name ``altertax`` (Malcolm's closure). Taxes, technology
-    and endowments are ShockBlock instruments (fixed per period), not closure flags."""
+    and endowments are ShockBlock instruments (fixed per period), not closure flags.
+    The residual region is not a field here: pass ``ALTAX_RESIDUAL_REGION`` explicitly."""
     return GTAPClosureConfig(
         name="altertax_gempack",
         closure_type="MCP",
