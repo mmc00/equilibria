@@ -190,3 +190,69 @@ def test_solved_run_keeps_the_prm_mobility(env):
     p = load_altertax_params(DATA / "nus333", folder("nus333") / "parameters.prm")
     assert run.params.sets.mf == p.sets.mf == run.params.sets.f
     assert run.params.sets.sf == p.sets.sf == []
+
+
+def _trade_prices(run, t):
+    """GAMS M_PEFOB / M_PMCIF at period t from the live pe / ptmg / lambdamg."""
+    from equilibria.family.cross_period import _ifsub_params
+
+    mp, sets = run.result.mp, run.params.sets
+    pr = {k: v[1] for k, v in _ifsub_params(run.params).items()}
+    rs, cs, ms = list(sets.r), list(sets.i), list(sets.m)
+    pefob, pmcif = {}, {}
+    for a, e in enumerate(rs):
+        for b, c in enumerate(cs):
+            for k, d in enumerate(rs):
+                pef = pr["efac"][a, b, k] * _at(mp, "pe", (e, c, d), t)
+                pwmg = sum(
+                    pr["amgm"][n, a, b, k]
+                    * _at(mp, "ptmg", (mm,), t)
+                    / (_at(mp, "lambdamg", (mm, e, c, d), t) + 1e-12)
+                    for n, mm in enumerate(ms)
+                )
+                pefob[(e, c, d)] = pef
+                pmcif[(e, c, d)] = pef + pwmg * pr["tmarg"][a, b, k]
+    return pefob, pmcif
+
+
+def _mqgdp_from_levels(run, r, tp, tq):
+    """GAMS mqgdp(tp, tq) of region r (model.gms 1306) from the solved levels."""
+    mp = run.result.mp
+    pefob, pmcif = _trade_prices(run, tp)
+    fd = ("hhd", "gov", "inv", "tmg")
+    xa = mp.vars["xaa"]
+    ab = sum(
+        _at(mp, "pa", k[:3], tp) * float(xa.value[n])
+        for n, k in enumerate(xa.keys)
+        if k[0] == r and k[2] in fd and k[3] == tq
+    )
+    xw = mp.vars["xw"]
+    tr = 0.0
+    for n, k in enumerate(xw.keys):
+        if k[3] != tq:
+            continue
+        if k[0] == r:
+            tr += pefob[k[:3]] * float(xw.value[n])
+        if k[2] == r:
+            tr -= pmcif[k[:3]] * float(xw.value[n])
+    return ab + tr
+
+
+def test_fisher_gdp_cross_sums_use_live_trade_prices(env):
+    """Under ifSUB the Fisher GDP aggregates value trade at M_PEFOB / M_PMCIF of the
+    period (GAMS model.gms 1306), not at the frozen pefob / pmcif report Vars: with a
+    tariff shock mq_gdp_sb (shock prices, base quantities) moved off base-price trade."""
+    run = _ratio_run(env, "nus333")
+    mp = run.result.mp
+    pefob, pmcif = _trade_prices(run, "shock")  # the post-solve report vars agree
+    for k in pefob:
+        assert pefob[k] == pytest.approx(_at(mp, "pefob", k, "shock"), rel=1e-12)
+        assert pmcif[k] == pytest.approx(_at(mp, "pmcif", k, "shock"), rel=1e-12)
+    for r in run.params.sets.r:
+        for slot, (tp, tq) in {
+            "sb": ("shock", "base"),
+            "bs": ("base", "shock"),
+        }.items():
+            assert _at(mp, f"mq_gdp_{slot}", (r,), "shock") == pytest.approx(
+                _mqgdp_from_levels(run, r, tp, tq), rel=1e-10
+            ), (r, slot)

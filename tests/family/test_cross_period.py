@@ -100,7 +100,7 @@ def case(request) -> Case:
     model, _state = compose_block_state(p, p.sets, closure, rr)
     sp = RecordingModel.from_model(model)
     backend = cross_period.record_cross_period(
-        p, rr, sets=sp.sets, var_domains=sp.var_domains
+        p, rr, sets=sp.sets, var_domains=sp.var_domains, if_sub=closure.if_sub
     )
     values = _dense(m, backend)
     layout = _layout(backend, values)
@@ -276,26 +276,26 @@ def test_mq_values_are_the_seeded_aggregates(case):
     assert worst <= 1e-12, worst
 
 
-def test_report_vars_are_slots_not_macros(case):
-    """Under ifSUB ``pefob``/``pmcif`` are fixed Vars read by the rows: they are leaves
-    of the recording and, fixed, become data slots with no Jacobian column."""
+def test_ifsub_rows_read_the_macros_not_the_report_vars(case):
+    """Under ifSUB the ``pefob``/``pmcif`` report Vars are frozen inside the solve, so the
+    GDP aggregates expand M_PEFOB / M_PMCIF (GAMS model.gms 1306) to the live ``pe`` /
+    ``ptmg`` / ``lambdamg``. ``lambdamg`` (a fixed shock instrument) becomes a data slot
+    with no Jacobian column."""
     leaves = {
         var
         for recs in case.backend.records.values()
         for _, res in recs
         for var, _ in _leaves(res)
     }
-    assert {"pefob", "pmcif"} <= leaves
-    layout = _layout(case.backend, case.values, fixed=("pefob", "pmcif"))
-    assert (layout.slots["pefob"] >= layout.n_cols).all()
-    assert (layout.slots["pmcif"] >= layout.n_cols).all()
+    assert not {"pefob", "pmcif"} & leaves
+    assert {"pe", "ptmg", "lambdamg"} <= leaves
+    layout = _layout(case.backend, case.values, fixed=("lambdamg",))
+    assert (layout.slots["lambdamg"] >= layout.n_cols).all()
     system = case.backend.system(layout)
     base = case.backend.system(case.layout)
-    # Same F with the two Vars as data, and fewer columns.
     zfull = case.layout.free_values
-    mask = np.ones(len(zfull), bool)
     names = case.layout.col_names
-    mask &= np.array([not n.startswith(("pefob[", "pmcif[")) for n in names])
+    mask = np.array([not n.startswith("lambdamg[") for n in names])
     np.testing.assert_allclose(
         system.F(zfull[mask]), base.F(zfull), rtol=1e-12, atol=1e-12
     )

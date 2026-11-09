@@ -634,10 +634,9 @@ ZERO_BASE = {
 #   term of our near-unit CES formulation, independent of the solver tolerance (TR_FTOL 1e-13
 #   and RELTOL 1e-12 leave it unchanged). It is NOT the Fisher/Divisia numeraire difference
 #   (about 1e-12 pp here). OPEN LEAD: the origin of the b / (sigma - 1) term is not found.
-# - pgdp (USA -0.17, ROW +0.42), qgdp (USA +4.62, ROW -2.43): ~1e-6 pp. Flat in sigma (pgdp
-#   USA 1.93e-5, 1.99e-5, 2.00e-5 against GEMPACK 2.31e-5; qgdp USA 4.02e-6, 4.07e-6, 4.07e-6
-#   against 7.2e-7: b is 5e-11 and 3e-12), so the stand-in is not their cause: a residual of
-#   the model at the 1e-6 pp scale, unexplained.
+# - pgdp / qgdp were misses here until 2026-11-09: the Fisher GDP aggregates valued trade
+#   at the pefob / pmcif report Vars, frozen under ifSUB; they now expand M_PEFOB / M_PMCIF
+#   (family.cross_period._mqgdp, GAMS model.gms 1306) and pass.
 # - qpm(AGR,USA), qms(AGR,USA), qxs(AGR,ROW,USA): the small-cell trade residual of ROW->USA
 #   imports of AGR (same family as Task 6's DQXS and Task 7's A23 residuals): qms and qxs
 #   (identical, one flow) -4.50e-5 vs -4.75e-5 at 1.01, -5.32e-5 at 1.001, -5.39e-5 at 1.0001
@@ -645,10 +644,6 @@ ZERO_BASE = {
 PCT_KNOWN_MISS = {
     ("pfactor", ("USA",)): +4.5248,
     ("pfactor", ("ROW",)): -4.5248,
-    ("pgdp", ("USA",)): -0.1665,
-    ("pgdp", ("ROW",)): +0.4180,
-    ("qgdp", ("USA",)): +4.6243,
-    ("qgdp", ("ROW",)): -2.4310,
     ("qpm", ("AGR", "USA")): +0.4643,
     ("qms", ("AGR", "USA")): +0.0530,
     ("qxs", ("AGR", "ROW", "USA")): +0.0530,

@@ -55,6 +55,8 @@ CROSS_VARS: tuple[str, ...] = (
     "rsav",
     "chiSave",
 )
+# Extra single-period Vars read under ifSUB: M_PEFOB / M_PMCIF expand to them.
+IFSUB_VARS: tuple[str, ...] = ("pe", "ptmg", "lambdamg")
 # Names of the aggregates, in the order Pyomo creates them (first use in the rules),
 # with the non-period part of their index.
 _AGG_ORDER: tuple[tuple[str, str], ...] = (
@@ -134,15 +136,42 @@ def _fd() -> tuple[str, ...]:
     )
 
 
-def _mqgdp(m: Any, fd: tuple[str, ...], tp: str, tq: str, r: str):
-    """Fisher cross-product of absorption + net exports."""
-    ab = sum(m.pa[r, i, a, tp] * m.xaa[r, i, a, tq] for i in m.i for a in fd)
-    tr = sum(
-        m.pefob[r, i, rp, tp] * m.xw[r, i, rp, tq]
-        - m.pmcif[rp, i, r, tp] * m.xw[rp, i, r, tq]
-        for i in m.i
-        for rp in m.r
+def _m_pefob(m: Any, e: str, c: str, d: str, t: str):
+    """GAMS M_PEFOB under ifSUB: (1 + exptx + etax)·pe (``_ifsub_macros._m_pefob``)."""
+    return m.efac[e, c, d] * m.pe[e, c, d, t]
+
+
+def _m_pmcif(m: Any, e: str, c: str, d: str, t: str):
+    """GAMS M_PMCIF under ifSUB: M_PEFOB + M_PWMG·tmarg, M_PWMG = Σ_m amgm·ptmg/lambdamg."""
+    pwmg = sum(
+        m.amgm[mm, e, c, d] * m.ptmg[mm, t] / (m.lambdamg[mm, e, c, d, t] + 1e-12)
+        for mm in m.m
     )
+    return _m_pefob(m, e, c, d, t) + pwmg * m.tmarg[e, c, d]
+
+
+def _mqgdp(
+    m: Any, fd: tuple[str, ...], tp: str, tq: str, r: str, *, if_sub: bool = False
+):
+    """Fisher cross-product of absorption + net exports (GAMS ``mqgdp``, model.gms 1306).
+
+    Trade is at M_PEFOB / M_PMCIF: under ifSUB the ``pefob`` / ``pmcif`` report Vars are
+    frozen inside the solve, so the macros are expanded to the live ``pe`` / ``ptmg``."""
+    ab = sum(m.pa[r, i, a, tp] * m.xaa[r, i, a, tq] for i in m.i for a in fd)
+    if if_sub:
+        tr = sum(
+            _m_pefob(m, r, i, rp, tp) * m.xw[r, i, rp, tq]
+            - _m_pmcif(m, rp, i, r, tp) * m.xw[rp, i, r, tq]
+            for i in m.i
+            for rp in m.r
+        )
+    else:
+        tr = sum(
+            m.pefob[r, i, rp, tp] * m.xw[r, i, rp, tq]
+            - m.pmcif[rp, i, r, tp] * m.xw[rp, i, r, tq]
+            for i in m.i
+            for rp in m.r
+        )
     return ab + tr
 
 
@@ -174,11 +203,12 @@ def _pos(arg):
     return (arg + sqrt(arg * arg + 1e-8)) * 0.5
 
 
-def rgdpmp_rule(m: Any, agg: _Aggregates, fd, r: str, t: str):
+def rgdpmp_rule(m: Any, agg: _Aggregates, fd, r: str, t: str, *, if_sub=False):
     if t == BASE:
         return m.rgdpmp[r, BASE] == m.gdpmp[r, BASE]
-    mq_base_t = agg.named("gdp", BASE, t, (r,), _mqgdp(m, fd, BASE, t, r))
-    mq_t_base = agg.named("gdp", t, BASE, (r,), _mqgdp(m, fd, t, BASE, r))
+    mq = lambda tp, tq: _mqgdp(m, fd, tp, tq, r, if_sub=if_sub)  # noqa: E731
+    mq_base_t = agg.named("gdp", BASE, t, (r,), mq(BASE, t))
+    mq_t_base = agg.named("gdp", t, BASE, (r,), mq(t, BASE))
     arg = (m.gdpmp[r, t] / m.gdpmp[r, BASE]) * (mq_base_t / (mq_t_base + 1e-12))
     arg_pos = _pos(arg)
     return m.rgdpmp[r, t] == m.rgdpmp[r, BASE] * sqrt(arg_pos + 1e-12)
@@ -244,10 +274,12 @@ def chisave_rule(m: Any, regions: list[str], t: str):
     return m.chiSave[t] == m.chiSave[BASE] * exp(dlog)
 
 
-def build_rows(m: Any) -> dict[str, list[tuple[tuple, Residual]]]:
+def build_rows(
+    m: Any, *, if_sub: bool = False
+) -> dict[str, list[tuple[tuple, Residual]]]:
     """Every cross-period row, ``{family: [(index, Residual), ...]}``, in the order
     ``build_equations_fisher`` declares them (which is also the order in which it
-    creates the aggregates)."""
+    creates the aggregates). ``if_sub``: the GDP aggregates expand M_PEFOB / M_PMCIF."""
     fd = _fd()
     regions = list(m.r)
     periods = list(m.t)
@@ -260,7 +292,7 @@ def build_rows(m: Any) -> dict[str, list[tuple[tuple, Residual]]]:
 
     for r in regions:
         for t in periods:
-            add("eq_rgdpmp", (r, t), rgdpmp_rule(m, agg, fd, r, t))
+            add("eq_rgdpmp", (r, t), rgdpmp_rule(m, agg, fd, r, t, if_sub=if_sub))
     for r in regions:
         for t in periods:
             add("eq_pgdpmp", (r, t), pgdpmp_rule(m, r, t))
@@ -294,9 +326,12 @@ def build_rows(m: Any) -> dict[str, list[tuple[tuple, Residual]]]:
     return rows
 
 
-def _params_arrays(params: Any, residual_region: str) -> dict[str, tuple]:
+def _params_arrays(
+    params: Any, residual_region: str, *, if_sub: bool = False
+) -> dict[str, tuple]:
     """``xscale`` (clamped as Pyomo clamps it) and the investment/saving weights, from
-    the same functions ``build_equations_fisher`` calls."""
+    the same functions ``build_equations_fisher`` calls; under ``if_sub`` also the
+    constants of M_PEFOB / M_PMCIF (:func:`_ifsub_params`)."""
     from equilibria.blocks.gtap._derived_params import (
         demand_income_params,
         xscale_data,
@@ -317,18 +352,48 @@ def _params_arrays(params: Any, residual_region: str) -> dict[str, tuple]:
     def per_region(name: str) -> np.ndarray:
         return np.array([float(di[name].get((r,), 0.0)) for r in regions])
 
-    return {
+    out = {
         "xscale": (("r", "a"), xscale),
         "depr": (("r",), per_region("depr")),
         "invwgt": (("r",), per_region("invwgt")),
         "savwgt": (("r",), per_region("savwgt")),
     }
+    return {**out, **_ifsub_params(params)} if if_sub else out
 
 
-def cross_var_domains(sp_var_domains: dict[str, tuple[str, ...]]) -> dict[str, tuple]:
+def _ifsub_params(params: Any) -> dict[str, tuple]:
+    """``efac = 1 + exptx + etax`` (r, i, rp), ``tmarg`` (r, i, rp) and ``amgm``
+    (m, r, i, rp): the Params of M_PEFOB / M_PMCIF, as the single-period blocks build them."""
+    from equilibria.blocks.gtap import _derived_params as dp
+    from equilibria.blocks.gtap import _ifsub_macros as mac
+
+    sets = params.sets
+    rs, cs, ms = list(sets.r), list(sets.i), list(sets.m)
+    tm, am = dp.tmarg_data(params, sets), dp.amgm_data(params, sets)
+    efac = np.zeros((len(rs), len(cs), len(rs)))
+    tmarg = np.zeros_like(efac)
+    amgm = np.zeros((len(ms), len(rs), len(cs), len(rs)))
+    for a, e in enumerate(rs):
+        for b, c in enumerate(cs):
+            for k, d in enumerate(rs):
+                ex = mac._safe(params, "taxes.rtxs", (e, c, d), 0.0)
+                efac[a, b, k] = 1.0 + ex + mac.etax_value(params, e, c, d)
+                tmarg[a, b, k] = float(tm.get((e, c, d), 0.0))
+                for n, mm in enumerate(ms):
+                    amgm[n, a, b, k] = float(am.get((mm, e, c, d), 0.0))
+    return {
+        "efac": (("r", "i", "rp"), efac),
+        "tmarg": (("r", "i", "rp"), tmarg),
+        "amgm": (("m", "r", "i", "rp"), amgm),
+    }
+
+
+def cross_var_domains(
+    sp_var_domains: dict[str, tuple[str, ...]], *, if_sub: bool = False
+) -> dict[str, tuple]:
     """Multiperiod domains of every Var the cross-period rows touch."""
     out = {}
-    for v in CROSS_VARS:
+    for v in CROSS_VARS + (IFSUB_VARS if if_sub else ()):
         if v not in sp_var_domains:
             raise KeyError(f"single-period variable {v!r} missing")
         out[v] = (*sp_var_domains[v], "t")
@@ -343,22 +408,26 @@ def record_cross_period(
     *,
     sets: dict[str, list[str]],
     var_domains: dict[str, tuple[str, ...]],
+    if_sub: bool = False,
 ) -> Any:
     """Record the cross-period rows: a ``FamilyBackend`` holding them.
 
     ``sets`` and ``var_domains`` are the single-period backend's (``FamilyBackend.sets`` /
-    ``.var_domains``); the multiperiod ones are derived from them."""
+    ``.var_domains``); the multiperiod ones are derived from them. ``if_sub`` is the
+    closure's (GAMS ifSUB): the GDP aggregates then expand M_PEFOB / M_PMCIF."""
     from equilibria.backends.family_backend import FamilyBackend
     from equilibria.blocks.gtap.periods import PERIODS
 
     mp_sets = {**{k: list(v) for k, v in sets.items()}, "t": list(PERIODS)}
-    doms = cross_var_domains(var_domains)
+    doms = cross_var_domains(var_domains, if_sub=if_sub)
     variables = {
         v: (d, np.zeros(tuple(len(mp_sets[s]) for s in d))) for v, d in doms.items()
     }
-    rec = RecordingModel(mp_sets, _params_arrays(params, residual_region), variables)
+    rec = RecordingModel(
+        mp_sets, _params_arrays(params, residual_region, if_sub=if_sub), variables
+    )
     backend = FamilyBackend()
-    backend.records = build_rows(rec)
+    backend.records = build_rows(rec, if_sub=if_sub)
     backend.var_domains = dict(rec.var_domains)
     backend.param_domains = dict(rec.param_domains)
     backend.sets = rec.sets
@@ -395,7 +464,11 @@ def load_or_record(
             return FamilyBackend.load(path)
     with phase("cross_records_build"):
         backend = record_cross_period(
-            params, residual_region, sets=sets, var_domains=var_domains
+            params,
+            residual_region,
+            sets=sets,
+            var_domains=var_domains,
+            if_sub=bool(getattr(closure, "if_sub", False)),
         )
         if path is not None:
             backend.save(path)
