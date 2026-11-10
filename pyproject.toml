@@ -88,6 +88,8 @@ modelcache = ["cloudpickle>=3.0"]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=4.0",
+    "pytest-split>=0.10",
+    "pytest-xdist>=3.5",
     "ruff>=0.4",
     "tomli>=2.0; python_version < '3.11'",
     "pre-commit>=3.0",
@@ -158,6 +160,8 @@ include = [
 dev = [
     "pytest>=8.0",
     "pytest-cov>=4.0",
+    "pytest-split>=0.10",
+    "pytest-xdist>=3.5",
     "ruff>=0.4",
     "mypy>=1.10",
     "ty>=0.0.14",
