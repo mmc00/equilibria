@@ -40,6 +40,7 @@ import numpy as np
 from pyomo.environ import sqrt, value
 
 from equilibria.blocks.base import Block
+from equilibria.blocks.gtap import _cd
 from equilibria.blocks.gtap import _derived_params as dp
 from equilibria.blocks.gtap.declarations import (
     declare_price_var,
@@ -269,7 +270,7 @@ class DemandUtilityBlock(Block):
                 if share <= 0.0:
                     return m.xg[r, i] == 0.0
                 sigmag = float(el.esubg.get(r, 1.0))
-                if abs(sigmag - 1.0) < 1e-8:
+                if abs(sigmag - 1.0) < 1e-8 and not _cd.exact_cd(p, sigmag):
                     sigmag = 1.01
                 return (
                     m.xg[r, i]
@@ -295,7 +296,7 @@ class DemandUtilityBlock(Block):
                 if sigmai_raw is None:
                     sigmai_raw = el.esubi.get(r, 0.0)
                 sigmai_raw = float(sigmai_raw or 0.0)
-                if abs(sigmai_raw - 1.0) < 1e-8:
+                if abs(sigmai_raw - 1.0) < 1e-8 and not _cd.exact_cd(p, sigmai_raw):
                     sigmai_raw = 1.01
                 return (
                     m.xi[r, i]
@@ -419,6 +420,20 @@ class DemandUtilityBlock(Block):
                 m = pyomo_model
                 (r,) = indices
                 sigmai_raw = float(el.esubi.get(r, 0.0))
+                if _cd.exact_cd(p, sigmai_raw):
+                    # CD: log pi + log axi = c + sum_i w_i log pa(inv); value shares
+                    alphas, qs = [], []
+                    for i in m.i:
+                        share = value(m.i_share[r, i])
+                        if share > 0.0:
+                            alphas.append(share)
+                            qs.append(m.pa[r, i, "inv"])
+                    if not alphas:
+                        return m.pi[r] == 1.0
+                    w, c = dp.cd_coefficients(alphas, [1.0] * len(alphas))
+                    return _cd.cd_price_row(
+                        m.pi[r], list(zip(w, qs, strict=True)), c, (m.axi[r],)
+                    )
                 if abs(sigmai_raw - 1.0) < 1e-8:
                     sigmai_raw = 1.01
                 expo = 1.0 - sigmai_raw
@@ -486,6 +501,16 @@ class DemandUtilityBlock(Block):
                 m = pyomo_model
                 (r,) = indices
                 sigmag = float(el.esubg.get(r, 1.0))
+                if _cd.exact_cd(p, sigmag):
+                    # CD: log pg = c + sum_i w_i log pa(gov); g_share value shares
+                    alphas, qs = [], []
+                    for i in m.i:
+                        share = value(m.g_share[r, i])
+                        if share > 0.0:
+                            alphas.append(share)
+                            qs.append(m.pa[r, i, "gov"])
+                    w, c = dp.cd_coefficients(alphas, [1.0] * len(alphas))
+                    return _cd.cd_price_row(m.pg[r], list(zip(w, qs, strict=True)), c)
                 if abs(sigmag - 1.0) < 1e-8:
                     sigmag = 1.01
                 expo = 1.0 - sigmag

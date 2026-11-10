@@ -32,6 +32,7 @@ from equilibria.babel.gdx.reader import read_gdx, read_parameter_values
 # re-exportadas aqui, que es donde las buscan los consumidores existentes.
 # Antes vivian aqui y obligaban a blocks/gtap/_derived_params.py a importar
 # hacia arriba, blocks -> templates.
+from equilibria.blocks.gtap._cd import UnitSigma, check_unit_sigma
 from equilibria.blocks.gtap.agents import (  # noqa: F401
     GTAP_FINAL_DEMAND_AGENTS,
     GTAP_GOVERNMENT_AGENT,
@@ -43,6 +44,8 @@ from equilibria.blocks.gtap.factor_wedge import (  # noqa: F401  (re-export)
     VaSubsidyBasis,
     check_basis,
     factor_wedge_rates,
+    pf_bench,
+    pfa_bench,
 )
 from equilibria.templates.gtap.gtap_equilibrium import GTAPEquilibriumSnapshot
 from equilibria.templates.gtap.gtap_sets import GTAPSets
@@ -124,6 +127,12 @@ class GTAPElasticities:
     sigmap: dict[tuple[str, str], float] = field(default_factory=dict)
     sigmand: dict[tuple[str, str], float] = field(default_factory=dict)
     sigmav: dict[tuple[str, str], float] = field(default_factory=dict)
+    # {nest: {cell: value before the guard}} of the production cells the #192 guard
+    # moved from 1 to 1.01 at load (closure-blind); unit_sigma="gempack" puts them
+    # back (GTAPParameters.set_unit_sigma).
+    _unit_guarded: dict[str, dict[tuple[str, str], float]] = field(
+        default_factory=dict, repr=False
+    )
 
     def load_from_gdx(self, gdx_path: Path, sets: GTAPSets) -> None:
         """Load elasticities from GDX file using GTAP Standard 7 native parameter names."""
@@ -561,10 +570,36 @@ class GTAPElasticities:
         1 = 1 and stop pinning px, pnd and pva. cal.gms treats sigmag, sigmai and
         sigmamg the same way.
         """
-        for nest in (self.sigmap, self.sigmand, self.sigmav):
+        for name in ("sigmap", "sigmand", "sigmav"):
+            nest = getattr(self, name)
             for key, value in nest.items():
                 if value == 1.0:
                     nest[key] = 1.01
+                    self._guard_record().setdefault(name, {})[key] = value
+
+    def restore_unit_production_elasticities(self) -> int:
+        """Undo the guard above (``unit_sigma="gempack"``): every cell it moved to 1.01
+        and that still holds 1.01 goes back to 1. Returns the number restored; the
+        record is cleared."""
+        restored = 0
+        record = self._guard_record()
+        for name, cells in record.items():
+            nest = getattr(self, name)
+            for key, value in cells.items():
+                if nest.get(key) == 1.01:
+                    nest[key] = value
+                    restored += 1
+        record.clear()
+        return restored
+
+    def keep_unit_production_guard(self) -> None:
+        """Make the guard's 1.01 deliberate (the stand-in of an A/B run): a later
+        ``set_unit_sigma("gempack")`` no longer restores those cells."""
+        self._guard_record().clear()
+
+    def _guard_record(self) -> dict[str, dict[tuple[str, str], float]]:
+        # an object unpickled from before the field existed has no attribute
+        return self.__dict__.setdefault("_unit_guarded", {})
 
     @staticmethod
     def require_non_unit_production_sigma(
@@ -690,16 +725,8 @@ class GTAPCalibratedShares:
         # make equations start from the same tax-adjusted normalization as GAMS.
         px = pnd = pva = pa = 1.0
 
-        def _kappa(r: str, f: str, a: str) -> float:
-            if taxes is None:
-                return 0.0
-            kappa = float(taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
-            if kappa == 0.0:
-                kappa = float(taxes.kappaf.get((r, f), 0.0) or 0.0)
-            return kappa
-
         def _pf_bench(r: str, f: str, a: str) -> float:
-            return max(1.0 / max(1.0 - _kappa(r, f, a), 1e-12), 1e-12)
+            return pf_bench(taxes, r, f, a)
 
         def _pfa_bench(r: str, f: str, a: str) -> float:
             # pfa = pf*(1+fctts+fcttx) (GAMS cal.gms:23902). Two factor wedges:
@@ -720,12 +747,9 @@ class GTAPCalibratedShares:
             # that made PATH/IPOPT diverge on gtap7_15x10. Verified: -fbep/evfb
             # reproduces GAMS's fctts (EU_28,Land,OtherCrops=0.510902) exactly.
             # Con gtap7_gempack, fctts = +fbep/evfb (la cuna de los datos).
-            fcttx, fctts = (
-                factor_wedge_rates(benchmark, r, f, a, va_subsidy_basis)
-                if benchmark is not None
-                else (0.0, 0.0)
-            )
-            return _pf_bench(r, f, a) * max(1.0 + fctts + fcttx, 1e-12)
+            # One definition (blocks/gtap/factor_wedge.pfa_bench): the exact CD
+            # price dual of the VA nest takes its constant from the same price.
+            return pfa_bench(benchmark, taxes, r, f, a, va_subsidy_basis)
 
         # Calculate intermediate values needed for calibration
         nd_values = {}  # ND bundle values
@@ -2810,6 +2834,9 @@ class GTAPParameters:
     # el signo con que se calibro de verdad (set_va_subsidy_basis los compara)
     va_subsidy_basis: VaSubsidyBasis = "gams"
     _calibrated_basis: VaSubsidyBasis = field(default="gams", repr=False)
+    # CES nests at sigma = 1 of the closure (set_unit_sigma): "gams" = the 1.01
+    # guards (#192), "gempack" = exact Cobb-Douglas (blocks/gtap/_cd.py)
+    unit_sigma: UnitSigma = "gams"
 
     def load_from_gdx(
         self,
@@ -2910,6 +2937,23 @@ class GTAPParameters:
         """
         self.va_subsidy_basis = check_basis(basis)
         if self._calibrated_basis != basis:
+            self._calibrate()
+
+    def set_unit_sigma(self, mode: UnitSigma) -> None:
+        """Stamp the closure's ``unit_sigma`` and, under ``"gempack"``, undo the load's
+        #192 guard of the production nests (the load runs before the closure is known,
+        as for ``set_va_subsidy_basis``) and recalibrate the shares at sigma = 1.
+
+        ``"gams"`` changes no elasticity: a nest left at exactly 1 then refuses to build
+        (#192), as before the switch existed."""
+        self.unit_sigma = check_unit_sigma(mode)
+        if (
+            mode == "gempack"
+            and self.elasticities.restore_unit_production_elasticities()
+        ):
+            self.shares.calibrate(
+                self.benchmark, self.elasticities, self.sets, self.taxes
+            )
             self._calibrate()
 
     def _calibrate(self) -> None:

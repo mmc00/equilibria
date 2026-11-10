@@ -51,7 +51,9 @@ def altertax_closure() -> GTAPClosureConfig:
     """The route's closure (``_solve_shock``'s) under the name ``altertax_gempack``:
     ``prep_square`` refuses the name ``altertax`` (Malcolm's closure). Taxes, technology
     and endowments are ShockBlock instruments (fixed per period), not closure flags.
-    The residual region is not a field here: pass ``ALTAX_RESIDUAL_REGION`` explicitly."""
+    The residual region is not a field here: pass ``ALTAX_RESIDUAL_REGION`` explicitly.
+    ``unit_sigma="gempack"``: the elasticities ``altertax.prm`` sets to 1 are exact
+    Cobb-Douglas nests, not the 1.01 stand-in."""
     return GTAPClosureConfig(
         name="altertax_gempack",
         closure_type="MCP",
@@ -63,4 +65,5 @@ def altertax_closure() -> GTAPClosureConfig:
         savf_flag="capFix",
         numeraire="pnum",
         va_subsidy_basis="gempack",
+        unit_sigma="gempack",
     )

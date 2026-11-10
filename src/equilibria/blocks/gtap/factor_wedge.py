@@ -75,3 +75,35 @@ def factor_wedge_rate(
         return 0.0
     tx, ts = factor_wedge_values(benchmark, r, f, a, basis)
     return (tx + ts) / evfb
+
+
+def _kappa(taxes: Any, r: str, f: str, a: str) -> float:
+    if taxes is None:
+        return 0.0
+    kappa = float(taxes.kappaf_activity.get((r, f, a), 0.0) or 0.0)
+    if kappa == 0.0:
+        kappa = float(taxes.kappaf.get((r, f), 0.0) or 0.0)
+    return kappa
+
+
+def pf_bench(taxes: Any, r: str, f: str, a: str) -> float:
+    """Benchmark factor price pf = 1/(1 - kappaf) (GTAPCalibratedShares calibration)."""
+    return max(1.0 / max(1.0 - _kappa(taxes, r, f, a), 1e-12), 1e-12)
+
+
+def pfa_bench(
+    benchmark: Any,
+    taxes: Any,
+    r: str,
+    f: str,
+    a: str,
+    basis: VaSubsidyBasis = "gams",
+) -> float:
+    """Benchmark tax-inclusive factor price pfa = pf*(1+fctts+fcttx) (cal.gms), the
+    price ``af`` is calibrated with (``calibrate_from_benchmark``)."""
+    fcttx, fctts = (
+        factor_wedge_rates(benchmark, r, f, a, basis)
+        if benchmark is not None
+        else (0.0, 0.0)
+    )
+    return pf_bench(taxes, r, f, a) * max(1.0 + fctts + fcttx, 1e-12)

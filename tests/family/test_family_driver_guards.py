@@ -420,7 +420,9 @@ def _stub_prepare_run(monkeypatch, seen):
         return "mp"
 
     params = types.SimpleNamespace(
-        sets=types.SimpleNamespace(r=["a"]), set_va_subsidy_basis=lambda b: None
+        sets=types.SimpleNamespace(r=["a"]),
+        set_va_subsidy_basis=lambda b: None,
+        set_unit_sigma=lambda m: None,
     )
     monkeypatch.setattr(disk_cache, "load_or_build", load_or_build)
     monkeypatch.setattr(cross_period, "load_or_record", load_cross)

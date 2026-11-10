@@ -31,28 +31,51 @@ class AltertaxRun:
     dataset_dir: Path
 
 
-# Elasticities that ``altertax.prm`` sets to exactly 1, which the 1.01 guard of #192
-# (cal.gms, as for the production nests) must also cover: ``esubm`` (``eq_pmteq``) and
-# ``sigmas`` = 1/esubq (``eq_xs``) are CES rows with exponent 1 - sigma that the blocks
-# drop at sigma = 1 (a free ``pmt`` and ``ps`` per cell: the system is not square);
-# ``esubd`` (the domestic/imported Armington nest) leaves ``pa`` undetermined at 1, and
-# check drifts away from base.
+# Elasticities that ``altertax.prm`` sets to exactly 1. The route's closure has
+# ``unit_sigma="gempack"`` (``altertax_closure``): the blocks write every one of them as
+# an exact Cobb-Douglas nest (``blocks/gtap/_cd.py``) and ``load_altertax_params`` keeps
+# them at 1. The 1.01 stand-in of GAMS #192 (cal.gms) stays selectable for A/B runs
+# (``load_altertax_params(..., unit_sigma=1.01)``): ``esubm`` (``eq_pmteq``) and
+# ``sigmas`` = 1/esubq (``eq_xs``) are CES rows with exponent 1 - sigma that drop at
+# sigma = 1 outside the CD form, and ``esubd`` leaves ``pa`` undetermined there.
 UNIT_TRADE_ELASTICITIES = ("esubd", "esubm", "sigmas")
+# guarded to 1.01 inside the blocks under unit_sigma="gams" (sigmag, sigmamg)
+UNIT_BLOCK_ELASTICITIES = ("esubg", "sigmam")
+_BLOCK_GUARD = 1.01
 
 
 def apply_unit_stand_in(
     params: GTAPParameters, unit_sigma: float = 1.01, *, recalibrate: bool = True
 ) -> int:
-    """Set every unit ``esubd``/``esubm``/``sigmas`` (:data:`UNIT_TRADE_ELASTICITIES`) to
-    ``unit_sigma`` (the 1.01 stand-in) and, with ``recalibrate``, recalibrate the shares.
-    Returns the number of elasticities changed."""
+    """The 1.01 stand-in of the route before ``unit_sigma="gempack"``, so that a run with
+    it reproduces that route under the ALTERTAX closure too:
+
+    - every unit ``esubd``/``esubm``/``sigmas`` (:data:`UNIT_TRADE_ELASTICITIES`) becomes
+      ``unit_sigma``;
+    - ``esubg`` and ``sigmam`` equal to 1 become 1.01 (the blocks' own guard);
+    - the production nests stay at the loader's 1.01 (#192), made deliberate: the
+      closure's ``set_unit_sigma("gempack")`` no longer restores them.
+
+    With ``recalibrate`` the shares are recalibrated. Returns the number of
+    elasticities changed."""
     changed = 0
+    el = params.elasticities
     for name in UNIT_TRADE_ELASTICITIES:
-        table = getattr(params.elasticities, name)
+        table = getattr(el, name)
         for key, value in table.items():
             if value == 1.0:
                 table[key] = unit_sigma
                 changed += 1
+    for name in UNIT_BLOCK_ELASTICITIES:
+        table = getattr(el, name)
+        for key, value in table.items():
+            if value == 1.0:
+                table[key] = _BLOCK_GUARD
+                changed += 1
+    before = {n: dict(getattr(el, n)) for n in ("sigmap", "sigmand", "sigmav")}
+    el.guard_unit_production_elasticities()
+    changed += sum(before[n][k] != v for n in before for k, v in getattr(el, n).items())
+    el.keep_unit_production_guard()
     if changed and recalibrate:
         params.shares.calibrate(
             params.benchmark, params.elasticities, params.sets, params.taxes
@@ -62,7 +85,10 @@ def apply_unit_stand_in(
 
 
 def load_altertax_params(
-    dataset_dir: Path, prm: str | Path = "altertax.prm", *, unit_sigma: float = 1.01
+    dataset_dir: Path,
+    prm: str | Path = "altertax.prm",
+    *,
+    unit_sigma: float | None = None,
 ) -> GTAPParameters:
     """``GTAPParameters`` of the nus333 package with ``prm`` as the parameter file.
 
@@ -70,9 +96,12 @@ def load_altertax_params(
     (e.g. the ``parameters.prm`` of a RunGTAP reference folder). The factor mobility sets
     come from its ``EFLG`` header (``GTAPSets.load_from_har``), not from the closure.
 
-    The production nests ``sigmap``/``sigmand``/``sigmav`` come out of the loader at 1.01
-    (#192); ``esubm`` and ``sigmas`` equal to 1 are set to ``unit_sigma`` here and the
-    shares recalibrated (the loader's last two steps)."""
+    ``unit_sigma=None`` (default): every elasticity ``prm`` sets to 1 stays exactly 1,
+    for the closure's exact Cobb-Douglas nests (``altertax_closure``,
+    ``unit_sigma="gempack"``): the production nests the loader moved to 1.01 (#192) are
+    put back here (``GTAPParameters.set_unit_sigma``; the load runs before any closure
+    is known). A number is the 1.01 stand-in of :func:`apply_unit_stand_in` instead
+    (A/B against the exact form). The shares are recalibrated either way."""
     d = Path(dataset_dir)
     prm_path = d / prm if (d / prm).exists() else Path(prm)
     baserate = d / "baserate.har"
@@ -83,7 +112,10 @@ def load_altertax_params(
         default_path=prm_path,
         baserate_path=baserate if baserate.exists() else None,
     )
-    changed = apply_unit_stand_in(p, unit_sigma, recalibrate=False)
+    if unit_sigma is None:
+        changed = p.elasticities.restore_unit_production_elasticities()
+    else:
+        changed = apply_unit_stand_in(p, unit_sigma, recalibrate=False)
     # GEMPACK GTAPv7 E_qia (gtapv7.tab, lines ~1717-1720): qia(c,r) = qinv(r), investment
     # demand across commodities is Leontief and ESBI is not read. ``altertax.prm`` carries
     # ESBI = 1, so the ALTERTAX entry point sets esubi = 0 in every region.

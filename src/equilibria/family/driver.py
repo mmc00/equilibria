@@ -187,6 +187,7 @@ def _driver_closure(closure: Any) -> Any:
         fix_technology=False,
         if_sub=bool(getattr(closure, "if_sub", False)),
         numeraire=getattr(closure, "numeraire", "pnum"),
+        unit_sigma=getattr(closure, "unit_sigma", "gams"),
     )
 
 
@@ -204,8 +205,8 @@ def prepare_run(
 
     Loads (or records, once) the single-period and cross-period families, composes the
     state once, and builds ``MPArrays`` from it: what ``build_block_model`` does, with no
-    Pyomo model. ``params`` takes the closure's value-added subsidy basis in place, as
-    ``build_block_model`` does. ``freeze`` moves the loaded records to the GC's permanent
+    Pyomo model. ``params`` takes the closure's value-added subsidy basis and
+    ``unit_sigma`` in place, as ``build_block_model`` does. ``freeze`` moves the loaded records to the GC's permanent
     generation before ``mp_build``; only for a caller inside a context that unfreezes.
     Under capFlex ``ref_gdx`` gives ``params._capflex_risk`` (see ``family.capflex``), set
     before the cache keys are taken."""
@@ -219,6 +220,7 @@ def prepare_run(
         params, params.sets, closure, residual_region
     )
     params.set_va_subsidy_basis(getattr(closure, "va_subsidy_basis", "gams"))
+    params.set_unit_sigma(getattr(closure, "unit_sigma", "gams"))
     stamp_capflex_risk(params, closure, ref_gdx)
     root = Path(cache_root) if cache_root is not None else default_cache_root()
     if jax_cache:

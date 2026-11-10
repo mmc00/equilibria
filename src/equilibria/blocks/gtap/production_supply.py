@@ -36,6 +36,7 @@ import numpy as np
 from pyomo.environ import exp, log, value
 
 from equilibria.blocks.base import Block
+from equilibria.blocks.gtap import _cd
 from equilibria.blocks.gtap import _derived_params as dp  # noqa: F401 (submodule)
 from equilibria.blocks.gtap import _ifsub_macros as mac
 from equilibria.blocks.gtap.declarations import (
@@ -330,11 +331,25 @@ class ProductionSupplyBlock(Block):
                 if and_val <= 0.0 and ava_val <= 0.0:
                     return None
                 sigmap = _get_sigmap(r, a)
+                lambdand = max(_lambdand(r, a), 1e-8)
+                lambdava = m.lambdava[r, a]
+                if _cd.exact_cd(p, sigmap):
+                    # CD: log px + log axp = c + w_nd log(pnd/lambdand)
+                    #     + w_va log(pva/lambdava); and/ava calibrated at px=pnd=pva=1
+                    alphas, qs = [], []
+                    if and_val > 0.0:
+                        alphas.append(and_val)
+                        qs.append(m.pnd[r, a] / lambdand)
+                    if ava_val > 0.0:
+                        alphas.append(ava_val)
+                        qs.append(m.pva[r, a] / lambdava)
+                    w, c = dp.cd_coefficients(alphas, [1.0] * len(alphas))
+                    return _cd.cd_price_row(
+                        m.px[r, a], list(zip(w, qs, strict=True)), c, (m.axp[r, a],)
+                    )
                 el.require_non_unit_production_sigma("sigmap", r, a, sigmap)
                 expo = 1.0 - sigmap
                 shift = m.axp[r, a] ** (sigmap - 1.0)
-                lambdand = max(_lambdand(r, a), 1e-8)
-                lambdava = m.lambdava[r, a]
                 term_nd = (
                     and_val * (m.pnd[r, a] / lambdand) ** expo if and_val > 0.0 else 0.0
                 )
@@ -354,9 +369,12 @@ class ProductionSupplyBlock(Block):
                 m = pyomo_model
                 r, a = indices
                 sigmand = _get_sigmand(r, a)
-                el.require_non_unit_production_sigma("sigmand", r, a, sigmand)
+                cd = _cd.exact_cd(p, sigmand)
+                if not cd:
+                    el.require_non_unit_production_sigma("sigmand", r, a, sigmand)
                 expo = 1.0 - sigmand
                 terms = []
+                alphas, qs = [], []
                 for i in m.i:
                     io_val = (
                         value(m.io_param[r, i, a])
@@ -368,7 +386,17 @@ class ProductionSupplyBlock(Block):
                     if io_val <= 0.0:
                         continue
                     lambdaio = max(value(m.lambdaio[r, i, a]), 1e-8)
+                    if cd:
+                        alphas.append(io_val)
+                        qs.append(m.pa[r, i, a] / lambdaio)
+                        continue
                     terms.append(io_val * (m.pa[r, i, a] / lambdaio) ** expo)
+                if cd and alphas:
+                    # CD: log pnd = c + sum_i w_i log(pa/lambdaio); io at pa=pnd=1
+                    w, c = dp.cd_coefficients(alphas, [1.0] * len(alphas))
+                    return _cd.cd_price_row(
+                        m.pnd[r, a], list(zip(w, qs, strict=True)), c
+                    )
                 if not terms:
                     return None
                 return m.pnd[r, a] ** expo == sum(terms)
@@ -384,9 +412,12 @@ class ProductionSupplyBlock(Block):
                 m = pyomo_model
                 r, a = indices
                 sigmav = _get_sigmav(r, a)
-                el.require_non_unit_production_sigma("sigmav", r, a, sigmav)
+                cd = _cd.exact_cd(p, sigmav)
+                if not cd:
+                    el.require_non_unit_production_sigma("sigmav", r, a, sigmav)
                 expo = 1.0 - sigmav
                 terms = []
+                alphas, qs, q0 = [], [], []
                 for f in m.f:
                     af_val = (
                         value(m.af_param[r, f, a])
@@ -398,7 +429,19 @@ class ProductionSupplyBlock(Block):
                     lambdaf = m.lambdaf[r, f, a]
                     # M_PFA inline under if_sub=True (pfa coupled to pf; eq_pfaeq off).
                     pfa_t = mac.m_pfa(m, p, r, f, a) if if_sub else m.pfa[r, f, a]
+                    if cd:
+                        alphas.append(af_val)
+                        qs.append(pfa_t / lambdaf)
+                        q0.append(dp.pfa_bench_value(p, r, f, a))
+                        continue
                     terms.append(af_val * (pfa_t / lambdaf) ** expo)
+                if cd and alphas:
+                    # CD: log pva = c + sum_f w_f log(pfa/lambdaf); af at the base
+                    # pfa = pf*(1+fctts+fcttx) and pva = 1
+                    w, c = dp.cd_coefficients(alphas, q0)
+                    return _cd.cd_price_row(
+                        m.pva[r, a], list(zip(w, qs, strict=True)), c
+                    )
                 if not terms:
                     return None
                 return m.pva[r, a] ** expo == sum(terms)
@@ -538,6 +581,18 @@ class ProductionSupplyBlock(Block):
                 sigma = _get_sigmas(r, i)
                 if sigma == float("inf"):
                     return m.xs[r, i] == sum(m.x[r, a, i] for a in active_activities)
+                if _cd.exact_cd(p, sigma):
+                    # CD: log ps = c + sum_a w_a log(pp); p_ax at ps = pp = 1
+                    alphas, qs = [], []
+                    for a in active_activities:
+                        ax_val = value(m.p_ax[r, a, i])
+                        if ax_val > 0.0:
+                            alphas.append(ax_val)
+                            qs.append(_m_pp(m, r, a, i))
+                    w, c = dp.cd_coefficients(alphas, [1.0] * len(alphas))
+                    return _cd.cd_price_row(
+                        m.ps[r, i], list(zip(w, qs, strict=True)), c
+                    )
                 exponent = 1.0 - sigma
                 if abs(exponent) < 1e-8:
                     return None

@@ -852,6 +852,10 @@ def build_block_model(
     # the gtap7_gempack closure sets "gempack" (EVFP subsidy basis) and recalibrates
     # gx/ava with the data's factor wedge (calibration ran at load, closure-blind).
     params.set_va_subsidy_basis(getattr(closure, "va_subsidy_basis", "gams"))
+    # Same for unit_sigma: "gempack" undoes the load's #192 guard of the production
+    # nests and the blocks write every nest at sigma = 1 as exact Cobb-Douglas
+    # (blocks/gtap/_cd.py); "gams" leaves the parameters as they are.
+    params.set_unit_sigma(getattr(closure, "unit_sigma", "gams"))
 
     # capFlex needs risk[r] = rorg/rore(r) calibrated from a benchmark (capFix) solve
     # BEFORE the multi-period model folds mutable params to numbers (gtap_model_multiperiod
