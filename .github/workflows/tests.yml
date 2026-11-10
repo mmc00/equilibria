@@ -207,12 +207,19 @@ jobs:
       - name: Collect expected test ids
         run: |
           set -euo pipefail
-          uv run pytest --collect-only -o addopts="" -q \
-            -m "not gams and not slow and not needs_gdxdump" tests \
-            | grep '::' > collected-python.txt
-          uv run pytest --collect-only -o addopts="" -q \
-            -m "needs_gdxdump and not gams and not slow" tests \
-            | grep '::' > collected-gdxdump.txt
+          # The two collections are independent and take ~290 s each, so they
+          # run side by side (4-core runner). `wait <pid>` keeps the failure
+          # of either one fatal, which a bare `&` would swallow.
+          collect() {  # $1 = -m expression, $2 = output file
+            uv run pytest --collect-only -o addopts="" -q -m "$1" tests \
+              | grep '::' > "$2"
+          }
+          collect "not gams and not slow and not needs_gdxdump" collected-python.txt &
+          pid_py=$!
+          collect "needs_gdxdump and not gams and not slow" collected-gdxdump.txt &
+          pid_gd=$!
+          wait "$pid_py"
+          wait "$pid_gd"
           wc -l collected-python.txt collected-gdxdump.txt
 
       - name: Upload collected ids
