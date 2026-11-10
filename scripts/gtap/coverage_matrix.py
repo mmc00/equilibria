@@ -186,6 +186,10 @@ _NLP_ROWS: list[Row] = [
         "gams nlp gtap ifsub=0 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     Row("gtap7_15x10", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "gams nlp gtap ifsub=1 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    Row("gtap7_3x4", "nlp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "gams nlp gtap ifsub=0 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    Row("gtap7_3x4", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "gams nlp gtap ifsub=1 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     # ALTERTAX (CD) — the old 86-94 check/shock ceiling ("mis-converged NLP ref")
     # DISSOLVED with the 2026-07-19 fixes (orphaned xaa-shares fix recovered +
     # unfaithful 1e-8 quantity floors removed): measured check 100% on ALL datasets,
@@ -257,6 +261,10 @@ _MCP_ROWS: list[Row] = [
     Row("gtap7_15x10", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "gams mcp gtap ifsub=0 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     Row("gtap7_15x10", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "gams mcp gtap ifsub=1 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    Row("gtap7_3x4", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "gams mcp gtap ifsub=0 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    Row("gtap7_3x4", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "gams mcp gtap ifsub=1 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     # --- altertax CD (ref gams_mcp_altertax_ifsub{N}_fbep-header) ---
     Row("gtap7_3x3", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
