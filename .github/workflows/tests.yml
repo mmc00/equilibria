@@ -107,8 +107,8 @@ jobs:
         id: plan
         run: |
           set -euo pipefail
-          py=$(python scripts/dev/plan_test_groups.py --suite python --budget 440 --max-groups 10 --explain)
-          gd=$(python scripts/dev/plan_test_groups.py --suite gdxdump --budget 360 --max-groups 8 --explain)
+          py=$(python scripts/dev/plan_test_groups.py --suite python --budget 480 --max-groups 10 --explain)
+          gd=$(python scripts/dev/plan_test_groups.py --suite gdxdump --budget 480 --max-groups 8 --explain)
           echo "python=$py" >> "$GITHUB_OUTPUT"
           echo "gdxdump=$gd" >> "$GITHUB_OUTPUT"
 
