@@ -408,13 +408,15 @@ def record_cross_period(
     *,
     sets: dict[str, list[str]],
     var_domains: dict[str, tuple[str, ...]],
-    if_sub: bool = False,
+    if_sub: bool,
 ) -> Any:
     """Record the cross-period rows: a ``FamilyBackend`` holding them.
 
     ``sets`` and ``var_domains`` are the single-period backend's (``FamilyBackend.sets`` /
     ``.var_domains``); the multiperiod ones are derived from them. ``if_sub`` is the
-    closure's (GAMS ifSUB): the GDP aggregates then expand M_PEFOB / M_PMCIF."""
+    closure's (GAMS ifSUB): the GDP aggregates then expand M_PEFOB / M_PMCIF. It has no
+    default: rows recorded with the wrong value read the frozen pefob / pmcif report
+    Vars instead of the macros, and differ from the Pyomo model only by ~1e-8."""
     from equilibria.backends.family_backend import FamilyBackend
     from equilibria.blocks.gtap.periods import PERIODS
 

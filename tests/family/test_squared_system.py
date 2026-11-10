@@ -532,6 +532,7 @@ def cross(inc):
         list(p.sets.r)[-1],
         sets=inc.backend.sets,
         var_domains=inc.backend.var_domains,
+        if_sub=_route_closure().if_sub,
     )
 
 
@@ -741,7 +742,11 @@ def _backends(dataset):
     backend = FamilyBackend()
     backend.build(model, skip=state.ifsub_skipped)
     cross = cross_period.record_cross_period(
-        p, rr, sets=backend.sets, var_domains=backend.var_domains
+        p,
+        rr,
+        sets=backend.sets,
+        var_domains=backend.var_domains,
+        if_sub=_route_closure().if_sub,
     )
     return p, backend, state, cross
 
