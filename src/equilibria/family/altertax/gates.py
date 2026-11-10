@@ -589,10 +589,14 @@ def report_decomp_of(
     if path is None:
         return report_decomp(decomp_headers(run), gem, waivers, labels) | {
             "steps": 1,
+            "steps_half": None,
+            "richardson": False,
             "path": None,
         }
     return report_decomp(path.headers, gem, waivers, labels) | {
         "steps": path.steps,
+        "steps_half": path.steps_half,
+        "richardson": path.richardson,
         "path": path.to_dict(),
     }
 

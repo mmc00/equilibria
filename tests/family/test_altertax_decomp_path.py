@@ -5,7 +5,8 @@ only to first order in the shock. For the 10 % RunGTAP references the shock is s
 K equal sub-steps along GEMPACK's path (the power of the instrument compounds: each step
 is ``(1 + p/100)**(1/K)``), each step's contributions use the previous step as ``pre``,
 and the K-step sums are the decomposition. K doubles until the EV of every region changes
-by less than ``TOL_CHANGE / 10`` between K and 2K."""
+by less than ``TOL_CHANGE / 10`` between K and 2K; the reported decomposition is the
+Richardson extrapolation ``2 D(K) - D(K/2)`` and the stop rule looks at every gated total."""
 
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ from equilibria.family.altertax.decomp import DECOMP_HEADERS, decomp_headers
 from equilibria.family.altertax.path import (
     PATH_TOL,
     pick_steps,
+    richardson,
     shock_fraction,
 )
 from equilibria.family.altertax.shocks import load_tms_shock
@@ -51,28 +53,67 @@ def test_shock_fraction_compounds_the_power():
         shock_fraction(full, 0.0)
 
 
-def test_pick_steps_doubles_until_the_ev_settles():
-    """EV(K) = a + b / K (first-order path error): the change K/2 -> K is b / K, so it
-    first drops below PATH_TOL * |EV| at the first K with b / K < PATH_TOL * |a + b/K|."""
+def test_richardson_is_exact_for_a_first_order_path():
+    """D(K) = a + b / K: R(K) = 2 D(K) - D(K/2) = a, header by header."""
+    from equilibria.babel.har.symbols import HeaderArray
+
     a, b = np.array([100.0, -50.0]), np.array([4.0, 1.0])
+
+    def ha(k):
+        return {
+            "A": HeaderArray(
+                name="A", coeff_name="A", long_name="", array=a + b / k,
+                set_names=["REG"], set_elements=[["x", "y"]],
+            )
+        }  # fmt: skip
+
+    r = richardson(ha(8), ha(4))
+    np.testing.assert_allclose(r["A"].array, a, rtol=1e-14)
+
+
+def test_pick_steps_stops_at_the_first_pair_when_r_is_exact():
+    """D(K) = a + b / K gives R(K) = a at every K >= 2, so the first pair of R's is
+    (R(2), R(4)): K = 4 where the EV-only rule needed K = 32."""
+    a, b = {"ev": 100.0, "t": -50.0}, {"ev": 4.0, "t": 1.0}
     seen = []
 
-    def ev_at(k):
+    def totals_at(k):
         seen.append(k)
-        return a + b / k
+        return {n: a[n] + b[n] / k for n in a}
 
-    k, hist = pick_steps(ev_at, tol=PATH_TOL, k_max=256)
-    assert seen == sorted(seen) and seen[0] == 1
-    assert all(y == 2 * x for x, y in zip(seen, seen[1:], strict=False))
-    assert hist[k]["change"] < PATH_TOL
-    assert hist[k // 2]["change"] is None or hist[k // 2]["change"] >= PATH_TOL
-    # 4 / k / 100 < 2e-3 -> k > 20 -> 32
-    assert k == 32
+    k, hist = pick_steps(totals_at, tol=PATH_TOL, k_max=256)
+    assert seen == [1, 2, 4] and k == 4
+    assert hist[1]["change"] is None and hist[2]["change"] is None
+    assert hist[4]["change"] < 1e-14
+
+
+def test_pick_steps_keeps_doubling_while_a_non_ev_total_has_not_settled():
+    """The EV is exact from K = 2 but another gated total carries a 1/K**2 term
+    (R has a 1/K**2 error left): the rule waits for it, not only for the EV."""
+    b = 5.0
+
+    def totals_at(k):
+        return {"ev": 100.0 + 4.0 / k, "other": 10.0 + b / k**2}
+
+    k, hist = pick_steps(totals_at, tol=PATH_TOL, k_max=256)
+    # R(K) = 10 - 2 b / K**2: the change K/2 -> K is 6 b / K**2 / 10 < 2e-3 -> K = 64
+    assert k == 64 and hist[32]["change"] > PATH_TOL > hist[64]["change"]
+    ev_only = pick_steps(lambda k: {"ev": 100.0 + 4.0 / k}, tol=PATH_TOL)[0]
+    assert ev_only == 4 < k
+
+
+def test_pick_steps_ignores_totals_below_the_noise_floor():
+    def totals_at(k):
+        return {"ev": 100.0, "tiny": 1e-4 * (1 + k**-0.5)}
+
+    assert pick_steps(totals_at, floor_at=lambda k: 1e-2)[0] == 4
+    with pytest.raises(RuntimeError, match="did not settle"):
+        pick_steps(totals_at, k_max=16)
 
 
 def test_pick_steps_refuses_to_stop_unconverged():
     with pytest.raises(RuntimeError, match="did not settle"):
-        pick_steps(lambda k: np.array([1.0 + 1.0 / k]), tol=PATH_TOL, k_max=8)
+        pick_steps(lambda k: {"t": 1.0 + 1.0 / k**0.5}, tol=PATH_TOL, k_max=8)
 
 
 # --- solves ---------------------------------------------------------------------------
@@ -158,16 +199,14 @@ def test_warm_start_from_a_solution_stays_there(env):
 
 
 def test_k_converges_on_nus333_rungtap(env):
-    """K doubles until EV(K/2) -> EV(K) moves less than PATH_TOL; the change halves at
-    each doubling (first-order error of the left-point steps)."""
+    """K doubles until every gated total of R(K/2) -> R(K) moves less than PATH_TOL; the
+    reported decomposition is the Richardson one of K and K/2."""
     run = _rungtap(env, "nus333", "auto")
     path = run.decomp_path
     k, hist = path.steps, path.history
-    assert k >= 2 and hist[k]["change"] < PATH_TOL
+    assert k >= 4 and hist[k]["change"] < PATH_TOL
     assert hist[k // 2]["change"] is None or hist[k // 2]["change"] >= PATH_TOL
-    changes = [hist[j]["change"] for j in sorted(hist) if hist[j]["change"]]
-    for x, y in zip(changes, changes[1:], strict=False):
-        assert 0.4 <= y / x <= 0.6
+    assert path.richardson and path.steps_half == k // 2
     # the path's last point is the run's own shock: same EV basis as the other outputs
     assert path.points[-1] is run.result.mp
 
@@ -177,6 +216,7 @@ def _decomp_gate(env, ds):
     cmp = gates.compare_all(run, folder(ds))
     rec = next(o for o in cmp["outputs"] if o["output"] == "decomp")
     assert rec["steps"] == run.decomp_path.steps
+    assert rec["steps_half"] == run.decomp_path.steps // 2 and rec["richardson"]
     return rec
 
 

@@ -8,8 +8,13 @@ come out ~4.8 % low (the tax base grows ~10 % along the path, the midpoint is ha
 
 Controller ruling (2026-11-09): the shock is solved in K equal sub-steps; each step's
 contributions use the previous step as ``pre`` (:func:`decomp.changes_between`), and the
-decomposition is their sum. K doubles from 1 until the EV of every region moves by less
-than ``PATH_TOL = TOL_CHANGE / 10`` between K/2 and K (:func:`pick_steps`).
+decomposition is their sum ``D(K)``. The totals converge first-order in 1/K (nus333 /
+10x7: 17 %, 8.7 %, 4.5 %, 2.3 %, 1.2 % at K = 1 .. 16), so the reported decomposition is
+the Richardson extrapolation ``R(K) = 2 D(K) - D(K/2)`` of every header (exact for
+``D(K) = a + b / K``). K doubles from 1 until every gated total (the EV and the regional
+totals the decomp gate checks, same relative metric) moves by less than
+``PATH_TOL = TOL_CHANGE / 10`` between ``R(K/2)`` and ``R(K)`` (:func:`pick_steps`, first
+possible stop K = 4). A fixed ``steps=K`` reports the plain ``D(K)``.
 
 Path. A shock is a percent change of the instrument's power (``imptx`` and ``prdtx_rai``
 are GEMPACK kind ``power``); GEMPACK splits it into steps whose powers compound
@@ -55,10 +60,13 @@ from equilibria.family.altertax.decomp import (
     changes_between,
     decomp_from_changes,
 )
+from equilibria.family.altertax.gates import NOISE, _regional_totals
 from equilibria.family.altertax.tolerances import ABS_FLOOR, TOL_CHANGE
 from equilibria.family.altertax.updated import _elements, _Period, headers_at
 
-PATH_TOL = TOL_CHANGE / 10  # EV change between K/2 and K that stops the doubling
+PATH_TOL = (
+    TOL_CHANGE / 10
+)  # change of any gated total between R(K/2) and R(K) that stops the doubling
 K_MAX = 64  # doubling stops with an error past this many sub-steps
 
 
@@ -85,26 +93,78 @@ def ev_change(ev: np.ndarray, ev_prev: np.ndarray) -> float:
     )
 
 
+def gated_totals(headers: Mapping[str, HeaderArray]) -> dict[tuple, float]:
+    """``{(header, part, region): total}`` of what the decomp gate checks: the regional
+    totals of every header but the exogenous ``C*`` ones (the ``A`` totals are the EVs)."""
+    out: dict[tuple, float] = {}
+    for name in DECOMP_HEADERS:
+        if not name.startswith("C"):
+            out |= _regional_totals(name, headers[name])
+    return out
+
+
+def noise_floor(headers: Mapping[str, HeaderArray]) -> float:
+    """The gate's noise floor, ``NOISE * max|EV|`` (largest |component| of a WELFARE row)."""
+    return NOISE * float(np.abs(np.asarray(headers["A"].array)).max())
+
+
+def totals_change(
+    new: Mapping[Any, float], old: Mapping[Any, float], floor: float = 0.0
+) -> float:
+    """Largest ``rel_diff`` (against ``new``, the gate's metric) over the totals that
+    are above ``floor`` on either side."""
+    return max(
+        (
+            rel_diff(float(v), float(old[k]), float(v), ABS_FLOOR)
+            for k, v in new.items()
+            if max(abs(v), abs(old[k])) > floor
+        ),
+        default=0.0,
+    )
+
+
+def richardson(
+    fine: Mapping[str, HeaderArray], coarse: Mapping[str, HeaderArray]
+) -> dict[str, HeaderArray]:
+    """``2 D(K) - D(K/2)`` of every header: cancels the 1/K term of the path error."""
+    return {
+        n: dataclasses.replace(
+            h,
+            array=2.0 * np.asarray(h.array, dtype=np.float64)
+            - np.asarray(coarse[n].array, dtype=np.float64),
+        )
+        for n, h in fine.items()
+    }
+
+
 def pick_steps(
-    ev_at: Callable[[int], np.ndarray], tol: float = PATH_TOL, k_max: int = K_MAX
+    totals_at: Callable[[int], Mapping[Any, float]],
+    tol: float = PATH_TOL,
+    k_max: int = K_MAX,
+    floor_at: Callable[[int], float] | None = None,
 ) -> tuple[int, dict[int, dict[str, Any]]]:
-    """Double K from 1 until :func:`ev_change` of ``ev_at(K)`` against ``ev_at(K/2)``
-    is below ``tol``. Returns that K (the finer of the pair) and ``{K: {"ev", "change"}}``
-    for every K tried (``change`` is None at K = 1). ``RuntimeError`` past ``k_max``."""
+    """Double K from 1 until :func:`totals_change` between ``R(K/2)`` and ``R(K)`` is
+    below ``tol``, with ``R(K) = 2 D(K) - D(K/2)`` and ``D(K) = totals_at(K)`` (a mapping
+    of every gated total; ``floor_at(K)`` is the noise floor, default 0). Returns that K
+    (the finer of the pair) and ``{K: {"change"}}`` for every K tried (``change`` is None
+    until two R exist, K < 4). ``RuntimeError`` past ``k_max``."""
     hist: dict[int, dict[str, Any]] = {}
-    k, prev = 1, None
+    k, d_prev, r_prev = 1, None, None
     while True:
-        ev = np.asarray(ev_at(k), dtype=np.float64)
-        ch = None if prev is None else ev_change(ev, prev)
-        hist[k] = {"ev": [float(x) for x in ev], "change": ch}
+        d = dict(totals_at(k))
+        r = None if d_prev is None else {x: 2.0 * v - d_prev[x] for x, v in d.items()}
+        ch = None
+        if r is not None and r_prev is not None:
+            ch = totals_change(r, r_prev, 0.0 if floor_at is None else floor_at(k))
+        hist[k] = {"change": ch}
         if ch is not None and ch < tol:
             return k, hist
         if k >= k_max:
             raise RuntimeError(
-                f"path decomposition: EV did not settle within {k_max} sub-steps "
-                f"(last change {ch:.3g} >= {tol:.3g})"
+                f"path decomposition: totals did not settle within {k_max} sub-steps "
+                f"(last change {ch if ch is None else format(ch, '.3g')} >= {tol:.3g})"
             )
-        prev, k = ev, 2 * k
+        d_prev, r_prev, k = d, r, 2 * k
 
 
 def sum_steps(steps: list[dict[str, HeaderArray]]) -> dict[str, HeaderArray]:
@@ -140,7 +200,8 @@ def sum_steps(steps: list[dict[str, HeaderArray]]) -> dict[str, HeaderArray]:
 @dataclass
 class DecompPath:
     """The path decomposition of a run: ``headers`` (as :func:`decomp.decomp_headers`)
-    summed over ``steps`` sub-steps; ``history`` the EV per K tried; ``points`` the
+    summed over ``steps`` sub-steps, Richardson-extrapolated with the ``steps // 2``
+    decomposition when ``richardson``; ``history`` the EV per K tried; ``points`` the
     shock arrays at fractions ``1/steps .. 1`` (the last is the run's own)."""
 
     steps: int
@@ -149,14 +210,25 @@ class DecompPath:
     points: list[Any] = field(repr=False)
     solves: int = 0  # sub-step shock solves (the run's own shock not counted)
     minutes: float = 0.0
+    richardson: bool = False
+
+    @property
+    def steps_half(self) -> int | None:
+        """K of the coarser decomposition of the extrapolation, None without it."""
+        return self.steps // 2 if self.richardson else None
 
     def to_dict(self) -> dict:
         return {
             "steps": self.steps,
+            "steps_half": self.steps_half,
+            "richardson": self.richardson,
             "path_tol": PATH_TOL,
             "solves": self.solves,
             "minutes": self.minutes,
             "ev_by_steps": {str(k): v["ev"] for k, v in self.history.items()},
+            "ev_richardson_by_steps": {
+                str(k): v.get("ev_richardson") for k, v in self.history.items()
+            },
             "change_by_steps": {str(k): v["change"] for k, v in self.history.items()},
         }
 
@@ -171,7 +243,8 @@ def solve_decomp_path(
 ) -> DecompPath:
     """The path decomposition of ``run`` (an ``AltertaxRun`` solved with
     ``keep_session``) for its ``shock``: ``steps`` sub-steps, or ``"auto"`` for
-    :func:`pick_steps`."""
+    :func:`pick_steps` and the Richardson extrapolation (a fixed K reports the plain
+    ``D(K)``)."""
     session = run.result.session
     if session is None:
         raise ValueError("solve_decomp_path needs a run solved with keep_session=True")
@@ -227,21 +300,35 @@ def solve_decomp_path(
             decomps[k] = sum_steps(parts)
         return decomps[k]
 
-    def ev_at(k: int) -> np.ndarray:
-        return np.asarray(headers_for(k)["A"].array, dtype=np.float64).sum(axis=1)
+    def ev_of(h: Mapping[str, HeaderArray]) -> list[float]:
+        return [
+            float(x) for x in np.asarray(h["A"].array, dtype=np.float64).sum(axis=1)
+        ]
 
     if steps == "auto":
-        k, hist = pick_steps(ev_at, tol, k_max)
+        k, hist = pick_steps(
+            lambda j: gated_totals(headers_for(j)),
+            tol,
+            k_max,
+            lambda j: noise_floor(headers_for(j)),
+        )
+        for j, rec in hist.items():
+            rec["ev"] = ev_of(decomps[j])
+            if j >= 2:
+                rec["ev_richardson"] = ev_of(richardson(decomps[j], decomps[j // 2]))
+        reported, extrapolated = richardson(decomps[k], decomps[k // 2]), True
     else:
         k = int(steps)
         if k < 1:
             raise ValueError(f"decomp_steps={steps!r}: expected 'auto' or K >= 1")
-        hist = {k: {"ev": [float(x) for x in ev_at(k)], "change": None}}
+        hist = {k: {"ev": ev_of(headers_for(k)), "change": None}}
+        reported, extrapolated = decomps[k], False
     return DecompPath(
         steps=k,
-        headers=decomps[k],
+        headers=reported,
         history=hist,
         points=[pts[Fraction(j, k)] for j in range(1, k + 1)],
         solves=solves,
         minutes=(time.perf_counter() - t0) / 60.0,
+        richardson=extrapolated,
     )
