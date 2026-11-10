@@ -144,3 +144,31 @@ def test_har_vom_is_keyed_by_activity():
     p = load_altertax_params(_9X10, _9X10 / _REF / "parameters.prm")
     acts = set(p.sets.a)
     assert all(a in acts for (_r, a) in p.benchmark.vom)
+
+
+@pytest.mark.slow
+def test_9x10_altertax_squares_and_solves(tmp_path, monkeypatch):
+    """End to end on 9x10: the family route squares the system and solves check and
+    shock (it stopped at ``not square: 12761 active rows, 12769 free variables``)."""
+    from equilibria.family.altertax.closure import residual_region_from_exp
+    from equilibria.family.altertax.run import load_altertax_params, solve_altertax
+    from equilibria.family.altertax.shocks import load_tms_shock
+    from tests.family._prep import _newton_mumps
+
+    ref = _9X10 / _REF
+    if not (ref / "tms_rate10.shk").exists():
+        pytest.skip("9x10 reference missing")
+    for k, v in {**_newton_mumps(), "EQUILIBRIA_GTAP_TR_LINSOLVE": "direct"}.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("EQUILIBRIA_FAMILY_CACHE", str(tmp_path / "cache"))
+    prm = ref / "parameters.prm"
+    run = solve_altertax(
+        _9X10,
+        prm=prm,
+        shock=load_tms_shock(ref / "tms_rate10.shk"),
+        params=load_altertax_params(_9X10, prm),
+        trade_balance="ratio",
+        cache_root=tmp_path,
+        residual_region=residual_region_from_exp(ref / "run.cmf"),
+    )
+    assert run.codes == {"check": 1, "shock": 1}
