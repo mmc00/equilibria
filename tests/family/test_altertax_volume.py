@@ -93,12 +93,10 @@ def test_volume_smoke_within_ulp_bound(altax_run, headers, gempack):
 
 
 # Gate (user 2026-11-09): every cell above the 8-ulp threshold has GEMPACK's sign and a
-# relative gap <= TOL_CHANGE (2e-2) on the change. Measured cause of the gaps (worst 1.26%):
-# GEMPACK's volume.har equals BV * q(altax.sl4) / 100 to 5e-7, so the gap is ours: the 1.01
-# stand-in for the unit elasticities of altertax.prm (linear in sigma - 1, ~0.9% of the
-# change per 0.01; DQO/DQC -0.901% at 1.01, extrapolating to -3e-4 at sigma = 1), plus a
-# residual of 0.17-0.36% on import/trade cells (DQXS(0,0,1), DQGM(0,1), DQFM(0,2,1),
-# DQPM(0,1)) that remains at sigma -> 1 and is unexplained. Exact sigma = 1 is future work.
+# relative gap <= TOL_CHANGE (2e-2) on the change. GEMPACK's volume.har equals
+# BV * q(altax.sl4) / 100 to 5e-7, so any gap is ours. With the 1.01 stand-in the worst gap
+# was 1.26 % (linear in sigma - 1, ~0.9 % of the change per 0.01); the exact sigma = 1
+# Cobb-Douglas (b8fe408f, b3b161ac) and the base Fisher refresh (440d9533) close it.
 def test_volume_values_within_tol_change(altax_run, headers, gempack):
     bases = volume_bases(altax_run)
     rel_bad, above = [], 0

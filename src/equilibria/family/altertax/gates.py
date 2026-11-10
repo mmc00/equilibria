@@ -499,36 +499,20 @@ def total_gaps(headers, gempack, scale):
     return gaps
 
 
-# Regional totals that miss TOL_CHANGE with the nominal trade balance closure, with the
-# signed error (ours - GEMPACK) / |GEMPACK| measured at the 1.01 stand-in. Sweeps of the
-# stand-in (sigma 1.01 / 1.005 / 1.0025, in %), the gap being linear in sigma - 1 where it
-# is the stand-in:
-#   A21 USA   -3.82 / -1.79 / -0.78      A24 ROW  -53.3 / -26.7 / -13.5 (6e-4 of EV)
-#   A222 USA  +3.91 / +2.31 / +1.51      A23 xtax ROW  -4.08 / -1.95 / -0.83 (-> ~+0.3 at 1)
-#   A231 dvol/export ROW  -3.59 / -1.72 / -0.73 (-> ~0 at 1)
-#   A23 mtax USA  -30.8 / -14.5 / -6.3 (-> ~+2 at 1: mostly the stand-in, borderline)
-# All of these are the stand-in except one. A231 dvol/import USA (-338 / -160 / -70 %,
-# -> ~+18 % at sigma = 1) is an OPEN small-cell model residual, not the stand-in: it is the
-# near-cancelling sum of three +-1.3e-2 cells (~4e-4 of EV) driven by the MFG ROW -> USA
-# dvol (+186 % at 1.01, +39 % at 1.0025, ~-10 % at sigma = 1: -4.0e-3 vs GEMPACK -4.4e-3),
-# the same family as Task 6's trade residual (DQXS/DQFM import cells at sigma -> 1).
-# ``test_known_misses_are_bounded`` keeps each within 1.5x of its measured error (same
-# sign), and still a miss: it fails when one starts to pass or gets worse.
-DECOMP_KNOWN_MISS = {
-    ("A21", "", "USA"): -0.0382,
-    ("A211", "welcnt", "USA"): -0.0382,
-    ("A222", "", "USA"): +0.0391,
-    ("A22I", "welcnt", "USA"): +0.0391,
-    ("A22I", "dvol", "USA"): +0.0286,
-    ("A24", "", "ROW"): -0.5326,
-    ("A241", "welcnt", "ROW"): -0.5326,
-    ("A23", "mtax", "USA"): -0.3082,
-    ("A231", "welcnt/import", "USA"): -0.3082,
-    ("A23", "xtax", "ROW"): -0.0408,
-    ("A231", "welcnt/export", "ROW"): -0.0408,
-    ("A231", "dvol/export", "ROW"): -0.0359,
-    ("A231", "dvol/import", "USA"): -3.3757,  # open residual, see above
-}
+# Regional totals that miss TOL_CHANGE, with the signed error (ours - GEMPACK) / |GEMPACK|
+# measured at the time. EMPTY since the exact sigma = 1 Cobb-Douglas (b8fe408f, b3b161ac:
+# ``unit_sigma="gempack"`` keeps the unit elasticities at exactly 1) and the refresh of the
+# base Fisher aggregates after the settled seed (440d9533). Every miss this table used to
+# carry came from the 1.01 stand-in (A21 USA, A222 USA, A24 ROW, A23 mtax/xtax and A231
+# dvol/export, all linear in sigma - 1) or from the small-cell residual that the stand-in
+# fed (A231 dvol/import USA, a near-cancelling sum of three small cells); at exact CD all of
+# them pass. Measured on the nus333 ALTAX reference: A231 within 2.7e-5 of GEMPACK, EV within
+# 2.3e-5 (USA) and 7.9e-7 (ROW), every regional total within TOL_CHANGE. A miss that returns
+# is entered here with its signed error; ``test_known_misses_are_bounded`` then keeps it
+# within 1.5x of that error (same sign) and fails when it starts to pass or gets worse.
+# ``load_altertax_params(unit_sigma=1.01)`` still selects the old stand-in for A/B, and
+# those misses come back with it.
+DECOMP_KNOWN_MISS: dict = {}
 
 
 def ev_gaps(ours, gem) -> list[float]:
@@ -625,29 +609,17 @@ ZERO_BASE = {
     ("qfe", ("LAND", "SER", "ROW")),
 }
 
-# Measured misses of the ALTERTAX shock at the 1.01 stand-in for the unit elasticities
-# (user 2026-11-09: kept). Values are the relative error (ours - gem) / max(|gem|, TOL_PCT).
-# - pfactor (USA +4.52, ROW -4.52): ~3e-5 pp. Sigma sweep of altertax.prm's unit elasticities
-#   (1.01, 1.001, 1.0001), pfactor USA 2.50e-5, 2.91e-4, 2.95e-3 pp and ROW -8.8e-6, -1.0e-4,
-#   -1.0e-3. It fits a + b / (sigma - 1) with b = +2.95e-7 (USA), -1.04e-7 (ROW) and
-#   a = -4.2e-6 (USA), +1.5e-6 (ROW), against GEMPACK -7.1e-6 and +2.5e-6: a deterministic
-#   term of our near-unit CES formulation, independent of the solver tolerance (TR_FTOL 1e-13
-#   and RELTOL 1e-12 leave it unchanged). It is NOT the Fisher/Divisia numeraire difference
-#   (about 1e-12 pp here). OPEN LEAD: the origin of the b / (sigma - 1) term is not found.
-# - pgdp / qgdp were misses here until 2026-11-09: the Fisher GDP aggregates valued trade
-#   at the pefob / pmcif report Vars, frozen under ifSUB; they now expand M_PEFOB / M_PMCIF
-#   (family.cross_period._mqgdp, GAMS model.gms 1306) and pass.
-# - qpm(AGR,USA), qms(AGR,USA), qxs(AGR,ROW,USA): the small-cell trade residual of ROW->USA
-#   imports of AGR (same family as Task 6's DQXS and Task 7's A23 residuals): qms and qxs
-#   (identical, one flow) -4.50e-5 vs -4.75e-5 at 1.01, -5.32e-5 at 1.001, -5.39e-5 at 1.0001
-#   (does not converge); qpm 2.79e-5, 2.03e-5, 1.96e-5 vs 1.91e-5 (converges: the stand-in).
-PCT_KNOWN_MISS = {
-    ("pfactor", ("USA",)): +4.5248,
-    ("pfactor", ("ROW",)): -4.5248,
-    ("qpm", ("AGR", "USA")): +0.4643,
-    ("qms", ("AGR", "USA")): +0.0530,
-    ("qxs", ("AGR", "ROW", "USA")): +0.0530,
-}
+# Measured misses of the ALTERTAX shock; the value is the relative error
+# (ours - gem) / max(|gem|, TOL_PCT). EMPTY since the exact sigma = 1 Cobb-Douglas
+# (b8fe408f, b3b161ac: ``unit_sigma="gempack"``) and the refresh of the base Fisher
+# aggregates after the settled seed (440d9533): every cell now passes. The misses it
+# carried were pfactor (USA +4.52, ROW -4.52, ~3e-5 pp: the b / (sigma - 1) term of the
+# 1.01 stand-in) and the small ROW -> USA AGR import cells qpm, qms and qxs (same family),
+# all of which close at exact CD. pgdp / qgdp were misses until 2026-11-09 (Fisher GDP
+# valued trade at the frozen pefob / pmcif; they now expand M_PEFOB / M_PMCIF, 81bca7e4).
+# A miss that returns is entered here with its measured error. The old stand-in is still
+# available for A/B with ``load_altertax_params(unit_sigma=1.01)``.
+PCT_KNOWN_MISS: dict = {}
 
 
 def pct_compared(ours, gempack, zero=ZERO_BASE):

@@ -2,8 +2,9 @@
 
 Three equilibria runs of the same experiment (``altax.exp``: ``to("AGR","AGR","USA")``):
 
-- ``s1.01``: ``altertax.prm`` as loaded (production nests at 1.01 by #192; ``esubd``,
-  ``esubm`` and ``sigmas`` equal to 1 also at 1.01, see ``run.UNIT_TRADE_ELASTICITIES``);
+- ``s1.01``: ``altertax.prm`` as loaded. The label is historic: since b8fe408f / b3b161ac
+  the default load keeps the unit elasticities (production nests, ``esubd``, ``esubm``,
+  ``sigmas``) at exactly 1; the 1.01 stand-in needs ``load_altertax_params(unit_sigma=1.01)``;
 - ``s1.02-prod``: ``sigmap``/``sigmand``/``sigmav`` forced to 1.02, the rest as above;
 - ``s1.02-all``: all of them at 1.02.
 

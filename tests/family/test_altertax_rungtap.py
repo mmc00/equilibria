@@ -48,11 +48,14 @@ def test_tms_shock_cell_order_nus333():
 @pytest.mark.parametrize("ds", DATASETS)
 def test_prm_outside_dataset_sets_mobility_and_leontief_investment(ds):
     """EFLG of the folder's parameters.prm decides the mobility (RunGTAP: all mobile);
-    esubi = 0 and the 1.01 stand-in still apply."""
+    esubi = 0 and the unit elasticities stay exactly 1 (the 1.01 stand-in only on request)."""
     p = load_altertax_params(DATA / ds, folder(ds) / "parameters.prm")
     assert sorted(p.sets.mf) == sorted(p.sets.f) and p.sets.sf == []
     assert all(v == 0.0 for v in p.elasticities.esubi.values())
-    assert not any(v == 1.0 for v in p.elasticities.esubd.values())
+    assert any(v == 1.0 for v in p.elasticities.esubd.values())
+    assert not any(v == 1.01 for v in p.elasticities.esubd.values())
+    q = load_altertax_params(DATA / ds, folder(ds) / "parameters.prm", unit_sigma=1.01)
+    assert not any(v == 1.0 for v in q.elasticities.esubd.values())
 
 
 def test_closure_capital_mobility_does_not_override_eflg():

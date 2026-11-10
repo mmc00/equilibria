@@ -12,8 +12,8 @@ TOL_SUMMARY = 1e-4  # summary tables
 TOL_VOLUME = (
     1e-4  # SUPERSEDED for volume.har by TOL_CHANGE (kept so imports do not break)
 )
-# user 2026-11-09: keep the 1.01 stand-in for sigma=1; ~99% on changes is enough; worst measured
-# 1.26% on nus333 volume. Relative on the change, for cells above 8 float32 ulps of the level.
+# user 2026-11-09: ~99% on changes is enough (set with the 1.01 stand-in, worst 1.26% on nus333
+# volume; the exact sigma = 1 route now sits well inside it, EV within 2.3e-5). Relative on the change, for cells above 8 float32 ulps of the level.
 TOL_CHANGE = 2e-2
 # ABSOLUTE, in percentage points: GEMPACK % read straight from altax.sl4 (Task 8)
 TOL_PCT = 1e-6

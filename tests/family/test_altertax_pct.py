@@ -6,8 +6,8 @@ Gate (user 2026-11-09): for every cell of every GEMPACK variable we map,
 ``ZERO_BASE``). Of the cells compared, only 37 of 221 (one in six) are governed by the
 relative bound (``|gem| >= TOL_PCT / TOL_CHANGE = 5e-5`` pp); the rest sit below it and pass
 or fail on the 1e-6 pp absolute floor: the ALTERTAX shock is 0.0012 %, so most changes are
-1e-5 pp or less. ``test_gate_share`` pins the split. The 9 cells that do not pass are
-pinned in ``KNOWN_MISS`` with their measured cause; ``test_known_misses_are_bounded`` keeps
+1e-5 pp or less. ``test_gate_share`` pins the split. Cells that do not pass are
+pinned in ``KNOWN_MISS`` with their measured cause (empty at exact sigma = 1); ``test_known_misses_are_bounded`` keeps
 each a miss, with the sign and within 1.5x of its measured relative error."""
 
 from __future__ import annotations

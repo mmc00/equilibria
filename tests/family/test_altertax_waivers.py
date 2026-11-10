@@ -34,7 +34,7 @@ def test_nus333_altax_reference_is_recognised(sl4):
     assert gates.is_nus333_altax_reference(nus333_dir(), sl4)
     w = gates.waivers_for(nus333_dir(), sl4)
     assert w is gates.NUS333_ALTAX_WAIVERS and w.reference == gates.REFERENCE_ID
-    assert w.pct and w.decomp and w.summary
+    assert w.summary  # the pct and decomp tables are empty at exact sigma = 1
 
 
 def test_other_input_data_gets_no_waivers(sl4, tmp_path):
@@ -55,23 +55,48 @@ def test_other_experiment_gets_no_waivers(sl4):
     assert gates.waivers_for(nus333_dir(), fake) is gates.NO_WAIVERS
 
 
-def test_without_waivers_the_known_misses_fail(altax_run, sl4):
-    """The same outputs and the same reference: waived they pass, unwaived they fail."""
-    gem_dir = FIXTURES
+def test_unwaived_gates_pass_except_summary_noise(altax_run, sl4):
+    """At exact sigma = 1 the pct and decomp gates pass with no waivers; only the float32
+    summary residuals still need theirs."""
     ours_pct, gem_pct = pct_changes(altax_run), gempack_changes(sl4)
-    on = gates.report_pct(altax_run, ours_pct, gem_pct, gates.NUS333_ALTAX_WAIVERS)
     off = gates.report_pct(altax_run, ours_pct, gem_pct, gates.NO_WAIVERS)
-    assert on["pass"] and not on["failing"] and on["known_miss"]
-    assert not off["pass"] and not off["known_miss"]
-    assert len(off["failing"]) == len(on["known_miss"])
+    assert off["pass"] and not off["failing"] and not off["known_miss"]
+    assert not gates.NUS333_ALTAX_WAIVERS.pct
 
     ours_d = decomp_headers(altax_run)
-    gem_d = read_har(str(gem_dir / "altax_decomp.har"))
-    assert gates.report_decomp(ours_d, gem_d, gates.NUS333_ALTAX_WAIVERS)["pass"]
-    assert not gates.report_decomp(ours_d, gem_d, gates.NO_WAIVERS)["pass"]
+    gem_d = read_har(str(FIXTURES / "altax_decomp.har"))
+    assert gates.report_decomp(ours_d, gem_d, gates.NO_WAIVERS)["pass"]
+    assert not gates.NUS333_ALTAX_WAIVERS.decomp
 
     ours_s = summary_headers(altax_run)
-    gem_s = read_har(str(gem_dir / "altax_summary.har"))
+    gem_s = read_har(str(FIXTURES / "altax_summary.har"))
     assert gates.report_summary(ours_s, gem_s, gates.NUS333_ALTAX_WAIVERS)["pass"]
     off_s = gates.report_summary(ours_s, gem_s, gates.NO_WAIVERS)
     assert not off_s["pass"] and not off_s["known_miss"]
+
+
+def test_a_waiver_passes_only_a_bounded_miss_of_its_own_sign(altax_run, sl4):
+    """The mechanism, on a synthetic miss: one cell moved off GEMPACK fails unwaived, passes
+    with its measured error, and fails again if the error grows or flips sign."""
+    ours, gem = pct_changes(altax_run), gempack_changes(sl4)
+    var, cell = next(
+        (n, k)
+        for n, cells in gem.items()
+        if n in ours
+        for k, g in cells.items()
+        if abs(g) > 1e-3
+    )
+    moved = {n: dict(c) for n, c in ours.items()}
+    moved[var][cell] = gem[var][cell] + 0.1 * abs(gem[var][cell])
+    off = gates.report_pct(altax_run, moved, gem, gates.NO_WAIVERS)
+    assert not off["pass"] and len(off["failing"]) == 1
+    err = gates.pct_failures(moved, gem, gates.ZERO_BASE)[(var, cell)]
+
+    def waived(ref):
+        w = dataclasses.replace(gates.NUS333_ALTAX_WAIVERS, pct={(var, cell): ref})
+        return gates.report_pct(altax_run, moved, gem, w)
+
+    on = waived(err)
+    assert on["pass"] and len(on["known_miss"]) == 1 and not on["failing"]
+    assert not waived(err / 2)["pass"]  # grew beyond 1.5x
+    assert not waived(-err)["pass"]  # sign flipped
