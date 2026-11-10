@@ -157,8 +157,10 @@ jobs:
           fi
           # PATHS is intentionally unquoted: space-separated test files.
           # shellcheck disable=SC2086
+          # -n 4: public-repo runners have 4 cores. Measured locally on the
+          # heaviest group: 1745 s serial -> 858 s (2.0x).
           uv run pytest -ra -m "not gams and not slow and not needs_gdxdump" $PATHS \
-            "${extra[@]}" \
+            "${extra[@]}" -n 4 \
             -o junit_family=xunit1 --junitxml="junit-python-$safe.xml"
 
       - name: Upload JUnit
