@@ -17,6 +17,7 @@ from equilibria.family.altertax import gates
 from equilibria.family.altertax.decomp import DECOMP_HEADERS, decomp_headers
 from equilibria.family.altertax.path import (
     PATH_TOL,
+    one_step_dvol,
     pick_steps,
     richardson,
     shock_fraction,
@@ -69,6 +70,36 @@ def test_richardson_is_exact_for_a_first_order_path():
 
     r = richardson(ha(8), ha(4))
     np.testing.assert_allclose(r["A"].array, a, rtol=1e-14)
+
+
+def test_dvol_comes_from_the_one_step_decomposition():
+    """``dvol`` is GEMPACK's ``BASE * cumulative %`` (a coefficient times a percent, not a
+    change variable): the path keeps the one-step value in every COL header's ``dvol``
+    column and A231's, and the summed/extrapolated value everywhere else (welcnt)."""
+    from equilibria.babel.har.symbols import HeaderArray
+
+    def ha(name, shape, cols, fill):
+        arr = np.full(shape, fill, dtype=np.float64)
+        return HeaderArray(
+            name=name, coeff_name=name, long_name="", array=arr,
+            set_names=["X"] * (len(shape) - 1) + [cols], set_elements=[],
+        )  # fmt: skip
+
+    path = {
+        "A22P": ha("A22P", (2, 3, 4), "COL", 7.0),
+        "A231": ha("A231", (2, 2, 2, 4, 2), "DIREC", 7.0),
+        "A": ha("A", (2, 5), "COLUMN", 7.0),
+    }
+    one = {
+        "A22P": ha("A22P", (2, 3, 4), "COL", 1.0),
+        "A231": ha("A231", (2, 2, 2, 4, 2), "DIREC", 1.0),
+        "A": ha("A", (2, 5), "COLUMN", 1.0),
+    }
+    out = one_step_dvol(path, one)
+    a22p, a231 = np.asarray(out["A22P"].array), np.asarray(out["A231"].array)
+    assert (a22p[..., 1] == 1.0).all() and (a22p[..., [0, 2, 3]] == 7.0).all()
+    assert (a231[..., 1, :] == 1.0).all() and (a231[..., [0, 2, 3], :] == 7.0).all()
+    assert (np.asarray(out["A"].array) == 7.0).all()
 
 
 def test_pick_steps_stops_at_the_first_pair_when_r_is_exact():
@@ -229,5 +260,13 @@ def test_decomp_gate_passes_on_nus333_rungtap(env):
 def test_decomp_gate_passes_on_10x7_rungtap(env):
     """~40 s (K = 16: 15 sub-step solves on top of the run), so not marked slow."""
     rec = _decomp_gate(env, "gtap7_10x7")
+    assert max(rec["ev_gap"]) <= TOL_CHANGE
+    assert rec["pass"], rec["failing"]
+
+
+def test_decomp_gate_passes_on_3x3_rungtap_with_one_step_dvol(env):
+    """A22P dvol ROW is GEMPACK's -365.93 (one-step -365.94); the path integral of dvol
+    gave -384.35, a different quantity (``V(t) dq`` instead of ``V0 q``)."""
+    rec = _decomp_gate(env, "gtap7_3x3")
     assert max(rec["ev_gap"]) <= TOL_CHANGE
     assert rec["pass"], rec["failing"]

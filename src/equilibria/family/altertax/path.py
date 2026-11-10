@@ -29,8 +29,12 @@ the check's ratio), warm-started from point ``(j-1)/K``. Doubling K reuses every
 K/2. The last point is the run's own shock (solved from the check), so the path ends on
 exactly the solution the other outputs (updated, summary, volume, pct) are read from.
 
-Sums. The CNT headers and the ``dvol`` columns are linear change variables of GEMPACK
-(``Variable (change)``): summed over the steps. ``taxrateb`` is the rate at the first
+Sums. The CNT headers are linear change variables of GEMPACK (``Variable (change)``):
+summed over the steps. The ``dvol`` columns (A231's slot too) are not: GEMPACK computes
+them once after the solve as ``BASE * cumulative %`` with BASE the initial coefficient
+(``BVDPB * qpd / 100`` ...), explanatory only, so they are the one-step value between the
+check and the last point (:func:`one_step_dvol`), the path integral ``V(t) dq`` being a
+different quantity (3x3 A22P ROW: GEMPACK -365.93, one step -365.94, path -384.35). ``taxrateb`` is the rate at the first
 ``pre``, ``taxrateu`` at the last ``post``. E1's ``percent`` form (``c1_cr`` ...) and F1's
 ``pinv``/``psave`` are percent-change variables: compounded. E1's ``value`` form is
 re-derived from the summed ``CNTtotr`` and the compounded percents (the ``postsim``
@@ -197,6 +201,25 @@ def sum_steps(steps: list[dict[str, HeaderArray]]) -> dict[str, HeaderArray]:
     return {n: dataclasses.replace(steps[0][n], array=out[n]) for n in DECOMP_HEADERS}
 
 
+def one_step_dvol(
+    path: Mapping[str, HeaderArray], one: Mapping[str, HeaderArray]
+) -> dict[str, HeaderArray]:
+    """``path`` with the ``dvol`` column of every COL header and of A231 taken from
+    ``one`` (module docstring, "Sums")."""
+    out = dict(path)
+    for name, h in path.items():
+        if h.set_names[-1:] == ["COL"]:
+            ix = (..., 1)
+        elif name == "A231":
+            ix = (..., 1, slice(None))  # COL is the axis before DIREC
+        else:
+            continue
+        arr = np.array(h.array, dtype=np.float64)
+        arr[ix] = np.asarray(one[name].array, dtype=np.float64)[ix]
+        out[name] = dataclasses.replace(h, array=arr)
+    return out
+
+
 @dataclass
 class DecompPath:
     """The path decomposition of a run: ``headers`` (as :func:`decomp.decomp_headers`)
@@ -297,7 +320,9 @@ def solve_decomp_path(
                 parts.append(
                     decomp_from_changes(va, vb, changes_between(A, B, els), els)
                 )
-            decomps[k] = sum_steps(parts)
+            (A, va), (B, vb) = at(Fraction(0), k), at(Fraction(1), k)
+            one = decomp_from_changes(va, vb, changes_between(A, B, els), els)
+            decomps[k] = one_step_dvol(sum_steps(parts), one)
         return decomps[k]
 
     def ev_of(h: Mapping[str, HeaderArray]) -> list[float]:
