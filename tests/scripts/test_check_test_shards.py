@@ -107,3 +107,32 @@ def test_outcome_change_is_reported(tmp_path: Path) -> None:
     assert mod.load_junit(
         [_junit(tmp_path / "x.xml", _case("tests/a.py::t1", "xfail", "r"))]
     ) == {"tests/a.py::t1": ("xfailed", "r")}
+
+
+def _module_case(file: str, kind: str, message: str = "") -> str:
+    """A whole module skipped or failing at collection: pytest writes it with an
+    empty classname and the dotted module as its name, in every shard."""
+    name = file.removesuffix(".py").replace("/", ".")
+    tag = "skipped" if kind == "skipped" else "error"
+    return (
+        f'<testcase classname="" name="{name}" file="{file}">'
+        f'<{tag} message="{message}">x</{tag}></testcase>'
+    )
+
+
+def test_module_skip_in_every_shard_is_not_a_test(tmp_path: Path) -> None:
+    m = _module()
+    skip = _module_case("tests/b/test_opt.py", "skipped", "harpy3 not installed")
+    j1 = _junit(tmp_path / "j1.xml", _case("tests/a/test_x.py::t1"), skip)
+    j2 = _junit(tmp_path / "j2.xml", _case("tests/a/test_x.py::t2"), skip)
+    expected = ["tests/a/test_x.py::t1", "tests/a/test_x.py::t2"]
+    assert m.check_shards(expected, [j1, j2]) == []
+
+
+def test_module_collection_error_is_reported(tmp_path: Path) -> None:
+    m = _module()
+    err = _module_case("tests/b/test_broken.py", "error", "ImportError")
+    j1 = _junit(tmp_path / "j1.xml", _case("tests/a/test_x.py::t1"), err)
+    problems = m.check_shards(["tests/a/test_x.py::t1"], [j1])
+    assert len(problems) == 1
+    assert "failed" in problems[0] and "test_broken" in problems[0]

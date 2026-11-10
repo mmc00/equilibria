@@ -76,15 +76,29 @@ def _outcome(case: ET.Element) -> Outcome:
     return ("passed", "")
 
 
-def _load(paths: list[Path]) -> tuple[dict[str, Outcome], Counter[str]]:
+def _is_module_entry(case: ET.Element) -> bool:
+    """A whole module skipped or broken at collection, not a test: pytest writes
+    it with an empty classname and the dotted module as name, once per shard."""
+    file = case.get("file") or ""
+    return not case.get("classname") and case.get("name") == file.removesuffix(
+        ".py"
+    ).replace("/", ".")
+
+
+def _load(
+    paths: list[Path],
+) -> tuple[dict[str, Outcome], Counter[str], set[str]]:
     outcomes: dict[str, Outcome] = {}
     seen: Counter[str] = Counter()
+    modules: set[str] = set()
     for path in paths:
         for case in ET.parse(path).getroot().iter("testcase"):
             nodeid = _nodeid(case)
             seen[nodeid] += 1
             outcomes[nodeid] = _outcome(case)
-    return outcomes, seen
+            if _is_module_entry(case):
+                modules.add(nodeid)
+    return outcomes, seen, modules
 
 
 def load_junit(paths: list[Path]) -> dict[str, Outcome]:
@@ -94,13 +108,15 @@ def load_junit(paths: list[Path]) -> dict[str, Outcome]:
 
 def check_shards(expected: list[str], junit_paths: list[Path]) -> list[str]:
     """Problems with a sharded run; an empty list means it is complete and green."""
-    outcomes, seen = _load(junit_paths)
+    outcomes, seen, modules = _load(junit_paths)
     problems: list[str] = []
     expected_set = set(expected)
     for nodeid in expected:
         if seen[nodeid] == 0:
             problems.append(f"missing: {nodeid} did not run in any shard")
     for nodeid, count in sorted(seen.items()):
+        if nodeid in modules:  # repeats in every shard by design; failures below
+            continue
         if count > 1:
             problems.append(f"more than once: {nodeid} ran {count} times")
         if nodeid not in expected_set:
