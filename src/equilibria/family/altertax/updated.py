@@ -409,6 +409,17 @@ def _history() -> HeaderArray:
     )
 
 
+def post_database(
+    run: AltertaxRun, basedata: Path | None = None
+) -> dict[str, HeaderArray]:
+    """The value headers of the updated database (shock period re-based on the stored
+    ``basedata``, see :func:`rebase`): what GEMPACK's ``Update`` statements write, and
+    what its post-simulation checks (``*Q`` of the summary) are evaluated on."""
+    if basedata is None:
+        basedata = run.dataset_dir / "basedata.har"
+    return _rebased(run, headers_at(run, "shock"), read_har(str(basedata)))
+
+
 def updated_headers(
     run: AltertaxRun, basedata: Path | None = None
 ) -> dict[str, HeaderArray]:
@@ -417,7 +428,7 @@ def updated_headers(
     supplies ``DVER`` and ``DPSM`` and the stored base the value headers are re-based on."""
     if basedata is None:
         basedata = run.dataset_dir / "basedata.har"
-    values = _rebased(run, headers_at(run, "shock"), read_har(str(basedata)))
+    values = post_database(run, basedata)
     have = {**values, **_copied(Path(basedata)), "XXHS": _history()}
     return {name: have[name] for name in UPDATED_HEADERS}
 

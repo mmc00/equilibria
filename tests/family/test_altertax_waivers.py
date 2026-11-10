@@ -18,7 +18,7 @@ from equilibria.family.altertax.summary import (
     input_database,
     summary_headers,
 )
-from equilibria.family.altertax.updated import headers_at
+from equilibria.family.altertax.updated import headers_at, post_database
 from tests.family._prep import ROOT
 
 FIXTURES = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg"
@@ -77,7 +77,7 @@ def test_unwaived_gates_pass(altax_run, sl4):
     gem_s = read_har(str(FIXTURES / "altax_summary.har"))
     flows = (
         check_flows(input_database(altax_run)),
-        check_flows(headers_at(altax_run, "shock")),
+        check_flows(post_database(altax_run)),
     )
     assert gates.report_summary(ours_s, gem_s, flows=flows)["pass"]  # no waivers at all
 

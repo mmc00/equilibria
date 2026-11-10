@@ -40,7 +40,11 @@ from equilibria.family.altertax.summary import (
     check_flows as _flows,
 )
 from equilibria.family.altertax.tolerances import CHECK_TOL
-from equilibria.family.altertax.updated import headers_at
+from equilibria.family.altertax.updated import (
+    headers_at,
+    post_database,
+    updated_headers,
+)
 from tests.family._prep import ROOT
 
 FIXTURE = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg/altax_summary.har"
@@ -119,7 +123,7 @@ def test_summary_checks_match_gempack(headers, gempack):
 
 
 def _flows_pair(altax_run):
-    return _flows(input_database(altax_run)), _flows(headers_at(altax_run, "shock"))
+    return _flows(input_database(altax_run)), _flows(post_database(altax_run))
 
 
 def test_ulp_checks_are_the_ten_float32_residual_headers():
@@ -170,18 +174,16 @@ def test_pre_residuals_within_ulp_of_gempack(altax_run, headers, gempack):
     assert not bad, bad
 
 
-def test_post_residuals_float64_zero_and_gempack_within_ulp(
-    altax_run, headers, gempack
-):
-    """*Q: ours (model, shock period) is zero to float64, |x| <= 1e-9 F; GEMPACK's is
-    within 8 float32 ulp of F."""
-    flows = _flows(headers_at(altax_run, "shock"))
+def test_post_residuals_are_float32_noise_like_gempacks(altax_run, headers, gempack):
+    """*Q: ours (rebased updated values, float32) and GEMPACK's are float32 residuals,
+    both within ULP_LIMIT float32 ulp of F (GEMPACK's within 8)."""
+    flows = _flows(post_database(altax_run))
     bad = {}
     for name in Q_RESIDUALS:
         f = flows[name[:3]]
         ours = np.abs(_abs_residual(name, headers[name].array, flows))
         gem = np.abs(_abs_residual(name, gempack[name].array, flows))
-        o = ours > 1e-9 * np.abs(f)
+        o = ours > ULP_LIMIT * _ulp32(f)
         g = gem > 8 * _ulp32(f)
         if o.any() or g.any():
             bad[name] = (np.argwhere(o).tolist(), np.argwhere(g).tolist())
@@ -262,3 +264,23 @@ def test_summary_loads(altax_run, tmp_path):
     write_summary_har(altax_run, written)
     got = read_har(str(written))
     assert set(got) >= set(EXPECTED)
+
+
+def test_post_checks_are_evaluated_on_the_rebased_updated_values(
+    altax_run, headers, gempack
+):
+    """GEMPACK's ``*Q`` checks run on its updated data, which carries the input data's
+    float32 imbalance: ours are the same formulas on the rebased updated values in
+    float32, not the exact identities of the raw shock levels (which are zero)."""
+    upd = updated_headers(altax_run)
+    post = post_database(altax_run)
+    assert set(post) <= set(upd) and all(
+        np.array_equal(post[k].array, upd[k].array) for k in post
+    )  # one computation shared by the updated.har and the summary
+    expected = summary_from_database(post, dtype=np.float32)
+    for q, p in (("VMCQ", "VMCP"), ("TRCQ", "TRCP"), ("VTCQ", "VTCP"),
+                 ("MPCQ", "MPCP"), ("VOCQ", "VOCS")):  # fmt: skip
+        assert np.array_equal(headers[q].array, expected[p].array), q
+    raw = summary_from_database(headers_at(altax_run, "shock"))
+    assert not np.array_equal(headers["TRCQ"].array, raw["TRCP"].array)
+    assert np.any(np.asarray(headers["TRCQ"].array) != 0.0)

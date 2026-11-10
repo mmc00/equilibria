@@ -47,7 +47,7 @@ from equilibria.babel.har.reader import read_har
 from equilibria.babel.har.symbols import HeaderArray
 from equilibria.babel.har.writer import write_har
 from equilibria.family.altertax.run import AltertaxRun
-from equilibria.family.altertax.updated import headers_at
+from equilibria.family.altertax.updated import headers_at, post_database
 
 # (header, coefficient, long name, set names) as in ``altax_summary.har``
 _META: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
@@ -98,16 +98,18 @@ _SALES = [
 
 
 def _pct(num: np.ndarray, den: np.ndarray) -> np.ndarray:
-    """``100 * num / den``, zero where ``den`` is zero."""
-    safe = np.where(den == 0.0, 1.0, den)
-    return np.where(den == 0.0, 0.0, 100.0 * num / safe)
+    """``100 * num / den``, zero where ``den`` is zero (in the dtype of ``den``)."""
+    one, zero = den.dtype.type(1), den.dtype.type(0)
+    safe = np.where(den == 0.0, one, den)
+    return np.where(den == 0.0, zero, den.dtype.type(100) * num / safe)
 
 
 def _tables(
-    db: dict[str, HeaderArray],
+    db: dict[str, HeaderArray], dtype: type = np.float64
 ) -> tuple[dict[str, np.ndarray], dict[str, list]]:
-    """Raw tables and the element lists of the set names, from a database of value headers."""
-    v = {k: np.asarray(h.array, dtype=np.float64) for k, h in db.items()}
+    """Raw tables (as ``dtype``) and the element lists of the set names, from a database
+    of value headers."""
+    v = {k: np.asarray(h.array, dtype=dtype) for k, h in db.items()}
     els = {
         "COMM": list(db["VDFB"].set_elements[0]),
         "ACTS": list(db["VDFB"].set_elements[1]),
@@ -118,10 +120,14 @@ def _tables(
     return v, els
 
 
-def summary_from_database(db: dict[str, HeaderArray]) -> dict[str, HeaderArray]:
+def summary_from_database(
+    db: dict[str, HeaderArray], dtype: type = np.float64
+) -> dict[str, HeaderArray]:
     """The 19 GTAPSUM headers of a database of value headers (``VDFB`` ... ``VTWR``,
-    ``MAKB``, ``MAKS``), as GEMPACK evaluates the section-E formulas on it."""
-    v, els = _tables(db)
+    ``MAKB``, ``MAKS``), as GEMPACK evaluates the section-E formulas on it. ``dtype``
+    ``np.float32`` evaluates the checks in single precision as GEMPACK does (the values
+    are rounded to float32 first; the headers are returned as float64)."""
+    v, els = _tables(db, dtype)
     nc, na, nr = len(els["COMM"]), len(els["ACTS"]), len(els["REG"])
     marg = [els["COMM"].index(m) for m in els["MARG"]]
 
@@ -197,6 +203,7 @@ def summary_from_database(db: dict[str, HeaderArray]) -> dict[str, HeaderArray]:
         "TRCK": trck, "VTCK": vtck, "MPCK": mpck, "VOCK": vock, **pct,
     }  # fmt: skip
     arrays.update({q: pct[p] for q, p in _POST.items()})
+    arrays = {k: np.asarray(a, dtype=np.float64) for k, a in arrays.items()}
 
     sets = {
         **els,
@@ -234,10 +241,11 @@ def summary_headers(
     run: AltertaxRun, basedata: Path | None = None
 ) -> dict[str, HeaderArray]:
     """The 19 headers of ``altax_summary.har``: level tables from the ``check`` period,
-    ``*Q`` from the ``shock`` period, accounting checks of the input data from
+    ``*Q`` from the updated values of the ``shock`` period, accounting checks of the input data from
     ``basedata`` (see the module docstring)."""
     model = summary_from_database(headers_at(run, "check"))
-    post = summary_from_database(headers_at(run, "shock"))
+    # gtapv7.tab 5325-5330 run on the updated data: the rebased values, in float32
+    post = summary_from_database(post_database(run, basedata), np.float32)
     data = summary_from_database(input_database(run, basedata))
     src = {**model, **{n: data[n] for n in _PRE_ON_DATA}, **{n: post[n] for n in _POST}}
     return {n: src[n] for n in SUMMARY_HEADERS}

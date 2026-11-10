@@ -53,7 +53,7 @@ from equilibria.family.altertax.tolerances import (
 )
 from equilibria.family.altertax.updated import (
     UPDATED_HEADERS,
-    headers_at,
+    post_database,
     updated_headers,
 )
 from equilibria.family.altertax.volume import (
@@ -934,7 +934,7 @@ def compare_all(
             labels,
             flows=(
                 check_flows(input_database(run, basedata)),
-                check_flows(headers_at(run, "shock")),
+                check_flows(post_database(run, basedata)),
             ),
         ),
         report_volume(run, volume_headers(run), read_har(str(files["volume"])), labels),
