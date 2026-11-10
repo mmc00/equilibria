@@ -1,0 +1,15 @@
+tests/compare/test_gtap3x3.py
+tests/data/test_fbep_variants.py
+tests/scripts/test_fbep_switch.py
+tests/scripts/test_nl_compare_local.py
+tests/templates/gtap/test_altertax_multiperiod_parity.py
+tests/templates/gtap/test_cd_sigma_guard.py
+tests/templates/gtap/test_default_tariff_shock.py
+tests/templates/gtap/test_f3_5_base_calib.py
+tests/templates/gtap/test_gtap7_mcp_parity.py
+tests/templates/gtap/test_gtap7_nlp_parity.py
+tests/templates/gtap/test_gtap_blocks_solve.py
+tests/templates/gtap/test_gtap_multiperiod_parity.py
+tests/templates/gtap/test_ifsub_equivalence.py
+tests/templates/gtap/test_multiperiod_build_once.py
+tests/templates/gtap/test_multiperiod_fisher.py

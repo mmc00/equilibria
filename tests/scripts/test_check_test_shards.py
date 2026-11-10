@@ -136,3 +136,19 @@ def test_module_collection_error_is_reported(tmp_path: Path) -> None:
     problems = m.check_shards(["tests/a/test_x.py::t1"], [j1])
     assert len(problems) == 1
     assert "failed" in problems[0] and "test_broken" in problems[0]
+
+
+def test_missing_test_of_unlisted_file_gets_refresh_hint(tmp_path: Path) -> None:
+    j1 = _junit(tmp_path / "1.xml", _case("tests/a.py::t1"))
+    problems = _module().check_shards(
+        ["tests/a.py::t1", "tests/new/test_new.py::t1"], [j1], suite="python"
+    )
+    assert len(problems) == 1
+    assert ".github/test_files_python.txt" in problems[0]
+    assert "--refresh-files" in problems[0]
+
+
+def test_missing_test_of_a_file_that_ran_has_no_hint(tmp_path: Path) -> None:
+    j1 = _junit(tmp_path / "1.xml", _case("tests/a.py::t1"))
+    problems = _module().check_shards(["tests/a.py::t1", "tests/a.py::t2"], [j1])
+    assert len(problems) == 1 and "--refresh-files" not in problems[0]

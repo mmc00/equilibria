@@ -106,14 +106,23 @@ def load_junit(paths: list[Path]) -> dict[str, Outcome]:
     return _load(paths)[0]
 
 
-def check_shards(expected: list[str], junit_paths: list[Path]) -> list[str]:
+def check_shards(
+    expected: list[str], junit_paths: list[Path], suite: str = "<suite>"
+) -> list[str]:
     """Problems with a sharded run; an empty list means it is complete and green."""
     outcomes, seen, modules = _load(junit_paths)
+    ran_files = {nodeid.split("::", 1)[0] for nodeid in seen}
     problems: list[str] = []
     expected_set = set(expected)
     for nodeid in expected:
         if seen[nodeid] == 0:
-            problems.append(f"missing: {nodeid} did not run in any shard")
+            message = f"missing: {nodeid} did not run in any shard"
+            if nodeid.split("::", 1)[0] not in ran_files:
+                message += (
+                    f" (file not in .github/test_files_{suite}.txt? regenerate it with "
+                    "scripts/dev/plan_test_groups.py --refresh-files)"
+                )
+            problems.append(message)
     for nodeid, count in sorted(seen.items()):
         if nodeid in modules:  # repeats in every shard by design; failures below
             continue
@@ -150,6 +159,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     shards = sub.add_parser("shards", help="every expected test ran exactly once")
     shards.add_argument("--expected", type=Path, required=True)
+    shards.add_argument("--suite", default="<suite>", help="suite name, for the hint")
     shards.add_argument("junit", nargs="*", type=Path)
     compare = sub.add_parser("compare", help="baseline run vs sharded run")
     compare.add_argument("--baseline", nargs="+", type=Path, required=True)
@@ -157,7 +167,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "shards":
-        problems = check_shards(_read_expected(args.expected), args.junit)
+        problems = check_shards(_read_expected(args.expected), args.junit, args.suite)
     else:
         problems = compare_runs(load_junit(args.baseline), load_junit(args.current))
     for problem in problems:
