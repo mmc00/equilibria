@@ -45,18 +45,18 @@ def _gams(tmp_path: Path, version: str) -> Path:
 
 def test_jobs_are_the_table(driver: Any) -> None:
     js = driver.jobs()
-    assert len(js) == 97
+    assert len(js) == 105
 
     def count(form: str, where: str) -> int:
         return sum(j.form == form and j.where == where for j in js)
 
-    assert (count("nl", "local"), count("nlp", "local")) == (20, 36)
-    assert (count("mcp", "local"), count("mcp", "neos")) == (5, 34)
+    assert (count("nl", "local"), count("nlp", "local")) == (20, 40)
+    assert (count("mcp", "local"), count("mcp", "neos")) == (5, 38)
     assert count("nlp", "neos") == 2
     assert {j.fbep for j in js} == {"header", "zero"}
     assert (sum(j.fbep == "header" for j in js), sum(j.fbep == "zero" for j in js)) == (
-        48,
-        49,
+        52,
+        53,
     )
     assert {
         (j.dataset, j.mode, j.ifsub)
@@ -78,11 +78,12 @@ def test_jobs_are_the_table(driver: Any) -> None:
     assert ("gtap7_3x3", "gtap", 1) not in neos  # solved locally
     # 9x10: comp.gms's own default (ifSUB=1), which the old COMP.csv was
     assert {(m, k) for ds, m, k in neos if ds == "9x10"} == {("gtap", 1)}
-    assert len({j.folder for j in js}) == 97
-    # no local mcp for 3x4: above the license cap
+    assert len({j.folder for j in js}) == 105
+    # no local mcp for 3x4: above the license cap (its CES mcp is on NEOS)
     assert {j.folder.name for j in js if j.dataset == "gtap7_3x4" and j.where == "local"} == {
-        f"gams_{f}_altertax_ifsub{k}_fbep-{v}"
-        for f in ("nl", "nlp") for k in (0, 1) for v in ("header", "zero")
+        f"gams_{f}_{m}_ifsub{k}_fbep-{v}"
+        for f, m in (("nl", "altertax"), ("nlp", "altertax"), ("nlp", "gtap"))
+        for k in (0, 1) for v in ("header", "zero")
     }  # fmt: skip
 
 
@@ -101,7 +102,7 @@ def test_neos_rows_carry_remote(driver: Any) -> None:
 
 def test_where_selects_rows(driver: Any, tmp_path: Path, capsys: Any) -> None:
     gams = str(_gams(tmp_path, "53.5.0"))
-    for where, n in (("local", 61), ("neos", 36), ("all", 97)):
+    for where, n in (("local", 65), ("neos", 40), ("all", 105)):
         argv = [
             "--tool-version",
             "53.5.0",
