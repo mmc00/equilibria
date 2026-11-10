@@ -4,13 +4,11 @@ name: Test durations
 # stores the JUnit of that serial run as the baseline for the sharded suite.
 # Output: artifacts durations-* (pytest-split JSON) and junit-baseline-*.
 #
-# `pull_request` on this file only: workflow_dispatch exists only once the file
-# is on the default branch, so the PR that adds it serves as the first run.
+# Manual only (~1 h serial): run it from the Actions tab on main when the
+# split drifts. It had a `pull_request` trigger on this file to bootstrap the
+# first run; that re-ran the hour-long job on every push of any PR touching it.
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - ".github/workflows/test-durations.yml"
 
 permissions:
   contents: read
