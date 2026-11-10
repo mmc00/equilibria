@@ -341,13 +341,46 @@ def _altax_share_sums(dataset: str) -> dict[str, dict]:
 )
 @pytest.mark.parametrize("dataset", ALTAX_DATASETS)
 def test_cd_share_sums_are_one(dataset, nest):
+    """S = sum alpha of every CD nest is 1. Armington's (alphad + alpham) is calibrated
+    from float32 data and is off 1 by up to ~2.4e-7 (10x7): it gets 1e-6 here, and the
+    blocks normalise it (:func:`test_cd_armington_rows_use_normalised_shares`)."""
     by = _altax_share_sums(dataset)[nest]
     assert by, nest
+    tol = 1e-6 if nest == "arm" else 1e-9
     bad = sorted(
-        ((k, v) for k, v in by.items() if abs(v - 1.0) > 1e-9),
+        ((k, v) for k, v in by.items() if abs(v - 1.0) > tol),
         key=lambda kv: -abs(kv[1] - 1.0),
     )
     assert not bad, (len(bad), len(by), bad[:5])
+
+
+@pytest.mark.parametrize("dataset", ALTAX_DATASETS)
+def test_cd_armington_rows_use_normalised_shares(dataset):
+    """Under exact CD eq_xda / eq_xma use alpha / S, S = alphad + alpham (EqPaa's weights),
+    so value adds up. The seed is the data, which the raw shares reproduce: at the seed
+    the row residual xda - (ad/S)*xaa*(pa/pdp) is xda * (1 - 1/S)."""
+    from equilibria.blocks.gtap import _derived_params as dp
+
+    p, _, layout, system = _altax_system(dataset)
+    arm = dp.armington_shares(p, p.sets)
+    f0 = system.F(np.asarray(layout.free_values, float))
+    rows = {n: k for k, n in enumerate(system.row_names)}
+    cols = {n: k for k, n in enumerate(layout.col_names)}
+    x0 = np.asarray(layout.free_values, float)
+    checked = 0
+    live = {k: v for k, v in arm.items() if sum(v) > 0.0}
+    for key, (ad, am) in sorted(live.items(), key=lambda kv: -abs(sum(kv[1]) - 1.0))[
+        :20
+    ]:
+        tot = ad + am
+        for fam, var in (("eq_xda", "xda"), ("eq_xma", "xma")):
+            row, col = f"{fam}[{','.join(key)}]", f"{var}[{','.join(key)}]"
+            if row not in rows or col not in cols or x0[cols[col]] <= 0.0:
+                continue
+            want = x0[cols[col]] * (1.0 - 1.0 / tot)
+            assert f0[rows[row]] == pytest.approx(want, rel=1e-6, abs=1e-15), (row, tot)
+            checked += 1
+    assert checked > 0
 
 
 def test_cd_coefficients_normalise():

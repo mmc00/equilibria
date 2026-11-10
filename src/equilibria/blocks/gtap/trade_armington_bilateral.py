@@ -371,11 +371,18 @@ class ArmingtonBilateralBlock(Block):
         # top-Armington shares (benchmark-seed CARRY, monolith 6122-6229)
         arm_shares = dp.armington_shares(p, s)
 
-        def _shares(r, i, aa):
-            return arm_shares.get((r, i, aa), (0.0, 0.0))
-
         def _top_sigma(r, i, aa):
             return float(el.esubd.get((r, i), 2.0))
+
+        def _shares(r, i, aa):
+            """(alphad, alpham). Under exact CD the pair is normalised to sum to 1,
+            as EqPaa's weights are (``_cd``): the float32 data leave ad + am off 1 by
+            up to ~1e-7, and with raw shares sum(p*x) != pa*xaa by that much."""
+            ad, am = arm_shares.get((r, i, aa), (0.0, 0.0))
+            if _cd.exact_cd(p, _top_sigma(r, i, aa)) and ad + am > 0.0:
+                tot = ad + am
+                return ad / tot, am / tot
+            return ad, am
 
         # import-source share cache (monolith 6472-6485)
         import_src = p.shares.normalized.import_source_share
