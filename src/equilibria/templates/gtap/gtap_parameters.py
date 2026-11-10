@@ -2907,6 +2907,7 @@ class GTAPParameters:
         self.sets.load_from_har(sets_path, default_path=default_path)
         self.elasticities.load_from_har(default_path, self.sets)
         self.benchmark.load_from_har(basedata_path, self.sets)
+        self.sets.set_output_pairs_from_make(self.benchmark.makb)
         if filter_config is not None:
             # Opt-in SAM filtering (CGEBox-style): remove small flows + re-balance
             # BEFORE calibration, so taxes/shares/calibrated all use the filtered SAM.

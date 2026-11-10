@@ -206,19 +206,24 @@ def _trade_params(params: Any) -> tuple[set[tuple], set[tuple], set[tuple]]:
 
 
 def _output_flags(params: Any) -> tuple[set[tuple], set[tuple]]:
-    """(xFlag over (r, a), makb support over (r, a, i))."""
+    """(xFlag over (r, a), makb support over (r, a, i)).
+
+    xFlag is keyed by activity: the activities with make flows (``sum_i makb > 0``, as
+    the GDX ``vom``). A ``vom`` / ``vom_i`` keyed by commodity (the HAR ``VOSB(COMM,
+    REG)``) never stands in for it: with activity names other than the commodity
+    names nothing would match and every ``xp`` / ``va`` / ``nd`` would be fixed."""
     bm = params.benchmark
-    vom = getattr(bm, "vom", {}) or getattr(bm, "vom_i", {})
-    if not vom:  # derive from the make flows without touching the benchmark
-        vom = {}
-        for (r, a, _i), val in getattr(bm, "makb", {}).items():
-            if val is not None and abs(float(val)) > 1e-12:
-                vom[(r, a)] = vom.get((r, a), 0.0) + float(val)
     x_rai = {
         k
         for k, val in getattr(bm, "makb", {}).items()
         if val is not None and abs(float(val)) > 1e-12
     }
+    vom: dict[tuple, float] = {}
+    for r, a, i in x_rai:
+        vom[(r, a)] = vom.get((r, a), 0.0) + float(bm.makb[(r, a, i)])
+    if not vom:  # no make flows: an activity-keyed vom, if there is one
+        acts = set(getattr(params.sets, "a", []) or [])
+        vom = {k: x for k, x in (getattr(bm, "vom", {}) or {}).items() if k[1] in acts}
     return _positive(vom), x_rai
 
 
@@ -404,12 +409,19 @@ def _deactivate_fixed_quantity_eqs(mp: MPArrays) -> None:
 
 def _check_overdetermined(mp: MPArrays) -> None:
     """``deactivate_zero_unique_var_eqs`` only fires when rows outnumber free
-    variables, and then drops rows by matching: the port refuses that case."""
+    variables, and then drops rows by matching: the port refuses that case, and a
+    system left short of rows (``_check_gap`` runs before the patches drop rows)."""
     n, nv = _n_rows(mp), _n_free(mp)
     if n > nv:
         raise ValueError(
             f"over-determined: {n} active rows for {nv} free variables "
             "(Pyomo would deactivate rows by matching)"
+        )
+    if n < nv:
+        raise ValueError(
+            f"under-determined: {n} active rows for {nv} free variables after the "
+            "squareness patches (rows dropped with their variables still free: are "
+            "the data flags keyed by the right set?)"
         )
 
 
