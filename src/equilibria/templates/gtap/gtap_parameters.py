@@ -57,6 +57,46 @@ from equilibria.templates.gtap.gtap_std7_mapping import (
 )
 
 
+def activity_output_flag(benchmark: Any, activities: Any) -> set[tuple[str, str]]:
+    """xFlag(r, a): the (region, activity) cells with output, ``sum_i makb > 0``
+    (the GDX ``vom``, cal.gms). Keyed by activity: ``vom_i`` and the HAR ``VOSB`` are
+    by commodity and never stand in for it (with activity names other than the
+    commodity names nothing would match and every xp / va / nd would be fixed). With
+    no make flow, the entries of ``vom`` whose second key is an activity."""
+    vom: dict[tuple[str, str], float] = {}
+    for (r, a, _i), val in (getattr(benchmark, "makb", {}) or {}).items():
+        if val is not None and abs(float(val)) > 1e-12:
+            vom[(r, a)] = vom.get((r, a), 0.0) + float(val)
+    if not vom:
+        acts = set(activities or [])
+        vom = {
+            k: float(x)
+            for k, x in (getattr(benchmark, "vom", {}) or {}).items()
+            if x is not None and k[1] in acts
+        }
+    return {k for k, x in vom.items() if x > 0}
+
+
+def _vosb_by_activity(
+    vosb: dict[tuple[str, str], float], makb: dict[tuple[str, str, str], float]
+) -> dict[tuple[str, str], float]:
+    """``VOSB(r, i)`` under the key of the one activity making ``i``, when the make
+    flows pair activities and commodities one to one; otherwise nothing (a commodity
+    total is not an activity's output, and ``vom`` then stays empty as for the HAR
+    datasets without ``VOSB``)."""
+    pairs = {(a, i) for (_r, a, i), v in makb.items() if v and abs(float(v)) > 1e-12}
+    by_comm: dict[str, set[str]] = defaultdict(set)
+    by_act: dict[str, set[str]] = defaultdict(set)
+    for a, i in pairs:
+        by_comm[i].add(a)
+        by_act[a].add(i)
+    if any(len(x) != 1 for x in (*by_comm.values(), *by_act.values())):
+        return {}
+    return {
+        (r, next(iter(by_comm[i]))): v for (r, i), v in vosb.items() if i in by_comm
+    }
+
+
 @dataclass
 class GTAPElasticities:
     """Elasticity parameters for GTAP model.
@@ -1496,8 +1536,7 @@ class GTAPBenchmarkValues:
             self.vim[k] = self.vdip.get(k, 0.0) + self.vmip.get(k, 0.0)
         self.vst.update(_h("VST", ["MARG", "REG"], r10))  # MARG×REG in HAR
 
-        # 2D (ACTS, REG) → (r, a)
-        self.vom.update(_h("VOSB", ["COMM", "REG"], r10))
+        vosb = _h("VOSB", ["COMM", "REG"], r10)  # (COMM, REG) → (r, i): by commodity
 
         # 3D intermediate (COMM, ACTS, REG) → (r, i, a)
         self.vdfp.update(_h("VDFP", ["COMM", "ACTS", "REG"], r201))
@@ -1508,6 +1547,8 @@ class GTAPBenchmarkValues:
         # 3D make matrix (COMM, ACTS, REG) → (r, a, i)
         self.makb.update(_h("MAKB", ["COMM", "ACTS", "REG"], r210))
         self.maks.update(_h("MAKS", ["COMM", "ACTS", "REG"], r210))
+        # vom is (r, a): VOSB enters it only through a one-to-one make structure
+        self.vom.update(_vosb_by_activity(vosb, self.makb))
 
         # 3D factors (ENDW, ACTS, REG) → (r, f, a)
         self.vfm.update(_h("EVFP", ["ENDW", "ACTS", "REG"], r201))

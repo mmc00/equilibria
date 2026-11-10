@@ -206,25 +206,17 @@ def _trade_params(params: Any) -> tuple[set[tuple], set[tuple], set[tuple]]:
 
 
 def _output_flags(params: Any) -> tuple[set[tuple], set[tuple]]:
-    """(xFlag over (r, a), makb support over (r, a, i)).
+    """(xFlag over (r, a), makb support over (r, a, i)); xFlag is keyed by activity
+    (``gtap_parameters.activity_output_flag``)."""
+    from equilibria.templates.gtap.gtap_parameters import activity_output_flag
 
-    xFlag is keyed by activity: the activities with make flows (``sum_i makb > 0``, as
-    the GDX ``vom``). A ``vom`` / ``vom_i`` keyed by commodity (the HAR ``VOSB(COMM,
-    REG)``) never stands in for it: with activity names other than the commodity
-    names nothing would match and every ``xp`` / ``va`` / ``nd`` would be fixed."""
     bm = params.benchmark
     x_rai = {
         k
         for k, val in getattr(bm, "makb", {}).items()
         if val is not None and abs(float(val)) > 1e-12
     }
-    vom: dict[tuple, float] = {}
-    for r, a, i in x_rai:
-        vom[(r, a)] = vom.get((r, a), 0.0) + float(bm.makb[(r, a, i)])
-    if not vom:  # no make flows: an activity-keyed vom, if there is one
-        acts = set(getattr(params.sets, "a", []) or [])
-        vom = {k: x for k, x in (getattr(bm, "vom", {}) or {}).items() if k[1] in acts}
-    return _positive(vom), x_rai
+    return activity_output_flag(bm, getattr(params.sets, "a", [])), x_rai
 
 
 # ── Steps ───────────────────────────────────────────────────────────────────

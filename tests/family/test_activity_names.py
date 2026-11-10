@@ -90,3 +90,57 @@ def test_har_sets_map_activities_to_their_commodities():
     assert all(s.activity_commodities[a] for a in s.a)
     assert all(s.commodity_activities[i] for i in s.i)
     assert set(s.output_pairs) == {(a, i) for (_r, a, i) in p.benchmark.makb}
+
+
+_9X10 = Path(__file__).resolve().parents[2] / "data" / "gtap7" / "9x10"
+_REF = "gempack_altertax-rungtap_tms-rate10_s8-16-32"
+
+
+def test_residual_region_comes_from_the_cmf_cgdslack():
+    """9x10 has no ``ROW``: RunGTAP's closure leaves ``cgdslack("RestofWorld")``."""
+    from equilibria.family.altertax.closure import residual_region_from_exp
+
+    cmf = _9X10 / _REF / "run.cmf"
+    if not cmf.exists():
+        pytest.skip("9x10 reference missing")
+    assert residual_region_from_exp(cmf) == "RestofWorld"
+
+
+def test_solve_altertax_refuses_a_residual_region_outside_the_regions():
+    """An unknown residual region would drop no ``eq_savf`` / ``eq_yi`` row."""
+    from equilibria.family.altertax.run import load_altertax_params, solve_altertax
+
+    if not (_9X10 / "basedata.har").exists():
+        pytest.skip("9x10 data missing")
+    prm = _9X10 / _REF / "parameters.prm"
+    p = load_altertax_params(_9X10, prm)
+    with pytest.raises(ValueError, match="residual region 'ROW' is not a region"):
+        solve_altertax(_9X10, prm=prm, shock={}, params=p, residual_region="ROW")
+
+
+def test_pyomo_conditional_fixing_keys_xflag_by_activity():
+    """The Pyomo ``apply_conditional_fixing`` had the same commodity-keyed fallback:
+    with activity names apart from the commodity names it fixed every xp / va / nd."""
+    pyo = pytest.importorskip("pyomo.environ")
+    from equilibria.templates.gtap.gtap_solver import GTAPSolver
+
+    p = _params()
+    m = pyo.ConcreteModel()
+    m.ra = pyo.Set(initialize=[("R", "a_ag"), ("R", "a_mfg")], dimen=2)
+    for name in ("xp", "va", "nd"):
+        setattr(m, name, pyo.Var(m.ra, initialize=1.0))
+    GTAPSolver(m, params=p).apply_conditional_fixing()
+    fixed = [(n, k) for n in ("xp", "va", "nd") for k in m.ra if getattr(m, n)[k].fixed]
+    assert fixed == []
+
+
+def test_har_vom_is_keyed_by_activity():
+    """``vom`` is (r, a); the HAR ``VOSB`` is by commodity, so it enters ``vom`` only
+    through a one-to-one make structure (nus333), never under commodity keys."""
+    from equilibria.family.altertax.run import load_altertax_params
+
+    if not (_9X10 / "basedata.har").exists():
+        pytest.skip("9x10 data missing")
+    p = load_altertax_params(_9X10, _9X10 / _REF / "parameters.prm")
+    acts = set(p.sets.a)
+    assert all(a in acts for (_r, a) in p.benchmark.vom)

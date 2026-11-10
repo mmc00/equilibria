@@ -160,6 +160,7 @@ def solve_altertax(
     params: GTAPParameters | None = None,
     trade_balance: str = "nominal",
     decomp_steps: int | str | None = None,
+    residual_region: str = ALTAX_RESIDUAL_REGION,
 ) -> AltertaxRun:
     """Base, check and shock of ALTERTAX on ``dataset_dir`` (``params`` overrides the
     load, e.g. with other elasticities).
@@ -174,18 +175,27 @@ def solve_altertax(
     ~1e-5). An int K, or ``"auto"`` (K doubled until the EV settles), solves the shock
     path in K sub-steps and integrates the decomposition along it
     (:func:`path.solve_decomp_path`, ``run.decomp_path``); the run keeps its solver
-    session (``run.result.session``) for that."""
+    session (``run.result.session``) for that.
+
+    ``residual_region`` is the region whose ``cgdslack`` is exogenous (``ROW`` in
+    nus333's ``altax.exp``; :func:`closure.residual_region_from_exp` reads it from a
+    closure file); it must be a region of the data."""
     if trade_balance not in ("nominal", "ratio"):
         raise ValueError(
             f"trade_balance={trade_balance!r}: expected 'nominal' or 'ratio'"
         )
     p = load_altertax_params(dataset_dir, prm) if params is None else params
     _check_cells(p, shock)
+    if residual_region not in p.sets.r:
+        raise ValueError(
+            f"residual region {residual_region!r} is not a region of the data "
+            f"{list(p.sets.r)}: no eq_savf / eq_yi row would be dropped"
+        )
     t0 = time.perf_counter()
     res = solve_gtap_family(
         p,
         altertax_closure(),
-        ALTAX_RESIDUAL_REGION,
+        residual_region,
         shock=shock,
         cache_root=cache_root,
         # GEMPACK's del_tbal(USA) = 0: the nominal balance, not savf = pigbl * savf_bar;

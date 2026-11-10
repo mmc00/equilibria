@@ -47,6 +47,22 @@ def parse_exp_exogenous(exp_path: Path) -> list[str]:
     return names
 
 
+def residual_region_from_exp(path: Path) -> str:
+    """The residual region of a GEMPACK closure (``.exp`` or ``.cmf``): the element of
+    its one exogenous ``cgdslack("<region>")``. nus333's ``altax.exp`` gives ``ROW``,
+    the RunGTAP ``run.cmf`` of 9x10 ``RestofWorld``."""
+    found = [
+        m.group(1)
+        for name in parse_exp_exogenous(path)
+        if (m := re.fullmatch(r'cgdslack\("([^"]+)"\)', name, re.I))
+    ]
+    if len(found) != 1:
+        raise ValueError(
+            f'{path}: expected one exogenous cgdslack("<region>"), found {found}'
+        )
+    return found[0]
+
+
 def altertax_closure() -> GTAPClosureConfig:
     """The route's closure (``_solve_shock``'s) under the name ``altertax_gempack``:
     ``prep_square`` refuses the name ``altertax`` (Malcolm's closure). Taxes, technology

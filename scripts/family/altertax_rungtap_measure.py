@@ -44,6 +44,10 @@ def _set_env() -> None:
 def measure(dataset: str, trade_balance: str, decomp_steps: int | str = "auto") -> dict:
     from equilibria.babel.har import read_har
     from equilibria.family.altertax import gates
+    from equilibria.family.altertax.closure import (
+        ALTAX_RESIDUAL_REGION,
+        residual_region_from_exp,
+    )
     from equilibria.family.altertax.decomp import decomp_headers
     from equilibria.family.altertax.pct import gempack_changes, pct_changes
     from equilibria.family.altertax.run import load_altertax_params, solve_altertax
@@ -58,6 +62,8 @@ def measure(dataset: str, trade_balance: str, decomp_steps: int | str = "auto") 
     shock = load_tms_shock(ref / "tms_rate10.shk")
     params = load_altertax_params(d, prm)
     steps = None if decomp_steps == 1 else decomp_steps
+    cmf = ref / "run.cmf"  # RunGTAP's closure names the residual region (cgdslack)
+    rres = residual_region_from_exp(cmf) if cmf.exists() else ALTAX_RESIDUAL_REGION
     run = solve_altertax(
         d,
         prm=prm,
@@ -65,10 +71,12 @@ def measure(dataset: str, trade_balance: str, decomp_steps: int | str = "auto") 
         trade_balance=trade_balance,
         params=params,
         decomp_steps=steps,
+        residual_region=rres,
     )
     res = run.result.results["shock"]
     out: dict = {
         "dataset": dataset,
+        "residual_region": rres,
         "trade_balance": trade_balance,
         "codes": run.codes,
         "minutes": run.minutes,
@@ -98,7 +106,7 @@ def measure(dataset: str, trade_balance: str, decomp_steps: int | str = "auto") 
         k[0]: float(sv.value[i]) / w1
         - float(sv.value[sv.keys.index((k[0], "check"))]) / w0
         for i, k in enumerate(sv.keys)
-        if k[-1] == "shock" and k[0] != run.params.sets.r[-1]
+        if k[-1] == "shock" and k[0] != rres
     }
     return out
 

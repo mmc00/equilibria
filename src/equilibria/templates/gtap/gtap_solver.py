@@ -614,21 +614,14 @@ class GTAPSolver:
                         fixed_count += 1
 
         # ===================================================================
-        # 3. Create xFlag: output exists if VOM(r,a) > 0
-        # Fall back to vom_i or makb when vom is empty (GTAPAgg datasets).
+        # 3. Create xFlag: output exists if VOM(r,a) > 0, keyed by activity
+        # (sum_i makb; vom_i / VOSB are by commodity and never stand in for it).
         # ===================================================================
-        x_flag = set()
-        vom_src = getattr(benchmark, "vom", {})
-        if not vom_src:
-            vom_src = getattr(benchmark, "vom_i", {})
-        if not vom_src:
-            # Derive from makb: active if any make flow exists for (r,a)
-            for (r, a, i), val in getattr(benchmark, "makb", {}).items():
-                if val is not None and abs(float(val)) > 1e-12:
-                    vom_src[(r, a)] = vom_src.get((r, a), 0.0) + float(val)
-        for (r, a), val in vom_src.items():
-            if val is not None and float(val) > 0:
-                x_flag.add((r, a))
+        from equilibria.templates.gtap.gtap_parameters import activity_output_flag
+
+        x_flag = activity_output_flag(
+            benchmark, getattr(getattr(self.params, "sets", None), "a", [])
+        )
 
         logger.debug(f"Output (xFlag): {len(x_flag)} active sector-region pairs")
 
