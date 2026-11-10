@@ -183,7 +183,7 @@ def test_compare_all_runs_on_a_rungtap_folder(env):
     assert cmp["waivers"]["applied"] is False
     assert next(o for o in cmp["outputs"] if o["output"] == "levels")["pass"]
     upd = next(o for o in cmp["outputs"] if o["output"] == "updated")
-    assert upd["structure_problems"] == ["XXHS"]
+    assert upd["structure_problems"] == []  # XXHS is history text: not compared
 
 
 def test_solved_run_keeps_the_prm_mobility(env):

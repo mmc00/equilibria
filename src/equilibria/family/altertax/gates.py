@@ -171,14 +171,17 @@ def structure_problems(
     ``labels=False`` leaves the long name out: RunGTAP's ``gtapv7.tab`` words the long
     names of the data headers differently from Burfisher's (``VDFB``: "expenditure on
     domestic c by act. a in r at basic prices" against "domestic purchases, by firms, at
-    basic prices"); sets, shape and coefficient name are still compared."""
+    basic prices"); sets, shape and coefficient name are still compared. A text header
+    (``TEXT_HEADERS``, the ``XXHS`` history) is compared on coefficient name, long name and
+    sets only: its lines and their count are the run's own history, not data."""
     bad = []
     for name in names:
         a, b = ours[name], gem[name]
+        text = name in TEXT_HEADERS
         if (
             a.set_names != b.set_names
             or a.set_elements != b.set_elements
-            or a.array.shape != b.array.shape
+            or (not text and a.array.shape != b.array.shape)
             or a.coeff_name != b.coeff_name
             or (labels and a.long_name != b.long_name)
         ):

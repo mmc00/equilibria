@@ -135,3 +135,27 @@ def test_headers_carry_the_shock(altax_run, headers, gempack):
     assert all(why.strip() for why in SHOCK_DELTA_EXCLUSIONS.values())
     assert not [x for x in bad if (x[0], x[1]) not in SHOCK_DELTA_EXCLUSIONS], bad
     assert {(x[0], x[1]) for x in bad} >= set(SHOCK_DELTA_EXCLUSIONS)  # none is stale
+
+
+def _xxhs(lines, long_name="HISTORY OF THIS HEADER ARRAY FILE"):
+    from equilibria.babel.har.symbols import HeaderArray
+
+    return HeaderArray(
+        name="XXHS",
+        coeff_name="XXHS",
+        long_name=long_name,
+        array=np.array(lines, dtype=object),
+        set_names=[],
+        set_elements=[],
+    )
+
+
+def test_xxhs_history_text_is_not_compared_as_data():
+    """XXHS is history text: other lines and another line count pass; its coefficient
+    name, long name and sets are still compared."""
+    ours = {"XXHS": _xxhs(["a", "b", "c"])}
+    gem = {"XXHS": _xxhs(["x"] * 11)}
+    assert structure_problems(ours, gem, ["XXHS"]) == []
+    gem_name = {"XXHS": _xxhs(["x"], long_name="OTHER")}
+    assert structure_problems(ours, gem_name, ["XXHS"]) == ["XXHS"]
+    assert structure_problems(ours, gem_name, ["XXHS"], labels=False) == []
