@@ -78,26 +78,61 @@ jobs:
       - name: Check commit messages of this PR
         run: python scripts/dev/check_commit_msg.py --range "origin/${{ github.base_ref }}..HEAD"
 
-  # The suite is split by measured duration (.github/test_durations.json,
-  # refreshed by test-durations.yml) into 8 groups that run in parallel:
-  # simulated longest group 7.9 min against ~25 min serial. The groups are
+  # Planner: splits each suite BY FILE under a time budget and emits the job
+  # matrix (scripts/dev/plan_test_groups.py, inputs .github/test_durations.json
+  # and .github/test_files_<suite>.txt). Whole files per group, so module- and
+  # session-level preparation is not repeated in every group and each group
+  # only imports the files it runs. A file longer than the budget is split by
+  # pytest-split across groups dedicated to it. Stdlib only: no test
+  # environment is needed here.
+  plan-groups:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      python-matrix: ${{ steps.plan.outputs.python }}
+      gdxdump-matrix: ${{ steps.plan.outputs.gdxdump }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Budgets in seconds of predicted group time; the planner fails (rather
+      # than exceeding max-groups) if the suite cannot fit.
+      - name: Plan test groups
+        id: plan
+        run: |
+          set -euo pipefail
+          py=$(python scripts/dev/plan_test_groups.py --suite python --budget 440 --max-groups 10 --explain)
+          gd=$(python scripts/dev/plan_test_groups.py --suite gdxdump --budget 360 --max-groups 8 --explain)
+          echo "python=$py" >> "$GITHUB_OUTPUT"
+          echo "gdxdump=$gd" >> "$GITHUB_OUTPUT"
+
+  # The suite runs as the groups of `plan-groups` in parallel (about 7 min
+  # longest group predicted against ~25 min serial). The groups are
   # independent runners, so the PATH-library and model-cache contention that
   # forbids -n inside one runner does not apply. Do NOT add -n/--numprocesses.
   # `tests-verdict` checks that the groups together ran every collected test
-  # exactly once, so a lost group or a stale durations file cannot hide tests.
+  # exactly once, so a lost group, a stale durations file or a test file
+  # missing from .github/test_files_python.txt cannot hide tests.
   #
   # `-ra` because pytest's default (-rfE) does not report skips.
   #
   # `not needs_gdxdump` is half of a partition: gdxdump-tests runs
-  # `needs_gdxdump and not gams and not slow`. Changing one requires the other.
+  # `needs_gdxdump and not gams and not slow`. Changing one requires the other
+  # (and the marker table in scripts/dev/plan_test_groups.py).
   python-tests:
-    needs: changes
+    name: python-tests (${{ matrix.group }})
+    needs: [changes, plan-groups]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        group: [1, 2, 3, 4, 5, 6, 7, 8]
+      matrix: ${{ fromJSON(needs.plan-groups.outputs.python-matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -105,20 +140,33 @@ jobs:
       - name: Setup test environment
         uses: ./.github/actions/setup-test-env
 
-      - name: Run tests (excluding GAMS-marked and slow), group ${{ matrix.group }} of 8
+      - name: Run tests (excluding GAMS-marked and slow), group ${{ matrix.group }}
+        env:
+          PATHS: ${{ matrix.paths }}
+          SPLIT: ${{ matrix.split }}
+          GROUP: ${{ matrix.group }}
         run: |
-          uv run pytest -ra -m "not gams and not slow and not needs_gdxdump" tests \
-            --splits 8 --group ${{ matrix.group }} \
-            --splitting-algorithm least_duration \
-            --durations-path .github/test_durations.json \
-            -o junit_family=xunit1 --junitxml=junit-python-${{ matrix.group }}.xml
+          set -euo pipefail
+          safe=$(printf '%s' "$GROUP" | tr -c 'A-Za-z0-9._-' '_')
+          echo "SAFE_GROUP=$safe" >> "$GITHUB_ENV"
+          extra=()
+          if [ -n "$SPLIT" ]; then
+            read -r i k <<< "$SPLIT"
+            extra=(--splits "$k" --group "$i" --splitting-algorithm least_duration
+                   --durations-path .github/test_durations.json)
+          fi
+          # PATHS is intentionally unquoted: space-separated test files.
+          # shellcheck disable=SC2086
+          uv run pytest -ra -m "not gams and not slow and not needs_gdxdump" $PATHS \
+            "${extra[@]}" \
+            -o junit_family=xunit1 --junitxml="junit-python-$safe.xml"
 
       - name: Upload JUnit
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: junit-python-${{ matrix.group }}
-          path: junit-python-${{ matrix.group }}.xml
+          name: junit-python-${{ env.SAFE_GROUP }}
+          path: junit-python-${{ env.SAFE_GROUP }}.xml
           if-no-files-found: warn
 
   # Documentation-only PR: only the docs tests (links, page examples).
@@ -183,16 +231,15 @@ jobs:
   # `gdxdump` sale de la wheel `gamspy_base` de PyPI (sin licencia: leer un GDX
   # no resuelve nada). Su salida es IDENTICA a la de GAMS 48 en los 97 GDX del
   # repo (verificado 2026-10-05, macOS, v54.5.0 vs 48). Job aparte y en
-  # paralelo, dividido en 5 grupos por duracion medida (grupo mas largo
-  # simulado: 7.4 min).
+  # paralelo, dividido por ARCHIVO en grupos (ver plan-groups).
   gdxdump-tests:
-    needs: changes
+    name: gdxdump-tests (${{ matrix.group }})
+    needs: [changes, plan-groups]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        group: [1, 2, 3, 4, 5]
+      matrix: ${{ fromJSON(needs.plan-groups.outputs.gdxdump-matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -217,37 +264,50 @@ jobs:
           head -n 3 /tmp/gdxdump_smoke.txt
 
       # Complemento exacto del `-m` de python-tests (ver alli).
-      - name: Run needs_gdxdump tests, group ${{ matrix.group }} of 5
+      - name: Run needs_gdxdump tests, group ${{ matrix.group }}
         env:
           # Sin guards: si gdxdump (o PATH) faltara, los tests FALLAN en vez de
           # saltarse y dejar el job verde. Seguro aqui porque ninguno de estos
           # tests usa cyipopt, lo unico que CI puede no lograr instalar.
           EQUILIBRIA_REQUIRE_SOLVERS: "1"
+          PATHS: ${{ matrix.paths }}
+          SPLIT: ${{ matrix.split }}
+          GROUP: ${{ matrix.group }}
         run: |
-          uv run pytest -ra -m "needs_gdxdump and not gams and not slow" tests \
-            --splits 5 --group ${{ matrix.group }} \
-            --splitting-algorithm least_duration \
-            --durations-path .github/test_durations.json \
-            -o junit_family=xunit1 --junitxml=junit-gdxdump-${{ matrix.group }}.xml
+          set -euo pipefail
+          safe=$(printf '%s' "$GROUP" | tr -c 'A-Za-z0-9._-' '_')
+          echo "SAFE_GROUP=$safe" >> "$GITHUB_ENV"
+          extra=()
+          if [ -n "$SPLIT" ]; then
+            read -r i k <<< "$SPLIT"
+            extra=(--splits "$k" --group "$i" --splitting-algorithm least_duration
+                   --durations-path .github/test_durations.json)
+          fi
+          # PATHS is intentionally unquoted: space-separated test files.
+          # shellcheck disable=SC2086
+          uv run pytest -ra -m "needs_gdxdump and not gams and not slow" $PATHS \
+            "${extra[@]}" \
+            -o junit_family=xunit1 --junitxml="junit-gdxdump-$safe.xml"
 
       - name: Upload JUnit
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: junit-gdxdump-${{ matrix.group }}
-          path: junit-gdxdump-${{ matrix.group }}.xml
+          name: junit-gdxdump-${{ env.SAFE_GROUP }}
+          path: junit-gdxdump-${{ env.SAFE_GROUP }}.xml
           if-no-files-found: warn
 
   # Single verdict for the split suites. Fails when any needed job failed or
   # was cancelled, when a job that must run was skipped, or (code PRs) when
   # the shards did not run every collected test exactly once.
   tests-verdict:
-    needs: [changes, collect, python-tests, gdxdump-tests, python-docs-tests]
+    needs: [changes, plan-groups, collect, python-tests, gdxdump-tests, python-docs-tests]
     if: always()
     runs-on: ubuntu-latest
     env:
       CODE: ${{ needs.changes.outputs.code }}
       R_CHANGES: ${{ needs.changes.result }}
+      R_PLAN: ${{ needs.plan-groups.result }}
       R_COLLECT: ${{ needs.collect.result }}
       R_PYTHON: ${{ needs.python-tests.result }}
       R_GDXDUMP: ${{ needs.gdxdump-tests.result }}
@@ -257,7 +317,7 @@ jobs:
         run: |
           set -u
           bad=0
-          for pair in changes=$R_CHANGES collect=$R_COLLECT python-tests=$R_PYTHON \
+          for pair in changes=$R_CHANGES plan-groups=$R_PLAN collect=$R_COLLECT python-tests=$R_PYTHON \
                       gdxdump-tests=$R_GDXDUMP python-docs-tests=$R_DOCS; do
             name=${pair%%=*}; result=${pair#*=}
             echo "$name: $result"
@@ -268,7 +328,7 @@ jobs:
           if [ "$R_CHANGES" != "success" ]; then bad=1; fi
           if [ "$CODE" = "true" ]; then
             # Code PR: the split suites must have run; docs tests are skipped.
-            for r in "$R_COLLECT" "$R_PYTHON" "$R_GDXDUMP"; do
+            for r in "$R_PLAN" "$R_COLLECT" "$R_PYTHON" "$R_GDXDUMP"; do
               [ "$r" = "success" ] || bad=1
             done
           else
@@ -303,7 +363,7 @@ jobs:
           ls artifacts
           for suite in python gdxdump; do
             python scripts/dev/check_test_shards.py shards \
-              --expected "artifacts/collected-$suite.txt" \
+              --expected "artifacts/collected-$suite.txt" --suite "$suite" \
               artifacts/junit-$suite-*.xml
           done
 
