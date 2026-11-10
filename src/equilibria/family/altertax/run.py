@@ -6,6 +6,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from equilibria.family.altertax.closure import ALTAX_RESIDUAL_REGION, altertax_closure
 from equilibria.family.driver import FamilyResult, solve_gtap_family
@@ -29,6 +30,9 @@ class AltertaxRun:
     codes: dict[str, int]
     minutes: float
     dataset_dir: Path
+    # ``solve_altertax(decomp_steps=...)``: the path-integral decomposition
+    # (``family.altertax.path.DecompPath``); None = the one-step ``decomp_headers``
+    decomp_path: Any = None
 
 
 # Elasticities that ``altertax.prm`` sets to exactly 1. The route's closure has
@@ -155,6 +159,7 @@ def solve_altertax(
     cache_root: Path | None = None,
     params: GTAPParameters | None = None,
     trade_balance: str = "nominal",
+    decomp_steps: int | str | None = None,
 ) -> AltertaxRun:
     """Base, check and shock of ALTERTAX on ``dataset_dir`` (``params`` overrides the
     load, e.g. with other elasticities).
@@ -162,7 +167,14 @@ def solve_altertax(
     ``trade_balance`` is the closure of the external balance of every non-residual region:
     ``"nominal"`` (default, ``altax.exp`` of nus333 Burfisher: ``del_tbal = 0``) holds
     ``savf`` at its check value; ``"ratio"`` (RunGTAP's ``del_tbalry = 0``) holds
-    ``savf / world income``. The residual region (``cgdslack``) is the same in both."""
+    ``savf / world income``. The residual region (``cgdslack``) is the same in both.
+
+    ``decomp_steps``: ``None`` (default) leaves the welfare decomposition to the one-step
+    :func:`decomp.decomp_headers`, exact to first order (the Burfisher ALTAX shock is
+    ~1e-5). An int K, or ``"auto"`` (K doubled until the EV settles), solves the shock
+    path in K sub-steps and integrates the decomposition along it
+    (:func:`path.solve_decomp_path`, ``run.decomp_path``); the run keeps its solver
+    session (``run.result.session``) for that."""
     if trade_balance not in ("nominal", "ratio"):
         raise ValueError(
             f"trade_balance={trade_balance!r}: expected 'nominal' or 'ratio'"
@@ -179,7 +191,13 @@ def solve_altertax(
         # GEMPACK's del_tbal(USA) = 0: the nominal balance, not savf = pigbl * savf_bar;
         # "ratio": del_tbalry(r) = 0 (savf / world income)
         nominal_trade_balance=trade_balance,
+        keep_session=decomp_steps is not None,
     )
     minutes = (time.perf_counter() - t0) / 60.0
     codes = {k: int(res.results[k]["code"]) for k in ("check", "shock")}
-    return AltertaxRun(p, res, codes, minutes, Path(dataset_dir))
+    run = AltertaxRun(p, res, codes, minutes, Path(dataset_dir))
+    if decomp_steps is not None:
+        from equilibria.family.altertax.path import solve_decomp_path
+
+        run.decomp_path = solve_decomp_path(run, shock, decomp_steps)
+    return run

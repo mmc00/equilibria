@@ -1,7 +1,7 @@
 """Measure the ALTERTAX array route against a RunGTAP AlterTax reference (10 % tms shock).
 
     python scripts/family/altertax_rungtap_measure.py <dataset> [--trade-balance ratio|nominal]
-                                                       [--out DIR]
+                                                       [--decomp-steps auto|K|1] [--out DIR]
 
 ``<dataset>`` is a folder of ``data/gtap7`` (``nus333``, ``gtap7_10x7``); the reference is its
 ``gempack_altertax-rungtap_tms-rate10_s8-16-32`` folder (``parameters.prm``, ``tms_rate10.shk``,
@@ -9,6 +9,10 @@
 and shock, then runs every gate of ``family.altertax.gates`` that can be evaluated against
 that folder, one by one (a failing or erroring gate does not stop the others), and writes
 ``<dataset>_<trade_balance>.json`` into DIR (default: the current directory).
+
+The welfare decomposition is the path integral (``solve_altertax(decomp_steps="auto")``:
+K sub-steps, K doubled until the EV moves less than TOL_CHANGE / 10); ``--decomp-steps 1``
+gives the one-step decomposition, a number K a fixed path.
 """
 
 from __future__ import annotations
@@ -37,7 +41,7 @@ def _set_env() -> None:
     )
 
 
-def measure(dataset: str, trade_balance: str) -> dict:
+def measure(dataset: str, trade_balance: str, decomp_steps: int | str = "auto") -> dict:
     from equilibria.babel.har import read_har
     from equilibria.family.altertax import gates
     from equilibria.family.altertax.decomp import decomp_headers
@@ -53,8 +57,14 @@ def measure(dataset: str, trade_balance: str) -> dict:
     prm = ref / "parameters.prm"
     shock = load_tms_shock(ref / "tms_rate10.shk")
     params = load_altertax_params(d, prm)
+    steps = None if decomp_steps == 1 else decomp_steps
     run = solve_altertax(
-        d, prm=prm, shock=shock, trade_balance=trade_balance, params=params
+        d,
+        prm=prm,
+        shock=shock,
+        trade_balance=trade_balance,
+        params=params,
+        decomp_steps=steps,
     )
     res = run.result.results["shock"]
     out: dict = {
@@ -65,6 +75,7 @@ def measure(dataset: str, trade_balance: str) -> dict:
         "shock_nit": res.get("nit"),
         "ratio_iterations": res.get("ratio_iterations"),
         "shock_residual": res.get("residual"),
+        "decomp_path": run.decomp_path.to_dict() if run.decomp_path else None,
         "outputs": [],
     }
     cmp = gates.compare_all(run, ref)  # sl4dump folder: no waivers, labels off
@@ -96,12 +107,14 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("dataset")
     ap.add_argument("--trade-balance", default="ratio", choices=("ratio", "nominal"))
+    ap.add_argument("--decomp-steps", default="auto")
     ap.add_argument("--out", default=".")
     a = ap.parse_args()
+    steps = a.decomp_steps if a.decomp_steps == "auto" else int(a.decomp_steps)
     _set_env()
     from equilibria.family.altertax.gates import json_safe
 
-    res = measure(a.dataset, a.trade_balance)
+    res = measure(a.dataset, a.trade_balance, steps)
     path = Path(a.out) / f"{a.dataset}_{a.trade_balance}.json"
     path.write_text(json.dumps(json_safe(res), indent=1, allow_nan=False, default=str))
     print(path)
@@ -113,6 +126,18 @@ def main() -> int:
         "ratio_it",
         res["ratio_iterations"],
     )
+    if res["decomp_path"]:
+        dp = res["decomp_path"]
+        print(
+            "decomp path: steps",
+            dp["steps"],
+            "solves",
+            dp["solves"],
+            "minutes",
+            round(dp["minutes"], 2),
+            "EV change by steps",
+            dp["change_by_steps"],
+        )
     for o in res["outputs"]:
         print(
             o["output"] if "output" in o else o.get("error"),

@@ -193,9 +193,15 @@ def model_changes(
 ) -> dict[str, np.ndarray]:
     """Cumulative percent changes (GEMPACK names, ``CHANGE_SHAPES`` axes) of the model
     from ``pre`` to ``post``: ``100 * (x_post / x_pre - 1)``."""
-    A, B = _Period(run, pre), _Period(run, post)
+    return changes_between(_Period(run, pre), _Period(run, post), _elements(run))
+
+
+def changes_between(
+    A: _Period, B: _Period, els: dict[str, list[str]]
+) -> dict[str, np.ndarray]:
+    """:func:`model_changes` between two periods that may belong to different solves of
+    the same model (``A`` the pre, ``B`` the post): the steps of a shock path."""
     _require_unchanged(A, B)
-    els = _elements(run)
     comm, acts, reg, endw, marg = (
         els[k] for k in ("COMM", "ACTS", "REG", "ENDW", "MARG")
     )
@@ -269,7 +275,8 @@ def decomp_from_changes(
     family model (:func:`model_changes`) or from any other solution of the same model.
 
     Valid for SMALL shocks only: each CNT is one step ``COEF(pre) * q%`` of what GEMPACK
-    integrates along the multistep path with the coefficient updated at every step."""
+    integrates along the multistep path with the coefficient updated at every step. For
+    a large shock, :mod:`equilibria.family.altertax.path` sums it over sub-steps."""
     comm, acts, reg, endw, marg = (
         els[k] for k in ("COMM", "ACTS", "REG", "ENDW", "MARG")
     )

@@ -579,6 +579,24 @@ def report_decomp(
     )
 
 
+def report_decomp_of(
+    run: AltertaxRun, gem, waivers: Waivers = NO_WAIVERS, labels: bool = True
+) -> dict:
+    """:func:`report_decomp` of the run's decomposition: the path integral when the run
+    has one (``solve_altertax(decomp_steps=...)``, recorded as ``steps`` and ``path``),
+    else the one-step ``decomp_headers`` (``steps`` 1)."""
+    path = getattr(run, "decomp_path", None)
+    if path is None:
+        return report_decomp(decomp_headers(run), gem, waivers, labels) | {
+            "steps": 1,
+            "path": None,
+        }
+    return report_decomp(path.headers, gem, waivers, labels) | {
+        "steps": path.steps,
+        "path": path.to_dict(),
+    }
+
+
 # --- pct (solution.sl4) ---------------------------------------------------------------
 
 
@@ -869,9 +887,7 @@ def compare_all(
             summary_headers(run), read_har(str(files["summary"])), waivers, labels
         ),
         report_volume(run, volume_headers(run), read_har(str(files["volume"])), labels),
-        report_decomp(
-            decomp_headers(run), read_har(str(files["decomp"])), waivers, labels
-        ),
+        report_decomp_of(run, read_har(str(files["decomp"])), waivers, labels),
         report_pct(run, pct_changes(run), gempack_changes(sl4), waivers),
     ]
     return {
