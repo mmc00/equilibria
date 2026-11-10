@@ -4,13 +4,18 @@ formulas applied to the input ``basedata.har``."""
 
 from __future__ import annotations
 
+import dataclasses
+
 import numpy as np
 import pytest
 
 from equilibria.babel.har.reader import read_har
 from equilibria.family.altertax.gates import (
-    NOISE_UNMATCHED,
     SUMMARY_LEVELS,
+    ULP_CHECKS,
+    ULP_LIMIT,
+    check_ulps,
+    report_summary,
     structure_problems,
     summary_failures,
 )
@@ -27,6 +32,12 @@ from equilibria.family.altertax.summary import (
     summary_from_database,
     summary_headers,
     write_summary_har,
+)
+from equilibria.family.altertax.summary import (
+    abs_residual as _abs_residual,
+)
+from equilibria.family.altertax.summary import (
+    check_flows as _flows,
 )
 from equilibria.family.altertax.tolerances import CHECK_TOL
 from equilibria.family.altertax.updated import headers_at
@@ -67,36 +78,6 @@ def headers(altax_run):
     return summary_headers(altax_run)
 
 
-def _flows(db):
-    """The flow each residual checks, per header family (gtapv7.tab 5268-5322):
-    VCB (VMC*), VCIF (TRC*), VTMUSE (VTC*), sum_s VMSB (MPC*), MAKEB (VOC*)."""
-    v = {k: np.asarray(h.array, dtype=np.float64) for k, h in db.items()}
-    marg = list(db["VST"].set_elements[0])
-    comm = list(db["VDFB"].set_elements[0])
-    vcb = (
-        v["VDPB"]
-        + v["VDGB"]
-        + v["VDIB"]
-        + v["VDFB"].sum(axis=1)
-        + v["VXSB"].sum(axis=2)
-    )
-    for k, m in enumerate(marg):
-        vcb[comm.index(m)] += v["VST"][k]
-    return {
-        "VMC": vcb,
-        "TRC": v["VCIF"],
-        "VTC": v["VTWR"].sum(axis=(1, 2, 3)),
-        "MPC": v["VMSB"].sum(axis=1),
-        "VOC": v["MAKB"],
-    }
-
-
-def _abs_residual(name, arr, flows):
-    """Residual ``name`` in absolute units (the percent ones times F / 100)."""
-    arr = np.asarray(arr, dtype=np.float64)
-    return arr * flows[name[:3]] / 100.0 if name[-1] in "PSQ" else arr
-
-
 def test_summary_headers(headers):
     assert list(SUMMARY_HEADERS) == EXPECTED
     assert set(headers) == set(EXPECTED)
@@ -111,8 +92,8 @@ def test_summary_levels_match_gempack(headers, gempack):
     assert not bad, bad
 
 
-# NOISE_UNMATCHED (the headers that are float32 residuals of GEMPACK's data, with the
-# measured cause of each) lives in equilibria.family.altertax.gates.
+# ULP_CHECKS (the headers that are float32 residuals of GEMPACK's data, with the
+# measured cause of each) live in equilibria.family.altertax.gates.
 PRE_RESIDUALS = [
     "VMCK",
     "VMCP",
@@ -132,9 +113,47 @@ _failing = summary_failures
 
 
 def test_summary_checks_match_gempack(headers, gempack):
-    checks = [n for n in EXPECTED if n not in LEVELS]
-    bad = _failing(headers, gempack, checks)
-    assert set(bad) == NOISE_UNMATCHED, (set(bad) ^ NOISE_UNMATCHED, bad)
+    """The checks that are not float32 residuals match at TOL_SUMMARY."""
+    checks = [n for n in EXPECTED if n not in LEVELS and n not in ULP_CHECKS]
+    assert not _failing(headers, gempack, checks)
+
+
+def _flows_pair(altax_run):
+    return _flows(input_database(altax_run)), _flows(headers_at(altax_run, "shock"))
+
+
+def test_ulp_checks_are_the_ten_float32_residual_headers():
+    assert set(ULP_CHECKS) == {
+        "MPCQ", "TRCK", "TRCP", "TRCQ", "VMCK", "VMCP", "VMCQ", "VTCK", "VTCP", "VTCQ",
+    }  # fmt: skip
+    assert ULP_LIMIT == 64
+
+
+def test_ulp_checks_pass_for_every_reference_without_waivers(
+    altax_run, headers, gempack
+):
+    """One rule, no reference id: every ulp-checked header within 64 ulp of F, the gate
+    passes (measured max ulp per header is in the gate record)."""
+    rec = report_summary(headers, gempack, flows=_flows_pair(altax_run))
+    assert rec["pass"] and not rec["failing_ulps"], rec["max_ulps"]
+    assert set(rec["max_ulps"]) == set(ULP_CHECKS)
+    assert max(rec["max_ulps"].values()) <= ULP_LIMIT
+
+
+@pytest.mark.parametrize("ulps, ok", [(63, True), (65, False)])
+def test_ulp_rule_boundary(altax_run, headers, gempack, ulps, ok):
+    """A cell moved off GEMPACK by 63 ulp of its flow passes, by 65 fails."""
+    flows = _flows_pair(altax_run)
+    name = "TRCK"  # absolute header: the gap is added to the cell as is
+    ix = tuple(np.argwhere(flows[0]["TRC"] > 0)[0])
+    f = flows[0]["TRC"][ix]
+    moved = dict(headers)
+    arr = np.array(gempack[name].array, dtype=np.float64)
+    arr[ix] += ulps * float(_ulp32(f))
+    moved[name] = dataclasses.replace(headers[name], array=arr)
+    assert float(check_ulps(name, moved, gempack, flows[0])[ix]) == pytest.approx(ulps)
+    rec = report_summary(moved, gempack, flows=flows)
+    assert (name not in rec["failing_ulps"]) is ok
 
 
 def test_pre_residuals_within_ulp_of_gempack(altax_run, headers, gempack):

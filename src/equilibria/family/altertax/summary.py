@@ -246,3 +246,35 @@ def summary_headers(
 def write_summary_har(run: AltertaxRun, path: Path) -> None:
     """Write the GTAPSUM summary of ``run`` to ``path`` (GEMPACK ``summary.har`` shape)."""
     write_har(path, summary_headers(run))
+
+
+def check_flows(db: dict[str, HeaderArray]) -> dict[str, np.ndarray]:
+    """The flow ``F`` each accounting check measures, per header family (gtapv7.tab
+    5268-5322): ``VCB`` (``VMC*``), ``VCIF`` (``TRC*``), ``VTMUSE`` (``VTC*``),
+    ``sum_s VMSB`` (``MPC*``), ``MAKEB`` (``VOC*``), on a database of value headers.
+    The ``*K`` headers are in these units, the ``*P``/``*S``/``*Q`` ones in percent of them."""
+    v, els = _tables(db)
+    vcb = (
+        v["VDPB"]
+        + v["VDGB"]
+        + v["VDIB"]
+        + v["VDFB"].sum(axis=1)
+        + v["VXSB"].sum(axis=2)
+    )
+    for k, m in enumerate(els["MARG"]):
+        vcb[els["COMM"].index(m)] += v["VST"][k]
+    return {
+        "VMC": vcb,
+        "TRC": v["VCIF"],
+        "VTC": v["VTWR"].sum(axis=(1, 2, 3)),
+        "MPC": v["VMSB"].sum(axis=1),
+        "VOC": v["MAKB"],
+    }
+
+
+def abs_residual(
+    name: str, arr: np.ndarray, flows: dict[str, np.ndarray]
+) -> np.ndarray:
+    """Check header ``name`` in the units of its flow (the percent ones times F / 100)."""
+    arr = np.asarray(arr, dtype=np.float64)
+    return arr * flows[name[:3]] / 100.0 if name[-1] in "PSQ" else arr

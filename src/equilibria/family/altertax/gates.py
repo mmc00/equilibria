@@ -6,8 +6,7 @@ levels); each returns plain data (gaps, failing cells) and ``report_*`` turns it
 record the command writes to ``compare.json``. Tolerances come from
 :mod:`equilibria.family.altertax.tolerances`.
 
-Waivers. The known-miss tables (``PCT_KNOWN_MISS``, ``DECOMP_KNOWN_MISS``,
-``NOISE_UNMATCHED``) were measured on ONE experiment: nus333 with Burfisher's ALTAX shock.
+Waivers. The known-miss tables (``PCT_KNOWN_MISS``, ``DECOMP_KNOWN_MISS``) were measured on ONE experiment: nus333 with Burfisher's ALTAX shock.
 Their keys are region/commodity names that 3x3, 3x4, 5x5 or 20x41 share, so they must never
 apply by key alone. ``waivers_for(dataset_dir, sl4)`` returns them only when the input data
 is the nus333 ``basedata.har`` (SHA-256) AND the GEMPACK solution's shock is
@@ -35,7 +34,15 @@ from equilibria.family.altertax import compare as _levels
 from equilibria.family.altertax.decomp import DECOMP_HEADERS, decomp_headers
 from equilibria.family.altertax.pct import gempack_changes, pct_changes, zero_base_cells
 from equilibria.family.altertax.run import AltertaxRun
-from equilibria.family.altertax.summary import SUMMARY_HEADERS, summary_headers
+from equilibria.family.altertax.summary import (
+    SUMMARY_HEADERS,
+    check_flows,
+    input_database,
+    summary_headers,
+)
+from equilibria.family.altertax.summary import (
+    abs_residual as _abs_residual,
+)
 from equilibria.family.altertax.tolerances import (
     ABS_FLOOR,
     TOL_CHANGE,
@@ -44,7 +51,11 @@ from equilibria.family.altertax.tolerances import (
     TOL_SUMMARY,
     TOL_UPDATED,
 )
-from equilibria.family.altertax.updated import UPDATED_HEADERS, updated_headers
+from equilibria.family.altertax.updated import (
+    UPDATED_HEADERS,
+    headers_at,
+    updated_headers,
+)
 from equilibria.family.altertax.volume import (
     VOLUME_HEADERS,
     volume_bases,
@@ -249,12 +260,11 @@ REFERENCE_ID = "burfisher-nus333-altax"
 
 @dataclass(frozen=True)
 class Waivers:
-    """The measured misses that may pass: ``summary`` headers (float32 noise), ``decomp``
-    regional totals and ``pct`` cells with their measured relative error. ``reference`` is
-    the id of the reference they were measured on, ``None`` for none."""
+    """The measured misses that may pass: ``decomp`` regional totals and ``pct`` cells with
+    their measured relative error. ``reference`` is the id of the reference they were
+    measured on, ``None`` for none."""
 
     reference: str | None = None
-    summary: frozenset = frozenset()
     decomp: dict = field(default_factory=dict)
     pct: dict = field(default_factory=dict)
 
@@ -262,7 +272,6 @@ class Waivers:
         return {
             "reference": self.reference,
             "applied": self.reference is not None,
-            "summary_headers": sorted(self.summary),
             "decomp_totals": len(self.decomp),
             "pct_cells": len(self.pct),
         }
@@ -309,8 +318,10 @@ def waivers_for(dataset_dir: Path, sl4: Any) -> Waivers:
 
 # Accounting checks that are float32 residuals of GEMPACK's data and sums, so they are
 # zero or a few ulp of the flow F they check (ulp32(F) is cell dependent) and a relative
-# metric against them is meaningless: the headers below are NOT matched at TOL_SUMMARY
-# and the test below fails if one starts to be. Measured cause per header:
+# metric against them is meaningless. They are gated by ONE rule for every reference:
+# |ours - GEMPACK| <= ULP_LIMIT * ulp32(F) cell by cell, in the units of F (the percent
+# headers times F / 100), F the flow of ``summary.check_flows`` (pre-simulation headers on
+# the input data, ``*Q`` on the shock-period data). Measured cause per header:
 #  * VMCK/VMCP/VTCK/VTCP (pre): GEMPACK's order of float32 accumulation of VCB, MAKEBCOM
 #    and VTMUSE is not reproducible (a sequential float32 sum of the same basedata gives 3
 #    of 6 VMCK cells, by chance); in float64 the data residual is another small number.
@@ -319,9 +330,19 @@ def waivers_for(dataset_dir: Path, sl4: Any) -> Waivers:
 #    imbalance carried through GEMPACK's update (TRCK cells 3, 6, 7 equal TRCQ; float64 on
 #    altax_updated.har reproduces them), not GEMPACK computing noise; VMCQ and VTCQ are
 #    accumulation-order noise as VMCK and VTCK.
-NOISE_UNMATCHED = frozenset(
-    ["VMCK", "VMCP", "VTCK", "VTCP", "VMCQ", "TRCQ", "VTCQ", "MPCQ"]
-)
+# The remaining checks (MPCK MPCP VOCK VOCS VOCQ) are matched at TOL_SUMMARY.
+ULP_LIMIT = 64
+ULP_CHECKS = (
+    "MPCQ", "TRCK", "TRCP", "TRCQ", "VMCK", "VMCP", "VMCQ", "VTCK", "VTCP", "VTCQ",
+)  # fmt: skip
+POST_CHECKS = ("VMCQ", "TRCQ", "VTCQ", "MPCQ")  # computed on the shock-period data
+
+
+def check_ulps(name: str, ours, gem, flows: dict[str, np.ndarray]) -> np.ndarray:
+    """|ours - GEMPACK| of check header ``name`` in float32 ulp of its flow, per cell."""
+    a = _abs_residual(name, ours[name].array, flows)
+    b = _abs_residual(name, gem[name].array, flows)
+    return np.abs(a - b) / ulp32(flows[name[:3]])
 
 
 def summary_failures(ours, gem, names) -> dict[str, tuple[float, tuple]]:
@@ -333,24 +354,43 @@ def summary_failures(ours, gem, names) -> dict[str, tuple[float, tuple]]:
 
 
 def report_summary(
-    ours, gem, waivers: Waivers = NO_WAIVERS, labels: bool = True
+    ours, gem, labels: bool = True, *, flows: tuple[dict, dict] | None = None
 ) -> dict:
-    checks = [n for n in SUMMARY_HEADERS if n not in SUMMARY_LEVELS]
+    """Gate of ``summary.har``: the four level tables at TOL_SUMMARY, the ``ULP_CHECKS``
+    within ``ULP_LIMIT`` ulp of their flow, the other checks at TOL_SUMMARY. ``flows`` is
+    ``(pre, post)``: :func:`summary.check_flows` of the input data and of the shock-period
+    data."""
+    if flows is None:
+        raise ValueError("report_summary needs flows=(pre, post) for the ulp checks")
+    checks = [
+        n for n in SUMMARY_HEADERS if n not in SUMMARY_LEVELS and n not in ULP_CHECKS
+    ]
     bad_levels = summary_failures(ours, gem, SUMMARY_LEVELS)
     bad_checks = summary_failures(ours, gem, checks)
-    unexpected = sorted(set(bad_checks) - waivers.summary)
+    ulps = {
+        n: float(np.max(check_ulps(n, ours, gem, flows[n in POST_CHECKS])))
+        for n in ULP_CHECKS
+    }
+    bad_ulps = sorted(n for n, u in ulps.items() if not u <= ULP_LIMIT)
     bad_struct = structure_problems(ours, gem, SUMMARY_HEADERS, labels=labels)
     gaps = gaps_by_header(ours, gem, SUMMARY_LEVELS)
     mx = max(g[0] for g in gaps.values())
     return _record(
         "summary",
-        {"TOL_SUMMARY": TOL_SUMMARY, "gated": list(SUMMARY_LEVELS)},
+        {
+            "TOL_SUMMARY": TOL_SUMMARY,
+            "gated": list(SUMMARY_LEVELS),
+            "ULP_LIMIT": ULP_LIMIT,
+            "ulp_checks": list(ULP_CHECKS),
+        },
         mx,
         "relative",
         worst_cells(ours, gem, SUMMARY_LEVELS),
-        not bad_levels and not unexpected and not bad_struct,
-        known_miss=sorted(set(bad_checks) & waivers.summary),
-        failing_unexpected=unexpected,
+        not bad_levels and not bad_checks and not bad_ulps and not bad_struct,
+        known_miss=[],
+        failing_unexpected=sorted(bad_checks),
+        max_ulps=ulps,
+        failing_ulps=bad_ulps,
         structure_problems=bad_struct,
     )
 
@@ -708,9 +748,7 @@ def report_pct(run: AltertaxRun, ours, gem, waivers: Waivers = NO_WAIVERS) -> di
     )
 
 
-NUS333_ALTAX_WAIVERS = Waivers(
-    REFERENCE_ID, NOISE_UNMATCHED, DECOMP_KNOWN_MISS, PCT_KNOWN_MISS
-)
+NUS333_ALTAX_WAIVERS = Waivers(REFERENCE_ID, DECOMP_KNOWN_MISS, PCT_KNOWN_MISS)
 
 
 # --- levels ---------------------------------------------------------------------------
@@ -891,7 +929,13 @@ def compare_all(
         report_levels(run, gempack_dir, basedata),
         report_updated(updated_headers(run), read_har(str(files["updated"])), labels),
         report_summary(
-            summary_headers(run), read_har(str(files["summary"])), waivers, labels
+            summary_headers(run),
+            read_har(str(files["summary"])),
+            labels,
+            flows=(
+                check_flows(input_database(run, basedata)),
+                check_flows(headers_at(run, "shock")),
+            ),
         ),
         report_volume(run, volume_headers(run), read_har(str(files["volume"])), labels),
         report_decomp_of(run, read_har(str(files["decomp"])), waivers, labels),

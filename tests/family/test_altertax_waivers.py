@@ -13,7 +13,12 @@ from equilibria.babel.har.reader import read_har
 from equilibria.family.altertax import gates
 from equilibria.family.altertax.decomp import decomp_headers
 from equilibria.family.altertax.pct import gempack_changes, pct_changes
-from equilibria.family.altertax.summary import summary_headers
+from equilibria.family.altertax.summary import (
+    check_flows,
+    input_database,
+    summary_headers,
+)
+from equilibria.family.altertax.updated import headers_at
 from tests.family._prep import ROOT
 
 FIXTURES = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg"
@@ -34,7 +39,7 @@ def test_nus333_altax_reference_is_recognised(sl4):
     assert gates.is_nus333_altax_reference(nus333_dir(), sl4)
     w = gates.waivers_for(nus333_dir(), sl4)
     assert w is gates.NUS333_ALTAX_WAIVERS and w.reference == gates.REFERENCE_ID
-    assert w.summary  # the pct and decomp tables are empty at exact sigma = 1
+    assert not w.pct and not w.decomp  # empty at exact sigma = 1
 
 
 def test_other_input_data_gets_no_waivers(sl4, tmp_path):
@@ -55,9 +60,9 @@ def test_other_experiment_gets_no_waivers(sl4):
     assert gates.waivers_for(nus333_dir(), fake) is gates.NO_WAIVERS
 
 
-def test_unwaived_gates_pass_except_summary_noise(altax_run, sl4):
-    """At exact sigma = 1 the pct and decomp gates pass with no waivers; only the float32
-    summary residuals still need theirs."""
+def test_unwaived_gates_pass(altax_run, sl4):
+    """At exact sigma = 1 the pct and decomp gates pass with no waivers, and the summary
+    checks pass by the ulp rule that every reference shares."""
     ours_pct, gem_pct = pct_changes(altax_run), gempack_changes(sl4)
     off = gates.report_pct(altax_run, ours_pct, gem_pct, gates.NO_WAIVERS)
     assert off["pass"] and not off["failing"] and not off["known_miss"]
@@ -70,9 +75,11 @@ def test_unwaived_gates_pass_except_summary_noise(altax_run, sl4):
 
     ours_s = summary_headers(altax_run)
     gem_s = read_har(str(FIXTURES / "altax_summary.har"))
-    assert gates.report_summary(ours_s, gem_s, gates.NUS333_ALTAX_WAIVERS)["pass"]
-    off_s = gates.report_summary(ours_s, gem_s, gates.NO_WAIVERS)
-    assert not off_s["pass"] and not off_s["known_miss"]
+    flows = (
+        check_flows(input_database(altax_run)),
+        check_flows(headers_at(altax_run, "shock")),
+    )
+    assert gates.report_summary(ours_s, gem_s, flows=flows)["pass"]  # no waivers at all
 
 
 def test_a_waiver_passes_only_a_bounded_miss_of_its_own_sign(altax_run, sl4):
