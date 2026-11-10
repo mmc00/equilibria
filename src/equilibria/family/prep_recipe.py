@@ -152,6 +152,9 @@ class _Ctx:
     savf_targets: Any = (
         None  # {region: value} the held savf is set to (None: its check)
     )
+    # arrays whose own values of this period the free cells restart from, after the
+    # seed (a shock sub-step starting at the previous one); None = the seed alone
+    warm: Any = None
 
     def exo(self, name: str, v: VarArr) -> np.ndarray:
         """Cells of ``name`` that are exogenous instruments (the driver never frees,
@@ -236,6 +239,27 @@ def _seed_from_prior(c: _Ctx) -> None:
         ia, ib = _aligned(v, c.period, c.seed_prior)
         take = ~c.exo(name, v)[ia] & ~v.fixed[ia] & ~np.isnan(v.value[ib])
         v.value[ia[take]] = v.value[ib[take]]
+    if c.cross is not None:
+        from equilibria.family.cross_period import refresh_aggregates
+
+        refresh_aggregates(c.cross, c.mp)
+
+
+def _warm_start(c: _Ctx) -> None:
+    """Warm start from a previous solve of this same period (``run_recipe(warm=)``): the
+    free cells take the value ``warm`` holds for this period, after the seed from the
+    prior period, and the Fisher aggregates are refreshed. Fixed cells (the shock, the
+    numeraire) and the exogenous instruments keep what the recipe wrote. A no-op without
+    ``warm``: every other run seeds from the prior period only."""
+    if c.warm is None:
+        return
+    for name, v in c.mp.vars.items():
+        w = c.warm.vars[name]
+        if w.keys is not v.keys and len(w.keys) != len(v.keys):
+            raise ValueError(f"warm start: {name} has other cells than the run's")
+        ia = np.flatnonzero(v.period == c.period)
+        take = ~c.exo(name, v)[ia] & ~v.fixed[ia] & ~np.isnan(w.value[ia])
+        v.value[ia[take]] = w.value[ia[take]]
     if c.cross is not None:
         from equilibria.family.cross_period import refresh_aggregates
 
@@ -478,6 +502,7 @@ _RECIPES = {
         _freeze_inactive,
         _user_shock,
         _seed_from_prior,
+        _warm_start,
         _unfix_regy,
         _fix_shock_numeraire,
         _collapse_pft,
@@ -517,6 +542,7 @@ def run_recipe(
     shock_levels: bool = False,
     nominal_savf: tuple[str, ...] = (),
     savf_targets: Any = None,
+    warm: MPArrays | None = None,
 ) -> MPArrays:
     """``mp`` after the recipe of ``period`` (base, check or shock; gtap), as new arrays.
 
@@ -532,7 +558,12 @@ def run_recipe(
     ``backend`` (the single-period recording) says which instrument cells a live row
     reads; the shock period needs it for the default tariff and for ``shock``, a user
     shock ``{instrument: {cell: pct}}`` (levels with ``shock_levels``) applied as
-    ``shocks.apply_shock`` does, which then replaces the default tariff."""
+    ``shocks.apply_shock`` does, which then replaces the default tariff.
+
+    ``warm`` (shock period only): arrays from a previous solve of the shock whose values
+    the free cells restart from after the check seed (``_warm_start``)."""
+    if warm is not None and period != "shock":
+        raise NotImplementedError("a warm start is for the shock period only")
     if period == "check" and base_calibrated and not solve_check:
         raise NotImplementedError("no array recipe for the check copied from the base")
     steps = _RECIPES.get((period, mode))
@@ -557,6 +588,7 @@ def run_recipe(
         shock_levels,
         tuple(nominal_savf),
         savf_targets,
+        warm,
     )
     if not ctx.mp.exogenous:  # a photo's arrays lack what ``MPArrays.build`` sets
         ctx.mp.exogenous = sp_ref.exogenous

@@ -172,6 +172,8 @@ class FamilyResult:
     timing: dict[str, float] = field(default_factory=dict)
     phases: dict[str, float] = field(default_factory=dict)  # self seconds per phase
     phase_counts: dict[str, int] = field(default_factory=dict)
+    # ``solve_gtap_family(keep_session=True)``: more shocks on the same run context
+    session: Any = field(default=None, repr=False)
 
 
 def _driver_closure(closure: Any) -> Any:
@@ -326,11 +328,14 @@ def _solve_period(
     shock: Any = None,
     shock_levels: bool = False,
     tag: str | None = None,
+    warm_start: bool = False,
 ) -> tuple[MPArrays, dict[str, Any]]:
     """One period of ``_solve_multiperiod_inner``: recipe, solve, post-solve.
 
     Returns the arrays the next period starts from (``mp`` itself is not modified).
-    ``tag`` names the call in the phase timing (default: the period)."""
+    ``tag`` names the call in the phase timing (default: the period). ``warm_start``
+    (shock only): the free cells restart from the shock values ``mp`` already holds (a
+    previous shock solve) instead of the check's."""
     with scope(tag or period):
         return _solve_period_inner(
             run,
@@ -340,6 +345,7 @@ def _solve_period(
             solve_check=solve_check,
             shock=shock,
             shock_levels=shock_levels,
+            warm_start=warm_start,
         )
 
 
@@ -352,6 +358,7 @@ def _solve_period_inner(
     solve_check: bool,
     shock: Any = None,
     shock_levels: bool = False,
+    warm_start: bool = False,
 ) -> tuple[MPArrays, dict[str, Any]]:
     from equilibria.family.cell_index import CellIndex
     from equilibria.family.post_solve import post_solve
@@ -377,6 +384,7 @@ def _solve_period_inner(
             shock_levels=shock_levels,
             nominal_savf=run.nominal_savf,
             savf_targets=run.savf_targets,
+            warm=mp if warm_start else None,
         )
     if period == "base":  # skip_base_solve: the base is the calibrated benchmark
         with phase("post_solve"):
@@ -487,6 +495,7 @@ def solve_gtap_family(
     cache_root: Path | None = None,
     jax_cache: bool = True,
     nominal_trade_balance: bool | str = False,
+    keep_session: bool = False,
 ) -> FamilyResult:
     """Calibrated base, check and shock on arrays: ``_solve_shock``'s route without Pyomo.
 
@@ -503,7 +512,10 @@ def solve_gtap_family(
     ``"ratio"`` is GEMPACK's ``del_tbalry(r) = 0`` instead: the same hook, but ``savf[r]``
     keeps its ratio to world income, ``savf_shock = savf_check * W / W_check`` with
     ``W = sum(regy)``; ``W`` depends on the solution, so the shock is solved again at the
-    updated targets until ``W`` stops moving (``RATIO_TOL``)."""
+    updated targets until ``W`` stops moving (``RATIO_TOL``).
+
+    ``keep_session``: the result carries a :class:`FamilySession` (``result.session``)
+    that solves the shock period again at other shocks on the same context."""
     if nominal_trade_balance not in (False, True, "nominal", "ratio"):
         raise ValueError(
             f"nominal_trade_balance={nominal_trade_balance!r}: expected False, True, "
@@ -550,6 +562,7 @@ def solve_gtap_family(
                 timer,
                 ref_gdx,
                 nominal_trade_balance,
+                keep_session=keep_session,
             )
     finally:
         activate(prev)
@@ -565,7 +578,12 @@ def _world_income(mp: MPArrays, period: str) -> float:
 
 
 def _ratio_iterations(
-    run: FamilyRun, cur: MPArrays, result: dict, shock: Any, shock_levels: bool
+    run: FamilyRun,
+    cur: MPArrays,
+    result: dict,
+    shock: Any,
+    shock_levels: bool,
+    warm_start: bool = False,
 ) -> tuple[MPArrays, dict]:
     """GEMPACK ``del_tbalry(r) = 0`` on top of the nominal hook: ``savf[r]`` of every
     non-residual region is held at ``savf_check[r] * W / W_check`` (``W`` = world income =
@@ -573,7 +591,8 @@ def _ratio_iterations(
     with ``del_tbalry = 0`` (gtapv7.tab, E_del_tbalry). The first solve held the check's
     value (``W`` at the check); each further solve uses the ``W`` of the previous one, until
     the relative change of ``W`` is below ``RATIO_TOL``. Returns the last arrays and stats
-    (``nit`` is summed over the solves; ``ratio_iterations`` counts them)."""
+    (``nit`` is summed over the solves; ``ratio_iterations`` counts them). With
+    ``warm_start`` each solve restarts from the previous one instead of the check."""
     sv = cur.vars["savf"]
     chk = {
         k[0]: float(sv.value[i])
@@ -594,6 +613,7 @@ def _ratio_iterations(
                 solve_check=True,
                 shock=shock,
                 shock_levels=shock_levels,
+                warm_start=warm_start,
             )
             nit += int(result.get("nit", 0))
             w_new = _world_income(cur, "shock")
@@ -612,6 +632,40 @@ def _ratio_iterations(
     return cur, result
 
 
+@dataclass
+class FamilySession:
+    """The run context of a finished ``solve_gtap_family`` (``keep_session=True``): the
+    shock period solved again at other shocks, with the same base and check. Used for the
+    sub-steps of a shock path (``family.altertax.path``)."""
+
+    run: FamilyRun
+    after_check: MPArrays  # the arrays the shock period of the run started from
+    ratio: bool  # trade_balance="ratio": world-income iterations around each solve
+
+    def solve_shock(
+        self, shock: Any, *, shock_levels: bool = False, start: MPArrays | None = None
+    ) -> tuple[MPArrays, dict[str, Any]]:
+        """The shock period at ``shock``, as the run solved its own. ``start``: arrays
+        of a previous shock solve of this session; the free cells start from its shock
+        values (warm start) instead of the check's. Returns ``(arrays, stats)``."""
+        warm = start is not None
+        cur, res = _solve_period(
+            self.run,
+            start if start is not None else self.after_check,
+            "shock",
+            base_calibrated=True,
+            solve_check=True,
+            shock=shock,
+            shock_levels=shock_levels,
+            warm_start=warm,
+        )
+        if self.ratio:
+            cur, res = _ratio_iterations(
+                self.run, cur, res, shock, shock_levels, warm_start=warm
+            )
+        return cur, res
+
+
 def _solve_family(
     params,
     closure,
@@ -624,6 +678,7 @@ def _solve_family(
     timer,
     ref_gdx=None,
     nominal_trade_balance=False,
+    keep_session=False,
 ) -> FamilyResult:
     t0 = time.perf_counter()
     run, mp = prepare_run(
@@ -649,7 +704,10 @@ def _solve_family(
 
     cur = dataclasses.replace(mp, settled_seed=settled, base_calibrated=True)
     results: dict[str, dict[str, Any]] = {}
+    after_check = cur
     for period in PERIODS:
+        if period == "shock":
+            after_check = cur
         t = time.perf_counter()
         cur, results[period] = _solve_period(
             run,
@@ -674,4 +732,5 @@ def _solve_family(
         timing,
         dict(timer.seconds),
         dict(timer.counts),
+        session=FamilySession(run, after_check, ratio) if keep_session else None,
     )
