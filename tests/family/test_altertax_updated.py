@@ -92,7 +92,7 @@ def test_updated_loads(altax_run, tmp_path):
 SHOCK_DELTA_EXCLUSIONS: dict[tuple[str, tuple[int, ...]], str] = {
     ("MAKB", (0, 0, 0)): (
         "MAKB[AGR,AGR,USA], the shocked cell: GEMPACK moves -0.25 (8 float32 ulps), "
-        "ours -0.405. MAKB = MAKS * (1 + prdtx_rai) holds exactly on our side "
+        "ours -0.349. MAKB = MAKS * (1 + prdtx_rai) holds exactly on our side "
         "(power 1.0024391 -> 1.0024511, +1.2000e-5, the 0.0012% shock); GEMPACK's own "
         "MAKB/MAKS goes 1.0024391 -> 1.0024517 (+1.26e-5, beyond float32 resolution of "
         "~1e-7), i.e. its MAKB is 5.6e-7 relative off its own MAKS and the stated shock. "
@@ -105,8 +105,8 @@ SHOCK_DELTA_EXCLUSIONS: dict[tuple[str, tuple[int, ...]], str] = {
 
 
 def shock_delta_failures(altax_run, headers, gempack):
-    """Cells where EITHER side's change is above 8 float32 ulps (GEMPACK: updated minus
-    basedata; ours: shock minus check): the signs agree and ours is within 20% of
+    """Cells where EITHER side's change is above 8 float32 ulps (GEMPACK and ours: updated
+    minus the stored basedata): the signs agree and ours is within 20% of
     GEMPACK's. Returns ``(checked per header, failures)``."""
     base = read_har(str(nus333_dir() / "basedata.har"))
     chk = headers_at(altax_run, "check")
@@ -118,7 +118,9 @@ def shock_delta_failures(altax_run, headers, gempack):
         g = np.asarray(gempack[name].array, dtype=np.float64)
         b = np.asarray(base[name].array, dtype=np.float64)
         dg = g - b
-        dm = np.asarray(ha.array, dtype=np.float64) - chk[name].array
+        dm = (
+            np.asarray(ha.array, dtype=np.float64) - b
+        )  # both sides: updated minus stored base
         for ix in np.ndindex(g.shape):
             thr = 8 * float(np.spacing(np.float32(max(abs(g[ix]), abs(b[ix])))))
             if max(abs(dg[ix]), abs(dm[ix])) <= thr:
@@ -159,3 +161,25 @@ def test_xxhs_history_text_is_not_compared_as_data():
     gem_name = {"XXHS": _xxhs(["x"], long_name="OTHER")}
     assert structure_problems(ours, gem_name, ["XXHS"]) == ["XXHS"]
     assert structure_problems(ours, gem_name, ["XXHS"], labels=False) == []
+
+
+def test_rebase_scales_the_stored_base_by_the_model_ratio():
+    from equilibria.family.altertax.updated import rebase
+
+    stored = np.array([100.0, 50.0])
+    check = np.array([100.0004, 49.9998])  # rebuild differs from the stored base
+    shock = np.array([110.00044, 25.0])
+    out = rebase(shock, check, stored)
+    np.testing.assert_allclose(out, stored * shock / check, rtol=1e-12)
+    assert abs(out[0] - 110.0) < abs(shock[0] - 110.0)
+
+
+def test_rebase_keeps_the_shock_value_where_the_check_or_stored_base_is_zero():
+    from equilibria.family.altertax.updated import rebase
+
+    stored = np.array([0.0, 5.0, 7.0])
+    check = np.array([3.0, 0.0, 2.0])
+    shock = np.array([4.0, 9.0, 3.0])
+    out = rebase(shock, check, stored)
+    assert out[0] == 4.0 and out[1] == 9.0
+    assert out[2] == pytest.approx(7.0 * 3.0 / 2.0)

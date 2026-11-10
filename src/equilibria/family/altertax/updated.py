@@ -334,6 +334,39 @@ def headers_at(run: AltertaxRun, period: str) -> dict[str, HeaderArray]:
     return out
 
 
+def rebase(shock: np.ndarray, check: np.ndarray, stored: np.ndarray) -> np.ndarray:
+    """GEMPACK updates the stored base value by the percent change, so the updated value
+    is ``stored * shock / check`` (``check``: our rebuild of the base, which differs from
+    ``stored`` by the input data's rounding residual). Cells with a zero ``check`` or a
+    zero ``stored`` keep our ``shock`` value."""
+    ok = (check != 0.0) & (stored != 0.0)
+    ratio = np.divide(shock, check, out=np.ones_like(shock), where=ok)
+    return np.where(ok, stored * ratio, shock)
+
+
+def _rebased(
+    run: AltertaxRun, shock: dict[str, HeaderArray], base: dict[str, HeaderArray]
+) -> dict[str, HeaderArray]:
+    """``shock`` value headers re-based on the stored ``base`` headers (see :func:`rebase`)."""
+    check = headers_at(run, "check")
+    out: dict[str, HeaderArray] = {}
+    for name, ha in shock.items():
+        array = rebase(
+            np.asarray(ha.array, dtype=np.float64),
+            np.asarray(check[name].array, dtype=np.float64),
+            np.asarray(base[name].array, dtype=np.float64),
+        )
+        out[name] = HeaderArray(
+            name=ha.name,
+            coeff_name=ha.coeff_name,
+            long_name=ha.long_name,
+            array=array,
+            set_names=list(ha.set_names),
+            set_elements=[list(x) for x in ha.set_elements],
+        )
+    return out
+
+
 def _copied(basedata: Path) -> dict[str, HeaderArray]:
     """``DVER`` (``gtapv7.tab`` 163: ``VERNUM = 0``, copied to the update file) and
     ``DPSM`` (1479: ``DPARSUM = dpsum``, the sum of the distribution parameters; ``dpsum``
@@ -381,10 +414,11 @@ def updated_headers(
 ) -> dict[str, HeaderArray]:
     """The 33 headers of the updated database at the shock period, in
     :data:`UPDATED_HEADERS` order. ``basedata`` (default: ``run.dataset_dir / "basedata.har"``)
-    supplies ``DVER`` and ``DPSM``."""
+    supplies ``DVER`` and ``DPSM`` and the stored base the value headers are re-based on."""
     if basedata is None:
         basedata = run.dataset_dir / "basedata.har"
-    have = {**headers_at(run, "shock"), **_copied(Path(basedata)), "XXHS": _history()}
+    values = _rebased(run, headers_at(run, "shock"), read_har(str(basedata)))
+    have = {**values, **_copied(Path(basedata)), "XXHS": _history()}
     return {name: have[name] for name in UPDATED_HEADERS}
 
 
