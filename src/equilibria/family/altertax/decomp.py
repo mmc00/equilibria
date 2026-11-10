@@ -141,6 +141,30 @@ DECOMP_HEADERS: tuple[str, ...] = tuple(m[0] for m in _META)
 _UNCHANGED = ("axp", "aft", "lambdaf", "lambdava", "lambdam", "lambdamg", "pop")
 
 
+def product_labels(unit: str, names: list[str], letter: str) -> list[str]:
+    """Element labels of the GEMPACK set product ``UNITx x SET`` (``UACT``/``UCOM`` of ALLOCEFF).
+
+    Rule (GEMPACK manual, set products ``x``: "If needed, GEMPACK will truncate names so that
+    combined names still have no more than 12 characters"; when a name is truncated, every
+    name of the product is rewritten as the first letter of the set plus the element number,
+    https://www.copsmodels.com/webhelp/tabmate/hc_productsets.htm):
+
+    * if every ``{unit}_{name}`` fits in 12 characters, that is the label (``a_Rice``);
+    * otherwise, for all elements, ``{unit}_{letter}{i}`` (``i`` is 1-based) followed by the
+      element name cut so the label is 12 characters (``a_A5Livestoc``, ``c_C10Textile``).
+
+    The rewritten form (letter of the element set, name cut to fit) is read off the GEMPACK
+    ``decomp.har`` A1 headers of all eight reference datasets and tested against them.
+    """
+    plain = [f"{unit}_{n}" for n in names]
+    if all(len(x) <= 12 for x in plain):
+        return plain
+    return [
+        f"{unit}_{letter}{i}"[:12] + n[: max(0, 12 - len(f"{unit}_{letter}{i}"))]
+        for i, n in enumerate(names, 1)
+    ]
+
+
 def _ratio(pre: dict, post: dict, key: tuple[str, ...]) -> float:
     """Cumulative percent change ``100 * (x_post / x_pre - 1)``, zero where ``x_pre = 0``."""
     x0 = _g(pre, key)
@@ -504,7 +528,7 @@ def decomp_from_changes(
         "COLUMN": _COLUMN, "CTAX": _CTAX, "COL": _COL, "DIR": _DIR, "ACTIVITY": _ACTIVITY,
         "TYPE": _TYPE, "DIREC": _DIREC, "TECHTYPE": _TECHTYPE, "PRICES": _PRICES,
         "FORM": _FORM, "COLM": _COLM,
-        "ALLOCEFF": [*endw, *[f"a_{a}" for a in acts], *[f"c_{c}" for c in comm]],
+        "ALLOCEFF": [*endw, *product_labels("a", acts, "A"), *product_labels("c", comm, "C")],
     }  # fmt: skip
     res: dict[str, HeaderArray] = {}
     for name, coeff, long_name, names in _META:

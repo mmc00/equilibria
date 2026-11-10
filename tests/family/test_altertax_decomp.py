@@ -349,3 +349,63 @@ def test_decomp_loads(altax_run, tmp_path):
     write_decomp_har(altax_run, written)
     got = read_har(str(written))
     assert set(got) >= set(EXPECTED)
+
+
+# ---- ALLOCEFF labels: GEMPACK set-product naming (A1 header) --------------------------
+
+
+def test_product_labels_short_names_are_unit_underscore_name():
+    from equilibria.family.altertax.decomp import product_labels
+
+    assert product_labels("a", ["Food", "Mnfcs", "Svces"], "A") == [
+        "a_Food",
+        "a_Mnfcs",
+        "a_Svces",
+    ]
+    assert product_labels("c", ["Restofagri"], "C") == [
+        "c_Restofagri"
+    ]  # exactly 12 chars
+
+
+def test_product_labels_truncate_whole_set_when_any_exceeds_12():
+    from equilibria.family.altertax.decomp import product_labels
+
+    names = ["Rice", "Livestock", "Textiles", "Construction", "Services"]
+    assert product_labels("a", names, "A") == [
+        "a_A1Rice",
+        "a_A2Livestoc",
+        "a_A3Textiles",
+        "a_A4Construc",
+        "a_A5Services",
+    ]
+    ten = [f"Sector{i}" for i in range(10)] + ["Construction"]
+    assert product_labels("c", ten, "C")[9] == "c_C10Sector9"
+    assert product_labels("c", ten, "C")[10] == "c_C11Construc"[:12]
+
+
+_REF_DIRS = [
+    "9x10",
+    "gtap7_10x7",
+    "gtap7_15x10",
+    "gtap7_20x41",
+    "gtap7_3x3",
+    "gtap7_3x4",
+    "gtap7_5x5",
+    "nus333",
+]
+
+
+@pytest.mark.parametrize("ds", _REF_DIRS)
+def test_allo_labels_equal_gempack_a1_on_every_reference(ds):
+    from equilibria.family.altertax.decomp import product_labels
+
+    h = read_har(
+        ROOT
+        / f"data/gtap7/{ds}/gempack_altertax-rungtap_tms-rate10_s8-16-32/decomp.har"
+    )
+    a1 = h["A1"].set_elements[0]
+    acts = h["A21"].set_elements[0]
+    comm = h["A222"].set_elements[0]
+    endw = h["A24"].set_elements[0]
+    ours = [*endw, *product_labels("a", acts, "A"), *product_labels("c", comm, "C")]
+    assert ours == a1
