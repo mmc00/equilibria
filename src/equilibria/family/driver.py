@@ -14,6 +14,7 @@ import dataclasses
 import os
 import time
 from collections.abc import Mapping
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -152,6 +153,9 @@ class FamilyRun:
     # = the check's value
     savf_targets: Any = field(default=None, repr=False)
     residual_region: str = ""  # the resolved residual region of the run
+    # (reltol, ftol) of every Newton solve of the run; None = the environment's
+    # EQUILIBRIA_GTAP_TR_RELTOL / _FTOL
+    newton_tol: tuple[float, float] | None = None
     cell_index: Any = field(default=None, repr=False)
     adjacency: dict = field(default_factory=dict, repr=False)
 
@@ -202,6 +206,7 @@ def prepare_run(
     jax_cache: bool = True,
     freeze: bool = False,
     ref_gdx: Any = None,
+    newton_tol: tuple[float, float] | None = None,
 ) -> tuple[FamilyRun, MPArrays]:
     """The run context and the multiperiod arrays, from the disk cache where possible.
 
@@ -257,8 +262,15 @@ def prepare_run(
         regions=[str(r) for r in params.sets.r],
         if_sub=bool(getattr(closure, "if_sub", False)),
         residual_region=str(residual_region),
+        newton_tol=newton_tol,
     )
     return run, mp
+
+
+# (reltol, ftol) of the solve in progress; set by ``_solve_period_inner`` from the run
+_NEWTON_TOL: ContextVar[tuple[float, float] | None] = ContextVar(
+    "_NEWTON_TOL", default=None
+)
 
 
 def _newton(ss: Any, sq: Squared) -> tuple[Any, float, int]:
@@ -267,7 +279,9 @@ def _newton(ss: Any, sq: Squared) -> tuple[Any, float, int]:
     The settings are read from the environment as the Pyomo path reads them (the
     ``NEWTON_MUMPS`` set); the family pairing is the system's own column order, and
     MUMPS runs with ICNTL(6)=7. ``code`` is 1 iff Newton succeeded and the residual of
-    the squared system is below ``CODE_RESIDUAL`` (``_ok_sr``), else 2 as the Pyomo path."""
+    the squared system is below ``CODE_RESIDUAL`` (``_ok_sr``), else 2 as the Pyomo path.
+    ``_NEWTON_TOL`` (the run's ``newton_tol``, set around the call) replaces the
+    environment's two stopping tolerances."""
     from equilibria.solver.newton_tr import newton_tr
 
     linsolve = os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE", "direct").lower()
@@ -277,7 +291,14 @@ def _newton(ss: Any, sq: Squared) -> tuple[Any, float, int]:
     lb[~np.isfinite(lb)] = -1e20  # as the Pyomo path
     ub[~np.isfinite(ub)] = 1e20
     # the relative test needs RELTOL > 0, then fscale applies
-    reltol = float(os.environ.get("EQUILIBRIA_GTAP_TR_RELTOL", "0") or 0.0)
+    tol = _NEWTON_TOL.get()
+    if tol is None:
+        reltol, ftol = (
+            float(os.environ.get("EQUILIBRIA_GTAP_TR_RELTOL", "0") or 0.0),
+            None,
+        )
+    else:
+        reltol, ftol = tol
     with phase("fscale"):
         fscale = ss.fscale() if reltol > 0.0 else None
 
@@ -299,6 +320,7 @@ def _newton(ss: Any, sq: Squared) -> tuple[Any, float, int]:
             colperm=np.arange(n),  # row k is paired with column k
             fscale=fscale,
             reltol=reltol,
+            ftol=ftol,
             icntl6=ICNTL6_FAMILY if linsolve == "mumps" else None,
             row_names=sq.row_names,
             col_names=sq.col_names,
@@ -420,7 +442,11 @@ def _solve_period_inner(
         ss = SquaredSystem.build(
             run.backend, run.state, mp_sq, period, sq, cross=run.cross
         )
-    res, resid, code = _newton(ss, sq)
+    token = _NEWTON_TOL.set(run.newton_tol)
+    try:
+        res, resid, code = _newton(ss, sq)
+    finally:
+        _NEWTON_TOL.reset(token)
     with phase("post_solve"):
         post_solve(
             mp_sq,
@@ -496,6 +522,7 @@ def solve_gtap_family(
     jax_cache: bool = True,
     nominal_trade_balance: bool | str = False,
     keep_session: bool = False,
+    newton_tol: tuple[float, float] | None = None,
 ) -> FamilyResult:
     """Calibrated base, check and shock on arrays: ``_solve_shock``'s route without Pyomo.
 
@@ -513,6 +540,9 @@ def solve_gtap_family(
     keeps its ratio to world income, ``savf_shock = savf_check * W / W_check`` with
     ``W = sum(regy)``; ``W`` depends on the solution, so the shock is solved again at the
     updated targets until ``W`` stops moving (``RATIO_TOL``).
+
+    ``newton_tol``: ``(reltol, ftol)`` for every Newton solve of the run (scaled and
+    absolute residual), instead of ``EQUILIBRIA_GTAP_TR_RELTOL`` / ``_FTOL``.
 
     ``keep_session``: the result carries a :class:`FamilySession` (``result.session``)
     that solves the shock period again at other shocks on the same context."""
@@ -563,6 +593,7 @@ def solve_gtap_family(
                 ref_gdx,
                 nominal_trade_balance,
                 keep_session=keep_session,
+                newton_tol=newton_tol,
             )
     finally:
         activate(prev)
@@ -679,6 +710,7 @@ def _solve_family(
     ref_gdx=None,
     nominal_trade_balance=False,
     keep_session=False,
+    newton_tol=None,
 ) -> FamilyResult:
     t0 = time.perf_counter()
     run, mp = prepare_run(
@@ -689,6 +721,7 @@ def _solve_family(
         jax_cache=jax_cache,
         freeze=_gc_freeze_from_env(),
         ref_gdx=ref_gdx,
+        newton_tol=newton_tol,
     )
     if nominal_trade_balance:
         run.nominal_savf = tuple(r for r in run.regions if r != run.residual_region)

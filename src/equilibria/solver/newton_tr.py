@@ -51,6 +51,7 @@ def newton_tr(
     paired_colperm: Callable[[], tuple[np.ndarray | None, int]] | None = None,
     fscale: np.ndarray | None = None,
     reltol: float | None = None,
+    ftol: float | None = None,
     icntl6: int | None = None,
     row_names: Sequence | None = None,
     col_names: Sequence | None = None,
@@ -69,7 +70,8 @@ def newton_tr(
     ``None``, ``paired_colperm() -> (perm | None, matched)`` is tried at the first
     factorization (the Pyomo path's GAMS pairing), then a numeric bipartite matching.
     ``fscale``/``reltol``: converge on ``||F/fscale||_inf < reltol`` (``reltol=None``
-    reads ``EQUILIBRIA_GTAP_TR_RELTOL``; ignored without ``fscale``). ``f0``: ``F`` at
+    reads ``EQUILIBRIA_GTAP_TR_RELTOL``; ignored without ``fscale``); also stops on
+    ``||F||_inf < ftol`` (``ftol=None`` reads ``EQUILIBRIA_GTAP_TR_FTOL``, 1e-7). ``f0``: ``F`` at
     the clipped ``x0`` when the caller already has it. ``row_names``/``col_names``/
     ``col_is_fixed`` only feed diagnostics and the structural gate.
     ``gmin``: diagonal regularization of J·P (``None`` reads ``EQUILIBRIA_GTAP_GMIN``).
@@ -104,7 +106,11 @@ def newton_tr(
     from scipy.sparse.linalg import spilu as _spilu_tr
 
     _maxit_tr = int(maxit)
-    _ftol_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_FTOL", "1e-7"))
+    _ftol_tr = (
+        float(os.environ.get("EQUILIBRIA_GTAP_TR_FTOL", "1e-7"))
+        if ftol is None
+        else float(ftol)
+    )
     _delta_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_DELTA0", "1.0"))
     _dmax_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_DELTAMAX", "1e3"))
     _drop_tr = float(os.environ.get("EQUILIBRIA_GTAP_TR_DROPTOL", "1e-5"))

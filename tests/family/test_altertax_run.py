@@ -180,3 +180,27 @@ def test_nominal_balance_needs_capfix():
     closure = altertax_closure().model_copy(update={"savf_flag": "capFlex"})
     with pytest.raises(NotImplementedError, match="nominal_trade_balance"):
         solve_gtap_family(object(), closure, "ROW", nominal_trade_balance=True)
+
+
+def test_altertax_solves_converge_to_1e10_whatever_the_env(env, monkeypatch):
+    """The ALTERTAX solves carry their own tolerance (scaled residual 1e-10, absolute
+    1e-12): the env default of the measure script (RELTOL 1e-6) stopped the shock ~6e-7
+    from the root and left small cancelling indices (pfactor[USA] of 3x4) off by 3e-6 pp.
+    Other routes keep reading the env: ``FamilyRun.newton_tol`` defaults to ``None``."""
+    import equilibria.solver.newton_tr as nt
+    from equilibria.family.driver import FamilyRun
+
+    assert FamilyRun.__dataclass_fields__["newton_tol"].default is None
+    monkeypatch.setenv("EQUILIBRIA_GTAP_TR_RELTOL", "1e-6")
+    monkeypatch.setenv("EQUILIBRIA_GTAP_TR_FTOL", "1e-7")
+    seen = []
+    orig = nt.newton_tr
+
+    def spy(*a, **k):
+        seen.append((k.get("reltol"), k.get("ftol")))
+        return orig(*a, **k)
+
+    monkeypatch.setattr(nt, "newton_tr", spy)
+    run = solve_altertax(nus333_dir(), cache_root=env.mktemp("altax_tol"))
+    assert run.codes == {"check": 1, "shock": 1}
+    assert seen and set(seen) == {(1e-10, 1e-12)}

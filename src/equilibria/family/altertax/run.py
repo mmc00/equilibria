@@ -151,6 +151,16 @@ def _check_cells(params: GTAPParameters, shock: dict) -> None:
                     )
 
 
+# (scaled residual, absolute residual) that stop every Newton solve of ALTERTAX. The
+# shock is ~1e-3 and the outputs are percent changes, so a residual of the usual 1e-6
+# (the env default) leaves factor prices ~3e-6 pp off the root, enough to fail an index
+# that nearly cancels (pfactor[USA] of 3x4). One more Newton step takes the scaled
+# residual to ~1e-10. The absolute test must not stop the solve first: newton_tr stops
+# on EITHER, so its 1e-7 default is replaced by 1e-12, below what 1e-10 scaled implies
+# (fscale >= 1) and still above the float64 floor of the largest datasets.
+ALTAX_NEWTON_TOL = (1e-10, 1e-12)
+
+
 def solve_altertax(
     dataset_dir: Path,
     *,
@@ -202,6 +212,7 @@ def solve_altertax(
         # "ratio": del_tbalry(r) = 0 (savf / world income)
         nominal_trade_balance=trade_balance,
         keep_session=decomp_steps is not None,
+        newton_tol=ALTAX_NEWTON_TOL,
     )
     minutes = (time.perf_counter() - t0) / 60.0
     codes = {k: int(res.results[k]["code"]) for k in ("check", "shock")}
