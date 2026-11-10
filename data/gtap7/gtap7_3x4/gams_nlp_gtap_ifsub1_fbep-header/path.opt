@@ -1,0 +1,12 @@
+convergence_tolerance 1e-9
+major_iteration_limit 2000
+minor_iteration_limit 100000
+cumulative_iteration_limit 1000000
+proximal_perturbation 1e-2
+crash_method pnewton
+crash_perturb yes
+nms_initial_reference_factor 2
+gradient_step_limit 20
+restart_limit 5
+lemke_start automatic
+time_limit 3600

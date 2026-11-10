@@ -59,7 +59,7 @@ NL_PHASES = {
 }
 NLP_DATASETS = {
     "altertax": ("gtap7_3x3", "gtap7_3x4", "gtap7_5x5", "gtap7_10x7", "gtap7_15x10"),
-    "gtap": ("gtap7_3x3", "gtap7_5x5", "gtap7_10x7", "gtap7_15x10"),
+    "gtap": ("gtap7_3x3", "gtap7_3x4", "gtap7_5x5", "gtap7_10x7", "gtap7_15x10"),
 }
 MCP_JOBS = (("gtap7_3x3", "gtap", 1), ("gtap7_3x3", "altertax", 1))
 # nus333 (Burfisher's NUS333): comp_nus333.gms on its HARs, ifSUB=0; FBEP is
@@ -67,8 +67,9 @@ MCP_JOBS = (("gtap7_3x3", "gtap", 1), ("gtap7_3x3", "altertax", 1))
 NUS333_JOB = ("nus333", "gtap", 0, "zero")
 # above the local PATH license (1000 rows): solved on NEOS
 NEOS_JOBS = {
-    "gtap": (("gtap7_3x3", 0), ("gtap7_5x5", 0), ("gtap7_5x5", 1), ("gtap7_10x7", 0),
-             ("gtap7_10x7", 1), ("gtap7_15x10", 0), ("gtap7_15x10", 1), ("9x10", 1)),
+    "gtap": (("gtap7_3x3", 0), ("gtap7_3x4", 0), ("gtap7_3x4", 1), ("gtap7_5x5", 0),
+             ("gtap7_5x5", 1), ("gtap7_10x7", 0), ("gtap7_10x7", 1), ("gtap7_15x10", 0),
+             ("gtap7_15x10", 1), ("9x10", 1)),
     "altertax": (("gtap7_3x3", 0), ("gtap7_3x4", 0), ("gtap7_3x4", 1), ("gtap7_5x5", 0),
                  ("gtap7_5x5", 1), ("gtap7_10x7", 0), ("gtap7_10x7", 1), ("gtap7_15x10", 0),
                  ("gtap7_15x10", 1)),
