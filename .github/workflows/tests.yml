@@ -17,7 +17,7 @@ jobs:
   # root *.md files, FUNDING.yml, CITATION.cff) does not need the solver and
   # parity jobs: they take about an hour and cannot change with a text edit.
   # Such a PR still runs the docs tests (links and page examples, in
-  # python-tests), docs-build, pre-commit and the layout and commit checks.
+  # python-docs-tests), docs-build, pre-commit and the layout and commit checks.
   # Pushes to main and manual runs always run everything. main has no
   # required checks, so a skipped job does not block a merge.
   changes:
@@ -78,8 +78,53 @@ jobs:
       - name: Check commit messages of this PR
         run: python scripts/dev/check_commit_msg.py --range "origin/${{ github.base_ref }}..HEAD"
 
+  # The suite is split by measured duration (.github/test_durations.json,
+  # refreshed by test-durations.yml) into 8 groups that run in parallel:
+  # simulated longest group 7.9 min against ~25 min serial. The groups are
+  # independent runners, so the PATH-library and model-cache contention that
+  # forbids -n inside one runner does not apply. Do NOT add -n/--numprocesses.
+  # `tests-verdict` checks that the groups together ran every collected test
+  # exactly once, so a lost group or a stale durations file cannot hide tests.
+  #
+  # `-ra` because pytest's default (-rfE) does not report skips.
+  #
+  # `not needs_gdxdump` is half of a partition: gdxdump-tests runs
+  # `needs_gdxdump and not gams and not slow`. Changing one requires the other.
   python-tests:
     needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
+
+      - name: Run tests (excluding GAMS-marked and slow), group ${{ matrix.group }} of 8
+        run: |
+          uv run pytest -ra -m "not gams and not slow and not needs_gdxdump" tests \
+            --splits 8 --group ${{ matrix.group }} \
+            --splitting-algorithm least_duration \
+            --durations-path .github/test_durations.json \
+            -o junit_family=xunit1 --junitxml=junit-python-${{ matrix.group }}.xml
+
+      - name: Upload JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-python-${{ matrix.group }}
+          path: junit-python-${{ matrix.group }}.xml
+          if-no-files-found: warn
+
+  # Documentation-only PR: only the docs tests (links, page examples).
+  python-docs-tests:
+    needs: changes
+    if: needs.changes.outputs.code != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -88,31 +133,46 @@ jobs:
       - name: Setup test environment
         uses: ./.github/actions/setup-test-env
 
-      # La suite completa, no una lista blanca. Hasta 2026-09-16 este paso
-      # enumeraba 5 archivos de 172 (3,5 % de la suite), herencia de 2f5c128
-      # ("stabilize tests for linux runner"): se listo lo que pasaba entonces y
-      # el resto nunca se reconecto. Todo babel/ quedaba fuera, incluidos los
-      # lectores HAR/GDX donde vivia el bug REFULL del PR #46.
-      #
-      # NO anadir -n/--numprocesses: los tests GTAP compiten por la libreria
-      # PATH y por las caches de modelo, y en paralelo producen decenas de
-      # fallos espurios (40 medidos; 1 real al correrlos aislados).
-      #
-      # `-ra` porque el default de pytest (-rfE) no reporta skips: los 64 que
-      # habia aqui no decian ni cuales eran ni por que.
-      #
-      # `not needs_gdxdump` es la mitad de una particion: gdxdump-tests corre
-      # `needs_gdxdump and not gams and not slow`. Cambiar una exige la otra.
-      - name: Run tests (excluding GAMS-marked and slow)
-        if: needs.changes.outputs.code == 'true'
-        run: |
-          uv run pytest -ra -m "not gams and not slow and not needs_gdxdump" tests
-
-      # Documentation-only PR: only the docs tests (links, page examples).
       - name: Run docs tests (documentation-only PR)
-        if: needs.changes.outputs.code != 'true'
         run: |
           uv run pytest -ra -m "not gams and not slow and not needs_gdxdump" tests/docs
+
+  # Expected test ids per suite, collected once and compared by tests-verdict
+  # against what the groups actually ran. Collection does not need gdxdump:
+  # tests/conftest.py only adds skip markers at run time (they do not change
+  # what `-m` selects), so both suites are collected here with the same env.
+  # `-o addopts=""` because the repo's addopts carries -q, which would turn
+  # the listing into `file: count`.
+  collect:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
+
+      - name: Collect expected test ids
+        run: |
+          set -euo pipefail
+          uv run pytest --collect-only -o addopts="" -q \
+            -m "not gams and not slow and not needs_gdxdump" tests \
+            | grep '::' > collected-python.txt
+          uv run pytest --collect-only -o addopts="" -q \
+            -m "needs_gdxdump and not gams and not slow" tests \
+            | grep '::' > collected-gdxdump.txt
+          wc -l collected-python.txt collected-gdxdump.txt
+
+      - name: Upload collected ids
+        uses: actions/upload-artifact@v4
+        with:
+          name: collected-ids
+          path: |
+            collected-python.txt
+            collected-gdxdump.txt
+          if-no-files-found: error
 
   # Los tests needs_gdxdump (paridad GTAP7 MCP/NLP, altertax, ifsub, F3.5...)
   # leen GDX de referencia con `gdxdump`, que viene con GAMS. Sin el, el guard
@@ -123,12 +183,16 @@ jobs:
   # `gdxdump` sale de la wheel `gamspy_base` de PyPI (sin licencia: leer un GDX
   # no resuelve nada). Su salida es IDENTICA a la de GAMS 48 en los 97 GDX del
   # repo (verificado 2026-10-05, macOS, v54.5.0 vs 48). Job aparte y en
-  # paralelo: son ~19 min en CI (10 en una Mac) y mas que doblarian
-  # python-tests (~10 min).
+  # paralelo, dividido en 5 grupos por duracion medida (grupo mas largo
+  # simulado: 7.4 min).
   gdxdump-tests:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3, 4, 5]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -153,14 +217,95 @@ jobs:
           head -n 3 /tmp/gdxdump_smoke.txt
 
       # Complemento exacto del `-m` de python-tests (ver alli).
-      - name: Run needs_gdxdump tests
+      - name: Run needs_gdxdump tests, group ${{ matrix.group }} of 5
         env:
           # Sin guards: si gdxdump (o PATH) faltara, los tests FALLAN en vez de
           # saltarse y dejar el job verde. Seguro aqui porque ninguno de estos
           # tests usa cyipopt, lo unico que CI puede no lograr instalar.
           EQUILIBRIA_REQUIRE_SOLVERS: "1"
         run: |
-          uv run pytest -ra -m "needs_gdxdump and not gams and not slow" tests
+          uv run pytest -ra -m "needs_gdxdump and not gams and not slow" tests \
+            --splits 5 --group ${{ matrix.group }} \
+            --splitting-algorithm least_duration \
+            --durations-path .github/test_durations.json \
+            -o junit_family=xunit1 --junitxml=junit-gdxdump-${{ matrix.group }}.xml
+
+      - name: Upload JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-gdxdump-${{ matrix.group }}
+          path: junit-gdxdump-${{ matrix.group }}.xml
+          if-no-files-found: warn
+
+  # Single verdict for the split suites. Fails when any needed job failed or
+  # was cancelled, when a job that must run was skipped, or (code PRs) when
+  # the shards did not run every collected test exactly once.
+  tests-verdict:
+    needs: [changes, collect, python-tests, gdxdump-tests, python-docs-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      CODE: ${{ needs.changes.outputs.code }}
+      R_CHANGES: ${{ needs.changes.result }}
+      R_COLLECT: ${{ needs.collect.result }}
+      R_PYTHON: ${{ needs.python-tests.result }}
+      R_GDXDUMP: ${{ needs.gdxdump-tests.result }}
+      R_DOCS: ${{ needs.python-docs-tests.result }}
+    steps:
+      - name: Check job results
+        run: |
+          set -u
+          bad=0
+          for pair in changes=$R_CHANGES collect=$R_COLLECT python-tests=$R_PYTHON \
+                      gdxdump-tests=$R_GDXDUMP python-docs-tests=$R_DOCS; do
+            name=${pair%%=*}; result=${pair#*=}
+            echo "$name: $result"
+            case "$result" in
+              failure|cancelled) bad=1 ;;
+            esac
+          done
+          if [ "$R_CHANGES" != "success" ]; then bad=1; fi
+          if [ "$CODE" = "true" ]; then
+            # Code PR: the split suites must have run; docs tests are skipped.
+            for r in "$R_COLLECT" "$R_PYTHON" "$R_GDXDUMP"; do
+              [ "$r" = "success" ] || bad=1
+            done
+          else
+            # Docs-only PR: the split suites are skipped, the docs tests run.
+            [ "$R_DOCS" = "success" ] || bad=1
+          fi
+          exit $bad
+
+      - name: Checkout
+        if: env.CODE == 'true'
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        if: env.CODE == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download JUnit and collected ids
+        if: env.CODE == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "{junit-*,collected-*}"
+          path: artifacts
+          merge-multiple: true
+
+      # Every collected test ran exactly once across the groups, none failed.
+      - name: Verify shards
+        if: env.CODE == 'true'
+        run: |
+          set -euo pipefail
+          ls artifacts
+          for suite in python gdxdump; do
+            python scripts/dev/check_test_shards.py shards \
+              --expected "artifacts/collected-$suite.txt" \
+              artifacts/junit-$suite-*.xml
+          done
 
   structural-gates:
     needs: changes
