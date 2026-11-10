@@ -318,3 +318,47 @@ def test_copied_check_raises(case):
     )
     with pytest.raises(NotImplementedError, match="copied"):
         run_recipe(mp, "check", params=p, closure=_closure(), sp_ref=ref, **flags)
+
+
+def test_base_refreshes_the_aggregates_after_the_settled_seed(tmp_path):
+    """F3.5: the base is re-seeded from the settled point, so its Fisher aggregates
+    (``mq_*``, defined sums of the seeded levels) must be recomputed from that point,
+    as the shock's warm start does. Otherwise the check solves against the sums of the
+    build point while the shock refreshes them (nus333 ALTERTAX: a zero shock does not
+    return to the check)."""
+    import dataclasses
+
+    from equilibria.family.cross_period import mq_values
+    from equilibria.family.driver import prepare_run, settled_check_point
+    from equilibria.family.prep_recipe import run_recipe
+
+    p = _params("gtap7_3x3")
+    run, mp = prepare_run(
+        p, _closure(), list(p.sets.r)[-1], cache_root=tmp_path, jax_cache=False
+    )
+    # a settled point away from the build point: every seeded level moves by 1e-3
+    settled = {
+        name: {k: v * (1.0 + 1e-3) for k, v in cells.items()}
+        for name, cells in settled_check_point(mp).items()
+    }
+    seeded = dataclasses.replace(mp, settled_seed=settled, base_calibrated=True)
+    got = run_recipe(
+        seeded,
+        "base",
+        params=run.params,
+        closure=run.closure,
+        sp_ref=run.ref,
+        backend=run.backend,
+        cross=run.cross,
+        **ROUTE,
+    )
+    want = mq_values(run.cross, got)
+    worst = (0.0, "")
+    for name, cells in want.items():
+        v = got.var(name)
+        for key, val in cells.items():
+            x = float(v.value[v.pos(key)])
+            rel = abs(x - val) / max(1.0, abs(val))
+            if rel > worst[0]:
+                worst = (rel, f"{name}{key}: stored {x!r} defined {val!r}")
+    assert worst[0] <= 1e-12, f"worst aggregate {worst[0]:.3e}: {worst[1]}"

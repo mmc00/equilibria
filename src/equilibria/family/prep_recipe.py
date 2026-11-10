@@ -7,7 +7,8 @@ masks, with no model and no expressions:
 
 * ``("base", "gtap")``: seed from the settled check point (F3.5, only when the driver
   runs with ``base_calibrated`` and the arrays carry ``settled_seed``), freeze the other
-  periods, copy the single-period reference's fixing and bounds.
+  periods, copy the single-period reference's fixing and bounds, then (after a settled
+  seed) refresh the Fisher aggregates from the seeded levels.
 * ``("check", "gtap")``: freeze the other periods, seed (only with ``seed_from_prior``),
   unfix ``regy``, collapse the ``pft`` block, copy the single-period reference's fixing
   and bounds, free what GAMS does not bound, mute the welfare tail, holdfix the
@@ -19,8 +20,8 @@ masks, with no model and no expressions:
 ``sp_reference_arrays`` is the single-period reference (what the driver reads from a
 throwaway Pyomo model) as arrays, from the same composer steps on a ``StateModel``.
 
-The Fisher aggregates ``mq_*`` are refreshed after the seed from the sums over the
-periods when ``run_recipe`` gets the cross-period recording (``cross=``); without it
+The Fisher aggregates ``mq_*`` are refreshed after each seed (the base's settled one
+and the warm start from the prior period) from the sums over the periods when ``run_recipe`` gets the cross-period recording (``cross=``); without it
 they keep the value they had (their fixed / bounds are right).
 """
 
@@ -196,6 +197,20 @@ def _seed_from_settled(c: _Ctx) -> None:
                 v.value[i] = float(val)
             except (TypeError, ValueError):
                 continue
+
+
+def _refresh_after_settled_seed(c: _Ctx) -> None:
+    """F3.5: after the settled seed (and the reference fixing), the Fisher aggregates
+    (mq_*) are recomputed from the sums they define, as ``_seed_from_prior`` does. They
+    are defined sums, not unknowns: left at their build value the check solves against
+    stale base aggregates (``mq_*_bb[base]``) while the shock refreshes them. A no-op
+    when the seed was (no ``base_calibrated``, no seed) or without the cross-period
+    recording. Mirrors ``period_prep._refresh_after_settled_seed``."""
+    if not (c.base_calibrated and c.mp.settled_seed) or c.cross is None:
+        return
+    from equilibria.family.cross_period import refresh_aggregates
+
+    refresh_aggregates(c.cross, c.mp)
 
 
 def _freeze_inactive(c: _Ctx) -> None:
@@ -443,7 +458,12 @@ def _nominal_trade_balance(c: _Ctx) -> None:
 
 
 _RECIPES = {
-    ("base", "gtap"): (_seed_from_settled, _freeze_inactive, _replicate_sp_reference),
+    ("base", "gtap"): (
+        _seed_from_settled,
+        _freeze_inactive,
+        _replicate_sp_reference,
+        _refresh_after_settled_seed,
+    ),
     ("check", "gtap"): (
         _freeze_inactive,
         _seed_from_prior_if_asked,
@@ -502,7 +522,7 @@ def run_recipe(
 
     With ``cross`` (the cross-period recording) the ``mq_*`` aggregates are refreshed
     from the sums they define where the Pyomo recipe does (the seed from the prior
-    period); without it they keep their value (see the module docstring).
+    period, and the base after its settled seed); without it they keep their value (see the module docstring).
 
     The driver flags (``PeriodPreparer``'s) have no default: they pick the recipe and
     the period the seed copies from. A step whose component is missing raises

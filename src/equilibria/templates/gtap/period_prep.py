@@ -109,6 +109,23 @@ def _seed_from_settled(c: _Ctx) -> None:
                 pass
 
 
+def _refresh_after_settled_seed(c: _Ctx) -> None:
+    """F3.5: tras la siembra asentada (y la fijacion del modelo de referencia) los
+    agregados Fisher (mq_*) se recalculan de las sumas que definen, como en el
+    arranque en caliente (``_seed_period_from_prior``). Son sumas DEFINIDAS, no
+    incognitas: con su valor de construccion el check resuelve contra agregados del
+    base (``mq_*_bb[base]``) viejos y el shock contra los refrescados (nus333
+    ALTERTAX: un shock nulo no volvia al check). Sin siembra no hace nada. Espejo de
+    ``family.prep_recipe._refresh_after_settled_seed``."""
+    if not (c.prep.base_calibrated and getattr(c.m, "_settled_seed", None)):
+        return
+    from equilibria.templates.gtap.gtap_model_multiperiod import (
+        GTAPMultiPeriodModel,
+    )
+
+    GTAPMultiPeriodModel.refresh_fisher_aggregates(c.m)
+
+
 def _freeze_inactive(c: _Ctx) -> None:
     _drv().freeze_inactive_periods(c.m, c.period)
 
@@ -283,7 +300,12 @@ class _Recipe:
 
 
 _BASE = _Recipe(
-    steps=(_seed_from_settled, _freeze_inactive, _replicate_sp_reference),
+    steps=(
+        _seed_from_settled,
+        _freeze_inactive,
+        _replicate_sp_reference,
+        _refresh_after_settled_seed,
+    ),
     closure="base",
 )
 

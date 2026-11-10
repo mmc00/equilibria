@@ -126,3 +126,50 @@ def test_a_hook_for_another_period_does_not_fire(monkeypatch, tmp_path):
     monkeypatch.setenv("EQUILIBRIA_DEBUG_EXPORT_NL_CHECK", str(tmp_path / "m.nl"))
     debug_before_solve(_tiny(), "base")  # no para
     assert not (tmp_path / "m.nl").exists()
+
+
+# ── F3.5: los agregados Fisher tras la siembra del base ────────────────────
+
+
+def test_base_refreshes_the_fisher_aggregates_after_the_settled_seed():
+    """F3.5 re-siembra el base desde el punto asentado: los agregados Fisher
+    (``mq_*``, sumas DEFINIDAS de los niveles sembrados) se recalculan, como en el
+    arranque en caliente del shock. Si no, el check resuelve contra las sumas del
+    punto de construccion y el shock contra las refrescadas."""
+    from pyomo.environ import value
+    from tests.templates.gtap import _period_snapshot as snap
+
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+
+    if not snap.DATASET.exists():
+        pytest.skip("gtap7_3x3 dataset not present")
+    p = snap._load_params()
+    closure = GTAPClosureConfig(
+        name="base",
+        closure_type="MCP",
+        capital_mobility="sluggish",
+        fix_endowments=False,
+        fix_taxes=False,
+        fix_technology=False,
+        if_sub=False,
+        numeraire="pnum",
+    )
+    m, _ = build_block_model(
+        p, p.sets, closure, list(p.sets.r)[-1], base_calibrated=True
+    )
+    assert m._settled_seed
+    PeriodPreparer(
+        mode="altertax",
+        base_closure=closure,
+        alt_closure=closure,
+        residual_region=list(p.sets.r)[-1],
+        base_calibrated=True,
+    ).prepare(m, "base", p)
+    worst = (0.0, "")
+    for name, (var, defs) in m._fisher_aggregates.items():
+        for idx, expr in defs.items():
+            r = abs(float(var[idx].value) - float(value(expr)))
+            if r > worst[0]:
+                worst = (r, f"{name}{idx}")
+    assert worst[0] < 1e-12, f"{worst[1]}: residual {worst[0]:.3e}"
