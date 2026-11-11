@@ -308,3 +308,63 @@ def test_decomp_gate_passes_on_3x3_rungtap_with_one_step_dvol(env):
     rec = _decomp_gate(env, "gtap7_3x3")
     assert max(rec["ev_gap"]) <= TOL_CHANGE
     assert rec["pass"], rec["failing"]
+
+
+# --- Newton sub-steps ----------------------------------------------------------------
+
+# largest relative change of a gated total between the Newton-step path and the
+# full-solve path on gtap7_3x3: measured 2.95e-6 (K = 4, 2026-11-10); the bound is that
+# measurement with a ~3x margin, far below PATH_TOL (1e-3)
+NEWTON_VS_SOLVE_3X3 = 1e-5
+
+
+@pytest.fixture(scope="module")
+def run_3x3(env):
+    return _rungtap(env, "gtap7_3x3", "auto")
+
+
+def test_newton_path_matches_the_full_solve_path_on_3x3(run_3x3):
+    """One Newton step per sub-step (the ratio closure in the linear system) in place
+    of a full nonlinear solve with its ratio iterations: the reported decomposition is
+    the full-solve one within NEWTON_VS_SOLVE_3X3 on every gated total, at the same K."""
+    from equilibria.family.altertax.path import (
+        gated_totals,
+        noise_floor,
+        solve_decomp_path,
+        totals_change,
+    )
+
+    run = run_3x3
+    newton = run.decomp_path
+    assert newton.substep == "newton"
+    shock = load_tms_shock(folder("gtap7_3x3") / "tms_rate10.shk")
+    full = solve_decomp_path(run, shock, "auto", substep="solve")
+    assert full.substep == "solve" and full.steps == newton.steps
+    gap = totals_change(
+        gated_totals(newton.headers),
+        gated_totals(full.headers),
+        noise_floor(full.headers),
+    )
+    assert gap <= NEWTON_VS_SOLVE_3X3
+
+
+def test_newton_points_hold_the_ratio_closure(run_3x3):
+    """``savf[r] / W`` of every ratio region equals the check's ratio at every Newton
+    point (``dW = g . dx`` is in the linear system, savf follows it)."""
+    from equilibria.family.driver import _world_income
+
+    run = run_3x3
+    path = run.decomp_path
+    assert path.substep == "newton"
+    mp0 = run.result.mp
+    sv0 = mp0.vars["savf"]
+    w_chk = _world_income(mp0, "check")
+    regions = run.result.session.run.nominal_savf
+    assert regions
+    for mp in path.points[:-1]:
+        w = _world_income(mp, "shock")
+        sv = mp.vars["savf"]
+        for r in regions:
+            want = float(sv0.value[sv0.pos((r, "check"))]) / w_chk
+            got = float(sv.value[sv.pos((r, "shock"))]) / w
+            assert abs(got - want) <= 1e-10 * abs(want), (r, got, want)

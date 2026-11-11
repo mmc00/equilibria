@@ -23,11 +23,17 @@ its linearised percent-change variable integrates. :func:`shock_fraction` gives 
 at fraction ``t`` of that path. (Measured: interpolating the percent arithmetically moves
 the EV by ~1e-7 relative on nus333, so the choice is immaterial at TOL_CHANGE.)
 
-Sub-steps. Point ``j/K`` is solved through the run's own :class:`FamilySession` (same
-base, check and closure; under ``trade_balance="ratio"`` each point keeps ``savf / W`` at
-the check's ratio), warm-started from point ``(j-1)/K``. Doubling K reuses every point of
-K/2. The last point is the run's own shock (solved from the check), so the path ends on
-exactly the solution the other outputs (updated, summary, volume, pct) are read from.
+Sub-steps. Point ``j/K`` comes from point ``(j-1)/K`` through the run's own
+:class:`FamilySession` (same base, check and closure; under ``trade_balance="ratio"``
+each point keeps ``savf / W`` at the check's ratio). ``substep="newton"`` (default): ONE
+Newton step at ``(j-1)/K`` towards the shock of ``j/K``, the ratio closure inside the
+linear system (:class:`_NewtonSteps`); the points of K are not those of K/2, each K is
+its own path from the check. ``substep="solve"``: a full nonlinear solve with its ratio
+iterations, warm-started from the previous point; doubling K reuses every point of K/2.
+Measured, the two give the same reported totals within 2.4e-4 relative (3x3 to 20x41;
+3x3: 3.0e-6), the Newton path at about half the time. Either way the last point is the
+run's own shock (solved from the check), so the path ends on exactly the solution the
+other outputs (updated, summary, volume, pct) are read from.
 
 Sums. The CNT headers are linear change variables of GEMPACK (``Variable (change)``):
 summed over the steps. The ``dvol`` columns (A231's slot too) are not: GEMPACK computes
@@ -48,11 +54,12 @@ converged EV agrees with GEMPACK's within 0.06 % (nus333 ROW) without it.
 from __future__ import annotations
 
 import dataclasses
+import os
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from fractions import Fraction
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -67,6 +74,7 @@ from equilibria.family.altertax.decomp import (
 from equilibria.family.altertax.gates import NOISE, _regional_totals
 from equilibria.family.altertax.tolerances import ABS_FLOOR, TOL_CHANGE
 from equilibria.family.altertax.updated import _elements, _Period, headers_at
+from equilibria.family.phases import PhaseTimer, activate, phase
 
 PATH_TOL = (
     TOL_CHANGE / 10
@@ -234,9 +242,11 @@ class DecompPath:
     headers: dict[str, HeaderArray]
     history: dict[int, dict[str, Any]]
     points: list[Any] = field(repr=False)
-    solves: int = 0  # sub-step shock solves (the run's own shock not counted)
+    solves: int = 0  # sub-step shock solves / Newton steps (the run's own not counted)
     minutes: float = 0.0
     richardson: bool = False
+    substep: str = "newton"  # how an intermediate point is reached (SUBSTEPS)
+    phases: dict[str, float] = field(default_factory=dict)  # seconds by phase
 
     @property
     def steps_half(self) -> int | None:
@@ -251,12 +261,150 @@ class DecompPath:
             "path_tol": PATH_TOL,
             "solves": self.solves,
             "minutes": self.minutes,
+            "substep": self.substep,
+            "phases": dict(self.phases),
             "ev_by_steps": {str(k): v["ev"] for k, v in self.history.items()},
             "ev_richardson_by_steps": {
                 str(k): v.get("ev_richardson") for k, v in self.history.items()
             },
             "change_by_steps": {str(k): v["change"] for k, v in self.history.items()},
         }
+
+
+class _Linear:
+    """Factorizations of the sub-step Jacobians: MUMPS under
+    ``EQUILIBRIA_GTAP_TR_LINSOLVE=mumps`` (the run's settings: ICNTL(6)=7, values at
+    the analysis), its symbolic analysis kept while the pattern is the same; SuperLU
+    otherwise. Row k is paired with column k (the family order), so no permutation."""
+
+    def __init__(self) -> None:
+        self.kind = os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE", "direct").lower()
+        self.lu: Any = None
+        self.sig: Any = None
+
+    def factor(self, J: Any) -> None:
+        if self.kind != "mumps":
+            import scipy.sparse.linalg as sla
+
+            with phase("factor"):
+                self.lu = sla.splu(J.tocsc())
+            return
+        coo = J.tocoo()
+        sig = (coo.nnz, hash(coo.row.tobytes()), hash(coo.col.tobytes()))
+        if sig != self.sig:
+            from pyomo.contrib.pynumero.linalg.mumps_interface import (
+                MumpsCentralizedAssembledLinearSolver,
+            )
+
+            from equilibria.family.driver import ICNTL6_FAMILY
+
+            with phase("mumps_symbolic"):
+                lu = MumpsCentralizedAssembledLinearSolver(sym=0)
+                icntl = {14: 100, 6: ICNTL6_FAMILY, 7: 0, 8: 8, 24: 1}
+                for k, v in icntl.items():
+                    lu.set_icntl(k, v)
+                lu.set_cntl(3, -1e-8)
+                ctx = cast(Any, lu._mumps)
+                set_rows_cols = ctx.set_centralized_assembled_rows_cols
+
+                def rows_cols_then_values(irn, jcn):
+                    set_rows_cols(irn, jcn)
+                    ctx.set_centralized_assembled_values(coo.data)
+
+                ctx.set_centralized_assembled_rows_cols = rows_cols_then_values
+                try:
+                    lu.do_symbolic_factorization(coo)
+                finally:
+                    del ctx.set_centralized_assembled_rows_cols
+            self.lu, self.sig = lu, sig
+        with phase("mumps_numeric"):
+            self.lu.do_numeric_factorization(coo)
+
+    def solve(self, b: np.ndarray) -> np.ndarray:
+        with phase("back_solve"):
+            if self.kind != "mumps":
+                return self.lu.solve(b)
+            r = self.lu.do_back_solve(np.array(b, dtype=float))
+            return np.asarray(r[0] if isinstance(r, tuple) else r, dtype=float)
+
+
+class _NewtonSteps:
+    """The intermediate points of a ``substep="newton"`` path (module docstring,
+    "Sub-steps"): from point ``x_j`` at shock ``s_{j+1}``, one Newton step
+
+        J(x_j) dx + v dW = -F(x_j; s_{j+1}, T(W_j)),   dW = g . dx
+
+    with ``T(W) = savf_check * W / W_check`` the ratio targets of the ``nominal_savf``
+    regions (``trade_balance="ratio"``), ``v = dF/dW`` through them (finite difference,
+    once per path) and ``g`` the sum of the ``regy`` shock columns (``W = sum(regy)``):
+    a bordered solve, two back-solves on one factorization. The point's savf is
+    ``T(W_j + dW)``, so the ratio closure holds there. Without the ratio closure (the
+    nominal one: savf at the check) the step is the plain Newton step."""
+
+    def __init__(self, run: Any, shock: Mapping[str, Mapping[tuple, float]]) -> None:
+        from equilibria.family.driver import _world_income
+
+        self.session = run.result.session
+        mp = run.result.mp
+        srun = self.session.run
+        sv = mp.vars["savf"]
+        self.ratio = bool(self.session.ratio)
+        self.regions = tuple(srun.nominal_savf) if self.ratio else ()
+        self.chk = {r: float(sv.value[sv.pos((r, "check"))]) for r in self.regions}
+        self.w_chk = _world_income(mp, "check")
+        self.lin = _Linear()
+        self.v: np.ndarray | None = None
+
+    def targets(self, w: float) -> dict[str, float] | None:
+        if not self.ratio:
+            return None
+        return {r: x * w / self.w_chk for r, x in self.chk.items()}
+
+    def step(self, shock_t: Mapping[str, Mapping[tuple, float]], start: Any) -> Any:
+        from equilibria.family.driver import _world_income
+
+        w0 = self.w_chk if start is None else _world_income(start, "shock")
+        ss, sq, mp_sq = self.session.shock_system(
+            shock_t, start=start, savf_targets=self.targets(w0)
+        )
+        x0 = np.asarray(ss.x0, dtype=float)
+        with phase("F"):
+            f0 = ss.F(x0)
+        with phase("J"):
+            J = ss.J(x0)
+        self.lin.factor(J)
+        a = self.lin.solve(-f0)
+        dw = 0.0
+        if self.ratio:
+            if self.v is None:
+                self.v = self._dF_dW(shock_t, start, w0, x0, f0, sq)
+            g = np.fromiter(
+                (c.startswith("regy[") and c.endswith(",shock]") for c in sq.col_names),
+                dtype=bool,
+                count=len(x0),
+            )
+            b = self.lin.solve(self.v)
+            dw = float(a[g].sum()) / (1.0 + float(b[g].sum()))
+            a = a - b * dw
+            sv = mp_sq.vars["savf"]
+            for r, t in (self.targets(w0 + dw) or {}).items():
+                sv.value[sv.pos((r, "shock"))] = t
+        return self.session.finish_shock(mp_sq, sq, x0 + a)
+
+    def _dF_dW(self, shock_t, start, w0, x0, f0, sq) -> np.ndarray:
+        """``dF/dW`` at the first step: the system rebuilt with the targets of
+        ``W + d`` (``d = 1e-6 W_check``), ``(F_d(x) - F(x)) / d``."""
+        d = 1e-6 * self.w_chk
+        ss_d, sq_d, _ = self.session.shock_system(
+            shock_t, start=start, savf_targets=self.targets(w0 + d)
+        )
+        if list(sq_d.col_names) != list(sq.col_names):
+            raise RuntimeError("path decomposition: dF/dW system has other columns")
+        with phase("F"):
+            return (ss_d.F(x0) - f0) / d
+
+
+SUBSTEPS = ("newton", "solve")
 
 
 def solve_decomp_path(
@@ -266,66 +414,98 @@ def solve_decomp_path(
     *,
     tol: float = PATH_TOL,
     k_max: int = K_MAX,
+    substep: str = "newton",
 ) -> DecompPath:
     """The path decomposition of ``run`` (an ``AltertaxRun`` solved with
     ``keep_session``) for its ``shock``: ``steps`` sub-steps, or ``"auto"`` for
     :func:`pick_steps` and the Richardson extrapolation (a fixed K reports the plain
-    ``D(K)``)."""
+    ``D(K)``). ``substep`` (module docstring, "Sub-steps"): ``"newton"`` reaches each
+    intermediate point with one Newton step from the previous one, ``"solve"`` with a
+    full solve of the session."""
+    if substep not in SUBSTEPS:
+        raise ValueError(f"substep={substep!r}: expected one of {SUBSTEPS}")
     session = run.result.session
     if session is None:
         raise ValueError("solve_decomp_path needs a run solved with keep_session=True")
+    timer = PhaseTimer()
+    prev_timer = activate(timer)
+    try:
+        return _solve_decomp_path(run, shock, steps, tol, k_max, substep, timer)
+    finally:
+        activate(prev_timer)
+
+
+def _solve_decomp_path(run, shock, steps, tol, k_max, substep, timer) -> DecompPath:
+    session = run.result.session
     t0 = time.perf_counter()
     els = _elements(run)
-    pts: dict[Fraction, Any] = {Fraction(1): run.result.mp}
-    cache: dict[Fraction, tuple[_Period, dict[str, np.ndarray]]] = {}
+    newton = _NewtonSteps(run, shock) if substep == "newton" else None
+    pts: dict[Any, Any] = {Fraction(1): run.result.mp}
+    cache: dict[Any, tuple[_Period, dict[str, np.ndarray]]] = {}
     solves = 0
 
-    def point(f: Fraction, k: int):
-        nonlocal solves
-        if f not in pts:
-            prev = f - Fraction(1, k)
-            start = pts[prev] if prev > 0 else None
-            mp, res = session.solve_shock(shock_fraction(shock, float(f)), start=start)
-            if int(res["code"]) != 1:
-                raise RuntimeError(
-                    f"path decomposition: sub-step {f} of the shock did not converge "
-                    f"(code {res['code']}, residual {res.get('residual')})"
-                )
-            pts[f] = mp
-            solves += 1
-        return pts[f]
+    def key(j: int, k: int) -> Any:
+        """A point of the K-step path: the fraction where every K shares it (the
+        check, the run's own shock, every point of a full-solve path), else (K, j)."""
+        f = Fraction(j, k)
+        return f if newton is None or f in (0, 1) else (k, j)
 
-    def at(f: Fraction, k: int) -> tuple[_Period, dict[str, np.ndarray]]:
-        if f not in cache:
-            if f == 0:
-                r, per = run, "check"
+    def point(j: int, k: int):
+        nonlocal solves
+        kk = key(j, k)
+        if kk not in pts:
+            f = Fraction(j, k)
+            start = pts[key(j - 1, k)] if j > 1 else None
+            if newton is not None:
+                pts[kk] = newton.step(shock_fraction(shock, float(f)), start)
             else:
-                r = dataclasses.replace(
-                    run, result=dataclasses.replace(run.result, mp=point(f, k))
+                mp, res = session.solve_shock(
+                    shock_fraction(shock, float(f)), start=start
                 )
-                per = "shock"
-            heads = {
-                n: np.asarray(h.array, dtype=np.float64)
-                for n, h in headers_at(r, per).items()
-            }
-            cache[f] = (_Period(r, per), heads)
-        return cache[f]
+                if int(res["code"]) != 1:
+                    raise RuntimeError(
+                        f"path decomposition: sub-step {f} of the shock did not "
+                        f"converge (code {res['code']}, residual {res.get('residual')})"
+                    )
+                pts[kk] = mp
+            solves += 1
+        return pts[kk]
+
+    def at(j: int, k: int) -> tuple[_Period, dict[str, np.ndarray]]:
+        kk = key(j, k)
+        if kk not in cache:
+            with phase("headers_at"):
+                if j == 0:
+                    r, per = run, "check"
+                else:
+                    r = dataclasses.replace(
+                        run, result=dataclasses.replace(run.result, mp=point(j, k))
+                    )
+                    per = "shock"
+                heads = {
+                    n: np.asarray(h.array, dtype=np.float64)
+                    for n, h in headers_at(r, per).items()
+                }
+                cache[kk] = (_Period(r, per), heads)
+        return cache[kk]
 
     decomps: dict[int, dict[str, HeaderArray]] = {}
 
     def headers_for(k: int) -> dict[str, HeaderArray]:
         if k not in decomps:
-            for j in range(1, k):  # in order: each point warm-starts the next
-                point(Fraction(j, k), k)
+            for j in range(1, k):  # in order: each point starts from the previous
+                point(j, k)
             parts = []
             for j in range(k):
-                (A, va), (B, vb) = at(Fraction(j, k), k), at(Fraction(j + 1, k), k)
-                parts.append(
-                    decomp_from_changes(va, vb, changes_between(A, B, els), els)
-                )
-            (A, va), (B, vb) = at(Fraction(0), k), at(Fraction(1), k)
-            one = decomp_from_changes(va, vb, changes_between(A, B, els), els)
-            decomps[k] = one_step_dvol(sum_steps(parts), one)
+                (A, va), (B, vb) = at(j, k), at(j + 1, k)
+                with phase("decomp_steps"):
+                    parts.append(
+                        decomp_from_changes(va, vb, changes_between(A, B, els), els)
+                    )
+            (A, va), (B, vb) = at(0, k), at(k, k)
+            with phase("decomp_steps"):
+                one = decomp_from_changes(va, vb, changes_between(A, B, els), els)
+                decomps[k] = one_step_dvol(sum_steps(parts), one)
         return decomps[k]
 
     def ev_of(h: Mapping[str, HeaderArray]) -> list[float]:
@@ -355,8 +535,10 @@ def solve_decomp_path(
         steps=k,
         headers=reported,
         history=hist,
-        points=[pts[Fraction(j, k)] for j in range(1, k + 1)],
+        points=[pts[key(j, k)] for j in range(1, k + 1)],
         solves=solves,
         minutes=(time.perf_counter() - t0) / 60.0,
         richardson=extrapolated,
+        substep=substep,
+        phases={n: round(v, 4) for n, v in timer.seconds.items()},
     )

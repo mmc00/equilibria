@@ -382,14 +382,68 @@ def _solve_period_inner(
     shock_levels: bool = False,
     warm_start: bool = False,
 ) -> tuple[MPArrays, dict[str, Any]]:
-    from equilibria.family.cell_index import CellIndex
     from equilibria.family.post_solve import post_solve
+
+    mp1 = _period_recipe(
+        run,
+        mp,
+        period,
+        base_calibrated=base_calibrated,
+        solve_check=solve_check,
+        shock=shock,
+        shock_levels=shock_levels,
+        warm_start=warm_start,
+    )
+    if period == "base":  # skip_base_solve: the base is the calibrated benchmark
+        with phase("post_solve"):
+            post_solve(
+                mp1,
+                "base",
+                backend=run.backend,
+                state=run.state,
+                params=run.params,
+                regions=run.regions,
+                if_sub=run.if_sub,
+            )
+        return mp1, {"code": 1, "residual": 0.0, "skipped_solve": True}
+    sq, mp_sq, ss = _period_system(run, mp1, period)
+    token = _NEWTON_TOL.set(run.newton_tol)
+    try:
+        res, resid, code = _newton(ss, sq)
+    finally:
+        _NEWTON_TOL.reset(token)
+    with phase("post_solve"):
+        post_solve(
+            mp_sq,
+            period,
+            backend=run.backend,
+            state=run.state,
+            params=run.params,
+            regions=run.regions,
+            if_sub=run.if_sub,
+            sq=sq,
+            x=res.x,
+            code=code,
+        )
+    return mp_sq, {"code": code, "residual": resid, "nit": res.nit}
+
+
+def _period_recipe(
+    run: FamilyRun,
+    mp: MPArrays,
+    period: str,
+    *,
+    base_calibrated: bool,
+    solve_check: bool,
+    shock: Any = None,
+    shock_levels: bool = False,
+    warm_start: bool = False,
+) -> MPArrays:
+    """The recipe step of ``_solve_period_inner`` (new arrays)."""
     from equilibria.family.prep_recipe import run_recipe
-    from equilibria.family.prep_square import square
-    from equilibria.family.squared_system import ArrayIncidence, SquaredSystem
 
     with phase("recipe"):
-        mp1 = run_recipe(
+        return run_recipe(
             mp,
             period,
             params=run.params,
@@ -408,18 +462,15 @@ def _solve_period_inner(
             savf_targets=run.savf_targets,
             warm=mp if warm_start else None,
         )
-    if period == "base":  # skip_base_solve: the base is the calibrated benchmark
-        with phase("post_solve"):
-            post_solve(
-                mp1,
-                "base",
-                backend=run.backend,
-                state=run.state,
-                params=run.params,
-                regions=run.regions,
-                if_sub=run.if_sub,
-            )
-        return mp1, {"code": 1, "residual": 0.0, "skipped_solve": True}
+
+
+def _period_system(run: FamilyRun, mp1: MPArrays, period: str) -> tuple[Any, Any, Any]:
+    """The square and system-build steps of ``_solve_period_inner`` on the recipe's
+    arrays ``mp1``: ``(sq, mp_sq, ss)``."""
+    from equilibria.family.cell_index import CellIndex
+    from equilibria.family.prep_square import square
+    from equilibria.family.squared_system import ArrayIncidence, SquaredSystem
+
     with phase("square"):
         if run.cell_index is None or not run.cell_index.fits(mp1):
             run.cell_index = CellIndex(mp1)
@@ -442,25 +493,7 @@ def _solve_period_inner(
         ss = SquaredSystem.build(
             run.backend, run.state, mp_sq, period, sq, cross=run.cross
         )
-    token = _NEWTON_TOL.set(run.newton_tol)
-    try:
-        res, resid, code = _newton(ss, sq)
-    finally:
-        _NEWTON_TOL.reset(token)
-    with phase("post_solve"):
-        post_solve(
-            mp_sq,
-            period,
-            backend=run.backend,
-            state=run.state,
-            params=run.params,
-            regions=run.regions,
-            if_sub=run.if_sub,
-            sq=sq,
-            x=res.x,
-            code=code,
-        )
-    return mp_sq, {"code": code, "residual": resid, "nit": res.nit}
+    return sq, mp_sq, ss
 
 
 def settled_check_point(mp: MPArrays) -> dict[str, dict]:
@@ -695,6 +728,57 @@ class FamilySession:
                 self.run, cur, res, shock, shock_levels, warm_start=warm
             )
         return cur, res
+
+    def shock_system(
+        self,
+        shock: Any,
+        *,
+        start: MPArrays | None = None,
+        savf_targets: Mapping[str, float] | None = None,
+        shock_levels: bool = False,
+    ) -> tuple[Any, Squared, MPArrays]:
+        """The shock period at ``shock`` prepared as :meth:`solve_shock` prepares one
+        solve (recipe warm from ``start``, square, system build), not solved: ``(ss,
+        sq, mp_sq)``, ``ss.x0`` the start point. ``savf_targets`` (``{region: savf}``)
+        holds the ``nominal_savf`` regions there (``trade_balance="ratio"``)."""
+        run = self.run
+        run.savf_targets = None if savf_targets is None else dict(savf_targets)
+        try:
+            with scope("shock"):
+                mp1 = _period_recipe(
+                    run,
+                    start if start is not None else self.after_check,
+                    "shock",
+                    base_calibrated=True,
+                    solve_check=True,
+                    shock=shock,
+                    shock_levels=shock_levels,
+                    warm_start=start is not None,
+                )
+                sq, mp_sq, ss = _period_system(run, mp1, "shock")
+        finally:
+            run.savf_targets = None
+        return ss, sq, mp_sq
+
+    def finish_shock(self, mp_sq: MPArrays, sq: Squared, x: np.ndarray) -> MPArrays:
+        """``post_solve`` of the shock period at the point ``x`` of ``sq`` (``mp_sq``
+        modified and returned), as after a converged solve."""
+        from equilibria.family.post_solve import post_solve
+
+        run = self.run
+        with scope("shock"), phase("post_solve"):
+            return post_solve(
+                mp_sq,
+                "shock",
+                backend=run.backend,
+                state=run.state,
+                params=run.params,
+                regions=run.regions,
+                if_sub=run.if_sub,
+                sq=sq,
+                x=x,
+                code=1,
+            )
 
 
 def _solve_family(
