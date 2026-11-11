@@ -79,6 +79,7 @@ tests/data/test_gempack_tools.py
 tests/data/test_no_test_fixtures.py
 tests/data/test_reference_keys.py
 tests/data/test_release_check.py
+tests/data/test_sources_cache.py
 tests/data/test_sources_checks.py
 tests/data/test_sources_dataset_dir.py
 tests/data/test_sources_derived.py
