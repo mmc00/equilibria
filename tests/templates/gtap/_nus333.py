@@ -1,7 +1,6 @@
 """Lo comun de los tests nus333 (Burfisher 3e): datos, cierre, % de cambio y oraculos.
 
-``nus333_params`` hace SKIP si falta el dataset (o el ``.prm``): los tests son
-LOCAL-only.
+``nus333_params`` hace SKIP si falta el dataset y FALLA si falta su ``.prm``.
 """
 
 from __future__ import annotations
@@ -9,6 +8,7 @@ from __future__ import annotations
 import gzip
 import importlib
 import json
+import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -23,13 +23,20 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def nus333_params(prm: str = "default.prm") -> GTAPParameters:
-    """Parametros nus333 con el ``.prm`` del ejercicio; SKIP si falta algo."""
+    """nus333 parameters with the exercise's ``.prm``.
+
+    SKIP only when the dataset is missing. A missing ``.prm`` next to a present
+    dataset is a FAIL: the name is checked with its exact case, because macOS
+    finds ``3x3CES.prm`` as ``3x3ces.prm`` and Linux (the CI) does not, which
+    used to skip 60 cases in the CI without a word."""
     from equilibria._local_refs import nus333_dir
     from equilibria.templates.gtap import GTAPParameters
 
     har = nus333_dir()
-    if not (har / "basedata.har").exists() or not (har / prm).exists():
-        pytest.skip(f"nus333 o {prm} no disponible en {har}")
+    if not (har / "basedata.har").exists():
+        pytest.skip(f"nus333 not available in {har}")
+    if prm not in os.listdir(har):
+        pytest.fail(f"{prm} is not in {har} (names are case-sensitive)")
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=har / "basedata.har",
