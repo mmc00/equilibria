@@ -346,7 +346,8 @@ WHY_GTAPV7 = (
     "en test_nus333_psave_gtap.py"
 )
 WHY_RF = (
-    "fijada a su macro con ifSUB (RF de measure_gtap_pure_tols): reporte, no resultado"
+    "adjustment price, margin or tax through which the model clears its markets: "
+    "two implementations differ in it by small numerical amounts (paper, Section 5.4)"
 )
 
 
