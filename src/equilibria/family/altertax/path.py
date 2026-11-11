@@ -366,7 +366,7 @@ class _NewtonSteps:
         self.x_chk: np.ndarray | None = None
         self.g: np.ndarray | None = None
         self._x: dict[int, np.ndarray] = {}  # id(point arrays) -> its start vector
-        self._col: dict[str, int] | None = None
+        self._mq: tuple[np.ndarray, np.ndarray] | None = None  # (eq_mq rows, mq cols)
 
     def targets(self, w: float) -> dict[str, float] | None:
         if not self.ratio:
@@ -434,32 +434,41 @@ class _NewtonSteps:
         x1 = x0 + a
         with phase("copy"):
             mp = self.template.copy()
-        for name, cells in self._fixed_cells(shock_t, w0 + dw).items():
+        fixed = self._fixed_cells(shock_t, w0 + dw)
+        for name, cells in fixed.items():
             var = mp.vars[name]
             for key, value in cells.items():
                 var.value[var.pos(key)] = value
+        if self.ratio:  # the system's savf slots at the point's targets
+            self.ss.set_fixed("savf", fixed["savf"])
         mp = self.session.finish_shock(mp, self.sq, x1)
-        self._x[id(mp)] = self._warm_x(mp, x1)
+        self._x[id(mp)] = self._warm_x(x1, J)
         return mp
 
-    def _warm_x(self, mp: Any, x: np.ndarray) -> np.ndarray:
-        """The start vector a rebuild warm-started from the point ``mp`` (column vector
-        ``x``) gets: ``x`` with the Fisher aggregates (``mq_*``) refreshed at the
-        point's levels, as the recipe's warm start refreshes them."""
-        from equilibria.family.cross_period import mq_values
-
-        cross = self.session.run.cross
-        if cross is None:
-            return x
-        if self._col is None:
-            self._col = {c: i for i, c in enumerate(self.sq.col_names)}
+    def _warm_x(self, x: np.ndarray, J: Any) -> np.ndarray:
+        """The start vector a rebuild warm-started from the new point (column vector
+        ``x``, the system's fixed slots at that point) gets: ``x`` with the Fisher
+        aggregates refreshed at the point's levels, as the recipe's warm start
+        refreshes them. Each aggregate column ``mq_*[.., shock]`` is the unknown of its
+        defining row ``eq_mq_*`` (linear in it): one Newton update on that row alone,
+        ``mq - F_row / (dF_row/dmq)``, is the defined sum at the other levels."""
+        if self._mq is None:
+            rows = {r: i for i, r in enumerate(self.sq.row_names)}
+            pairs = [
+                (rows[f"eq_{c}"], i)
+                for i, c in enumerate(self.sq.col_names)
+                if c.startswith("mq_") and f"eq_{c}" in rows
+            ]
+            r_ix = np.array([p[0] for p in pairs], dtype=np.int64)
+            c_ix = np.array([p[1] for p in pairs], dtype=np.int64)
+            self._mq = (r_ix, c_ix)
+        r_ix, c_ix = self._mq
         out = np.array(x, dtype=float)
-        with phase("refresh_aggregates"):
-            for name, cells in mq_values(cross, mp).items():
-                for key, val in cells.items():
-                    i = self._col.get(f"{name}[{','.join(key)}]")
-                    if i is not None:
-                        out[i] = val
+        if len(r_ix):
+            with phase("refresh_aggregates"):
+                f = self.ss.F(x)[r_ix]
+                d = np.asarray(J.tocsr()[r_ix, c_ix]).ravel()
+                out[c_ix] = x[c_ix] - f / d
         return out
 
     def _dF_dW(self, w0: float, x0: np.ndarray, f0: np.ndarray) -> np.ndarray:
