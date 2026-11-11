@@ -247,6 +247,8 @@ class DecompPath:
     richardson: bool = False
     substep: str = "newton"  # how an intermediate point is reached (SUBSTEPS)
     phases: dict[str, float] = field(default_factory=dict)  # seconds by phase
+    # one record per sub-step solve / Newton step, as ``driver.solve_record``
+    step_records: list = field(default_factory=list)
 
     @property
     def steps_half(self) -> int | None:
@@ -268,6 +270,7 @@ class DecompPath:
                 str(k): v.get("ev_richardson") for k, v in self.history.items()
             },
             "change_by_steps": {str(k): v["change"] for k, v in self.history.items()},
+            "step_records": [dict(r) for r in self.step_records],
         }
 
 
@@ -281,6 +284,7 @@ class _Linear:
         self.kind = os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE", "direct").lower()
         self.lu: Any = None
         self.sig: Any = None
+        self.null_pivots = 0  # MUMPS INFOG(28) of the last numeric factorization
 
     def factor(self, J: Any) -> None:
         if self.kind != "mumps":
@@ -288,6 +292,7 @@ class _Linear:
 
             with phase("factor"):
                 self.lu = sla.splu(J.tocsc())
+            self.null_pivots = 0
             return
         coo = J.tocoo()
         sig = (coo.nnz, hash(coo.row.tobytes()), hash(coo.col.tobytes()))
@@ -319,6 +324,7 @@ class _Linear:
             self.lu, self.sig = lu, sig
         with phase("mumps_numeric"):
             self.lu.do_numeric_factorization(coo)
+        self.null_pivots = int(self.lu.get_infog(28) or 0)
 
     def solve(self, b: np.ndarray) -> np.ndarray:
         with phase("back_solve"):
@@ -366,6 +372,7 @@ class _NewtonSteps:
         self.x_chk: np.ndarray | None = None
         self.g: np.ndarray | None = None
         self._x: dict[int, np.ndarray] = {}  # id(point arrays) -> its start vector
+        self.records: list[dict] = []  # one per step (``driver.solve_record`` keys)
         self._mq: tuple[np.ndarray, np.ndarray] | None = None  # (eq_mq rows, mq cols)
 
     def targets(self, w: float) -> dict[str, float] | None:
@@ -412,7 +419,15 @@ class _NewtonSteps:
         self.ss.x0 = np.array(x, dtype=float)
         return self.ss, self.ss.x0
 
-    def step(self, shock_t: Mapping[str, Mapping[tuple, float]], start: Any) -> Any:
+    def step(
+        self,
+        shock_t: Mapping[str, Mapping[tuple, float]],
+        start: Any,
+        label: str = "path step",
+    ) -> Any:
+        """One Newton step (class docstring) to the point at ``shock_t``; appends its
+        record to ``records``. A factorization that raises or a non-finite step stops
+        the path with a ``RuntimeError`` naming the sub-step (``label``)."""
         from equilibria.family.driver import _world_income
 
         w0 = self.w_chk if start is None else _world_income(start, "shock")
@@ -421,7 +436,12 @@ class _NewtonSteps:
             f0 = ss.F(x0)
         with phase("J"):
             J = ss.J(x0)
-        self.lin.factor(J)
+        try:
+            self.lin.factor(J)
+        except Exception as e:  # noqa: BLE001 - re-raised, naming the sub-step
+            raise RuntimeError(
+                f"path decomposition: sub-step {label}: factorization failed: {e}"
+            ) from e
         a = self.lin.solve(-f0)
         dw = 0.0
         if self.ratio:
@@ -431,6 +451,25 @@ class _NewtonSteps:
             b = self.lin.solve(self.v)
             dw = float(a[g].sum()) / (1.0 + float(b[g].sum()))
             a = a - b * dw
+        if not (np.all(np.isfinite(a)) and np.isfinite(dw)):
+            raise RuntimeError(
+                f"path decomposition: sub-step {label}: the Newton step is not finite "
+                f"(MUMPS null pivots {self.lin.null_pivots})"
+            )
+        self.records.append(
+            {
+                "solve": label,
+                "code": 1,
+                "nit": 1,
+                "residual": None,  # one step: no residual is evaluated after it
+                "start_residual": float(np.linalg.norm(f0, np.inf)),
+                "converged": True,
+                "null_pivots": self.lin.null_pivots,
+                "null_pivot_factors": int(self.lin.null_pivots > 0),
+                "gmin_retries": 0,
+                "factor_failures": 0,
+            }
+        )
         x1 = x0 + a
         with phase("copy"):
             mp = self.template.copy()
@@ -524,6 +563,7 @@ def _solve_decomp_path(run, shock, steps, tol, k_max, substep, timer) -> DecompP
     pts: dict[Any, Any] = {Fraction(1): run.result.mp}
     cache: dict[Any, tuple[_Period, dict[str, np.ndarray]]] = {}
     solves = 0
+    records: list[dict] = []
 
     def key(j: int, k: int) -> Any:
         """A point of the K-step path: the fraction where every K shares it (the
@@ -537,11 +577,17 @@ def _solve_decomp_path(run, shock, steps, tol, k_max, substep, timer) -> DecompP
         if kk not in pts:
             f = Fraction(j, k)
             start = pts[key(j - 1, k)] if j > 1 else None
+            label = f"path K={k} step {j}"
             if newton is not None:
-                pts[kk] = newton.step(shock_fraction(shock, float(f)), start)
+                pts[kk] = newton.step(shock_fraction(shock, float(f)), start, label)
+                records.append(newton.records[-1])
             else:
                 mp, res = session.solve_shock(
                     shock_fraction(shock, float(f)), start=start
+                )
+                records.extend(
+                    {**r, "solve": f"{label}: {r['solve']}"}
+                    for r in res.get("solves", ())
                 )
                 if int(res["code"]) != 1:
                     raise RuntimeError(
@@ -622,4 +668,5 @@ def _solve_decomp_path(run, shock, steps, tol, k_max, substep, timer) -> DecompP
         richardson=extrapolated,
         substep=substep,
         phases={n: round(v, 4) for n, v in timer.seconds.items()},
+        step_records=records,
     )

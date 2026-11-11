@@ -66,6 +66,22 @@ def test_command_writes_five_outputs(solved):
     assert {"nit", "residual", "minutes"} <= set(run)
 
 
+def test_run_and_compare_json_list_every_solve(solved):
+    """Every Newton solve (settle, check, shock) with its code, iterations, null pivots
+    and GMIN retries, in run.json and compare.json; all converged, so both pass."""
+    out, p = solved
+    assert p.returncode == 0, p.stderr[-2000:]
+    run = json.loads((out / "run.json").read_text())
+    cmp = json.loads((out / "compare.json").read_text())
+    for recs in (run["solves"], cmp["solves"]):
+        assert [r["solve"] for r in recs] == ["settle_check", "check", "shock"]
+        for r in recs:
+            assert {"code", "nit", "residual", "null_pivots", "gmin_retries"} <= set(r)
+            assert r["code"] == 1
+    assert cmp["solves_pass"] is True and cmp["pass"] is True
+    assert "solve shock" in p.stdout
+
+
 def test_compare_json_passes_against_the_fixtures(solved):
     out, p = solved
     assert p.returncode == 0, p.stderr[-2000:]

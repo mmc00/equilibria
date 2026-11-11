@@ -34,6 +34,8 @@ class NewtonResult:
     cfg: dict = field(default_factory=dict)  # GMIN / ICNTL actually used
     linsolve: str = "direct"
     gmin_factors: int = 0  # numeric factorizations that ran with GMIN on the diagonal
+    # MUMPS analyses/factorizations that raised (that iteration took the gradient step)
+    factor_failures: int = 0
 
 
 def _nm(names: Sequence | None, i: int) -> str:
@@ -206,6 +208,7 @@ def newton_tr(
     _tr_nfact = 0  # numeric factorizations
     _tr_nullpiv: list = []  # MUMPS INFOG(28) after each numeric factor
     _tr_cfg: dict = {}  # GMIN / ICNTL actually used
+    _tr_factor_failures = 0  # MUMPS analyses/factorizations that raised
     for _k_tr in range(_maxit_tr):
         _rinf_tr = float(np.linalg.norm(_F_tr, np.inf))
         _tr_trace.append(
@@ -434,8 +437,15 @@ def newton_tr(
                 _Jm_tr = _Jm_base
                 if _attempt == 0:
                     _gmin = 0.0 if _on_null_pivot else _gmin_cfg
-                    if _on_null_pivot and _lu_gmin_pattern and _need_lu:
-                        _lu_tr = None  # last analysis was on the GMIN pattern
+                    # the live analysis is on the GMIN pattern (J·P + diag, more
+                    # nonzeros): any factor of the plain J·P needs a new analysis.
+                    # GMIN on factors every step (below), also when the LU is young.
+                    if (
+                        _on_null_pivot
+                        and _lu_gmin_pattern
+                        and (_need_lu or _gmin_cfg > 0.0)
+                    ):
+                        _lu_tr = None
                         _lu_gmin_pattern = False
                 else:
                     _gmin = _gmin_cfg  # retry: refactor this same matrix with GMIN
@@ -680,6 +690,7 @@ def newton_tr(
                             pass
                         _plog_m(f"MUMPS FAILED: {_e_m}{_infog}")
                         _lu_tr = None
+                        _tr_factor_failures += 1
                 else:
                     _lu_age_tr += 1
                 if (
@@ -982,4 +993,5 @@ def newton_tr(
         cfg=_tr_cfg,
         linsolve=_linsolve_tr,
         gmin_factors=_tr_gmin_factors,
+        factor_failures=_tr_factor_failures,
     )

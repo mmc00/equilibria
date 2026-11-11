@@ -89,6 +89,10 @@ def measure(dataset: str, trade_balance: str, decomp_steps: int | str = "auto") 
     cmp = gates.compare_all(run, ref)  # sl4dump folder: no waivers, labels off
     out["outputs"] = cmp["outputs"]
     out["waivers"] = cmp["waivers"]
+    # every Newton solve and path step; one failed solve fails the run
+    out["solves"] = cmp["solves"]
+    out["solves_pass"] = cmp["solves_pass"]
+    out["pass"] = cmp["pass"]
     sl4 = gates.read_sl4(ref / gates.SL4_DUMP)
     # closure diagnostics straight from the reference's own % changes
     out["gempack_closure"] = {
@@ -154,7 +158,33 @@ def main() -> int:
             "pass",
             o["pass"],
         )
-    return 0
+    print_solves(res["solves"])
+    print("overall", "PASS" if res["pass"] else "FAIL")
+    return 0 if res["pass"] else 1
+
+
+def print_solves(solves: list[dict]) -> None:
+    """One line per Newton solve / path step; the failed ones are marked FAILED. The
+    path steps are summed into one line per K (they are many)."""
+    path: dict[str, list[dict]] = {}
+    for r in solves:
+        if r["solve"].startswith("path K="):
+            path.setdefault(r["solve"].split(" step")[0], []).append(r)
+            continue
+        print(
+            f"solve {r['solve']}: code {r['code']} nit {r['nit']} residual "
+            f"{r['residual']} null pivots {r['null_pivots']} gmin retries "
+            f"{r['gmin_retries']} factor failures {r.get('factor_failures', 0)}"
+            + ("" if int(r["code"]) == 1 else "  FAILED")
+        )
+    for k, rs in path.items():
+        bad = [r["solve"] for r in rs if int(r["code"]) != 1]
+        print(
+            f"solve {k}: {len(rs)} steps, codes "
+            f"{sorted({int(r['code']) for r in rs})} null pivots "
+            f"{sum(int(r['null_pivots']) for r in rs)}"
+            + (f"  FAILED {bad}" if bad else "")
+        )
 
 
 if __name__ == "__main__":

@@ -126,6 +126,26 @@ ICNTL6_FAMILY = 7  # MUMPS ICNTL(6) on the family squared system (Pyomo keeps 0)
 CODE_RESIDUAL = 1e-5  # code 1 needs ||F||_inf below this, as ``_ok_sr``
 
 
+def solve_record(label: str, res: Any, resid: float, code: int) -> dict[str, Any]:
+    """What a run reports of one Newton solve: its ``code`` (1 = converged), ``nit``,
+    the final ``residual``, the MUMPS null pivots summed over its factorizations
+    (``null_pivots``; ``null_pivot_factors`` counts the factorizations that had any),
+    the GMIN refactorizations they triggered (``gmin_retries``) and the factorizations
+    that raised (``factor_failures``)."""
+    piv = [int(k) for k in getattr(res, "null_pivots", ()) or ()]
+    return {
+        "solve": label,
+        "code": int(code),
+        "nit": int(getattr(res, "nit", 0)),
+        "residual": float(resid),
+        "converged": bool(getattr(res, "success", False)),
+        "null_pivots": sum(piv),
+        "null_pivot_factors": sum(1 for k in piv if k > 0),
+        "gmin_retries": int(getattr(res, "gmin_factors", 0)),
+        "factor_failures": int(getattr(res, "factor_failures", 0)),
+    }
+
+
 def default_cache_root() -> Path:
     """Where the records and the compiled programs live (``EQUILIBRIA_FAMILY_CACHE``)."""
     env = os.environ.get(CACHE_ENV)
@@ -158,6 +178,8 @@ class FamilyRun:
     newton_tol: tuple[float, float] | None = None
     cell_index: Any = field(default=None, repr=False)
     adjacency: dict = field(default_factory=dict, repr=False)
+    # one record per Newton solve of the run, in order (:func:`solve_record`)
+    solves: list = field(default_factory=list, repr=False)
 
 
 @dataclass
@@ -178,6 +200,9 @@ class FamilyResult:
     phase_counts: dict[str, int] = field(default_factory=dict)
     # ``solve_gtap_family(keep_session=True)``: more shocks on the same run context
     session: Any = field(default=None, repr=False)
+    # every Newton solve of the run (settle, check, shock, ratio iterations), in order:
+    # ``{"solve", "code", "nit", "residual", "null_pivots", "gmin_retries", ...}``
+    solves: list = field(default_factory=list)
 
 
 def _driver_closure(closure: Any) -> Any:
@@ -351,13 +376,15 @@ def _solve_period(
     shock_levels: bool = False,
     tag: str | None = None,
     warm_start: bool = False,
+    label: str | None = None,
 ) -> tuple[MPArrays, dict[str, Any]]:
     """One period of ``_solve_multiperiod_inner``: recipe, solve, post-solve.
 
     Returns the arrays the next period starts from (``mp`` itself is not modified).
-    ``tag`` names the call in the phase timing (default: the period). ``warm_start``
-    (shock only): the free cells restart from the shock values ``mp`` already holds (a
-    previous shock solve) instead of the check's."""
+    ``tag`` names the call in the phase timing (default: the period); ``label`` its
+    record in ``run.solves`` (default: the tag). ``warm_start`` (shock only): the free
+    cells restart from the shock values ``mp`` already holds (a previous shock solve)
+    instead of the check's."""
     with scope(tag or period):
         return _solve_period_inner(
             run,
@@ -368,6 +395,7 @@ def _solve_period(
             shock=shock,
             shock_levels=shock_levels,
             warm_start=warm_start,
+            label=label or tag or period,
         )
 
 
@@ -381,6 +409,7 @@ def _solve_period_inner(
     shock: Any = None,
     shock_levels: bool = False,
     warm_start: bool = False,
+    label: str = "",
 ) -> tuple[MPArrays, dict[str, Any]]:
     from equilibria.family.post_solve import post_solve
 
@@ -425,7 +454,14 @@ def _solve_period_inner(
             x=res.x,
             code=code,
         )
-    return mp_sq, {"code": code, "residual": resid, "nit": res.nit}
+    rec = solve_record(label or period, res, resid, code)
+    run.solves.append(rec)
+    return mp_sq, {
+        "code": code,
+        "residual": resid,
+        "nit": res.nit,
+        "solves": [rec],
+    }
 
 
 def _period_recipe(
@@ -655,8 +691,12 @@ def _ratio_iterations(
     with ``del_tbalry = 0`` (gtapv7.tab, E_del_tbalry). The first solve held the check's
     value (``W`` at the check); each further solve uses the ``W`` of the previous one, until
     the relative change of ``W`` is below ``RATIO_TOL``. Returns the last arrays and stats
-    (``nit`` is summed over the solves; ``ratio_iterations`` counts them). With
-    ``warm_start`` each solve restarts from the previous one instead of the check."""
+    (``nit`` is summed over the solves; ``ratio_iterations`` counts them; ``solves``
+    lists the record of every solve, the first one's included). With ``warm_start``
+    each solve restarts from the previous one instead of the check.
+
+    A solve that fails (code != 1), the first one included, ends the iterations: the
+    returned ``code`` is that solve's, never a later solve's 1."""
     sv = cur.vars["savf"]
     chk = {
         k[0]: float(sv.value[i])
@@ -666,6 +706,9 @@ def _ratio_iterations(
     w_chk = _world_income(cur, "check")
     w = _world_income(cur, "shock")
     nit = int(result.get("nit", 0))
+    records = list(result.get("solves", ()))
+    if int(result["code"]) != 1:  # the first solve failed: no W to iterate on
+        return cur, {**result, "nit": nit, "ratio_iterations": 0, "solves": records}
     try:
         for k in range(RATIO_MAX_ITER):
             run.savf_targets = {r: x * w / w_chk for r, x in chk.items()}
@@ -678,8 +721,10 @@ def _ratio_iterations(
                 shock=shock,
                 shock_levels=shock_levels,
                 warm_start=warm_start,
+                label=f"shock ratio {k + 2}",
             )
             nit += int(result.get("nit", 0))
+            records += result.get("solves", ())
             w_new = _world_income(cur, "shock")
             done = abs(w_new - w) <= RATIO_TOL * abs(w_new)
             w = w_new
@@ -692,7 +737,7 @@ def _ratio_iterations(
             )
     finally:
         run.savf_targets = None
-    result = {**result, "nit": nit, "ratio_iterations": k + 1}
+    result = {**result, "nit": nit, "ratio_iterations": k + 1, "solves": records}
     return cur, result
 
 
@@ -850,4 +895,5 @@ def _solve_family(
         dict(timer.seconds),
         dict(timer.counts),
         session=FamilySession(run, after_check, ratio) if keep_session else None,
+        solves=list(run.solves),
     )

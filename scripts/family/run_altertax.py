@@ -12,10 +12,13 @@ of Burfisher's ``altax.exp``) on ``<dataset-dir>`` (a GTAP 7 package: ``basedata
 ``./altertax_out``):
 
 - ``updated.har``, ``summary.har``, ``decomp.har``, ``volume.har``, ``pct.har``;
-- ``run.json``: ``codes`` per period, ``nit``, ``residual``, ``minutes`` (always written).
+- ``run.json``: ``codes`` per period, ``nit``, ``residual``, ``minutes`` and ``solves``
+  (every Newton solve: code, iterations, residual, null pivots, GMIN retries; always
+  written).
 
-If any period does not solve (code != 1) only ``run.json`` is written, nothing is compared
-and the exit status is 3, the message naming the period.
+If any period does not solve (code != 1), or any Newton solve of the run failed, only
+``run.json`` is written, nothing is compared and the exit status is 3, the message naming
+the period or the solve. ``compare.json`` lists the solves too.
 
 ``--compare GEMPACK_DIR`` checks every output against a GEMPACK run folder and writes
 ``compare.json`` (per output: max gap, worst 10 cells, the gate, pass/fail, the known
@@ -71,6 +74,16 @@ def _write_json(path: Path, obj: dict) -> None:
     from equilibria.family.altertax.gates import json_safe
 
     path.write_text(json.dumps(json_safe(obj), indent=2, allow_nan=False) + "\n")
+
+
+def _print_solves(solves: list[dict]) -> None:
+    """One line per Newton solve; a failed one is marked FAILED."""
+    for r in solves:
+        print(
+            f"  solve {r['solve']}: code {r['code']} nit {r['nit']} residual "
+            f"{r['residual']} null pivots {r['null_pivots']} gmin retries "
+            f"{r['gmin_retries']}" + ("" if int(r["code"]) == 1 else "  FAILED")
+        )
 
 
 def load_shock(args: argparse.Namespace) -> dict:
@@ -141,20 +154,29 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: ALTERTAX did not solve: {info['error']}", file=sys.stderr)
         return 3
     results = run.result.results
+    failed = run.failed_solves()
     info |= {
         "codes": run.codes,
         "nit": {k: results[k].get("nit") for k in run.codes},
         "residual": {k: results[k].get("residual") for k in run.codes},
         "minutes": run.minutes,
-        "solved": all(c == 1 for c in run.codes.values()),
+        "solved": all(c == 1 for c in run.codes.values()) and not failed,
+        # every Newton solve: code, iterations, null pivots, GMIN retries
+        "solves": run.solve_records(),
     }
     _clean(out)  # nothing stale from an earlier run survives this one
     _write_json(out / "run.json", info)
+    _print_solves(info["solves"])
     bad = [k for k, c in run.codes.items() if c != 1]
-    if bad:
+    if bad or failed:
+        what = (
+            f"period {bad[0]!r} has code {run.codes[bad[0]]}"
+            if bad
+            else f"solve {failed[0]['solve']!r} has code {failed[0]['code']}"
+        )
         print(
-            f"error: ALTERTAX did not solve, period {bad[0]!r} has code {run.codes[bad[0]]} "
-            f"(codes {run.codes}); no outputs written, see {out / 'run.json'}",
+            f"error: ALTERTAX did not solve, {what} (codes {run.codes}); no outputs "
+            f"written, see {out / 'run.json'}",
             file=sys.stderr,
         )
         return 3
@@ -174,6 +196,7 @@ def main(argv: list[str] | None = None) -> int:
             f"  {o['output']:8s} max {o['max_kind'].split()[0]} gap {o['max']:.3e}  "
             f"{'PASS' if o['pass'] else 'FAIL'}"
         )
+    print(f"  solves   {'PASS' if cmp['solves_pass'] else 'FAIL'}")
     if not cmp["pass"]:
         print("error: a gate failed, see compare.json", file=sys.stderr)
         return 1

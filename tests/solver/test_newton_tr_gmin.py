@@ -87,3 +87,66 @@ def test_default_without_gmin_never_uses_it():
     pytest.importorskip("mumps")
     res = _run(_linear())
     assert res.gmin_factors == 0
+
+
+def _offdiag_null():
+    """F = (b^2 - 1, a + b - 2): row 0 stores no (0, 0) entry, so the GMIN retry
+    analyses a pattern with one more nonzero than J·P; at b = 0 row 0 is null. The
+    root is a = b = 1, reached after the retry's step is accepted."""
+
+    def F(x):
+        return np.array([x[1] ** 2 - 1.0, x[0] + x[1] - 2.0])
+
+    def J(x):
+        data = np.array([2.0 * x[1], 1.0, 1.0])
+        return sp.csr_matrix((data, [1, 0, 1], [0, 1, 3]), shape=(2, 2))
+
+    return F, J
+
+
+def test_factor_after_gmin_retry_reanalyses_the_plain_pattern(capfd):
+    """After a GMIN retry the live analysis is on J·P + diag; the next factor (GMIN on
+    keeps one per step, even when the step was accepted and the LU is young) must
+    re-analyse J·P, not hand MUMPS a matrix with fewer nonzeros ("nonzeros changed")."""
+    pytest.importorskip("mumps")
+    F, J = _offdiag_null()
+    res = newton_tr(
+        F,
+        J,
+        np.array([0.5, 0.0]),
+        np.full(2, -1e6),
+        np.full(2, 1e6),
+        colperm=np.arange(2),
+        linsolve="mumps",
+        icntl6=0,
+        maxit=20,
+        gmin=1e-9,
+        gmin_policy="on_null_pivot",
+    )
+    err = capfd.readouterr().err
+    assert res.success
+    assert res.null_pivots[0] > 0 and res.gmin_factors == 1
+    assert "MUMPS FAILED" not in err
+    assert res.factor_failures == 0
+
+
+def test_failed_factorization_is_counted(monkeypatch):
+    """A MUMPS factorization that raises is counted in ``factor_failures`` (the solve
+    falls back to the gradient step for that iteration)."""
+    pytest.importorskip("mumps")
+    from pyomo.contrib.pynumero.linalg import mumps_interface as mi
+
+    orig = mi.MumpsCentralizedAssembledLinearSolver.do_numeric_factorization
+    calls = {"n": 0}
+
+    def flaky(self, matrix, raise_on_error=True):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("injected factorization failure")
+        return orig(self, matrix, raise_on_error)
+
+    monkeypatch.setattr(
+        mi.MumpsCentralizedAssembledLinearSolver, "do_numeric_factorization", flaky
+    )
+    res = _run(_linear())
+    assert res.factor_failures == 1

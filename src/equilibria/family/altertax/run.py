@@ -34,6 +34,19 @@ class AltertaxRun:
     # (``family.altertax.path.DecompPath``); None = the one-step ``decomp_headers``
     decomp_path: Any = None
 
+    def solve_records(self) -> list[dict]:
+        """Every Newton solve of the run (``FamilyResult.solves``: settle, check, shock
+        and its ratio iterations) then every step of the decomp path, in order; each
+        ``{"solve", "code", "nit", "residual", "null_pivots", "gmin_retries", ...}``."""
+        recs = [dict(r) for r in getattr(self.result, "solves", ()) or ()]
+        if self.decomp_path is not None:
+            recs += [dict(r) for r in self.decomp_path.step_records]
+        return recs
+
+    def failed_solves(self) -> list[dict]:
+        """The records of :meth:`solve_records` whose code is not 1."""
+        return [r for r in self.solve_records() if int(r["code"]) != 1]
+
 
 # Elasticities that ``altertax.prm`` sets to exactly 1. The route's closure has
 # ``unit_sigma="gempack"`` (``altertax_closure``): the blocks write every one of them as

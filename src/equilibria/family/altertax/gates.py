@@ -914,7 +914,8 @@ def compare_all(
     run: AltertaxRun, gempack_dir: Path, labels: bool | None = None
 ) -> dict:
     """The six outputs of ``run`` against a GEMPACK run folder: ``{"outputs": [...],
-    "pass": bool, "waivers": ...}``. A missing GEMPACK file is a ``FileNotFoundError``
+    "pass": bool, "solves": [...], "solves_pass": bool, "waivers": ...}``; ``solves`` is
+    :meth:`AltertaxRun.solve_records` and ``pass`` needs every solve converged too. A missing GEMPACK file is a ``FileNotFoundError``
     naming it. The known-miss waivers apply only to the nus333 ALTAX reference.
     ``labels`` (compare header long names): ``None`` = off for a RunGTAP folder (its
     solution is a ``sl4dump.har``, its tab words the data headers differently), on
@@ -941,8 +942,13 @@ def compare_all(
         report_decomp_of(run, read_har(str(files["decomp"])), waivers, labels),
         report_pct(run, pct_changes(run), gempack_changes(sl4), waivers),
     ]
+    solves = run.solve_records() if hasattr(run, "solve_records") else []
+    solves_pass = all(int(r["code"]) == 1 for r in solves)
     return {
         "outputs": outputs,
-        "pass": all(o["pass"] for o in outputs),
+        # a failed Newton solve fails the run whatever the outputs say
+        "pass": solves_pass and all(o["pass"] for o in outputs),
+        "solves": solves,
+        "solves_pass": solves_pass,
         "waivers": waivers.to_dict(),
     }
