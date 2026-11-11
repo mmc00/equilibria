@@ -203,5 +203,14 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _exit_now(code: int) -> None:
+    """End the command without the interpreter's teardown: every output is written
+    and closed by now; freeing the run's arrays (~6 GB on 20x41) took 28-51 s. Only
+    here, at the entry point; ``main`` returns normally to any other caller."""
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    _exit_now(main())
