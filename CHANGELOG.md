@@ -9,6 +9,18 @@ commit log.
 
 ## [Unreleased]
 
+## [0.6.4] — 2026-11-10
+
+The release the paper's replication package is built from; no change to any number.
+
+### Added
+- GAMS CES reference results for the 3x4 aggregation (4 NLP with local IPOPT, 4 MCP on NEOS)
+  and four matching rows in the GTAP parity matrix: Table A1 now covers all 40 combinations
+  (#232).
+
+### Changed
+- CI runs the test suites in parallel groups planned by file under a time budget (#230, #233).
+
 ## [0.6.3] — 2026-11-09
 
 Fixes to the paper's replication package; no change to any number.
