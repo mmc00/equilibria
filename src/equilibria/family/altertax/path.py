@@ -178,9 +178,12 @@ def sum_steps(steps: list[dict[str, HeaderArray]]) -> dict[str, HeaderArray]:
     for name in DECOMP_HEADERS:
         arrs = [np.asarray(s[name].array, dtype=np.float64) for s in steps]
         tot = np.sum(arrs, axis=0)
-        if steps[0][name].set_names[-1:] == ["COL"]:
-            tot[..., 2] = arrs[0][..., 2]  # taxrateb: the rate at the first pre
-            tot[..., 3] = arrs[-1][..., 3]  # taxrateu: the rate at the last post
+        names = list(steps[0][name].set_names)
+        if "COL" in names:  # the last axis, or the one before DIREC (A231)
+            ax = names.index("COL")
+            col, first, last = (np.moveaxis(a, ax, 0) for a in (tot, arrs[0], arrs[-1]))
+            col[2] = first[2]  # taxrateb: the rate at the first pre
+            col[3] = last[3]  # taxrateu: the rate at the last post
         out[name] = tot
 
     def compound(arrs: list[np.ndarray]) -> np.ndarray:

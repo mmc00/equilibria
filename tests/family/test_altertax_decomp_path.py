@@ -102,6 +102,44 @@ def test_dvol_comes_from_the_one_step_decomposition():
     assert (np.asarray(out["A"].array) == 7.0).all()
 
 
+def _synthetic_steps(k):
+    """``k`` per-step decompositions of every DECOMP header (sizes 2, set sizes of the
+    fixed sets): step ``j`` holds ``j + 1`` everywhere, so a summed cell is
+    ``k (k + 1) / 2`` and a first/last-step cell is 1 / ``k``."""
+    from equilibria.babel.har.symbols import HeaderArray
+    from equilibria.family.altertax.decomp import _META
+
+    size = {"COL": 4, "COLUMN": 7, "PRICES": 3, "FORM": 2, "COLM": 3, "DIR": 2,
+            "DIREC": 2, "TYPE": 2, "CTAX": 9, "ACTIVITY": 4, "TECHTYPE": 7}  # fmt: skip
+    out = []
+    for j in range(k):
+        step = {}
+        for name, coeff, long_name, names in _META:
+            shape = tuple(size.get(s, 2) for s in names)
+            step[name] = HeaderArray(
+                name=name, coeff_name=coeff, long_name=long_name,
+                array=np.full(shape, j + 1.0), set_names=list(names), set_elements=[],
+            )  # fmt: skip
+        out.append(step)
+    return out
+
+
+@pytest.mark.parametrize("name", ["A211", "A22P", "A231"])
+def test_rate_columns_do_not_depend_on_k(name):
+    """``taxrateb`` is the rate at the first step's ``pre`` and ``taxrateu`` at the last
+    step's ``post`` wherever the COL axis sits: A231 ends in DIREC (COL is the axis
+    before), and its rate cells were summed over the K steps (they grew with K)."""
+    from equilibria.family.altertax.path import sum_steps
+
+    for k in (2, 4):
+        arr = np.asarray(sum_steps(_synthetic_steps(k))[name].array)
+        ax = list(_synthetic_steps(1)[0][name].set_names).index("COL")
+        col = np.moveaxis(arr, ax, 0)
+        assert (col[2] == 1.0).all(), (k, "taxrateb")
+        assert (col[3] == float(k)).all(), (k, "taxrateu")
+        assert (col[0] == k * (k + 1) / 2).all(), (k, "welcnt is summed")
+
+
 def test_pick_steps_stops_at_the_first_pair_when_r_is_exact():
     """D(K) = a + b / K gives R(K) = a at every K >= 2, so the first pair of R's is
     (R(2), R(4)): K = 4 where the EV-only rule needed K = 32."""
