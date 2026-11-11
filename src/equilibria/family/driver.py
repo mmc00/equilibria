@@ -315,7 +315,8 @@ def _newton(ss: Any, sq: Squared, border: Any = None) -> tuple[Any, float, int]:
     linsolve = os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE", "direct").lower()
     lb = np.array([sq.cells[c][2] for c in sq.col_names], dtype=float)
     ub = np.array([sq.cells[c][3] for c in sq.col_names], dtype=float)
-    F, J, x0 = ss.F, ss.J, np.asarray(ss.x0, dtype=float)
+    F, x0 = ss.F, np.asarray(ss.x0, dtype=float)
+    J = lambda z: ss.J(z)  # noqa: E731 - looked up at the first Jacobian
     row_names, col_names = list(sq.row_names), list(sq.col_names)
     if border is not None:
         lb, ub = np.append(lb, -np.inf), np.append(ub, np.inf)
