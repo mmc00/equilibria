@@ -50,8 +50,8 @@ def _inject_first_shock_failure(monkeypatch):
     orig = driver._newton
     seen = {"shock": 0}
 
-    def failing(ss, sq):
-        res, resid, code = orig(ss, sq)
+    def failing(*args, **kw):
+        res, resid, code = orig(*args, **kw)
         if list(phases.CURRENT._prefix[:1]) == ["shock"]:
             seen["shock"] += 1
             if seen["shock"] == 1:

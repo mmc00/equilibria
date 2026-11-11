@@ -160,7 +160,8 @@ def test_ratio_closure_holds_savf_over_world_income(env, ds):
     assert not any(
         bool(eq.active[eq.keys.index((r, "shock"))]) for r in regs[:-1]
     )  # the real-balance row is off, the residual region keeps its own
-    assert run.result.results["shock"]["ratio_iterations"] > 1
+    # W is an unknown of the shock's Newton system: one solve, no outer iterations
+    assert run.result.results["shock"]["ratio"] == "bordered"
 
 
 def test_ratio_levels_gate_on_nus333(env):

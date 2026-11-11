@@ -694,7 +694,9 @@ class SquaredSystem:
         out[self._proxy_k] = x[self._proxy_k] - self.x0[self._proxy_k]
         return out
 
-    def J(self, x: np.ndarray) -> sp.csr_matrix:
+    def J_entries(self, x: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """The entries of :meth:`J` as ``(rows, cols, data)`` (COO, duplicates not
+        summed), for a caller that borders the matrix before assembling it."""
         rows, cols, data = [], [], []
         for system, _, _, zperm, row_of in self._parts:
             Jf = system.jac(x[zperm])
@@ -706,10 +708,11 @@ class SquaredSystem:
         rows.append(self._proxy_k)
         cols.append(self._proxy_k)
         data.append(np.ones(len(self._proxy_k)))
-        return sp.csr_matrix(
-            (np.concatenate(data), (np.concatenate(rows), np.concatenate(cols))),
-            shape=(self._n, self._n),
-        )
+        return np.concatenate(rows), np.concatenate(cols), np.concatenate(data)
+
+    def J(self, x: np.ndarray) -> sp.csr_matrix:
+        rows, cols, data = self.J_entries(x)
+        return sp.csr_matrix((data, (rows, cols)), shape=(self._n, self._n))
 
 
 __all__ = [

@@ -155,7 +155,7 @@ def default_cache_root() -> Path:
 @dataclass
 class FamilyRun:
     """What every solve call of one run reads. Constant, except ``savf_targets``, which
-    the ``trade_balance="ratio"`` iterations set around each shock solve and reset."""
+    ``FamilySession.shock_system`` sets around one shock build and resets."""
 
     params: Any
     closure: Any  # the driver's base_closure (the recipe and the squaring read it)
@@ -298,8 +298,11 @@ _NEWTON_TOL: ContextVar[tuple[float, float] | None] = ContextVar(
 )
 
 
-def _newton(ss: Any, sq: Squared) -> tuple[Any, float, int]:
+def _newton(ss: Any, sq: Squared, border: Any = None) -> tuple[Any, float, int]:
     """Newton-TR on the squared system: ``(NewtonResult, ||F||_inf, code)``.
+
+    ``border`` (a :class:`RatioBorder`): the system bordered with the world-income
+    unknown and its row (``trade_balance="ratio"``); ``res.x`` then ends with ``W``.
 
     The settings are read from the environment as the Pyomo path reads them (the
     ``NEWTON_MUMPS`` set); the family pairing is the system's own column order, and
@@ -310,11 +313,18 @@ def _newton(ss: Any, sq: Squared) -> tuple[Any, float, int]:
     from equilibria.solver.newton_tr import newton_tr
 
     linsolve = os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE", "direct").lower()
-    n = len(ss.x0)
     lb = np.array([sq.cells[c][2] for c in sq.col_names], dtype=float)
     ub = np.array([sq.cells[c][3] for c in sq.col_names], dtype=float)
+    F, J, x0 = ss.F, ss.J, np.asarray(ss.x0, dtype=float)
+    row_names, col_names = list(sq.row_names), list(sq.col_names)
+    if border is not None:
+        lb, ub = np.append(lb, -np.inf), np.append(ub, np.inf)
+        F, J, x0 = border.F, border.J, np.append(x0, border.w0)
+        row_names.append(border.ROW)
+        col_names.append(border.COL)
     lb[~np.isfinite(lb)] = -1e20  # as the Pyomo path
     ub[~np.isfinite(ub)] = 1e20
+    n = len(x0)
     # the relative test needs RELTOL > 0, then fscale applies
     tol = _NEWTON_TOL.get()
     if tol is None:
@@ -326,20 +336,22 @@ def _newton(ss: Any, sq: Squared) -> tuple[Any, float, int]:
         reltol, ftol = tol
     with phase("fscale"):
         fscale = ss.fscale() if reltol > 0.0 else None
+    if fscale is not None and border is not None:
+        fscale = np.append(fscale, border.fscale_row)
 
     def timed_F(z):
         with phase("newton_F"):
-            return ss.F(np.clip(z, lb, ub))
+            return F(np.clip(z, lb, ub))
 
     def timed_J(z):
         with phase("newton_J"):
-            return ss.J(np.clip(z, lb, ub))
+            return J(np.clip(z, lb, ub))
 
     with phase("newton_other"):  # analysis, factor, solve and the TR logic
         res = newton_tr(
             timed_F,
             timed_J,
-            np.clip(ss.x0, lb, ub),
+            np.clip(x0, lb, ub),
             lb,
             ub,
             colperm=np.arange(n),  # row k is paired with column k
@@ -347,8 +359,8 @@ def _newton(ss: Any, sq: Squared) -> tuple[Any, float, int]:
             reltol=reltol,
             ftol=ftol,
             icntl6=ICNTL6_FAMILY if linsolve == "mumps" else None,
-            row_names=sq.row_names,
-            col_names=sq.col_names,
+            row_names=row_names,
+            col_names=col_names,
             linsolve=linsolve,
             maxit=int(os.environ.get("EQUILIBRIA_GTAP_SCIPY_MAXITER", "300")),
             # GMIN lands on other entries under the family pairing than under Pyomo's
@@ -361,7 +373,7 @@ def _newton(ss: Any, sq: Squared) -> tuple[Any, float, int]:
             mumps_values_at_analysis=True,
         )
     with phase("residual_check"):
-        resid = float(np.linalg.norm(ss.F(np.clip(res.x, lb, ub)), np.inf))
+        resid = float(np.linalg.norm(F(np.clip(res.x, lb, ub)), np.inf))
     return res, resid, 1 if (bool(res.success) and resid < CODE_RESIDUAL) else 2
 
 
@@ -607,8 +619,8 @@ def solve_gtap_family(
     ``eq_savf`` row is dropped, instead of ``savf = pigbl * savf_bar`` (real).
     ``"ratio"`` is GEMPACK's ``del_tbalry(r) = 0`` instead: the same hook, but ``savf[r]``
     keeps its ratio to world income, ``savf_shock = savf_check * W / W_check`` with
-    ``W = sum(regy)``; ``W`` depends on the solution, so the shock is solved again at the
-    updated targets until ``W`` stops moving (``RATIO_TOL``).
+    ``W = sum(regy)``; ``W`` depends on the solution, so it is one more unknown of the
+    shock's Newton system (:class:`RatioBorder`): one solve.
 
     ``newton_tol``: ``(reltol, ftol)`` for every Newton solve of the run (scaled and
     absolute residual), instead of ``EQUILIBRIA_GTAP_TR_RELTOL`` / ``_FTOL``.
@@ -668,77 +680,150 @@ def solve_gtap_family(
         activate(prev)
 
 
-RATIO_TOL = 1e-12  # relative change of world income that ends the ratio iterations
-RATIO_MAX_ITER = 25
-
-
 def _world_income(mp: MPArrays, period: str) -> float:
     v = mp.vars["regy"]
     return float(sum(v.value[i] for i in np.flatnonzero(v.period == period)))
 
 
-def _ratio_iterations(
+class RatioBorder:
+    """GEMPACK ``del_tbalry(r) = 0`` inside the shock's Newton system. ``savf[r]`` of
+    every non-residual region is held at ``savf_check[r] * W / W_check`` (``W`` = world
+    income = ``sum(regy)``), the level form of ``INCOMEWLD * del_tbalry = TB * y - TBAL *
+    ywld`` with ``del_tbalry = 0`` (gtapv7.tab, E_del_tbalry). ``W`` is one more unknown
+    (the last), with its own row ``W - g.x = 0`` (``g`` the ``regy`` shock columns);
+    ``F`` writes the savf targets of ``W`` into the system's fixed slots
+    (``SquaredSystem.set_fixed``) before evaluating it. The Jacobian is bordered: ``[[J,
+    v], [-g, 1]]``, ``v = dF/dW`` through the targets (finite difference, once, at the
+    start). The solution is the fixed point the outer iterations of a plain solve at
+    ``T(W)`` reach (tested), in one Newton solve."""
+
+    ROW = "eq_ratio_world_income"
+    COL = "ratio_world_income"
+
+    def __init__(self, ss: Any, sq: Squared, chk: Mapping[str, float], w_chk: float):
+        self.ss, self.chk, self.w_chk = ss, dict(chk), float(w_chk)
+        g = np.fromiter(
+            (c.startswith("regy[") and c.endswith(",shock]") for c in sq.col_names),
+            dtype=bool,
+            count=len(sq.col_names),
+        )
+        self.g_ix = np.flatnonzero(g)
+        self.n = len(sq.col_names)
+        x0 = np.asarray(ss.x0, dtype=float)
+        self.w0 = float(x0[self.g_ix].sum())
+        self.fscale_row = max(1.0, abs(self.w0))
+        self._w: float | None = None
+        f0 = self._F_at(x0, self.w0)
+        d = 1e-6 * self.w_chk
+        v = (self._F_at(x0, self.w0 + d) - f0) / d
+        self._F_at(x0, self.w0)  # the slots back at the start
+        self.v_rows = np.flatnonzero(v)
+        self.v_vals = v[self.v_rows]
+
+    def targets(self, w: float) -> dict[str, float]:
+        """``{region: savf}`` at world income ``w``."""
+        return {r: x * w / self.w_chk for r, x in self.chk.items()}
+
+    def _set(self, w: float) -> None:
+        if w != self._w:
+            self.ss.set_fixed(
+                "savf", {(r, "shock"): x for r, x in self.targets(w).items()}
+            )
+            self._w = w
+
+    def _F_at(self, x: np.ndarray, w: float) -> np.ndarray:
+        self._set(w)
+        return self.ss.F(x)
+
+    def F(self, z: np.ndarray) -> np.ndarray:
+        x, w = z[:-1], float(z[-1])
+        return np.append(self._F_at(x, w), w - x[self.g_ix].sum())
+
+    def J(self, z: np.ndarray) -> Any:
+        import scipy.sparse as sp
+
+        self._set(float(z[-1]))
+        r, c, d = self.ss.J_entries(z[:-1])
+        n, ng, nv = self.n, len(self.g_ix), len(self.v_rows)
+        rows = np.concatenate([r, self.v_rows, np.full(ng + 1, n)])
+        cols = np.concatenate([c, np.full(nv, n), self.g_ix, [n]])
+        data = np.concatenate([d, self.v_vals, -np.ones(ng), [1.0]])
+        return sp.csr_matrix((data, (rows, cols)), shape=(n + 1, n + 1))
+
+
+def _solve_shock_ratio(
     run: FamilyRun,
-    cur: MPArrays,
-    result: dict,
+    mp: MPArrays,
+    *,
     shock: Any,
     shock_levels: bool,
     warm_start: bool = False,
-) -> tuple[MPArrays, dict]:
-    """GEMPACK ``del_tbalry(r) = 0`` on top of the nominal hook: ``savf[r]`` of every
-    non-residual region is held at ``savf_check[r] * W / W_check`` (``W`` = world income =
-    ``sum(regy)``), the level form of ``INCOMEWLD * del_tbalry = TB * y - TBAL * ywld``
-    with ``del_tbalry = 0`` (gtapv7.tab, E_del_tbalry). The first solve held the check's
-    value (``W`` at the check); each further solve uses the ``W`` of the previous one, until
-    the relative change of ``W`` is below ``RATIO_TOL``. Returns the last arrays and stats
-    (``nit`` is summed over the solves; ``ratio_iterations`` counts them; ``solves``
-    lists the record of every solve, the first one's included). With ``warm_start``
-    each solve restarts from the previous one instead of the check.
+    label: str = "shock",
+) -> tuple[MPArrays, dict[str, Any]]:
+    """The shock period under ``trade_balance="ratio"``: recipe and system as a plain
+    shock solve (savf held at the check's value), then ONE Newton solve of the system
+    bordered by :class:`RatioBorder`; the post-solve sees the savf targets of the
+    solution's ``W``. Stats as ``_solve_period`` (``ratio="bordered"``)."""
+    from equilibria.family.post_solve import post_solve
 
-    A solve that fails (code != 1), the first one included, ends the iterations: the
-    returned ``code`` is that solve's, never a later solve's 1."""
-    sv = cur.vars["savf"]
-    chk = {
-        k[0]: float(sv.value[i])
-        for i, k in enumerate(sv.keys)
-        if sv.period[i] == "check" and k[0] in run.nominal_savf
-    }
-    w_chk = _world_income(cur, "check")
-    w = _world_income(cur, "shock")
-    nit = int(result.get("nit", 0))
-    records = list(result.get("solves", ()))
-    if int(result["code"]) != 1:  # the first solve failed: no W to iterate on
-        return cur, {**result, "nit": nit, "ratio_iterations": 0, "solves": records}
-    try:
-        for k in range(RATIO_MAX_ITER):
-            run.savf_targets = {r: x * w / w_chk for r, x in chk.items()}
-            cur, result = _solve_period(
-                run,
-                cur,
+    sv = mp.vars["savf"]
+    chk = {r: float(sv.value[sv.pos((r, "check"))]) for r in run.nominal_savf}
+    w_chk = _world_income(mp, "check")
+    with scope("shock"):
+        mp1 = _period_recipe(
+            run,
+            mp,
+            "shock",
+            base_calibrated=True,
+            solve_check=True,
+            shock=shock,
+            shock_levels=shock_levels,
+            warm_start=warm_start,
+        )
+        sq, mp_sq, ss = _period_system(run, mp1, "shock")
+        if not chk:
+            raise ValueError("trade_balance='ratio' needs the nominal_savf regions")
+        with phase("ratio_border"):
+            border = RatioBorder(ss, sq, chk, w_chk)
+        if len(border.g_ix) != len(run.regions):
+            raise ValueError(
+                f"trade_balance='ratio': {len(border.g_ix)} regy shock columns for "
+                f"{len(run.regions)} regions"
+            )
+        token = _NEWTON_TOL.set(run.newton_tol)
+        try:
+            res, resid, code = _newton(ss, sq, border)
+        finally:
+            _NEWTON_TOL.reset(token)
+        w = float(res.x[-1])
+        x = np.asarray(res.x[:-1], dtype=float)
+        sv1 = mp_sq.vars["savf"]
+        for r, value in border.targets(w).items():
+            sv1.value[sv1.pos((r, "shock"))] = value
+        with phase("post_solve"):
+            post_solve(
+                mp_sq,
                 "shock",
-                base_calibrated=True,
-                solve_check=True,
-                shock=shock,
-                shock_levels=shock_levels,
-                warm_start=warm_start,
-                label=f"shock ratio {k + 2}",
+                backend=run.backend,
+                state=run.state,
+                params=run.params,
+                regions=run.regions,
+                if_sub=run.if_sub,
+                sq=sq,
+                x=x,
+                code=code,
             )
-            nit += int(result.get("nit", 0))
-            records += result.get("solves", ())
-            w_new = _world_income(cur, "shock")
-            done = abs(w_new - w) <= RATIO_TOL * abs(w_new)
-            w = w_new
-            if done or int(result["code"]) != 1:
-                break
-        else:
-            raise RuntimeError(
-                f"trade_balance='ratio': world income did not settle in "
-                f"{RATIO_MAX_ITER} solves"
-            )
-    finally:
-        run.savf_targets = None
-    result = {**result, "nit": nit, "ratio_iterations": k + 1, "solves": records}
-    return cur, result
+    rec = {**solve_record(label, res, resid, code), "ratio": "bordered"}
+    run.solves.append(rec)
+    return mp_sq, {
+        "code": code,
+        "residual": resid,
+        "nit": res.nit,
+        "solves": [rec],
+        "ratio": "bordered",
+        "ratio_iterations": 1,
+        "world_income": w,
+    }
 
 
 @dataclass
@@ -749,7 +834,7 @@ class FamilySession:
 
     run: FamilyRun
     after_check: MPArrays  # the arrays the shock period of the run started from
-    ratio: bool  # trade_balance="ratio": world-income iterations around each solve
+    ratio: bool  # trade_balance="ratio": the bordered solve (RatioBorder) each time
 
     def solve_shock(
         self, shock: Any, *, shock_levels: bool = False, start: MPArrays | None = None
@@ -758,9 +843,14 @@ class FamilySession:
         of a previous shock solve of this session; the free cells start from its shock
         values (warm start) instead of the check's. Returns ``(arrays, stats)``."""
         warm = start is not None
-        cur, res = _solve_period(
+        mp = start if start is not None else self.after_check
+        if self.ratio:
+            return _solve_shock_ratio(
+                self.run, mp, shock=shock, shock_levels=shock_levels, warm_start=warm
+            )
+        return _solve_period(
             self.run,
-            start if start is not None else self.after_check,
+            mp,
             "shock",
             base_calibrated=True,
             solve_check=True,
@@ -768,11 +858,6 @@ class FamilySession:
             shock_levels=shock_levels,
             warm_start=warm,
         )
-        if self.ratio:
-            cur, res = _ratio_iterations(
-                self.run, cur, res, shock, shock_levels, warm_start=warm
-            )
-        return cur, res
 
     def shock_system(
         self,
@@ -871,18 +956,19 @@ def _solve_family(
         if period == "shock":
             after_check = cur
         t = time.perf_counter()
-        cur, results[period] = _solve_period(
-            run,
-            cur,
-            period,
-            base_calibrated=True,
-            solve_check=True,
-            shock=shock,
-            shock_levels=shock_levels,
-        )
         if ratio and period == "shock":
-            cur, results[period] = _ratio_iterations(
-                run, cur, results[period], shock, shock_levels
+            cur, results[period] = _solve_shock_ratio(
+                run, cur, shock=shock, shock_levels=shock_levels
+            )
+        else:
+            cur, results[period] = _solve_period(
+                run,
+                cur,
+                period,
+                base_calibrated=True,
+                solve_check=True,
+                shock=shock,
+                shock_levels=shock_levels,
             )
         timing[f"{period}_s"] = time.perf_counter() - t
     timing["total_s"] = time.perf_counter() - t0
