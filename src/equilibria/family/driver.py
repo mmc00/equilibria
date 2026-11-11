@@ -301,9 +301,11 @@ _NEWTON_TOL: ContextVar[tuple[float, float] | None] = ContextVar(
 )
 
 
-def _newton(
-    ss: Any, sq: Squared, border: Any = None, keep: dict | None = None
-) -> tuple[Any, float, int]:
+# the run's ``mumps`` dict for the solve in progress; set with ``_NEWTON_TOL``
+_MUMPS_KEEP: ContextVar[dict | None] = ContextVar("_MUMPS_KEEP", default=None)
+
+
+def _newton(ss: Any, sq: Squared, border: Any = None) -> tuple[Any, float, int]:
     """Newton-TR on the squared system: ``(NewtonResult, ||F||_inf, code)``.
 
     ``border`` (a :class:`RatioBorder`): the system bordered with the world-income
@@ -314,8 +316,9 @@ def _newton(
     MUMPS runs with ICNTL(6)=7. ``code`` is 1 iff Newton succeeded and the residual of
     the squared system is below ``CODE_RESIDUAL`` (``_ok_sr``), else 2 as the Pyomo path.
     ``_NEWTON_TOL`` (the run's ``newton_tol``, set around the call) replaces the
-    environment's two stopping tolerances. ``keep`` (the run's ``mumps``): a MUMPS
-    analysis kept from the previous solve is reused when the pattern is the same."""
+    environment's two stopping tolerances. ``_MUMPS_KEEP`` (the run's ``mumps``, set
+    the same way): a MUMPS analysis kept from the previous solve is reused when the
+    pattern is the same."""
     from equilibria.solver.newton_tr import newton_tr
 
     linsolve = os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE", "direct").lower()
@@ -378,7 +381,7 @@ def _newton(
             # analysed on the pattern alone (Pyomo's wrapper), ICNTL(6)=7 cannot use
             # the values and met a spurious null pivot on the 20x41 capFlex settle
             mumps_values_at_analysis=True,
-            mumps_keep=keep,
+            mumps_keep=_MUMPS_KEEP.get(),
         )
     with phase("residual_check"):
         resid = float(np.linalg.norm(F(np.clip(res.x, lb, ub)), np.inf))
@@ -456,11 +459,12 @@ def _solve_period_inner(
             )
         return mp1, {"code": 1, "residual": 0.0, "skipped_solve": True}
     sq, mp_sq, ss = _period_system(run, mp1, period)
-    token = _NEWTON_TOL.set(run.newton_tol)
+    token, keep = _NEWTON_TOL.set(run.newton_tol), _MUMPS_KEEP.set(run.mumps)
     try:
-        res, resid, code = _newton(ss, sq, keep=run.mumps)
+        res, resid, code = _newton(ss, sq)
     finally:
         _NEWTON_TOL.reset(token)
+        _MUMPS_KEEP.reset(keep)
     with phase("post_solve"):
         post_solve(
             mp_sq,
@@ -798,11 +802,12 @@ def _solve_shock_ratio(
                 f"trade_balance='ratio': {len(border.g_ix)} regy shock columns for "
                 f"{len(run.regions)} regions"
             )
-        token = _NEWTON_TOL.set(run.newton_tol)
+        token, keep = _NEWTON_TOL.set(run.newton_tol), _MUMPS_KEEP.set(run.mumps)
         try:
-            res, resid, code = _newton(ss, sq, border, keep=run.mumps)
+            res, resid, code = _newton(ss, sq, border)
         finally:
             _NEWTON_TOL.reset(token)
+            _MUMPS_KEEP.reset(keep)
         w = float(res.x[-1])
         x = np.asarray(res.x[:-1], dtype=float)
         sv1 = mp_sq.vars["savf"]
