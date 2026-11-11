@@ -368,3 +368,29 @@ def test_newton_points_hold_the_ratio_closure(run_3x3):
             want = float(sv0.value[sv0.pos((r, "check"))]) / w_chk
             got = float(sv.value[sv.pos((r, "shock"))]) / w
             assert abs(got - want) <= 1e-10 * abs(want), (r, got, want)
+
+
+def test_updated_system_equals_a_fresh_build_at_a_sub_step_point(run_3x3):
+    """The Newton path builds the shock system once and writes each sub-step's shock and
+    savf targets into its fixed slots: at a sub-step point (from the first point of the
+    path towards the second, targets at that point's world income) its start point, F
+    and J equal those of the system built from scratch (recipe, square, build)."""
+    from equilibria.family.altertax.path import _NewtonSteps
+    from equilibria.family.driver import _world_income
+
+    run = run_3x3
+    shock = load_tms_shock(folder("gtap7_3x3") / "tms_rate10.shk")
+    k = run.decomp_path.steps
+    steps = _NewtonSteps(run, shock)
+    s1, s2 = shock_fraction(shock, 1 / k), shock_fraction(shock, 2 / k)
+    start = steps.step(s1, None)
+    w = _world_income(start, "shock")
+    ss, x = steps.system_at(s2, start, w)
+    fresh, sq_f, _ = run.result.session.shock_system(
+        s2, start=start, savf_targets=steps.targets(w)
+    )
+    assert list(sq_f.col_names) == list(steps.sq.col_names)
+    np.testing.assert_allclose(x, fresh.x0, rtol=0, atol=1e-12)
+    np.testing.assert_allclose(ss.F(x), fresh.F(x), rtol=0, atol=1e-12)
+    ja, jb = ss.J(x).tocsr(), fresh.J(x).tocsr()
+    assert abs(ja - jb).max() <= 1e-12

@@ -11,6 +11,7 @@ for scripts that time the system without them.
 from __future__ import annotations
 
 import itertools
+from collections.abc import Mapping
 from typing import Any, NamedTuple
 
 import numpy as np
@@ -457,6 +458,9 @@ class SquaredSystem:
         self._row_pos_d: dict[str, int] | None = None
         self._row_names: list[str] = row_names
         self._fscale_ctx: list = []
+        # set by ``build`` for ``set_fixed``: (system, layout, single-period part)
+        self._layouts: list = []
+        self._period: str | None = None
         self.proxy_rows = [row_names[k] for k in proxy_k]
         # Squared columns with no backend cell (each paired with a proxy row).
         self.proxy_cols_outside_backend = int(n_outside)
@@ -496,7 +500,7 @@ class SquaredSystem:
         zperm = np.concatenate(zcols) if zcols else np.zeros(0, dtype=np.int64)
         ctx = (backend.records, values, free)
         k = _squared_rows(tab.rows, backend.records, ids)
-        return backend.system(layout), zperm, k, ctx
+        return backend.system(layout), zperm, k, ctx, layout
 
     @staticmethod
     def _cross_period_part(cross, mp, ids):
@@ -526,7 +530,7 @@ class SquaredSystem:
         zperm = np.concatenate(zcols) if zcols else np.zeros(0, dtype=np.int64)
         ctx = (cross.records, values, free)
         k = _squared_rows(tab.rows, cross.records, ids)
-        return cross.system(layout), zperm, k, ctx
+        return cross.system(layout), zperm, k, ctx, layout
 
     @classmethod
     def build(
@@ -573,7 +577,9 @@ class SquaredSystem:
 
         parts, covered, backend_cols = [], np.zeros(n, bool), np.zeros(n, bool)
         fscale_ctx = []
-        for i, (system, zperm, k_of_row, ctx) in enumerate(raw):
+        layouts = []
+        for i, (system, zperm, k_of_row, ctx, layout) in enumerate(raw):
+            layouts.append((system, layout, i == 0))
             row_name = (
                 (lambda nm, p=period: _with_period(nm, p))
                 if i == 0
@@ -618,7 +624,38 @@ class SquaredSystem:
         ss = cls(x0, parts, sq.row_names, proxy_k, len(outside))
         ss._row_names = sq.row_names
         ss._fscale_ctx = fscale_ctx
+        ss._layouts = layouts
+        ss._period = period
         return ss
+
+    def set_fixed(self, var: str, cells: Mapping[tuple, float]) -> None:
+        """Write new values of fixed cells of ``var`` (``{key with period: value}``, the
+        ``mp`` keys) into the fixed slots of every recording that has ``var``, in place:
+        F and J then are those of a system built with these values (a parameter update
+        without a rebuild, e.g. a shock sub-step). ``KeyError`` when no recording has
+        ``var``; ``ValueError`` for a cell that is a column (free) or of another period
+        than the system's single-period part."""
+        found = False
+        for system, layout, single in self._layouts:
+            if var not in layout.slots:
+                continue
+            doms = layout.var_domains[var]
+            slots = layout.slots[var]
+            for key, value in cells.items():
+                if single:
+                    if key[-1] != self._period:
+                        raise ValueError(f"{var}{key}: not of period {self._period!r}")
+                    key = key[:-1]
+                idx = tuple(
+                    layout.sets[d].index(e) for d, e in zip(doms, key, strict=True)
+                )
+                slot = int(slots[idx])
+                if slot < layout.n_cols:
+                    raise ValueError(f"{var}{key}: a free column, not a fixed cell")
+                system.fixed_values[slot - layout.n_cols] = float(value)
+            found = True
+        if not found:
+            raise KeyError(f"{var}: no recording of the system has it")
 
     @property
     def _row_pos(self) -> dict[str, int]:

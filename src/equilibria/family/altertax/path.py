@@ -339,7 +339,13 @@ class _NewtonSteps:
     once per path) and ``g`` the sum of the ``regy`` shock columns (``W = sum(regy)``):
     a bordered solve, two back-solves on one factorization. The point's savf is
     ``T(W_j + dW)``, so the ratio closure holds there. Without the ratio closure (the
-    nominal one: savf at the check) the step is the plain Newton step."""
+    nominal one: savf at the check) the step is the plain Newton step.
+
+    The shock system is built once (recipe, square, build at the first step); each step
+    writes its shock levels and savf targets into the fixed slots
+    (:meth:`SquaredSystem.set_fixed`) and starts from the previous point's column
+    vector with its Fisher aggregates refreshed, which is what a rebuild warm-started
+    from that point gives (tested)."""
 
     def __init__(self, run: Any, shock: Mapping[str, Mapping[tuple, float]]) -> None:
         from equilibria.family.driver import _world_income
@@ -354,20 +360,63 @@ class _NewtonSteps:
         self.w_chk = _world_income(mp, "check")
         self.lin = _Linear()
         self.v: np.ndarray | None = None
+        self.ss: Any = None
+        self.sq: Any = None
+        self.template: Any = None  # the built arrays before any post-solve
+        self.x_chk: np.ndarray | None = None
+        self.g: np.ndarray | None = None
+        self._x: dict[int, np.ndarray] = {}  # id(point arrays) -> its start vector
+        self._col: dict[str, int] | None = None
 
     def targets(self, w: float) -> dict[str, float] | None:
         if not self.ratio:
             return None
         return {r: x * w / self.w_chk for r, x in self.chk.items()}
 
+    def _fixed_cells(self, shock_t, w: float) -> dict[str, dict[tuple, float]]:
+        """``{var: {mp key: level}}`` of the shock cells at ``shock_t`` and the savf
+        targets at world income ``w``."""
+        from equilibria.family.shock import level
+
+        out = {
+            name: {
+                (*cell, "shock"): level(self.template, name, tuple(cell), pct)
+                for cell, pct in cells.items()
+            }
+            for name, cells in shock_t.items()
+        }
+        t = self.targets(w)
+        if t:
+            out.setdefault("savf", {}).update({(r, "shock"): x for r, x in t.items()})
+        return out
+
+    def system_at(self, shock_t, start: Any, w: float) -> tuple[Any, np.ndarray]:
+        """The shock system at ``shock_t`` with the savf targets of ``w``, and the start
+        column vector (the check's for ``start=None``, else the point ``start``'s)."""
+        if self.ss is None:
+            with phase("build_once"):
+                ss, sq, mp_sq = self.session.shock_system(
+                    shock_t, start=None, savf_targets=self.targets(self.w_chk)
+                )
+            self.ss, self.sq, self.template = ss, sq, mp_sq.copy()
+            self.x_chk = np.array(ss.x0, dtype=float)
+            self.g = np.fromiter(
+                (c.startswith("regy[") and c.endswith(",shock]") for c in sq.col_names),
+                dtype=bool,
+                count=len(self.x_chk),
+            )
+        with phase("set_fixed"):
+            for name, cells in self._fixed_cells(shock_t, w).items():
+                self.ss.set_fixed(name, cells)
+        x = self.x_chk if start is None else self._x[id(start)]
+        self.ss.x0 = np.array(x, dtype=float)
+        return self.ss, self.ss.x0
+
     def step(self, shock_t: Mapping[str, Mapping[tuple, float]], start: Any) -> Any:
         from equilibria.family.driver import _world_income
 
         w0 = self.w_chk if start is None else _world_income(start, "shock")
-        ss, sq, mp_sq = self.session.shock_system(
-            shock_t, start=start, savf_targets=self.targets(w0)
-        )
-        x0 = np.asarray(ss.x0, dtype=float)
+        ss, x0 = self.system_at(shock_t, start, w0)
         with phase("F"):
             f0 = ss.F(x0)
         with phase("J"):
@@ -377,31 +426,54 @@ class _NewtonSteps:
         dw = 0.0
         if self.ratio:
             if self.v is None:
-                self.v = self._dF_dW(shock_t, start, w0, x0, f0, sq)
-            g = np.fromiter(
-                (c.startswith("regy[") and c.endswith(",shock]") for c in sq.col_names),
-                dtype=bool,
-                count=len(x0),
-            )
+                self.v = self._dF_dW(w0, x0, f0)
+            g = self.g
             b = self.lin.solve(self.v)
             dw = float(a[g].sum()) / (1.0 + float(b[g].sum()))
             a = a - b * dw
-            sv = mp_sq.vars["savf"]
-            for r, t in (self.targets(w0 + dw) or {}).items():
-                sv.value[sv.pos((r, "shock"))] = t
-        return self.session.finish_shock(mp_sq, sq, x0 + a)
+        x1 = x0 + a
+        with phase("copy"):
+            mp = self.template.copy()
+        for name, cells in self._fixed_cells(shock_t, w0 + dw).items():
+            var = mp.vars[name]
+            for key, value in cells.items():
+                var.value[var.pos(key)] = value
+        mp = self.session.finish_shock(mp, self.sq, x1)
+        self._x[id(mp)] = self._warm_x(mp, x1)
+        return mp
 
-    def _dF_dW(self, shock_t, start, w0, x0, f0, sq) -> np.ndarray:
-        """``dF/dW`` at the first step: the system rebuilt with the targets of
-        ``W + d`` (``d = 1e-6 W_check``), ``(F_d(x) - F(x)) / d``."""
+    def _warm_x(self, mp: Any, x: np.ndarray) -> np.ndarray:
+        """The start vector a rebuild warm-started from the point ``mp`` (column vector
+        ``x``) gets: ``x`` with the Fisher aggregates (``mq_*``) refreshed at the
+        point's levels, as the recipe's warm start refreshes them."""
+        from equilibria.family.cross_period import mq_values
+
+        cross = self.session.run.cross
+        if cross is None:
+            return x
+        if self._col is None:
+            self._col = {c: i for i, c in enumerate(self.sq.col_names)}
+        out = np.array(x, dtype=float)
+        with phase("refresh_aggregates"):
+            for name, cells in mq_values(cross, mp).items():
+                for key, val in cells.items():
+                    i = self._col.get(f"{name}[{','.join(key)}]")
+                    if i is not None:
+                        out[i] = val
+        return out
+
+    def _dF_dW(self, w0: float, x0: np.ndarray, f0: np.ndarray) -> np.ndarray:
+        """``dF/dW`` at the first step: ``(F_d(x) - F(x)) / d`` with the savf targets
+        of ``W + d`` (``d = 1e-6 W_check``) written in, then put back."""
         d = 1e-6 * self.w_chk
-        ss_d, sq_d, _ = self.session.shock_system(
-            shock_t, start=start, savf_targets=self.targets(w0 + d)
-        )
-        if list(sq_d.col_names) != list(sq.col_names):
-            raise RuntimeError("path decomposition: dF/dW system has other columns")
-        with phase("F"):
-            return (ss_d.F(x0) - f0) / d
+        cell = {r: (r, "shock") for r in self.regions}
+        up, back = self.targets(w0 + d) or {}, self.targets(w0) or {}
+        self.ss.set_fixed("savf", {cell[r]: x for r, x in up.items()})
+        try:
+            with phase("F"):
+                return (self.ss.F(x0) - f0) / d
+        finally:
+            self.ss.set_fixed("savf", {cell[r]: x for r, x in back.items()})
 
 
 SUBSTEPS = ("newton", "solve")
