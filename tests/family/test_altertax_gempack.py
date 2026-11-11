@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import gzip
 import shutil
 
 import pytest
@@ -10,9 +9,9 @@ import pytest
 from equilibria.family.altertax.compare import compare_levels
 from equilibria.family.altertax.gates import levels_ok
 from equilibria.family.altertax.tolerances import TOL_LEVELS
-from tests.family._prep import ROOT
+from tests.family._prep import altax_gem, altax_reference_dir
 
-FIXTURES = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg"
+FIXTURES = altax_reference_dir()
 
 
 def _worst(report):
@@ -38,14 +37,8 @@ def test_levels_fall_back_to_the_sl4_when_there_is_no_levels_har(altax_run, tmp_
     from equilibria.compare.errors import CompareError
     from equilibria.family.altertax.gates import gempack_files
 
-    shutil.copy(FIXTURES / "altax.upd", tmp_path / "updated.har")
-    with (
-        gzip.open(FIXTURES / "altax.sl4.gz", "rb") as a,
-        (tmp_path / "solution.sl4").open("wb") as b,
-    ):
-        shutil.copyfileobj(a, b)
-    for name in ("summary", "decomp", "volume"):
-        shutil.copy(FIXTURES / f"altax_{name}.har", tmp_path / f"{name}.har")
+    for f in ("updated.har", "solution.sl4", "summary.har", "decomp.har", "volume.har"):
+        shutil.copy(altax_gem() / f, tmp_path / f)
     assert gempack_files(tmp_path)["levels"].name == "solution.sl4"
     with pytest.raises(CompareError, match="PLEV"):
         compare_levels(altax_run, tmp_path)

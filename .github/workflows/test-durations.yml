@@ -1,0 +1,101 @@
+name: Test durations
+
+# Measures every test's duration on a CI runner (serial, today's markers) and
+# stores the JUnit of that serial run as the baseline for the sharded suite.
+# Output: artifacts durations-* (pytest-split JSON) and junit-baseline-*.
+#
+# Manual only (~1 h serial): run it from the Actions tab on main when the
+# split drifts. It had a `pull_request` trigger on this file to bootstrap the
+# first run; that re-ran the hour-long job on every push of any PR touching it.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  durations-python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
+
+      # Serial on purpose (no -n): durations measured under contention would
+      # mislead the split. xunit1 adds the `file` attribute that
+      # scripts/dev/check_test_shards.py needs to rebuild exact nodeids.
+      - name: Run tests serially and record durations
+        run: |
+          uv run pytest -ra -m "not gams and not slow and not needs_gdxdump" tests \
+            --store-durations --durations-path durations.json \
+            -o junit_family=xunit1 --junitxml=junit.xml
+
+      - name: Upload durations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: durations-python
+          path: durations.json
+          if-no-files-found: warn
+
+      - name: Upload baseline JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-baseline-python
+          path: junit.xml
+          if-no-files-found: warn
+
+  durations-gdxdump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
+
+      # Same install + smoke as gdxdump-tests in tests.yml: fails hard if
+      # gdxdump is missing, so the baseline never records its tests as skips.
+      - name: Install gdxdump (gamspy_base)
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/gamspy_base.whl \
+            "https://files.pythonhosted.org/packages/py3/g/gamspy_base/gamspy_base-54.5.0-py3-none-manylinux_2_28_x86_64.whl"
+          echo "ef52b1c5d1c25715d7f9b813badcfc7e63b424c4d2cefc55b40e8200650b2c35  /tmp/gamspy_base.whl" | sha256sum -c -
+          unzip -q /tmp/gamspy_base.whl 'gamspy_base/*' -d "$HOME"
+          chmod +x "$HOME/gamspy_base/gdxdump"
+          echo "$HOME/gamspy_base" >> "$GITHUB_PATH"
+          "$HOME/gamspy_base/gdxdump" "$(git ls-files '*.gdx' | head -n 1)" > /tmp/gdxdump_smoke.txt
+          head -n 3 /tmp/gdxdump_smoke.txt
+
+      # Serial on purpose (no -n): durations measured under contention would
+      # mislead the split. xunit1 adds the `file` attribute that
+      # scripts/dev/check_test_shards.py needs to rebuild exact nodeids.
+      - name: Run tests serially and record durations
+        env:
+          EQUILIBRIA_REQUIRE_SOLVERS: "1"
+        run: |
+          uv run pytest -ra -m "needs_gdxdump and not gams and not slow" tests \
+            --store-durations --durations-path durations.json \
+            -o junit_family=xunit1 --junitxml=junit.xml
+
+      - name: Upload durations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: durations-gdxdump
+          path: durations.json
+          if-no-files-found: warn
+
+      - name: Upload baseline JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-baseline-gdxdump
+          path: junit.xml
+          if-no-files-found: warn

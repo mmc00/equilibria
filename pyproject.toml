@@ -1,7 +1,7 @@
 # pyproject.toml - equilibria: CGE modeling framework
 [project]
 name = "equilibria"
-version = "0.6.1"
+version = "0.6.4"
 description = "A modern Python framework for Computable General Equilibrium (CGE) modeling with modular equation blocks, universal data I/O, and auto-calibration."
 authors = [
     { name = "Marlon Molina", email = "dracomarmol@gmail.com" }
@@ -57,6 +57,8 @@ dependencies = [
     # equilibria` da un DeferredImportError al resolver. En el repo entraba de
     # rebote por mypy, asi que el agujero solo se ve en un venv limpio.
     "packaging>=23.0",
+    # end-of-solve panel (equilibria.report)
+    "rich>=13",
 ]
 
 [project.scripts]
@@ -67,6 +69,9 @@ equilibria = "equilibria.cli:main"
 pyomo = ["pyomo>=6.7"]
 poi = ["pyoptinterface>=0.1"]
 ipopt = ["cyipopt>=1.6.1"]
+# MCP solves through PATH's C API. The PATH libraries and license are not
+# included: see the README (Installation).
+path = ["path-capi-python>=0.1.0"]
 
 # Data format support
 excel = ["openpyxl>=3.1", "xlrd>=2.0"]
@@ -86,6 +91,8 @@ family = ["jax>=0.4.30"]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=4.0",
+    "pytest-split>=0.10",
+    "pytest-xdist>=3.5",
     "ruff>=0.4",
     "tomli>=2.0; python_version < '3.11'",
     "pre-commit>=3.0",
@@ -105,7 +112,7 @@ docs = [
 
 # All optional dependencies
 all = [
-    "equilibria[pyomo]",
+    "equilibria[pyomo,path]",
 ]
 
 [project.urls]
@@ -137,9 +144,15 @@ include = [
     "/src",
     "/tests",
     "/docs",
-    # the wheel's force-include reads these (load_bundled)
-    "/data/gtap7/9x10",
-    "/data/gtap7/nus333",
+    # only the files the wheel's force-include ships (load_bundled); the rest of
+    # data/<dataset>/ holds the recorded runs (~95 MB) and stays in the repo
+    "/data/gtap7/9x10/basedata.har",
+    "/data/gtap7/9x10/sets.har",
+    "/data/gtap7/9x10/default.prm",
+    "/data/gtap7/nus333/basedata.har",
+    "/data/gtap7/nus333/sets.har",
+    "/data/gtap7/nus333/default.prm",
+    "/data/gtap7/nus333/baserate.har",
 ]
 
 # ============================================================================
@@ -150,6 +163,8 @@ include = [
 dev = [
     "pytest>=8.0",
     "pytest-cov>=4.0",
+    "pytest-split>=0.10",
+    "pytest-xdist>=3.5",
     "ruff>=0.4",
     "mypy>=1.10",
     "ty>=0.0.14",
@@ -248,7 +263,9 @@ markers = [
 
 [tool.coverage.run]
 source = ["src/equilibria"]
-branch = true
+# Lines only: sys.monitoring (COVERAGE_CORE=sysmon, coverage.yml) traces branches
+# only from Python 3.14 on; with branches CI coverage cost 2-3x the test time.
+branch = false
 
 [tool.coverage.report]
 exclude_lines = [

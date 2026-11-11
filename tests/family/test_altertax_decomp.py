@@ -15,9 +15,6 @@ a relative one is meaningless on a number that is mostly float32 noise)."""
 
 from __future__ import annotations
 
-import gzip
-import shutil
-
 import numpy as np
 import pytest
 
@@ -47,9 +44,9 @@ from equilibria.family.altertax.gates import (
 )
 from equilibria.family.altertax.summary import numeric_headers
 from equilibria.family.altertax.tolerances import TOL_CHANGE
-from tests.family._prep import ROOT
+from tests.family._prep import ROOT, altax_gem
 
-FIXTURE = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg/altax_decomp.har"
+FIXTURE = altax_gem() / "decomp.har"
 EXPECTED = [
     "A", "A1", "A2", "A21", "A211", "A22", "A221", "A222", "A22F", "A22P", "A22G",
     "A22I", "A23", "A231", "A24", "A241", "A25", "A251", "B1", "B2", "C1", "C11",
@@ -122,15 +119,12 @@ def _sl4_changes(path, els):
 
 
 @pytest.fixture(scope="module")
-def sl4_headers(gempack, tmp_path_factory):
+def sl4_headers(gempack):
     """``decomp_from_changes`` on GEMPACK's own solution: base data, updated data and the
     cumulative changes of ``altax.sl4``."""
     from equilibria._local_refs import nus333_dir
 
-    d = tmp_path_factory.mktemp("sl4")
-    sl4 = d / "altax.sl4"
-    with gzip.open(FIXTURE.parent / "altax.sl4.gz", "rb") as src, sl4.open("wb") as dst:
-        shutil.copyfileobj(src, dst)
+    sl4 = FIXTURE.parent / "solution.sl4"
     els = {
         "COMM": list(gempack["A211"].set_elements[0]),
         "ACTS": list(gempack["A211"].set_elements[1]),
@@ -139,7 +133,7 @@ def sl4_headers(gempack, tmp_path_factory):
         "MARG": list(gempack["C16"].set_elements[0]),
     }
     pre = numeric_headers(read_har(str(nus333_dir() / "basedata.har")))
-    post = numeric_headers(read_har(str(FIXTURE.parent / "altax_updated.har")))
+    post = numeric_headers(read_har(str(FIXTURE.parent / "updated.har")))
 
     def arrays(har):
         return {k: np.asarray(h.array, dtype=np.float64) for k, h in har.items()}

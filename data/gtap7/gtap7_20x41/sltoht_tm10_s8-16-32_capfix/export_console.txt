@@ -1,0 +1,1 @@
+  levels vars=44 (LEVB+LEVA)  no-level=208 (NOLV)  (xcheck-mismatch=0 [])  -> C:\Documentos\proyectos\equilibria\runs\gempack_work\resolve\gtap7_20x41_sltoht_tm10_s8-16-32_capfix\gtap7_20x41\sl4levels.har

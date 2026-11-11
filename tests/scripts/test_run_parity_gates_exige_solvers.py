@@ -187,3 +187,25 @@ def test_el_oraculo_y_el_gate_usan_la_misma_instalacion():
     assert pathlib.Path(_diff_core.GDXDUMP).parent == pathlib.Path(gate), (
         f"oraculo={_diff_core.GDXDUMP} vs gate={gate}"
     )
+
+
+def test_green_gates_outside_a_git_checkout_end_green(monkeypatch, tmp_path, capsys):
+    """The replication zip is not a git checkout (no .git/).
+
+    Measured 2026-11-09 from the v0.6.2 zip in a clean environment: every gate
+    test passed, then main() died writing .git/gtap-parity-gates.stamp
+    (FileNotFoundError) and run_tables.py reported the Table A1 step as
+    FAILED. Outside git there is no push to guard, so there is nothing to stamp.
+    """
+    gate = _cargar_gate()
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
+    monkeypatch.setattr(gate, "repo_root", lambda *_: tmp_path)
+    monkeypatch.setattr(gate, "_run", lambda *a, **k: 0)
+    monkeypatch.setattr(gate, "REGEN_CMDS", [])
+    monkeypatch.setattr(gate.sys, "argv", ["run_parity_gates.py"])
+
+    rc = gate.main()
+
+    assert rc == 0, capsys.readouterr().out
+    assert not (tmp_path / ".git").exists()
+    assert "not a git checkout" in capsys.readouterr().out

@@ -42,7 +42,7 @@ ROOT_FILES = frozenset(
 )
 # Emptied by later phases of specs/data/changes/one-data-folder; each phase
 # removes its entry.
-ROOT_DIRS_TEMPORARY = frozenset({"results", "runs"})
+ROOT_DIRS_TEMPORARY = frozenset({"results"})
 
 # The top level of docs/ (phase 6 of specs/data/changes/one-data-folder).
 DOCS_TOP = frozenset(
@@ -129,13 +129,7 @@ _TOKEN_SPLIT = re.compile(r"[_\-.\s]+")
 
 # Spanish names that existed when the rule was introduced; the phase that moves
 # or renames each one removes it from here.
-SPANISH_LEGACY = frozenset(
-    {
-        "runs/gempack_20x41_validation/RESULTADO.md",
-        "scripts/windows/corridas_paper.ps1",
-        "tests/fixtures/nus333_bienestar_gempack.json.gz",
-    }
-)
+SPANISH_LEGACY: frozenset[str] = frozenset()
 
 ALLOWED_EXACT: set[str] = {
     "CHANGELOG.md",
@@ -150,7 +144,6 @@ ALLOWED_EXACT: set[str] = {
     "src/equilibria/babel/gdx/README.md",
     "src/equilibria/babel/har/README.md",
     "src/equilibria/templates/gtap/README.md",
-    "runs/gempack_20x41_validation/README.md",
     "scripts/windows/README.md",
     "data/gdx_tests/sam_v2_0/SAM-V2_0.gdx",
     # Sphinx documentation site:
@@ -160,11 +153,10 @@ ALLOWED_EXACT: set[str] = {
     #     examples directory; the name is hard-coded by the extension.
     "docs/site/Makefile",
     "docs/site/examples_src/README.rst",
-    # GEMPACK 20x41 validation package: README/RESULTADO are human-facing docs
-    # (Spanish RESULTADO, uppercase by convention) written alongside the .cmf
-    # re-attempt bundle; GENERATE_* is a fixture-generation how-to. Deliberate names.
-    "runs/gempack_20x41_validation/RESULTADO.md",
+    # GENERATE_* is a fixture-generation how-to. Deliberate name.
     "scripts/gtap/GENERATE_MISSING_LEVELS_FIXTURES.md",
+    # GitHub reads the sponsor button only from this exact name.
+    ".github/FUNDING.yml",
 }
 ALLOWED_PREFIXES: tuple[str, ...] = (
     "src/equilibria/templates/data/pep/",
@@ -179,7 +171,7 @@ ALLOWED_PREFIXES: tuple[str, ...] = (
     # Horridge's SIMPLE distribution (tpmh0103): simpleMCP.gms / simpleNLP.gms
     # keep the author's upstream CamelCase — renaming would break fidelity to
     # the published sources and the references in dogams.bat / the README.
-    "runs/horridge_simple/",
+    "data/horridge_simple/",
 )
 
 

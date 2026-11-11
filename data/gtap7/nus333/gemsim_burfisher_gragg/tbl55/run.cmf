@@ -1,0 +1,51 @@
+auxiliary files = "C:\Documentos\proyectos\equilibria\runs\gempack_work\gtapuv7_levels\gtapuv7_levels";
+file GTAPSETS = sets.har;
+file GTAPDATA = basedata.har;
+file GTAPSUM = "C:\Documentos\proyectos\equilibria\data\gtap7\nus333\gemsim_burfisher_gragg\tbl55\summary.har";
+file WELVIEW = "C:\Documentos\proyectos\equilibria\data\gtap7\nus333\gemsim_burfisher_gragg\tbl55\decomp.har";
+file GTAPVOL = "C:\Documentos\proyectos\equilibria\data\gtap7\nus333\gemsim_burfisher_gragg\tbl55\volume.har";
+updated file GTAPDATA = "C:\Documentos\proyectos\equilibria\data\gtap7\nus333\gemsim_burfisher_gragg\tbl55\updated.har";
+solution file = "C:\Documentos\proyectos\equilibria\data\gtap7\nus333\gemsim_burfisher_gragg\tbl55\solution";
+CPU = yes;
+NDS = yes;
+file gtapPARM = default.prm;
+Verbal Description =
+Table 5.5 10% increase in US capital stock;
+Method = Gragg;
+Steps = 2 4 6;
+automatic accuracy = no;
+subintervals = 1;
+! Standard GE closure for GTAPUv7: psave varies by region, pfactwld is numeraire
+Exogenous
+          pop
+          psaveslack pfactwld
+          profitslack incomeslack endwslack
+          cgdslack 
+          tradslack
+          ams atm atf ats atd
+          aosec aoreg avasec avareg
+          aintsec aintreg aintall
+          afcom afsec afreg afecom afesec afereg
+          aoall afall afeall
+          au dppriv dpgov dpsave
+          to tinc 
+          tpreg tm tms tx txs
+          qe
+          qesf
+          atall avaall tfe tfd tfm tgd tgm tpdall tpmall tid tim;
+Rest endogenous;
+ Shock qe("CAPITAL","USA") = 10;
+
+!@ contents of CMFStart when this EXP file was last saved
+!@ below is a record only....not read by RunGTAP
+!@ RunGTAP reads from the actual CMFSTART file
+!@ ! If a version has no CMFSTART file of its own
+!@ ! RunGTAP creates one by copying the supplied file CMFSTART.DEF
+!@ CPU = yes;  ! log show simulation times
+!@ NDS = yes;  ! no displays
+!@ Extrapolation accuracy file = NO ; ! No XAC file
+!@ !servants=1; ! use 2 processors at once, if possible
+!@ file GTAPSUM = SUMMARY.har;
+!@ file WELVIEW = DECOMP.har;
+!@ file GTAPVOL = VOLUME.har;
+!@ end of CMFSTART part

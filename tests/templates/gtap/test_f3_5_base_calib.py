@@ -37,7 +37,8 @@ REF_GDX = (
 # regenero los fixtures con el cierre estandar: comparado contra capFix, el match de
 # cantidades cayo de 96,3% a 73,2% sin que cambiara el modelo (git bisect, 2026-10-04).
 GEMPACK_CAPFIX = (
-    ROOT / "tests/fixtures/gtap7_gempack/sl4dump_gtap7_3x3_tm10_s8-16-32_capfix.har"
+    reference("gtap7_3x3", "gempack", shock=10, steps="8-16-32", closure="capFix")
+    / "sl4dump.har"
 )
 
 
@@ -194,8 +195,6 @@ def test_calibrated_land_response_beats_default_vs_gempack():
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     sl4 = GEMPACK_CAPFIX
-    if not sl4.exists():
-        pytest.skip(f"GEMPACK fixture missing: {sl4}")
     gem = None
     for _var in ("pfe", "pes"):
         try:
@@ -239,8 +238,6 @@ def test_overall_quantity_match_vs_gempack_is_clean_either_way():
     from measure_gempack_blocks import _quantity_match
 
     gem = GEMPACK_CAPFIX
-    if not gem.exists():
-        pytest.skip(f"GEMPACK fixture missing: {gem}")
 
     default = _quantity_match("gtap7_3x3", False, REF_GDX, gem)
     calib = _quantity_match("gtap7_3x3", True, REF_GDX, gem)

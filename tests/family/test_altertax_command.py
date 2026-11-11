@@ -5,7 +5,6 @@ The command runs in a subprocess with the worktree's python (nus333 solves in ~0
 
 from __future__ import annotations
 
-import gzip
 import json
 import os
 import shutil
@@ -18,11 +17,11 @@ import pytest
 from equilibria._local_refs import nus333_dir
 from equilibria.babel.har.reader import read_har
 from equilibria.family.altertax.tolerances import CHECK_TOL
-from tests.family._prep import ROOT, _newton_mumps
+from tests.family._prep import ROOT, _newton_mumps, altax_reference_dir
 
 pytest.importorskip("pyomo")
 SCRIPT = ROOT / "scripts" / "family" / "run_altertax.py"
-FIXTURES = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg"
+FIXTURES = altax_reference_dir()
 OUTPUT_NAMES = [f"{n}.har" for n in ("updated", "summary", "decomp", "volume", "pct")]
 COMPARED = {"levels", "updated", "summary", "volume", "decomp", "pct"}
 
@@ -102,20 +101,8 @@ def test_compare_accepts_gempack_run_folder_names(tmp_path):
     with no code change: the path to the future 3x3 ... 20x41 runs."""
     gem = tmp_path / "gem"
     gem.mkdir()
-    rename = {
-        "altax_updated.har": "updated.har",
-        "altax_summary.har": "summary.har",
-        "altax_decomp.har": "decomp.har",
-        "altax_volume.har": "volume.har",
-        "sl4levels_altax.har": "sl4levels.har",
-    }
-    for src, dst in rename.items():
-        shutil.copy(FIXTURES / src, gem / dst)
-    with (
-        gzip.open(FIXTURES / "altax.sl4.gz", "rb") as a,
-        (gem / "solution.sl4").open("wb") as b,
-    ):
-        shutil.copyfileobj(a, b)
+    for f in FIXTURES.iterdir():
+        shutil.copy(f, gem / f.name)
     out = tmp_path / "out"
     p = _run([nus333_dir(), "--out", out, "--compare", gem], tmp_path / "cache")
     assert p.returncode == 0, p.stderr[-2000:]
@@ -125,7 +112,7 @@ def test_compare_accepts_gempack_run_folder_names(tmp_path):
 def test_missing_gempack_file_is_a_clear_error(tmp_path):
     gem = tmp_path / "gem"
     gem.mkdir()
-    shutil.copy(FIXTURES / "altax_summary.har", gem / "summary.har")
+    shutil.copy(FIXTURES / "summary.har", gem / "summary.har")
     p = _run([nus333_dir(), "--out", tmp_path / "out", "--compare", gem], tmp_path)
     assert p.returncode != 0
     assert "updated" in p.stderr and "solution.sl4" in p.stderr

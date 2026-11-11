@@ -1,0 +1,65 @@
+name: Coverage
+
+# Coverage of what CI runs, measured when something lands on main (and by
+# hand), not on pull requests: on python 3.11 with branches it made the test
+# jobs 2-3x slower (python-tests 24 -> 75 min). Here: python 3.13 with
+# sys.monitoring (COVERAGE_CORE=sysmon) and lines only, +8 % on a GTAP test.
+# The two parts are the same partition as tests.yml; Codecov merges their
+# reports by flag. Areas: .github/codecov.yml (from specs/areas.toml).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    env:
+      COVERAGE_CORE: sysmon
+    strategy:
+      fail-fast: false
+      matrix:
+        part:
+          - name: python-tests
+            marks: "not gams and not slow and not needs_gdxdump"
+          - name: gdxdump-tests
+            marks: "needs_gdxdump and not gams and not slow"
+    name: coverage (${{ matrix.part.name }})
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
+        with:
+          python-version: "3.13"
+
+      # Falla duro a proposito: si gdxdump no esta, queremos rojo, no 58 skips.
+      - name: Install gdxdump (gamspy_base)
+        if: matrix.part.name == 'gdxdump-tests'
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/gamspy_base.whl \
+            "https://files.pythonhosted.org/packages/py3/g/gamspy_base/gamspy_base-54.5.0-py3-none-manylinux_2_28_x86_64.whl"
+          echo "ef52b1c5d1c25715d7f9b813badcfc7e63b424c4d2cefc55b40e8200650b2c35  /tmp/gamspy_base.whl" | sha256sum -c -
+          unzip -q /tmp/gamspy_base.whl 'gamspy_base/*' -d "$HOME"
+          chmod +x "$HOME/gamspy_base/gdxdump"
+          echo "$HOME/gamspy_base" >> "$GITHUB_PATH"
+          # Smoke test: que vuelque un GDX del repo, no solo que exista.
+          # La salida va a un archivo: `gdxdump | head` con pipefail mataria el
+          # paso por SIGPIPE.
+          "$HOME/gamspy_base/gdxdump" "$(git ls-files '*.gdx' | head -n 1)" > /tmp/gdxdump_smoke.txt
+          head -n 3 /tmp/gdxdump_smoke.txt
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest -ra -m "${{ matrix.part.marks }}" tests --cov --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          flags: ${{ matrix.part.name }}
+          fail_ci_if_error: true

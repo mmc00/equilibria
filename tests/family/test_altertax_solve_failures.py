@@ -15,12 +15,12 @@ import numpy as np
 import pytest
 
 from equilibria._local_refs import nus333_dir
-from tests.family._prep import ROOT, _newton_mumps
+from tests.family._prep import ROOT, _newton_mumps, altax_reference_dir
 
 pytest.importorskip("pyomo")
 DS = "gtap7_3x3"
 REF = ROOT / "data/gtap7" / DS / "gempack_altertax-rungtap_tms-rate10_s8-16-32"
-FIXTURES = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg"
+FIXTURES = altax_reference_dir()
 RECORD_KEYS = {"solve", "code", "nit", "residual", "null_pivots", "gmin_retries"}
 
 

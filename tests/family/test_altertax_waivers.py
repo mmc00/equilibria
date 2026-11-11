@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-import gzip
 import shutil
 
 import pytest
@@ -19,20 +18,15 @@ from equilibria.family.altertax.summary import (
     summary_headers,
 )
 from equilibria.family.altertax.updated import headers_at, post_database
-from tests.family._prep import ROOT
+from tests.family._prep import altax_gem
 
-FIXTURES = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg"
+FIXTURES = altax_gem()
 
 
 @pytest.fixture(scope="module")
 def sl4(tmp_path_factory):
     d = tmp_path_factory.mktemp("sl4")
-    with (
-        gzip.open(FIXTURES / "altax.sl4.gz", "rb") as a,
-        (d / "solution.sl4").open("wb") as b,
-    ):
-        shutil.copyfileobj(a, b)
-    return gates.read_sl4(d / "solution.sl4")
+    return gates.read_sl4(FIXTURES / "solution.sl4")
 
 
 def test_nus333_altax_reference_is_recognised(sl4):
@@ -69,12 +63,12 @@ def test_unwaived_gates_pass(altax_run, sl4):
     assert not gates.NUS333_ALTAX_WAIVERS.pct
 
     ours_d = decomp_headers(altax_run)
-    gem_d = read_har(str(FIXTURES / "altax_decomp.har"))
+    gem_d = read_har(str(FIXTURES / "decomp.har"))
     assert gates.report_decomp(ours_d, gem_d, gates.NO_WAIVERS)["pass"]
     assert not gates.NUS333_ALTAX_WAIVERS.decomp
 
     ours_s = summary_headers(altax_run)
-    gem_s = read_har(str(FIXTURES / "altax_summary.har"))
+    gem_s = read_har(str(FIXTURES / "summary.har"))
     flows = (
         check_flows(input_database(altax_run)),
         check_flows(post_database(altax_run)),

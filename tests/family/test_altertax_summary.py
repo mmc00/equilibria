@@ -45,9 +45,9 @@ from equilibria.family.altertax.updated import (
     post_database,
     updated_headers,
 )
-from tests.family._prep import ROOT
+from tests.family._prep import ROOT, altax_gem
 
-FIXTURE = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg/altax_summary.har"
+FIXTURE = altax_gem() / "summary.har"
 LEVELS = SUMMARY_LEVELS
 EXPECTED = [
     "GDPE",
@@ -220,9 +220,7 @@ def test_formulas_on_gempack_updated_data(gempack):
     """The post-sim formulas applied to GEMPACK's own updated database give GEMPACK's
     ``*Q`` headers where float32 sums allow (TRCQ, MPCQ); VMCQ and VTCQ are the same
     accumulation-order noise as VMCK and VTCK."""
-    upd = read_har(
-        str(ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg/altax_updated.har")
-    )
+    upd = read_har(str(altax_gem() / "updated.har"))
     s = summary_from_database(numeric_headers(upd))
     assert not _failing(s, gempack, ["TRCQ", "MPCQ", "VOCQ", "GDPE"])
     assert {"VMCQ", "VTCQ"} <= set(_failing(s, gempack, ["VMCQ", "VTCQ"]))
@@ -231,9 +229,7 @@ def test_formulas_on_gempack_updated_data(gempack):
 def test_levels_carry_the_shock(altax_run, gempack):
     """Two-sided delta of the level tables on the post-update database (ours: shock minus
     check; GEMPACK: summary of altax_updated.har minus summary of basedata.har)."""
-    upd = read_har(
-        str(ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg/altax_updated.har")
-    )
+    upd = read_har(str(altax_gem() / "updated.har"))
     g_post = summary_from_database(numeric_headers(upd))
     g_base = summary_from_database(input_database(altax_run))
     m_post = summary_from_database(headers_at(altax_run, "shock"))

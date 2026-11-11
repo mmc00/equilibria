@@ -11,8 +11,8 @@ Runs a sluggish-capital MCP closure with the ``gtap7_gempack`` subsidy basis
 The default "gams" basis carries cal.gms's subsidy sign, which contradicts the data
 and is not what this gate compares.
 
-SKIPs when a row's sl4dump fixture is absent, so it never blocks the parity stamp
-on a machine without the Windows-produced solution.
+The GEMPACK solutions are the records ``data/gtap7/<ds>/gempack_tm10_s8-16-32_<closure>/``
+(``sl4dump.har``), found with ``equilibria.sources.reference``.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from equilibria.sources import dataset_dir, find_reference, has_dataset
+from equilibria.sources import dataset_dir, find_reference, has_dataset, reference
 
 pytestmark = pytest.mark.integration
 ROOT = Path(__file__).resolve().parents[3]
@@ -31,7 +31,6 @@ sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
 from coverage_matrix import rows_for  # noqa: E402
 
-FIXTURES = ROOT / "tests/fixtures/gtap7_gempack"
 GEMPACK_ROWS = rows_for("gtap7", "gempack", kind="mcp")
 
 # Floor per (dataset): min fraction of cells within 1pp, and max allowed median |Δpp|.
@@ -264,20 +263,15 @@ def _gempack_params():
 
 
 def _capfix_fixture_for(row) -> Path | None:
-    """Return the dataset's capFix GEMPACK fixture if one has been generated, else None.
+    """Return the dataset's capFix GEMPACK sl4dump if one is recorded, else None.
 
-    run_gempack_matrix --rordelta 0 emits `sl4dump_<ds>_<tag>_capfix.har`, where <tag> carries
-    the shock+steps config (e.g. `tm10_s8-16-32`). We accept the exact row.ref-derived name, the
-    plain `tm10` form, or — as a fallback — ANY step-tagged capFix dump for the dataset (the
-    default study grid emits `tm10_s8-16-32_capfix`, which neither exact form matches)."""
-    stem = row.ref[: -len(".har")] if row.ref.endswith(".har") else row.ref
-    cands = [
-        FIXTURES / f"{stem}_capfix.har",
-        FIXTURES / f"sl4dump_{row.dataset}_tm10_capfix.har",
-    ]
-    # Fallback: match any step-tagged capFix dump for this dataset (sorted for determinism).
-    cands += sorted(FIXTURES.glob(f"sl4dump_{row.dataset}_*_capfix.har"))
-    return next((c for c in cands if c.exists()), None)
+    run_gempack_matrix --rordelta 0 records it as
+    ``data/gtap7/<ds>/gempack_tm10_s8-16-32_capfix/`` (the default study grid's 10%
+    shock, Steps 8 16 32)."""
+    folder = find_reference(
+        row.dataset, "gempack", shock=10, steps="8-16-32", closure="capFix"
+    )
+    return None if folder is None else folder / "sl4dump.har"
 
 
 @pytest.mark.needs_path
@@ -299,9 +293,13 @@ def test_gtap7_gempack_parity(row):
     if capfix_sl4 is not None:
         sl4, savf_flag = capfix_sl4, "capFix"
     else:
-        sl4, savf_flag = FIXTURES / row.ref, "capFlex"
-        if not sl4.exists():
-            pytest.skip(f"sl4dump fixture missing: {sl4}")
+        sl4 = (
+            reference(
+                row.dataset, "gempack", shock=10, steps="8-16-32", closure="capFlex"
+            )
+            / "sl4dump.har"
+        )
+        savf_flag = "capFlex"
         # No capFix fixture: the large-dataset capFlex MCP is non-convergent (code=2) and there
         # is no NLP fixture to compare against either — skip until a capFix fixture exists
         # (run_gempack_matrix --rordelta 0). Small datasets fall through and run capFlex.

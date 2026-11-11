@@ -1,6 +1,6 @@
 """Convencion del ``.har`` de NIVELES de una solucion GEMPACK (``sl4levels_*.har``).
 
-Lo escribe ``scripts/gtap/export_sl4_levels.py`` y lo lee
+Lo escribe ``data/gtap7/gempack/tools/export_sl4_levels.py`` y lo lee
 :func:`equilibria.compare.from_har`. Esta es la UNICA definicion de la convencion:
 
 * LEVA (post-simulacion): cabecera = el id numerico del ``sl4dump`` (``"0052"``),

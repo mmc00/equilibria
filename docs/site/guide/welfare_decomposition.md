@@ -143,9 +143,10 @@ region (its private, government and saving expenditure, income, and the
 per-commodity `VPP`, `INCPAR` and `ALPHA` of the benchmark) plus the
 cumulative percentage changes of utility `u` and of `dpsave`, and returns the
 EV in USD millions. The worked example,
-`runs/nus333_compare/verify_shadow_integrator.py`, reads those benchmark
-values from a RunGTAP export (`runs/nus333_compare/rungtap/basedata.xls`) that
-is not shipped with the repository, so it runs only where that export exists.
+`scripts/gtap/rungtap_compare/verify_shadow_integrator.py`, reads those
+benchmark values from a RunGTAP export (`basedata.xls`, in the git-ignored
+`notes/tmp/rungtap_compare/nus333/rungtap/`) that is not shipped with the
+repository, so it runs only where that export exists.
 
 ## RunGTAP parity validation of the shadow integrator (NUS333 + 9x10)
 
@@ -196,9 +197,9 @@ shadow integrator degrades when the closure absorbs very large
 trade-balance imbalances. The remaining 8 regions reproduce RunGTAP
 welfare to within 1% — well inside the cgebox-tolerated 5% residual band.
 
-Full reproducible workspace lives under `runs/nus333_compare/` and
-`runs/9x10_compare/`. See `verify_shadow_*.py`, `compare_*_report.py`
-and the corresponding `comparison.md` files.
+The scripts are in `scripts/gtap/rungtap_compare/` (`verify_shadow_*.py`,
+`compare_*_report.py`); the comparisons they wrote (`comparison*.md`) are
+archived in `docs/archive/findings/rungtap_compare/`.
 
 ## References
 

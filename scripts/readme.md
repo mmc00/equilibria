@@ -142,7 +142,6 @@ cada script y quién lo nombra (CI, tests, docs u otro código). Un script con
 | `dump_py_solution_gdx.py` | Solve the Python multi-period model as NLP (in-process), then write ALL its | — |  |
 | `example_basic.py` | Example: Basic GTAP Model Usage | — | monolito |
 | `example_parity.py` | Example: GTAP Parity Testing | — | monolito |
-| `export_sl4_levels.py` | Export pre- and post-simulation LEVELS from any GEMPACK SL4 solution to a plain HAR. | tests, código |  |
 | `gtap_sync.gms` | GTAP Synchronized Model - Matches Python exactly | código |  |
 | `final_parity_test.py` | Final GTAP Parity: Synchronized Calibration | — | monolito |
 | `gtap_model.gms` | Full GTAP Model - Multi-region CGE | docs, código |  |
@@ -158,7 +157,6 @@ cada script y quién lo nombra (CI, tests, docs u otro código). Un script con
 | `homotopy_shock.py` | GAMS-faithful homotopy driver for the altertax +10% import-tariff shock. | código | monolito |
 | `inheritance_table.py` | EXHAUSTIVE inter-period INHERITANCE sweep: every variable GAMS seeds from the prior | — |  |
 | `inspect_updated_har.py` | Inspect a RunGTAP updated.har: print every header's name, rank, shape, and | — |  |
-| `make_levels_tab.py` | Write gtapv7_levels.tab: gtapv7.tab with ``orig_level`` on six more variables. | tests, código |  |
 | `measure_gate_tols.py` | Fresh status sweep: run the EXACT altertax multi-period gate solve path | — | monolito |
 | `measure_gempack_blocks.py` | F3.5 against-GEMPACK measurement: the specific-factor (Land) price response. | tests, docs | bloques |
 | `measure_gtap_pure_tols.py` | Fresh status sweep for the PURE-GTAP (non-altertax) multi-period SOLVE gate. | código | monolito |
@@ -188,7 +186,6 @@ cada script y quién lo nombra (CI, tests, docs u otro código). Un script con
 | `validate_nus333_parity.py` | Smoke test: load NUS333 via HAR and validate parameters are populated. | — |  |
 | `validate_reference.py` | Validate that a GAMS reference GDX satisfies its OWN equations. | tests, código | monolito |
 | `verify_ifsub_equivalence.py` | Verify each Python ifSUB mode is faithful to its own GAMS oracle, per dataset. | tests, docs, código |  |
-| `welfare_gempack_fixture.py` | Bienestar de GEMPACK en los ejercicios de Burfisher: el oraculo del EV regional. | tests |  |
 
 ### `gtap_julia/` (14)
 
@@ -278,10 +275,4 @@ cada script y quién lo nombra (CI, tests, docs u otro código). Un script con
 | `create_cri_labor_tax_mapping.py` | Create a CRI mapping variant where social contributions map to taxes. | — |
 | `fix_cri_sam_for_pep.py` | Transform and rebalance a CRI SAM into a PEP-compatible structure. | — |
 | `run_manual_sam_pipeline.py` | Utility script that executes the manual IEEM->PEP pipeline step by step. | docs |
-
-### `windows/` (1)
-
-| Script | Qué hace | Lo nombra |
-|---|---|---|
-| `corridas_paper.ps1` | Corridas del paper que solo se pueden hacer en Windows (GEMPACK y sltoht). | tests, código |
 <!-- MAPA:FIN -->

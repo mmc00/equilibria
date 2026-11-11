@@ -28,9 +28,9 @@ from equilibria.family.altertax.volume import (
     volume_headers,
     write_volume_har,
 )
-from tests.family._prep import ROOT
+from tests.family._prep import ROOT, altax_gem
 
-FIXTURE = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg/altax_volume.har"
+FIXTURE = altax_gem() / "volume.har"
 EXPECTED = [
     "DQXS",
     "DQDS",

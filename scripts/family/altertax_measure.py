@@ -39,9 +39,10 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
 
 DEFAULT_OUT = Path.home() / "proyectos/dev-tools/equilibria-tools/plans/mediciones"
-FIXTURES = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg"
-HAR = FIXTURES / "sl4levels_altax.har"
-UPDATED = FIXTURES / "altax.upd"
+def _refs():
+    from tests.family._prep import altax_gem, altax_levels_har, altax_reference_dir
+
+    return altax_reference_dir(), altax_levels_har(), altax_gem() / "updated.har"
 
 
 def _set_env() -> None:
@@ -208,7 +209,7 @@ def main() -> None:
     def go(tag: str, params) -> None:
         run = solve_altertax(d, params=params)
         levels = family_levels(run.result.mp, eq_vars)
-        rep = compare_levels(run, FIXTURES)
+        rep = compare_levels(run, _refs()[0])
         runs[tag] = {
             "codes": run.codes,
             "minutes": run.minutes,
@@ -279,8 +280,8 @@ def main() -> None:
 
     out = {
         "sha": sha,
-        "har": str(HAR.relative_to(ROOT)),
-        "updated": str(UPDATED.relative_to(ROOT)),
+        "har": str(_refs()[1].relative_to(ROOT)),
+        "updated": str(_refs()[2].relative_to(ROOT)),
         "runs": runs,
         "sigma_effect": {
             k: {

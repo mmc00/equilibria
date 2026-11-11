@@ -42,9 +42,13 @@ def _period(cells: dict, period: str) -> dict:
 
 
 def _oracle_pre() -> tuple[dict[str, dict], set[str]]:
-    """Oraculo 1: pre = post / (1 + %/100) de los fixtures de sltoht del nus333."""
+    """Oraculo 1: pre = post / (1 + %/100) de los registros de sltoht del nus333."""
     post, pct = _by_variable(O.EX16_NUS333_POST), _by_variable(O.EX16_NUS333_PCT)
-    pre, sentinel = {}, set()
+    # The record names the variables without level in NOLV (no sentinel header).
+    pre, sentinel = (
+        {},
+        {str(x) for x in read_har(str(O.EX16_NUS333_POST))["NOLV"].array},
+    )
     for name, ha in post.items():
         cells = _cells(ha)
         if all(v >= 1e10 for v in cells.values()):

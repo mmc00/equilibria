@@ -550,7 +550,7 @@ wheels = [
 
 [[package]]
 name = "equilibria"
-version = "0.6.1"
+version = "0.6.4"
 source = { editable = "." }
 dependencies = [
     { name = "certifi" },
@@ -565,6 +565,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyomo" },
     { name = "pyyaml" },
+    { name = "rich" },
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "scipy", version = "1.18.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -573,12 +574,15 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
+    { name = "path-capi-python" },
     { name = "pyomo" },
 ]
 dev = [
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
+    { name = "pytest-split" },
+    { name = "pytest-xdist" },
     { name = "ruff" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
@@ -613,6 +617,9 @@ ipopt = [
 modelcache = [
     { name = "cloudpickle" },
 ]
+path = [
+    { name = "path-capi-python" },
+]
 poi = [
     { name = "pyoptinterface" },
 ]
@@ -629,6 +636,8 @@ dev = [
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
+    { name = "pytest-split" },
+    { name = "pytest-xdist" },
     { name = "ruff" },
     { name = "ty" },
 ]
@@ -642,7 +651,7 @@ requires-dist = [
     { name = "click", specifier = ">=8.4.1" },
     { name = "cloudpickle", marker = "extra == 'modelcache'", specifier = ">=3.0" },
     { name = "cyipopt", marker = "extra == 'ipopt'", specifier = ">=1.6.1" },
-    { name = "equilibria", extras = ["pyomo"], marker = "extra == 'all'" },
+    { name = "equilibria", extras = ["pyomo", "path"], marker = "extra == 'all'" },
     { name = "jax", marker = "extra == 'family'", specifier = ">=0.4.30" },
     { name = "matplotlib", marker = "extra == 'docs'", specifier = ">=3.7" },
     { name = "matplotlib", marker = "extra == 'viz'", specifier = ">=3.7" },
@@ -653,6 +662,7 @@ requires-dist = [
     { name = "packaging", specifier = ">=23.0" },
     { name = "pandas", specifier = ">=2.0" },
     { name = "pandas", marker = "extra == 'docs'", specifier = ">=2.0" },
+    { name = "path-capi-python", marker = "extra == 'path'", specifier = ">=0.1.0" },
     { name = "plotly", marker = "extra == 'viz'", specifier = ">=5.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "pydantic", specifier = ">=2.0" },
@@ -662,7 +672,10 @@ requires-dist = [
     { name = "pyoptinterface", marker = "extra == 'poi'", specifier = ">=0.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "pytest-split", marker = "extra == 'dev'", specifier = ">=0.10" },
+    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.5" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "rich", specifier = ">=13" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
     { name = "scipy", specifier = ">=1.15.3" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=7.2" },
@@ -673,13 +686,15 @@ requires-dist = [
     { name = "xlrd", specifier = ">=2.0.2" },
     { name = "xlrd", marker = "extra == 'excel'", specifier = ">=2.0" },
 ]
-provides-extras = ["pyomo", "poi", "ipopt", "excel", "viz", "modelcache", "family", "dev", "docs", "all"]
+provides-extras = ["pyomo", "poi", "ipopt", "path", "excel", "viz", "modelcache", "family", "dev", "docs", "all"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "mypy", specifier = ">=1.10" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-cov", specifier = ">=4.0" },
+    { name = "pytest-split", specifier = ">=0.10" },
+    { name = "pytest-xdist", specifier = ">=3.5" },
     { name = "ruff", specifier = ">=0.4" },
     { name = "ty", specifier = ">=0.0.14" },
 ]
@@ -704,6 +719,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8a/0e/97c33bf5009bdbac74fd2beace167cab3f978feb69cc36f1ef79360d6c4e/exceptiongroup-1.3.1-py3-none-any.whl", hash = "sha256:a7a39a3bd276781e98394987d3a5701d0c4edffb633bb7a5144577f82c773598", size = 16740, upload-time = "2025-11-21T23:01:53.443Z" },
+]
+
+[[package]]
+name = "execnet"
+version = "2.1.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/bf/89/780e11f9588d9e7128a3f87788354c7946a9cbb1401ad38a48c4db9a4f07/execnet-2.1.2.tar.gz", hash = "sha256:63d83bfdd9a23e35b9c6a3261412324f964c2ec8dcd8d3c6916ee9373e0befcd", size = 166622, upload-time = "2025-11-12T09:56:37.75Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/84/02fc1827e8cdded4aa65baef11296a9bbe595c474f0d6d758af082d849fd/execnet-2.1.2-py3-none-any.whl", hash = "sha256:67fba928dd5a544b783f6056f449e5e3931a5c378b128bc18501f7ea79e296ec", size = 40708, upload-time = "2025-11-12T09:56:36.333Z" },
 ]
 
 [[package]]
@@ -1981,6 +2005,15 @@ wheels = [
 ]
 
 [[package]]
+name = "path-capi-python"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f3/c1/7ba7212f7518cff958d2a1097a57eb4f4357c992f90c4dd3fc60b786d30f/path_capi_python-0.1.0.tar.gz", hash = "sha256:a9b849d1eec2d936899fdfee31d7ee70dba7a6679de88bee350f6d2b3102d4cb", size = 24564, upload-time = "2026-11-05T23:08:43.778Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/27/22/b6cc8c1388ec2f5042dac480ff1aff748bc175e05decbdfbf4c81433a8d4/path_capi_python-0.1.0-py3-none-any.whl", hash = "sha256:0167672c50007c1385369490c034b5b8c39a511e162b11d159775d51e5792fc7", size = 20670, upload-time = "2026-11-05T23:08:42.468Z" },
+]
+
+[[package]]
 name = "pathspec"
 version = "1.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -2430,6 +2463,31 @@ wheels = [
 ]
 
 [[package]]
+name = "pytest-split"
+version = "0.11.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2f/16/8af4c5f2ceb3640bb1f78dfdf5c184556b10dfe9369feaaad7ff1c13f329/pytest_split-0.11.0.tar.gz", hash = "sha256:8ebdb29cc72cc962e8eb1ec07db1eeb98ab25e215ed8e3216f6b9fc7ce0ec2b5", size = 13421, upload-time = "2026-02-03T09:14:31.469Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ae/a1/d4423657caaa8be9b31e491592b49cebdcfd434d3e74512ce71f6ec39905/pytest_split-0.11.0-py3-none-any.whl", hash = "sha256:899d7c0f5730da91e2daf283860eb73b503259cb416851a65599368849c7f382", size = 11911, upload-time = "2026-02-03T09:14:33.708Z" },
+]
+
+[[package]]
+name = "pytest-xdist"
+version = "3.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "execnet" },
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/78/b4/439b179d1ff526791eb921115fca8e44e596a13efeda518b9d845a619450/pytest_xdist-3.8.0.tar.gz", hash = "sha256:7e578125ec9bc6050861aa93f2d59f1d8d085595d6551c2c90b6f4fad8d3a9f1", size = 88069, upload-time = "2025-07-01T13:30:59.346Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ca/31/d4e37e9e550c2b92a9cbc2e4d0b7420a27224968580b5a447f420847c975/pytest_xdist-3.8.0-py3-none-any.whl", hash = "sha256:202ca578cfeb7370784a8c33d6d05bc6e13b4f25b5053c30a152269fd10f0b88", size = 46396, upload-time = "2025-07-01T13:30:56.632Z" },
+]
+
+[[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 source = { registry = "https://pypi.org/simple" }
@@ -2527,6 +2585,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c9/74/b3ff8e6c8446842c3f5c837e9c3dfcfe2018ea6ecef224c710c85ef728f4/requests-2.32.5.tar.gz", hash = "sha256:dbba0bac56e100853db0ea71b82b4dfd5fe2bf6d3754a8893c3af500cec7d7cf", size = 134517, upload-time = "2025-08-18T20:46:02.573Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1e/db/4254e3eabe8020b458f1a747140d32277ec7a271daf1d235b70dc0b4e6e3/requests-2.32.5-py3-none-any.whl", hash = "sha256:2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6", size = 64738, upload-time = "2025-08-18T20:46:00.542Z" },
+]
+
+[[package]]
+name = "rich"
+version = "15.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markdown-it-py", version = "3.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "markdown-it-py", version = "4.2.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "pygments" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c0/8f/0722ca900cc807c13a6a0c696dacf35430f72e0ec571c4275d2371fca3e9/rich-15.0.0.tar.gz", hash = "sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36", size = 230680, upload-time = "2026-04-12T08:24:00.75Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl", hash = "sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb", size = 310654, upload-time = "2026-04-12T08:24:02.83Z" },
 ]
 
 [[package]]

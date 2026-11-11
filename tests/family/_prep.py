@@ -107,3 +107,37 @@ def recording(dataset: str = "gtap7_3x3", ifsub: int = 1):
         closure = closure.model_copy(update={"if_sub": False})
     backend, _ = load_or_build(p, closure, list(p.sets.r)[-1], root)
     return backend
+
+
+@cache
+def altax_gem() -> Path:
+    """Burfisher's ALTAX run by GEMSIM (Gragg): ``solution.sl4``, ``updated.har``,
+    ``summary.har``, ``decomp.har``, ``volume.har``. Found through ``equilibria.sources``."""
+    from equilibria.sources import reference
+
+    return reference("nus333", "gemsim", experiment="altax", method="gragg")
+
+
+@cache
+def altax_levels_har() -> Path:
+    """sltoht's levels dump of that run (the ``.sl4`` has no ``PLEV``)."""
+    from equilibria.sources import reference
+
+    return (
+        reference("nus333", "sltoht", experiment="altax", method="gragg")
+        / "sl4levels.har"
+    )
+
+
+@cache
+def altax_reference_dir() -> Path:
+    """One folder with everything ``--compare`` reads: the GEMSIM run plus ``sl4levels.har``."""
+    import shutil
+    import tempfile
+
+    d = Path(tempfile.mkdtemp(prefix="altax_ref_"))
+    for f in altax_gem().iterdir():
+        if f.suffix in (".har", ".sl4"):
+            shutil.copy(f, d / f.name)
+    shutil.copy(altax_levels_har(), d / "sl4levels.har")
+    return d

@@ -1,0 +1,165 @@
+  
+ <TABLO  Version 6.4   April 2012>
+   This program accesses some of the routines in the GEMPACK software release
+ <GEMPACK Release 11.3.004   January 2015>
+  
+     -------------------------------------------------------
+    !            GEMPACK Software System Licence            !
+    !  Source Code Licence for the GEMPACK Software System  !
+    !                 Licence No.  GFM-1415                 !
+    !          Licence for Release 11.0 of GEMPACK          !
+    !               Ministry of Foreign Trade               !
+    !             PO Box 297-1007 Centro Colon,             !
+    !                      Costa Rica                       !
+     -------------------------------------------------------
+  
+  
+     << COPYRIGHT 1987-2010: CoPS/Impact and KPSOFT >>
+  
+  Current directory is:
+ C:\Documentos\proyectos\equilibria\runs\gempack_work\horridge\tariff10
+  
+  
+  Full path name of running EXE is: C:\GP\tablo.exe
+  Fortran compiler = GF64  4.8.1 (rev3, built by mingw-builds project):
+  Operating system is Windows 8
+ (Opened, as text, existing file 'simple.tab'.)
+  [TABLO Input file is "simple.tab"]
+ (Opened new print file 'simple.inf'.)
+  [Information file is "simple.inf"]
+  
+ Note that this implementation will be known by the name 'simple'.
+  
+ --> Starting CHECK stage
+  (Beginning preliminary pass of your TABLO Input file.)
+  
+  NUMIG = 297, NUMZD = 0.
+  NUMST = 9, NUMSS = 7.
+  NUMFL = 1, NUMDS = 0.
+  NUMRD = 58, NUMWR = 0.
+  NUMCS = 57, NUMVC = 46.
+  TCSIND = 202, TVCIND = 219.
+  NUMEQ = 21, NUMFM = 56.
+  NUMUD = 40, NUMTR = 0.
+  NUMOMT = 0, NUMBST = 2.
+  NUMCP = 0, NUMMF = 0.
+  (Beginning the check of your TABLO Input file.)
+  (After 50 statements, total number of errors is 0.)
+  
+  (After 89 statements, total number of errors is 0.)
+  
+  NUMIG = 89, NUMZD = 0.
+  NUMST = 10, NUMSS = 8.
+  NUMFL = 1, NUMDS = 0.
+  NUMRD = 3, NUMWR = 0.
+  NUMCS = 9, NUMVC = 25.
+  TCSIND = 202, TVCIND = 219.
+  NUMEQ = 20, NUMFM = 8.
+  NUMUD = 3, NUMTR = 0.
+  NUMOMT = 0, NUMBST = 2.
+  NUMCP = 0, NUMMF = 0.
+  (Checking for duplicate name use.)
+  (Checking coefficient initialization.)
+  
+  %%INFORMATION. TABLO has created 1 new sets as follows:
+   S@exp # Set with one element exp, a subset of USR #
+  
+  
+  
+ INPUT CHECK SUMMARY
+ -------------------
+  
+  Total number of statements is 89.
+  There are NO syntax errors or semantic problems.
+  
+ --> Starting CONDENSATION
+  
+  Using equation "E_x" to backsolve for variable "x", as
+    specified in the TAB file.
+  
+  To simplify the 'p' part of equation 'E_xdem', we will set
+  
+       (ALL,c,COM) (ALL,s,SRC) C00010(c,s)
+  
+   equal to the following expression:
+  
+       -SUM(l,LOCUSR,-USE(c,s,l) * SIGMA(c))
+  
+  
+  This substitution was SUCCESSFUL
+   and constitutes CONDENSATION ACTION number 1.
+  
+  Using equation "E_pcomp" to backsolve for variable "pcomp", as
+    specified in the TAB file.
+  
+ Coefficient of substituted variable in this equation is :
+  
+       {ID01[USE_S(c,u)]}
+  
+  
+  %W% Check above coefficient will never be zero.
+  
+  (To simplify the rewritten equations, we will set
+  
+       (ALL,c,COM) (ALL,u,LOCUSR) C00011(c,u)
+  
+   equal to  -1.0  divided by the coefficient shown above.)
+  
+  
+  To simplify the 'p' part of equation 'E_xdem', we will set
+  
+       (ALL,c,COM) (ALL,s,SRC) (ALL,XX01,SRC) C00012(c,s,XX01)
+  
+   equal to the following expression:
+  
+       SUM(l,LOCUSR,USE(c,s,l) * SIGMA(c) * C00011(c,l) * USE(c,XX01,l))
+  
+  
+  This substitution was SUCCESSFUL
+   and constitutes CONDENSATION ACTION number 2.
+  
+  --> Summary of CONDENSATION
+  
+  There are 18 equations left in the CONDENSED model.
+  0 equations have been used to SUBSTITUTE out variables.
+  2 equations have been used to BACKSOLVE for variables.
+  The entire model contains 20 equations.
+  
+  There are 23 variables left in the CONDENSED model.
+  0 variables have been SUBSTITUTED out.
+  0 variables have been OMITTED.
+  You can BACKSOLVE for 2 variables.
+  The entire model contains 25 variables.
+  
+ --> Starting CODE GENERATION
+  [Writing output for GEMSIM.]
+ (Opened new binary file 'simple.gss'.)
+  [GEMSIM Statement file is "simple.gss"]
+ (Opened new binary file 'simple.gst'.)
+  [GEMSIM Table file is "simple.gst"]
+  
+  (Processing reads, formulas, writes, displays etc.)
+  
+  (Processing the equations.)
+  
+  (Processing the backsolves.)
+  
+  (Processing the updates.)
+ (Opened new text file 'simple.min'.)
+ (Model Information file is 'simple.min'.)
+  
+  *******************************************************************
+  Successful completion of TABLO.
+  
+  When used with GEMSIM, the GEMSIM Statement
+   and Table files produced in this run of TABLO
+      o can create the Equations file (for the condensed system)
+      o can check 1 ASSERTIONs
+      o can carry out multi-step simulations
+  
+  *******************************************************************
+ (Information file is 'simple.inf'.)
+  
+  (The program has completed without error.)
+  Total elapsed time is: less than one second.
+  

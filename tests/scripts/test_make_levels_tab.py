@@ -22,7 +22,7 @@ from typing import Any
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts" / "gtap" / "make_levels_tab.py"
+SCRIPT = ROOT / "data" / "gtap7" / "gempack" / "tools" / "make_levels_tab.py"
 
 # Declaraciones copiadas de gtapv7.tab (GTAP 11a): lineas 576, 940, 1063, 1776,
 # 2334, 2475, y el Read de RORFLEX (2505-2509). qo ya tiene orig_level: no se toca.
@@ -300,3 +300,29 @@ def test_sti_real_sin_condensar(mlt: Any) -> None:
         "pgs",
         "gtapuv7_levels",
     ]
+
+
+def test_changes_out_lists_the_four_files(mlt: Any, tmp_path: Path) -> None:
+    """--changes-out writes the changes write_source records for the derived model."""
+    (tmp_path / "gtapv7.tab").write_text(MINI_TAB)
+    (tmp_path / "gtapv7.sti").write_text(MINI_STI)
+    out, changes = tmp_path / "out", tmp_path / "changes.yaml"
+    base = [str(tmp_path / "gtapv7.tab"), "--sti", str(tmp_path / "gtapv7.sti")]
+    tail = ["--out-dir", str(out), "--changes-out", str(changes)]
+    assert mlt.main([*base, *tail]) == 0
+    assert mlt.main([*base, *tail, "--uncondensed"]) == 0
+    assert mlt.main([*base, *tail]) == 0  # a rerun replaces its own two entries
+    import yaml
+
+    entries = yaml.safe_load(changes.read_text())
+    assert [e["file"] for e in entries] == [
+        "gtapuv7_levels.sti",
+        "gtapuv7_levels.tab",
+        "gtapv7_levels.sti",
+        "gtapv7_levels.tab",
+    ]
+    assert {e["change"] for e in entries} == {"added"}
+    assert all(set(e) == {"file", "change", "what", "why", "commit"} for e in entries)
+    assert "condensation" in next(
+        e["what"] for e in entries if e["file"] == "gtapuv7_levels.sti"
+    )

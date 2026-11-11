@@ -22,9 +22,9 @@ from equilibria.family.altertax.updated import (
     updated_headers,
     write_updated_har,
 )
-from tests.family._prep import ROOT
+from tests.family._prep import ROOT, altax_gem
 
-FIXTURE = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg/altax_updated.har"
+FIXTURE = altax_gem() / "updated.har"
 TEXT = TEXT_HEADERS
 
 

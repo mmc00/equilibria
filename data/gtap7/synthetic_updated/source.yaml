@@ -1,0 +1,15 @@
+kind: data
+model: gtap7
+dataset: gtap7_synthetic_updated
+source: 'A tiny synthetic RunGTAP-style updated.har (one VDFB header, 2 regions x
+  2 sectors) written by make_synthetic_updated_har.py (in this folder), for the GEMPACK
+  reference reader tests, which build their own copy in a temporary folder. Moved
+  from tests/fixtures/gtap7_gempack at 40a2abc6 (phase 3b); the generator''s default
+  output is now this folder. Regenerated there: same values (max abs 0), one header
+  byte differs (HAR writer changes since 2026-07)'
+license: test specimen written for equilibria
+outputs:
+  make_synthetic_updated_har.py: 20c18049a7574817546065215c6e04943e24812ebded100b2de76d64adfcce07
+  updated_synthetic.har: 8cf1e7a7993d7ca6f9b7ed9e5476a454bda7baa666334073b3103cec4714a9f9
+status: verified
+notes: ''

@@ -288,11 +288,8 @@ scripts/gtap/*
 !scripts/gtap/verify_ifsub_equivalence.py
 !scripts/gtap/gen_burfisher_gams.py
 !scripts/gtap/gams_welfare_fixture.py
-!scripts/gtap/welfare_gempack_fixture.py
 !scripts/gtap/gams/
 !scripts/gtap/gen_linearization_study.py
-!scripts/gtap/export_sl4_levels.py
-!scripts/gtap/make_levels_tab.py
 !scripts/gtap/mk_exp_directos.py
 # Phase-2 cascade orchestrator modules
 !scripts/gtap/cascade_config.py
@@ -310,6 +307,8 @@ scripts/gtap/*
 # Salidas de corridas GEMPACK/GAMS: se ignora todo lo generado (binarios y
 # consolas) y se versiona a mano la evidencia de validacion (.md, .cmf, .py,
 # .json). Antes esto eran 93 patrones enumerados por subdirectorio y extension.
+# phase 3a-2: what tablo compiles from data/gtap7/gempack_rungtap375_levels
+runs/gempack_work/
 runs/**/__pycache__/
 runs/**/*.har
 runs/**/*.sl4

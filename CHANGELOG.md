@@ -9,6 +9,74 @@ commit log.
 
 ## [Unreleased]
 
+## [0.6.4] — 2026-11-10
+
+The release the paper's replication package is built from; no change to any number.
+
+### Added
+- GAMS CES reference results for the 3x4 aggregation (4 NLP with local IPOPT, 4 MCP on NEOS)
+  and four matching rows in the GTAP parity matrix: Table A1 now covers all 40 combinations
+  (#232).
+
+### Changed
+- CI runs the test suites in parallel groups planned by file under a time budget (#230, #233).
+
+## [0.6.3] — 2026-11-09
+
+Fixes to the paper's replication package; no change to any number.
+
+### Fixed
+- `scripts/gtap/run_parity_gates.py` ends green outside a git checkout
+  (the replication zip has no `.git`): Table A1 no longer reports FAILED
+  after its tests pass.
+
+### Added
+- `scripts/paper/notebook_exercises.py` and the `run_tables.py` steps
+  `table3a_notebooks` and `table3_notebooks`: the Table A2/A3 rows of
+  TBL65B, TBL94, ME3C and ME9A (closures built in a notebook) are now
+  measured from the repository, one exercise per process.
+
+## [0.6.2] — 2026-11-08
+
+The release the GTAP paper's tables are measured on.
+
+### Added
+- `equilibria doctor` checks the installation a solve needs (#218, #219).
+- End-of-solve summary panel (Walras, residuals, worst equations), a warning
+  when a solved variable rests on its floor, and the same output on the
+  `equilibria` logger (#217).
+- GAMS NLP references for gtap7_15x10 and their gate rows (#220).
+
+### Fixed
+- The CDE household share recalibration uses GAMS's denominator: 15x10
+  altertax ifSUB=0 NLP check 53% → 100% (#221).
+- Altertax Armington shares (`alphad`/`alpham`) keep their base calibration,
+  as in GAMS, instead of being re-derived every period: 15x10 altertax
+  ifSUB=0 NLP shock 99.45% → 100% (#222).
+
+### Changed
+- Version tags publish to PyPI with Trusted Publishing (#216).
+- Job-list drivers are no longer hashed as inputs of the results they run
+  (#220).
+
+## [0.6.2a1] — 2026-11-05 (pre-release)
+
+First release on PyPI, an early alpha: the API can still change before
+0.6.2. `pip install "equilibria[path]"` now solves the README quickstart in a
+clean environment.
+
+### Fixed
+- The GTAP PATH solve finds the PATH libraries by platform (it assumed the
+  macOS-arm64 file names) and treats LUSOL as optional.
+- Without PyNumero's ASL library, which pip does not install, the Jacobian
+  defaults to `reverse_numeric`. Before, the callbacks failed to build and the
+  quickstart returned code 0 with an EV of ~1e-6 instead of -0.108.
+
+### Changed
+- New `path` extra (`path-capi-python`); the sdist ships only the data files
+  the wheel bundles (78 MB → 2.2 MB).
+
+
 ### Fixed
 - GTAP7 pure 5x5 ifSUB=1 MCP shock parity closed: 92.35% → **100%** (MCP
   gate 18/18 rows green, floor restored 92 → 99). The "multi-root pet/pe

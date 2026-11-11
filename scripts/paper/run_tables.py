@@ -7,9 +7,9 @@ o tardan mucho (20x41) se pueden saltar con --skip. Uso:
     PYTHONPATH=src:. python scripts/paper/run_tables.py --out paper_out --only table2,table3a
     PYTHONPATH=src:. python scripts/paper/run_tables.py --dry-run --out paper_out
 
-Las referencias GEMPACK vienen en tests/fixtures/gtap7_gempack/ (se generan en Windows con
-scripts/windows/corridas_paper.ps1 -Pasos 4,5,7 -Cierre capflex); las de GAMS de la Tabla 3
-las genera el paso table3_refs (scripts/gtap/gen_burfisher_gams.py).
+Las referencias GEMPACK son registros de data/ (equilibria.sources.reference; se generan en
+Windows con data/gtap7/gempack/tools/regenerate_paper.py); las de GAMS de la Tabla 3 las
+genera el paso table3_refs (scripts/gtap/gen_burfisher_gams.py).
 """
 
 from __future__ import annotations
@@ -20,15 +20,46 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, reference
 
 ROOT = Path(__file__).resolve().parents[2]
-FIX = "tests/fixtures/gtap7_gempack"
 
 
 def _rel(dataset: str) -> str:
     """A dataset folder relative to the repo root, as the commands take it."""
     return str(dataset_dir(dataset).relative_to(ROOT))
+
+
+def _levels6(dataset: str) -> str:
+    """The capFlex six-variable levels ``.har`` of a dataset, relative to the repo root."""
+    rec = reference(
+        dataset,
+        "gemsim",
+        tab="gtapv7_levels",
+        shock=10,
+        steps="8-16-32",
+        closure="capFlex",
+    )
+    return str((rec / "sl4levels.har").relative_to(ROOT))
+
+
+def _gragg_runs() -> list[str]:
+    """The folders of the Burfisher Gragg records (solutions and their levels)."""
+    return [
+        str(reference("nus333", tool, experiment="tbl46a", method="gragg").parent.relative_to(ROOT))
+        for tool in ("gemsim", "sltoht")
+    ]  # fmt: skip
+
+
+def _updated(dataset: str) -> str:
+    """The 10% capFlex GEMPACK ``updated.har`` of a dataset, relative to the repo root."""
+    rec = reference(dataset, "gempack", shock=10, steps="8-16-32", closure="capFlex")
+    return str((rec / "updated.har").relative_to(ROOT))
+
+
+# Their closures are built in a notebook (@overwrite): see scripts/paper/notebook_exercises.py.
+NOTEBOOK_EXERCISES = ["TBL65B", "TBL94", "ME3C", "ME9A"]
+
 TABLE2 = {  # dataset -> solver de la Tabla 2
     "3x3": "path",
     "3x4": "path",
@@ -53,9 +84,9 @@ def steps(out: Path) -> list[Step]:
         [
             py, "scripts/gtap/compare_gempack_levels.py",
             "--dataset", f"gtap7_{ds}", "--closure", "capFlex", "--solver", solver,
-            "--har", f"{FIX}/sl4levels6_gtap7_{ds}_tm10_s8-16-32.har",
+            "--har", _levels6(f"gtap7_{ds}"),
             "--basedata", f"{_rel(f'gtap7_{ds}')}/basedata.har",
-            "--updated", f"{FIX}/updated_gtap7_{ds}_tm10_s8-16-32.har",
+            "--updated", _updated(f"gtap7_{ds}"),
             "--save-eq", str(out / f"eq_gtap7_{ds}_capflex.json.gz"),
             "--out", str(out / f"table2_gtap7_{ds}.json"),
         ]
@@ -63,26 +94,52 @@ def steps(out: Path) -> list[Step]:
     ]  # fmt: skip
     t2_files = ["scripts/gtap/compare_gempack_levels.py"] + [
         f for ds in TABLE2 for f in (
-            f"{FIX}/sl4levels6_gtap7_{ds}_tm10_s8-16-32.har",
-            f"{FIX}/updated_gtap7_{ds}_tm10_s8-16-32.har",
+            _levels6(f"gtap7_{ds}"),
+            _updated(f"gtap7_{ds}"),
             f"{_rel(f'gtap7_{ds}')}/basedata.har",
         )
     ]  # fmt: skip
     refs = out / "gams_burfisher"
+    nb = "scripts/paper/notebook_exercises.py"
+    nb_files = [nb, "examples/notebooks/gtap7/burfisher"]
+    # One command per exercise: each @overwrite closure in its own process.
+    nb_gempack = [
+        [py, nb, "gempack", exp, "--json", str(out / f"table3a_{exp}.json")]
+        for exp in NOTEBOOK_EXERCISES
+    ]
+    nb_gams = [
+        [
+            py,
+            nb,
+            "gams",
+            exp,
+            "--gams-dir",
+            str(refs),
+            "--json",
+            str(out / f"table3_{exp}.json"),
+        ]
+        for exp in NOTEBOOK_EXERCISES
+    ]
     return [
         Step("table1", "Tabla 1: paridad con GAMS (MCP y NLP)",
              [[py, "scripts/gtap/run_parity_gates.py"]], ["scripts/gtap/run_parity_gates.py"]),
         Step("table2", "Tabla 2: niveles contra GEMPACK, 6 datasets, capFlex", t2, t2_files),
         Step("table3a", "Tabla 3a: ejercicios del libro contra GEMPACK (Gragg)",
              [[py, "scripts/gtap/compare_burfisher_gempack.py",
-               "--gempack-dir", f"{FIX}/burfisher_gragg", "--json", str(out / "table3a.json")]],
-             ["scripts/gtap/compare_burfisher_gempack.py", f"{FIX}/burfisher_gragg", _rel("nus333")]),
+               "--gempack-dir", "gragg", "--json", str(out / "table3a.json")]],
+             ["scripts/gtap/compare_burfisher_gempack.py", *_gragg_runs(), _rel("nus333")]),
+        Step("table3a_notebooks",
+             "Tabla 3a: los 4 ejercicios con cierre por notebook contra GEMPACK",
+             nb_gempack, nb_files),
         Step("table3_refs", "Referencias GAMS de la Tabla 3 (necesita GAMS)",
              [[py, "scripts/gtap/gen_burfisher_gams.py", str(refs)]],
              ["scripts/gtap/gen_burfisher_gams.py"]),
         Step("table3", "Tabla 3: ejercicios del libro contra GAMS",
              [[py, "scripts/gtap/run_burfisher.py", "--gams-dir", str(refs),
                "--json", str(out / "table3.json")]], ["scripts/gtap/run_burfisher.py"]),
+        Step("table3_notebooks",
+             "Tabla 3: los 4 ejercicios con cierre por notebook contra GAMS",
+             nb_gams, nb_files),
         Step("tbl65b_me3c", "TBL65B y ME3C (cierres por notebook)",
              [[py, "-m", "pytest", "-q", "tests/templates/gtap/test_nus333_tbl65b_unemployment.py"]],
              ["tests/templates/gtap/test_nus333_tbl65b_unemployment.py"]),

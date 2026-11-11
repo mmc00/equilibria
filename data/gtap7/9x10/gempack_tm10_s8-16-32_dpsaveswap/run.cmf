@@ -1,0 +1,59 @@
+! 9x10 uniform 10% shock to import tariff power (tm) — GEMPACK / GTAPv7
+! Mirrors equilibria's capFix closure with residual_region="NAmerica":
+! all non-residual regions have their savf pinned to baseline via the
+! standard `swap dpsave(r) = del_tbalry(r)` recipe.
+Auxiliary files = C:\runGTAP375\gtapv7 ;
+
+file GTAPSETS = sets.har ;
+file GTAPDATA = basedata.har ;
+file GTAPPARM = default.prm ;
+file GTAPSUM  = summary.har ;
+file WELVIEW  = decomp.har ;
+file GTAPVOL  = volume.har ;
+Updated file GTAPDATA = updated.har ;
+
+Method = Gragg ;
+Steps  = 8 16 32 ;
+Automatic accuracy = no ;
+Subintervals = 1 ;
+
+Verbal Description =
+9x10 uniform 10pct shock to import tariff power (tm), capFix closure ;
+
+Exogenous
+          pop
+          psaveslack pfactwld
+          profitslack incomeslack endwslack
+          cgdslack
+          tradslack
+          ams atm atf ats atd
+          aosec aoreg avasec avareg
+          aintsec aintreg aintall
+          afcom afsec afreg afecom afesec afereg
+          aoall afall afeall
+          au dppriv dpgov dpsave
+          to tinc
+          tpreg tm tms tx txs
+          qe
+          qesf ;
+Rest Endogenous ;
+
+! capFix closure: pin del_tbalry for all NON-RESIDUAL regions; NAmerica
+! absorbs the capital-account identity. Releases dpsave(r) for each
+! non-residual region.
+swap dpsave("Oceania")     = del_tbalry("Oceania") ;
+swap dpsave("EastAsia")    = del_tbalry("EastAsia") ;
+swap dpsave("SEAsia")      = del_tbalry("SEAsia") ;
+swap dpsave("SouthAsia")   = del_tbalry("SouthAsia") ;
+swap dpsave("LatinAmer")   = del_tbalry("LatinAmer") ;
+swap dpsave("EU_28")       = del_tbalry("EU_28") ;
+swap dpsave("MENA")        = del_tbalry("MENA") ;
+swap dpsave("SSA")         = del_tbalry("SSA") ;
+swap dpsave("RestofWorld") = del_tbalry("RestofWorld") ;
+
+Shock tm = uniform 10 ;
+
+CPU = yes ;
+NDS = yes ;
+log file = yes ;
+Extrapolation accuracy file = NO ;

@@ -2,7 +2,7 @@
 #
 # A: el modelo de bloques de equilibria resuelto (base -> check -> shock), leido con
 #    from_pyomo o from_dict. B: un .har de niveles de GEMPACK (LEVB = pre, LEVA = post;
-#    scripts/gtap/export_sl4_levels.py) leido con from_har.
+#    data/gtap7/gempack/tools/export_sl4_levels.py) leido con from_har.
 # Varias variables no estan tal cual en ninguna fuente; las arma
 # scripts/gtap/compare_gempack_levels.py antes de comparar (lista completa y
 # formulas en su docstring), p. ej.:

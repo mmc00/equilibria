@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from equilibria.sources import check_tree, load_source
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -218,12 +220,13 @@ def test_windows_cpu_reads_the_registry_name() -> None:
     ]
 
 
-def test_windows_cpu_falls_back_without_the_key() -> None:
-    import platform
-
-    assert _module()._windows_cpu(_FakeWinreg(None)) == (
-        platform.processor() or platform.machine()
-    )
+def test_windows_cpu_falls_back_without_the_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without the registry key: the architecture in the environment, not
+    platform.processor(), which queries WMI (timed out in the 3a-2 run)."""
+    monkeypatch.setenv("PROCESSOR_ARCHITECTURE", "AMD64")
+    assert _module()._windows_cpu(_FakeWinreg(None)) == "AMD64"
 
 
 def test_model_derived_from_records_the_changes(tmp_path: Path) -> None:
@@ -436,3 +439,222 @@ def test_no_options_file_records_no_options(tmp_path: Path) -> None:
     ]
     assert _module().main(argv) == 0
     assert load_source(folder).raw["solver"] == {"name": "PATH"}
+
+
+def _upstream(root: Path) -> Path:
+    """A file of another result, the input a chained result cross-checks against."""
+    dump = root / "gtap7" / "gtap7_3x3" / "gempack_tm10" / "sl4dump.har"
+    dump.parent.mkdir(parents=True)
+    dump.write_bytes(b"dump")
+    return dump
+
+
+def test_input_chains_a_result(tmp_path: Path) -> None:
+    """--input NAME=PATH hashes another result's file; editing it makes this one stale."""
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "sltoht_tm10"
+    cmd = [sys.executable, "-c", "open('out.txt','w').write('x')"]
+    argv = _argv(tmp_path, folder, cmd)
+    dump = _upstream(tmp_path)
+    argv[argv.index("--") : argv.index("--")] = ["--input", f"sl4dump={dump}"]
+    assert _module().main(argv) == 0
+    chained = load_source(folder).raw["generated_from"]["sl4dump"]
+    assert chained["path"] == "gtap7/gtap7_3x3/gempack_tm10/sl4dump.har"
+    assert len(chained["sha256"]) == 64
+    dump.write_bytes(b"edited")
+    assert any(
+        "sltoht_tm10: input sl4dump" in m and "changed after" in m
+        for m in check_tree(tmp_path)
+    )
+
+
+def test_input_folder_hashes_every_file(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "sltoht_tm10"
+    cmd = [sys.executable, "-c", "open('out.txt','w').write('x')"]
+    argv = _argv(tmp_path, folder, cmd)
+    dump = _upstream(tmp_path)
+    argv[argv.index("--") : argv.index("--")] = ["--input", f"solution={dump.parent}"]
+    assert _module().main(argv) == 0
+    chained = load_source(folder).raw["generated_from"]["solution"]
+    assert chained["path"] == "gtap7/gtap7_3x3/gempack_tm10"
+    assert set(chained["sha256"]) == {"sl4dump.har"}
+
+
+def test_input_outside_root_refused(tmp_path: Path) -> None:
+    root = tmp_path / "data"
+    folder = root / "gtap7" / "gtap7_3x3" / "sltoht_tm10"
+    outside = tmp_path / "elsewhere.har"
+    outside.write_bytes(b"x")
+    argv = _argv(root, folder, [sys.executable, "-c", "open('ran.txt','w').write('x')"])
+    argv[argv.index("--") : argv.index("--")] = ["--input", f"sl4dump={outside}"]
+    with pytest.raises(SystemExit):
+        _module().main(argv)
+    assert not (folder / "ran.txt").exists()
+
+
+def test_input_cannot_reuse_model_or_data(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "sltoht_tm10"
+    argv = _argv(tmp_path, folder, [sys.executable, "-c", "pass"])
+    dump = _upstream(tmp_path)
+    argv[argv.index("--") : argv.index("--")] = ["--input", f"model={dump}"]
+    with pytest.raises(SystemExit):
+        _module().main(argv)
+
+
+def test_external_is_recorded_not_checked(tmp_path: Path) -> None:
+    """--external hashes a file kept out of the repository; check_tree never reads it."""
+    root = tmp_path / "data"
+    folder = root / "gtap7" / "gtap7_3x3" / "gemsim_levels6"
+    exe = tmp_path / "runGTAP375" / "gtapv7.exe"
+    exe.parent.mkdir()
+    exe.write_bytes(b"MZ")
+    gss = tmp_path / "work" / "gtapv7_levels.gss"
+    gss.parent.mkdir()
+    gss.write_bytes(b"gss")
+    argv = _argv(root, folder, [sys.executable, "-c", "open('out.txt','w').write('x')"])
+    argv[argv.index("--") : argv.index("--")] = [
+        "--external",
+        f"gtapv7.exe={exe}@12.1.003",
+        "--external",
+        f"gtapv7_levels.gss={gss}",
+    ]
+    assert _module().main(argv) == 0
+    external = load_source(folder).raw["external"]
+    assert external["gtapv7.exe"]["path"] == str(exe)
+    assert external["gtapv7.exe"]["release"] == "12.1.003"
+    assert len(external["gtapv7.exe"]["sha256"]) == 64
+    assert "release" not in external["gtapv7_levels.gss"]
+    exe.unlink()
+    gss.unlink()
+    assert not any("gemsim_levels6" in m for m in check_tree(root))
+
+
+def test_missing_external_fails_before_running(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gemsim_levels6"
+    argv = _argv(
+        tmp_path, folder, [sys.executable, "-c", "open('ran.txt','w').write('x')"]
+    )
+    argv[argv.index("--") : argv.index("--")] = [
+        "--external",
+        f"gtapv7.exe={tmp_path / 'nope.exe'}",
+    ]
+    with pytest.raises(SystemExit):
+        _module().main(argv)
+    assert not (folder / "ran.txt").exists()
+
+
+def test_notes_from_file_is_appended_not_an_output(tmp_path: Path) -> None:
+    """--notes-from FILE: what the command leaves there goes to notes, not to outputs."""
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gemsim_x"
+    cmd = [sys.executable, "-c",
+           "open('out.txt','w').write('x'); open('note.txt','w').write('retried once')"]  # fmt: skip
+    argv = _argv(tmp_path, folder, cmd)
+    argv[argv.index("--") : argv.index("--")] = [
+        "--notes",
+        "base",
+        "--notes-from",
+        "note.txt",
+    ]
+    assert _module().main(argv) == 0
+    raw = load_source(folder).raw
+    assert raw["notes"] == "base; retried once"
+    assert set(raw["outputs"]) == {"out.txt"}
+    assert not (folder / "note.txt").exists()
+
+
+def test_notes_from_absent_file_keeps_notes(tmp_path: Path) -> None:
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gemsim_x"
+    argv = _argv(
+        tmp_path, folder, [sys.executable, "-c", "open('out.txt','w').write('x')"]
+    )
+    argv[argv.index("--") : argv.index("--")] = ["--notes-from", "note.txt"]
+    assert _module().main(argv) == 0
+    assert load_source(folder).raw["notes"] == ""
+
+
+def _not_starting(m, monkeypatch: pytest.MonkeyPatch, times: int) -> list[int]:
+    """subprocess.run fails to start the command ``times`` times (0xC0000142)."""
+    import subprocess
+
+    real, calls = m.subprocess.run, []
+
+    def run(cmd, **kw):
+        if not (isinstance(cmd, list) and cmd[:2] == [sys.executable, "-c"]):
+            return real(cmd, **kw)  # not the recorded command (platform, git...)
+        calls.append(1)
+        if len(calls) <= times:
+            return subprocess.CompletedProcess(cmd, 0xC0000142)
+        return real(cmd, **kw)
+
+    monkeypatch.setattr(m.subprocess, "run", run)
+    monkeypatch.setattr(m.time, "sleep", lambda s: None)  # the pause before a retry
+    return calls
+
+
+def test_command_that_does_not_start_is_retried_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """3a-1 and 3a-2: now and then Windows does not start the command (the python
+    of a job: STATUS_DLL_INIT_FAILED). One retry, and the record says so."""
+    m = _module()
+    calls = _not_starting(m, monkeypatch, 1)
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_ifsub0"
+    cmd = [sys.executable, "-c", "open('out.txt','w').write('x')"]
+    assert m.main(_argv(tmp_path, folder, cmd)) == 0
+    assert len(calls) == 2
+    assert "did not start" in load_source(folder).raw["notes"]
+
+
+def test_a_second_failed_start_writes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    m = _module()
+    calls = _not_starting(m, monkeypatch, 2)
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_ifsub0"
+    assert m.main(_argv(tmp_path, folder, [sys.executable, "-c", "pass"])) != 0
+    assert len(calls) == 2 and not (folder / "source.yaml").exists()
+
+
+def test_windows_machine_info_does_not_touch_wmi(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """platform's processor/release/version query WMI on Windows (Python 3.12), and
+    WMI timed out mid-run (WinError 258, KeyError 'Architecture'): a solved job lost
+    its record. machine_info builds the same strings without it."""
+    from types import SimpleNamespace
+
+    m = _module()
+
+    def wmi(*a: object) -> str:
+        raise OSError(258, "WMI timed out")
+
+    monkeypatch.setattr(m.platform, "system", lambda: "Windows")
+    for name in ("processor", "machine", "release", "version", "uname"):
+        monkeypatch.setattr(m.platform, name, wmi)
+    monkeypatch.setattr(
+        m.sys,
+        "getwindowsversion",
+        lambda: SimpleNamespace(major=10, minor=0, build=26200),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        m, "_windows_cpu", lambda: "13th Gen Intel(R) Core(TM) i7-1365U"
+    )
+    monkeypatch.setattr(m, "_windows_ram", lambda: 31.4)
+    info = m.machine_info()
+    assert info["os"] == "Windows 11 (10.0.26200)"
+    assert info["cpu"] == "13th Gen Intel(R) Core(TM) i7-1365U"
+    assert info["ram_gb"] == 31.4
+
+
+def test_retry_waits_before_the_second_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The immediate retry failed like the first attempt (full 3a-2 run): wait first."""
+    m = _module()
+    _not_starting(m, monkeypatch, 1)
+    slept: list[float] = []
+    monkeypatch.setattr(m.time, "sleep", slept.append)
+    folder = tmp_path / "gtap7" / "gtap7_3x3" / "gams_ifsub0"
+    cmd = [sys.executable, "-c", "open('out.txt','w').write('x')"]
+    assert m.main(_argv(tmp_path, folder, cmd)) == 0
+    assert slept == [m.RETRY_PAUSE_S] and m.RETRY_PAUSE_S >= 10

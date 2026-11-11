@@ -24,7 +24,7 @@ from equilibria.family.altertax.path import (
 )
 from equilibria.family.altertax.shocks import load_tms_shock
 from equilibria.family.altertax.tolerances import TOL_CHANGE
-from tests.family._prep import ROOT
+from tests.family._prep import ROOT, altax_gem
 
 DATA = ROOT / "data/gtap7"
 REF = "gempack_altertax-rungtap_tms-rate10_s8-16-32"
@@ -238,8 +238,8 @@ def test_path_matches_one_step_on_the_tiny_burfisher_shock(env):
     assert max(gates.ev_gaps(path.headers, one)) <= 1e-4
     gaps = gates.total_gaps(path.headers, one, gates.decomp_scale(one))
     assert gaps and max(r for *_, r in gaps.values()) <= PATH_TOL
-    base = ROOT / "tests/fixtures/gtap7_gempack/burfisher_gragg"
-    gem = read_har(str(base / "altax_decomp.har"))
+    base = altax_gem()
+    gem = read_har(str(base / "decomp.har"))
     scale = gates.decomp_scale(gem)
 
     def worst(h):
@@ -247,7 +247,7 @@ def test_path_matches_one_step_on_the_tiny_burfisher_shock(env):
 
     assert worst(path.headers) < worst(one)
     assert max(gates.ev_gaps(path.headers, gem)) < max(gates.ev_gaps(one, gem))
-    sl4 = gates.read_sl4(base / "altax.sl4.gz")
+    sl4 = gates.read_sl4(base / "solution.sl4")
     rec = gates.report_decomp(path.headers, gem, gates.waivers_for(nus333_dir(), sl4))
     assert rec["pass"], rec["failing"]
 

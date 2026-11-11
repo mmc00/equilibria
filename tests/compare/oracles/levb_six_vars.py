@@ -1,5 +1,5 @@
 """Oraculo: el nivel PRE (LEVB) que GEMPACK debe reportar para las seis variables a
-las que ``scripts/gtap/make_levels_tab.py`` les agrega ``orig_level``.
+las que ``data/gtap7/gempack/tools/make_levels_tab.py`` les agrega ``orig_level``.
 
 Sin equilibria.compare ni el parche del TAB: lee ``basedata.har`` y ``default.prm``
 con ``babel.har.reader`` y aplica a mano las definiciones de nivel de GTAPv7.tab
