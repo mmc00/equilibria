@@ -525,14 +525,94 @@ def mq_values(backend: Any, mp: Any) -> dict[str, dict[tuple, float]]:
     return out
 
 
+class _MqRows:
+    """The ``eq_mq_*`` rows of a cross-period recording compiled once as a system in
+    which every cell of every variable is a column (no fixed slot, so nothing is folded
+    and the system does not depend on the levels). Each row is ``mq - rhs`` with ``mq``
+    the row's own aggregate leaf and ``rhs`` free of aggregates, so at a point whose
+    ``mq_*`` cells are 0 its residual is ``-rhs``: the value :func:`mq_values` gives."""
+
+    def __init__(self, backend: Any) -> None:
+        from equilibria.backends.family_backend import FamilyBackend
+        from equilibria.family.layout import VarLayout
+
+        sets = backend.sets
+        fams = [f for f in backend.records if f.startswith("eq_mq_")]
+        read: set[str] = set()
+        cells: list[tuple[str, tuple]] = []
+        for fam in fams:
+            name = fam[3:]
+            for idx, res in backend.records[fam]:
+                lhs = res.lhs
+                if not (
+                    isinstance(lhs, Node) and lhs.op == "v" and lhs.args[0] == name
+                ):
+                    raise NotImplementedError(
+                        f"{fam}{idx}: lhs is not its own aggregate"
+                    )
+                rhs = (
+                    {v for v, _ in res.rhs.var_leaves()}
+                    if isinstance(res.rhs, Node)
+                    else set()
+                )
+                if any(v.startswith("mq_") for v in rhs):
+                    raise NotImplementedError(f"{fam}{idx}: rhs reads an aggregate")
+                read |= rhs
+                cells.append((name, tuple(idx)))
+        self.cells = cells
+        self.sets = sets
+        self.read = sorted(read)
+        self.var_domains = dict(backend.var_domains)
+        self.shapes = {
+            v: tuple(len(sets[d]) for d in doms) for v, doms in self.var_domains.items()
+        }
+        values = {v: np.zeros(shape) for v, shape in self.shapes.items()}
+        free = {v: np.ones(shape, dtype=bool) for v, shape in self.shapes.items()}
+        layout = VarLayout.from_state(sets, self.var_domains, values, free)
+        sub = FamilyBackend()
+        sub.records = {f: backend.records[f] for f in fams}
+        sub.var_domains, sub.sets = self.var_domains, sets
+        self.system = sub.system(layout)
+        self.off: dict[str, int] = {}
+        o = 0
+        for v, shape in self.shapes.items():  # VarLayout: columns in variable order
+            self.off[v] = o
+            o += int(np.prod(shape, dtype=np.int64))
+        self.n = o
+
+    def values(self, mp: Any) -> np.ndarray:
+        """``rhs`` of every row (``self.cells`` order) at the levels of ``mp``; a cell
+        ``mp`` does not hold reads NaN, as in :func:`mq_values`."""
+        from equilibria.family.squared_system import _flat_index
+
+        z = np.zeros(self.n)
+        for v in self.read:
+            var = mp.var(v)
+            dense = np.full(int(np.prod(self.shapes[v], dtype=np.int64)), np.nan)
+            dense[_flat_index(var, self.var_domains[v], self.sets)] = var.value
+            z[self.off[v] : self.off[v] + len(dense)] = dense
+        return -np.asarray(self.system.F(z), dtype=float)
+
+
+def _mq_rows(backend: Any) -> _MqRows:
+    """The recording's :class:`_MqRows`, compiled at its first use."""
+    hit = backend.__dict__.get("_mq_rows")
+    if hit is None:
+        hit = backend.__dict__["_mq_rows"] = _MqRows(backend)
+    return hit
+
+
 def refresh_aggregates(backend: Any, mp: Any) -> int:
     """Write ``mq_values`` into the ``mq_*`` cells of ``mp`` (in place): the defined
     sums at the levels just installed, as ``refresh_fisher_aggregates`` leaves them.
-    Returns the number of cells written."""
-    n = 0
-    for name, cells in mq_values(backend, mp).items():
-        var = mp.var(name)
-        for key, val in cells.items():
-            var.value[var.pos(key)] = val
-            n += 1
-    return n
+    The sums are the ``eq_mq_*`` rows evaluated as one compiled system (:class:`_MqRows`)
+    rather than a walk of each definition's tree. Returns the number of cells written."""
+    rows = _mq_rows(backend)
+    vals = rows.values(mp)
+    pos: dict[str, Any] = {}
+    for (name, key), val in zip(rows.cells, vals.tolist(), strict=True):
+        var = pos.get(name)
+        if var is None:
+            var = pos[name] = mp.var(name)
+        var.value[var.pos(key)] = val
+    return len(rows.cells)

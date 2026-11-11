@@ -276,6 +276,53 @@ def test_mq_values_are_the_seeded_aggregates(case):
     assert worst <= 1e-12, worst
 
 
+def _mp_with_mq(case: Case, mq_level: float):
+    """``_mp_from_pyomo`` plus every ``mq_*`` Var at ``mq_level`` (the refresh must not
+    depend on the aggregates' current values)."""
+    from equilibria.family.mp_arrays import VarArr
+
+    mp = _mp_from_pyomo(case)
+    for v in case.backend.var_domains:
+        if not v.startswith("mq_"):
+            continue
+        comp = getattr(case.m, v)
+        keys = [k if isinstance(k, tuple) else (k,) for k in comp]
+        z = np.zeros(len(keys))
+        mp.vars[v] = VarArr(keys, np.full(len(keys), mq_level), z.astype(bool), z, z)
+    return mp
+
+
+@pytest.mark.parametrize("perturbed", [False, True])
+def test_refresh_through_the_rows_equals_the_tree_walk(case, perturbed, monkeypatch):
+    """``refresh_aggregates`` evaluates the ``eq_mq_*`` rows (compiled once per
+    recording, ``F = mq - rhs`` at ``mq = 0``) instead of walking each definition's tree
+    in Python (``mq_values``): every aggregate cell gets the same value within 1e-12,
+    at the build point and at a perturbed one, whatever the aggregates held before."""
+    from equilibria.family import cross_period
+    from equilibria.family.cross_period import mq_values, refresh_aggregates
+
+    values = _perturbed(case.values) if perturbed else case.values
+    _set_pyomo(case, values)
+    want = mq_values(case.backend, _mp_with_mq(case, 0.0))
+
+    def no_tree_walk(*_a, **_k):
+        raise AssertionError("refresh_aggregates walked the definition trees")
+
+    monkeypatch.setattr(cross_period, "_value", no_tree_walk)
+    for level in (0.0, 7.5):
+        mp = _mp_with_mq(case, level)
+        n = refresh_aggregates(case.backend, mp)
+        assert n == sum(len(c) for c in want.values())
+        worst = 0.0
+        for name, cells in want.items():
+            var = mp.var(name)
+            for key, w in cells.items():
+                got = float(var.value[var.pos(key)])
+                worst = max(worst, abs(got - w) / max(1.0, abs(w)))
+        assert worst <= 1e-12, worst
+    _set_pyomo(case, case.values)
+
+
 def test_ifsub_rows_read_the_macros_not_the_report_vars(case):
     """Under ifSUB the ``pefob``/``pmcif`` report Vars are frozen inside the solve, so the
     GDP aggregates expand M_PEFOB / M_PMCIF (GAMS model.gms 1306) to the live ``pe`` /
