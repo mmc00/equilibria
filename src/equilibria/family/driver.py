@@ -25,11 +25,9 @@ from equilibria.family.capflex import require_ref_gdx, stamp_capflex_risk
 from equilibria.family.mp_arrays import MPArrays, Squared
 from equilibria.family.phases import PhaseTimer, activate, phase, scope
 from equilibria.solver.gc_tuning import (
+    _gc_family_scope,
     _gc_freeze_from_env,
     _gc_freeze_now,
-    _gc_frozen_permanent_graph,
-    _gc_relaxed_threshold,
-    _gc_threshold_from_env,
 )
 
 # Settings that change the Newton-TR system or add debug side effects the family route
@@ -668,11 +666,9 @@ def solve_gtap_family(
     try:
         # as ``solve_multiperiod``: freeze the live graph (EQUILIBRIA_GTAP_GC_FREEZE,
         # "0" -> off) and raise the gen-0 threshold (EQUILIBRIA_GTAP_GC_THRESHOLD:
-        # unset -> 50000, 0 -> off) for the solve
-        with (
-            _gc_frozen_permanent_graph(_gc_freeze_from_env()),
-            _gc_relaxed_threshold(_gc_threshold_from_env()),
-        ):
+        # unset -> 50000, 0 -> off) for the solve; inside a caller's family scope
+        # (ALTERTAX) the caller's setup stays as it is
+        with _gc_family_scope():
             return _solve_family(
                 params,
                 closure,

@@ -230,14 +230,20 @@ def test_pyomo_route_runs_no_family_driver_code(monkeypatch):
 
 
 def test_family_solve_runs_under_the_gc_threshold_of_the_pyomo_route(monkeypatch):
-    """``solve_gtap_family`` wraps its work in ``_gc_relaxed_threshold`` with the same
-    env control (``EQUILIBRIA_GTAP_GC_THRESHOLD``) as ``solve_multiperiod``."""
+    """``solve_gtap_family`` wraps its work in ``_gc_relaxed_threshold`` (through
+    ``_gc_family_scope``) with the same env control (``EQUILIBRIA_GTAP_GC_THRESHOLD``)
+    as ``solve_multiperiod``."""
     import contextlib
     import gc
 
     from equilibria.family import driver as drv
     from equilibria.solver import gc_tuning
 
+    # the Pyomo route's helpers are the very same objects
+    from equilibria.templates.gtap import gtap_multiperiod_driver as pyomo_drv
+
+    assert pyomo_drv._gc_relaxed_threshold is gc_tuning._gc_relaxed_threshold
+    assert pyomo_drv._gc_threshold_from_env is gc_tuning._gc_threshold_from_env
     seen = []
 
     @contextlib.contextmanager
@@ -246,7 +252,7 @@ def test_family_solve_runs_under_the_gc_threshold_of_the_pyomo_route(monkeypatch
         yield
         seen.append(("exit",))
 
-    monkeypatch.setattr(drv, "_gc_relaxed_threshold", spy, raising=False)
+    monkeypatch.setattr(gc_tuning, "_gc_relaxed_threshold", spy)
     monkeypatch.setattr(drv, "check_supported", lambda **k: None)
 
     def inner(*a, **k):
@@ -257,11 +263,6 @@ def test_family_solve_runs_under_the_gc_threshold_of_the_pyomo_route(monkeypatch
     monkeypatch.setenv("EQUILIBRIA_GTAP_GC_THRESHOLD", "1234")
     assert drv.solve_gtap_family(None, None, "R") == "result"
     assert seen == [("enter", 1234, gc.get_threshold()[0]), ("inner",), ("exit",)]
-    # the Pyomo route's helpers are the very same objects
-    from equilibria.templates.gtap import gtap_multiperiod_driver as pyomo_drv
-
-    assert pyomo_drv._gc_relaxed_threshold is gc_tuning._gc_relaxed_threshold
-    assert pyomo_drv._gc_threshold_from_env is gc_tuning._gc_threshold_from_env
 
 
 def test_family_solve_freezes_the_gc_and_undoes_it(monkeypatch):
@@ -280,7 +281,7 @@ def test_family_solve_freezes_the_gc_and_undoes_it(monkeypatch):
     assert pyomo_drv._gc_freeze_from_env is gc_tuning._gc_freeze_from_env
     monkeypatch.setattr(drv, "check_supported", lambda **k: None)
     monkeypatch.setattr(
-        drv, "_gc_relaxed_threshold", lambda t: contextlib.nullcontext()
+        gc_tuning, "_gc_relaxed_threshold", lambda t: contextlib.nullcontext()
     )
     gc.unfreeze()
     monkeypatch.delenv("EQUILIBRIA_GTAP_GC_FREEZE", raising=False)

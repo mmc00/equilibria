@@ -113,10 +113,11 @@ class FamilyBackend:
     def load(cls, path: Any) -> FamilyBackend:
         import pickle
 
-        from equilibria.solver.gc_tuning import _gc_paused
+        from equilibria.solver.gc_tuning import _gc_freeze_in_scope, _gc_paused
 
         with open(path, "rb") as fh, _gc_paused():
             data = pickle.load(fh)
+            _gc_freeze_in_scope()  # inside a family run: frozen before the GC is back
         backend = cls()
         for k in cls._SAVED:
             setattr(backend, k, data[k])

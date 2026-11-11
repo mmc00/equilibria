@@ -10,6 +10,7 @@ from typing import Any
 
 from equilibria.family.altertax.closure import ALTAX_RESIDUAL_REGION, altertax_closure
 from equilibria.family.driver import FamilyResult, solve_gtap_family
+from equilibria.solver.gc_tuning import _gc_family_scope
 from equilibria.templates.gtap import GTAPParameters
 
 # ``Shock to("AGR","AGR",USA") = 0.0012`` of ``altax.exp``: ``to(i,a,r)`` is the
@@ -214,24 +215,26 @@ def solve_altertax(
             f"residual region {residual_region!r} is not a region of the data "
             f"{list(p.sets.r)}: no eq_savf / eq_yi row would be dropped"
         )
-    t0 = time.perf_counter()
-    res = solve_gtap_family(
-        p,
-        altertax_closure(),
-        residual_region,
-        shock=shock,
-        cache_root=cache_root,
-        # GEMPACK's del_tbal(USA) = 0: the nominal balance, not savf = pigbl * savf_bar;
-        # "ratio": del_tbalry(r) = 0 (savf / world income)
-        nominal_trade_balance=trade_balance,
-        keep_session=decomp_steps is not None,
-        newton_tol=ALTAX_NEWTON_TOL,
-    )
-    minutes = (time.perf_counter() - t0) / 60.0
-    codes = {k: int(res.results[k]["code"]) for k in ("check", "shock")}
-    run = AltertaxRun(p, res, codes, minutes, Path(dataset_dir))
-    if decomp_steps is not None:
-        from equilibria.family.altertax.path import solve_decomp_path
+    # one GC setup over the solve AND the decomposition path (see _gc_family_scope)
+    with _gc_family_scope():
+        t0 = time.perf_counter()
+        res = solve_gtap_family(
+            p,
+            altertax_closure(),
+            residual_region,
+            shock=shock,
+            cache_root=cache_root,
+            # GEMPACK's del_tbal(USA) = 0: the nominal balance, not
+            # savf = pigbl * savf_bar; "ratio": del_tbalry(r) = 0 (savf / world income)
+            nominal_trade_balance=trade_balance,
+            keep_session=decomp_steps is not None,
+            newton_tol=ALTAX_NEWTON_TOL,
+        )
+        minutes = (time.perf_counter() - t0) / 60.0
+        codes = {k: int(res.results[k]["code"]) for k in ("check", "shock")}
+        run = AltertaxRun(p, res, codes, minutes, Path(dataset_dir))
+        if decomp_steps is not None:
+            from equilibria.family.altertax.path import solve_decomp_path
 
-        run.decomp_path = solve_decomp_path(run, shock, decomp_steps)
+            run.decomp_path = solve_decomp_path(run, shock, decomp_steps)
     return run

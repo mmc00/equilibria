@@ -146,13 +146,66 @@ def _gc_freeze_now(enabled: bool = True) -> None:
     For objects that become long-lived AFTER the outer `_gc_frozen_permanent_graph`
     was entered (e.g. the family route loads its records after the entry point).
     Nesting is fine: the outer context's `gc.unfreeze()` releases everything.
+
+    No collection first: `gc.freeze()` moves EVERY generation, young ones included,
+    to the permanent one (checked on CPython 3.12 and 3.13). The full collection this
+    used to run before it walked the ~9.8M records 20x41 had just loaded, for 7.4 s,
+    and freed ~8k objects.
     """
     if not enabled:
         return
     import gc
 
-    gc.collect()
     gc.freeze()
+
+
+_FAMILY_SCOPE_DEPTH = 0
+_FAMILY_SCOPE_FROZEN = False
+
+
+def _gc_freeze_in_scope() -> None:
+    """`gc.freeze()` only inside a `_gc_family_scope` that froze (whose exit will
+    unfreeze). For a bulk load still under `_gc_paused`: frozen before the collector
+    is back on, the loaded graph never reaches the next gen-0 pass. MEASURED on warm
+    20x41: the first gen-0 pass after each records load walked them, 1.8 s and 1.2 s.
+    Outside a scope it does nothing: no one would unfreeze what it froze."""
+    if _FAMILY_SCOPE_FROZEN:
+        import gc
+
+        gc.freeze()
+
+
+@contextlib.contextmanager
+def _gc_family_scope():
+    """The GC setup of a whole family run: `_gc_frozen_permanent_graph` and
+    `_gc_relaxed_threshold`, with their env controls (EQUILIBRIA_GTAP_GC_FREEZE,
+    EQUILIBRIA_GTAP_GC_THRESHOLD).
+
+    Reentrant: inside another family scope it changes nothing, so an inner exit (the
+    one of `solve_gtap_family`) neither unfreezes nor lowers the threshold. That lets
+    an ALTERTAX entry point hold one setup over the solve, the decomposition path and
+    the outputs. MEASURED on warm 20x41: when `solve_gtap_family` lifted the freeze,
+    the next full collection (in `report_levels`) walked the ~10M records for 8.7 s.
+
+    The Pyomo route does not use it; it keeps its own two contexts."""
+    global _FAMILY_SCOPE_DEPTH, _FAMILY_SCOPE_FROZEN
+    if _FAMILY_SCOPE_DEPTH:
+        _FAMILY_SCOPE_DEPTH += 1
+        try:
+            yield
+        finally:
+            _FAMILY_SCOPE_DEPTH -= 1
+        return
+    freeze = _gc_freeze_from_env()
+    with (
+        _gc_frozen_permanent_graph(freeze),
+        _gc_relaxed_threshold(_gc_threshold_from_env()),
+    ):
+        _FAMILY_SCOPE_DEPTH, _FAMILY_SCOPE_FROZEN = 1, freeze
+        try:
+            yield
+        finally:
+            _FAMILY_SCOPE_DEPTH, _FAMILY_SCOPE_FROZEN = 0, False
 
 
 @contextlib.contextmanager

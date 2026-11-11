@@ -115,6 +115,14 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """:func:`_main` under one GC setup for the solve and the outputs."""
+    from equilibria.solver.gc_tuning import _gc_family_scope
+
+    with _gc_family_scope():
+        return _main(argv)
+
+
+def _main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     ds = args.dataset_dir
     if not (ds / "basedata.har").exists() or not (ds / args.prm).exists():

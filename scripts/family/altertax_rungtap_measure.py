@@ -116,6 +116,14 @@ def measure(dataset: str, trade_balance: str, decomp_steps: int | str = "auto") 
 
 
 def main() -> int:
+    """:func:`_main` under one GC setup for the solve and the gates."""
+    from equilibria.solver.gc_tuning import _gc_family_scope
+
+    with _gc_family_scope():
+        return _main()
+
+
+def _main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("dataset")
     ap.add_argument("--trade-balance", default="ratio", choices=("ratio", "nominal"))
