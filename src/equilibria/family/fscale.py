@@ -66,6 +66,68 @@ def record_fscale(
     return out
 
 
+class LeafTable:
+    """The variable leaves of every recorded row of a recording (family order, record
+    order: the rows of its system), as flat positions into the concatenation of the
+    variables' dense arrays in ``var_order``. Built once per recording; :meth:`fscale`
+    is then ``record_fscale`` of every row as array operations."""
+
+    def __init__(self, records: Mapping[str, list], sizes: Mapping[str, int]) -> None:
+        self.var_order = list(sizes)
+        self.sizes = dict(sizes)
+        off, o = {}, 0
+        for v in self.var_order:
+            off[v] = o
+            o += int(sizes[v])
+        pos: list[int] = []
+        counts: list[int] = []
+        for recs in records.values():
+            for _, res in recs:
+                leaves = row_leaves(res)
+                counts.append(len(leaves))
+                pos.extend(off[v] + flat for v, flat in leaves)
+        self.n_rows = len(counts)
+        self.pos = np.asarray(pos, dtype=np.int64)
+        self.owner = np.repeat(
+            np.arange(self.n_rows, dtype=np.int64), np.asarray(counts, dtype=np.int64)
+        )
+
+    def fscale(
+        self, values: Mapping[str, np.ndarray], free: Mapping[str, np.ndarray]
+    ) -> np.ndarray:
+        """Per row ``max(1, |x_j|)`` over its free, non-NaN leaves (``record_fscale``)."""
+        x = np.concatenate(
+            [np.asarray(values[v], dtype=float).ravel() for v in self.var_order]
+        )
+        f = np.concatenate(
+            [np.asarray(free[v], dtype=bool).ravel() for v in self.var_order]
+        )
+        a = np.abs(x[self.pos])
+        use = f[self.pos] & (a == a)  # NaN: Pyomo has no value for it
+        out = np.ones(self.n_rows)
+        np.maximum.at(out, self.owner[use], a[use])
+        return out
+
+
+_LEAF_TABLES: list[tuple[Any, tuple, LeafTable]] = []  # (records, sizes, table)
+_LEAF_TABLES_KEPT = 4
+
+
+def leaf_table(
+    records: Mapping[str, list], values: Mapping[str, np.ndarray]
+) -> LeafTable:
+    """The :class:`LeafTable` of ``records`` over the variables (and their sizes) of
+    ``values``, kept for the recordings used last (the recordings live for the run)."""
+    sizes = tuple((v, int(np.asarray(a).size)) for v, a in values.items())
+    for rec, sz, table in _LEAF_TABLES:
+        if rec is records and sz == sizes:
+            return table
+    table = LeafTable(records, dict(sizes))
+    _LEAF_TABLES.append((records, sizes, table))
+    del _LEAF_TABLES[:-_LEAF_TABLES_KEPT]
+    return table
+
+
 def pyomo_fscale_from_photo(b: Any, a2: Any) -> dict[str, float]:
     """Pyomo's fscale of every squared row of call photo ``b``, recomputed from it.
 

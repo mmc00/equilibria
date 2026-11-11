@@ -665,6 +665,43 @@ def _check_permutation(
         raise ValueError("the matching is not a permutation: " + " | ".join(problems))
 
 
+def _paired(
+    mp: MPArrays,
+    index: CellIndex,
+    incidence: Any,
+    rid: np.ndarray,
+    cid: np.ndarray,
+    col_pos: np.ndarray,
+    rnames: list[str],
+    cnames: list[str],
+    pairs: list[tuple[int, int, bool]],
+) -> list[int]:
+    """The column of every row (``match_rows`` on the adjacency, checked to be a
+    permutation). With an ``ArrayIncidence`` it is kept per run (``index.cache``):
+    the adjacency is a function of the incidence, the active rows ``rid`` and the free
+    columns ``cid``, so the same rows, columns and forced pairs give the same pairing
+    (the settle and the check, the shock and its path's sub-steps)."""
+    keep = hasattr(incidence, "adjacency")
+    if keep:
+        key = ("paired", id(incidence))
+        sig = (
+            rid.tobytes(),
+            cid.tobytes(),
+            np.asarray(pairs, dtype=np.int64).tobytes(),
+        )
+        hit = index.cache.get(key)
+        if hit is not None and hit[0] is incidence and hit[1] == sig:
+            return list(hit[2])
+        adjacency = incidence.adjacency(mp, index, rid, col_pos)
+    else:
+        adjacency = _adjacency(rnames, cnames, incidence)
+    paired = match_rows(len(rnames), adjacency, pairs)
+    _check_permutation(paired, rnames, cnames, pairs)
+    if keep:
+        index.cache[key] = (incidence, sig, list(paired))
+    return paired
+
+
 @overload
 def square(
     mp: MPArrays,
@@ -767,13 +804,8 @@ def square(
     col_pos = np.full(len(index.col_names), -1, dtype=np.int64)
     col_pos[cid] = np.arange(len(cid))
 
-    if hasattr(incidence, "adjacency"):
-        adjacency = incidence.adjacency(mp, index, rid, col_pos)
-    else:
-        adjacency = _adjacency(rnames, cnames, incidence)
     pairs = _gams_pair_ids(mp, index, params, row_pos, col_pos, mode)
-    paired = match_rows(len(rnames), adjacency, pairs)
-    _check_permutation(paired, rnames, cnames, pairs)
+    paired = _paired(mp, index, incidence, rid, cid, col_pos, rnames, cnames, pairs)
     lazy = _LazyCells(mp, index, period)
     sq = Squared(rnames, [cnames[j] for j in paired], lazy)
     sq.ids = SquaredIds(

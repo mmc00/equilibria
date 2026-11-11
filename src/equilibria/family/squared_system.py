@@ -428,6 +428,53 @@ def _cross_period_tables(cross: Any, mp: MPArrays, index: CellIndex) -> _CrossTa
     return out
 
 
+# compiled systems kept per run, recording and part: the latest patterns, newest last
+_KEPT_PATTERNS = 2
+
+
+def _layout_pattern(layout: VarLayout) -> tuple:
+    """What a compiled system depends on besides the values: the free cells (the slots)
+    and which fixed cells are exactly 0 (``TermTable.groups`` folds their terms away)."""
+    free = [
+        (np.asarray(layout.slots[v]) < layout.n_cols).ravel()
+        for v in layout.var_domains
+    ]
+    mask = np.concatenate(free) if free else np.zeros(0, dtype=bool)
+    zero = np.asarray(layout.fixed_values, dtype=float) == 0.0
+    return (
+        tuple(layout.var_domains),
+        layout.n_cols,
+        len(mask),
+        np.packbits(mask).tobytes(),
+        len(zero),
+        np.packbits(zero).tobytes(),
+    )
+
+
+def _kept_system(recording: Any, layout: VarLayout, index: CellIndex, part: tuple):
+    """``recording.system(layout)``, compiled once per run (``index.cache``) and
+    pattern (:func:`_layout_pattern`): a layout of a pattern compiled before gets that
+    system with its own fixed values (a shallow copy; F and J read the fixed slots from
+    ``fixed_values`` only), which is the system a compile of this layout gives."""
+    import copy
+
+    key = ("system", id(recording), part)
+    sig = _layout_pattern(layout)
+    hit = index.cache.get(key)
+    kept = hit[1] if hit is not None and hit[0] is recording else []
+    for s, system in kept:
+        if s == sig:
+            out = copy.copy(system)
+            out.fixed_values = np.array(layout.fixed_values, dtype=float)
+            return out
+    system = recording.system(layout)
+    kept = [*kept, (sig, system)][-_KEPT_PATTERNS:]
+    index.cache[key] = (recording, kept)
+    out = copy.copy(system)  # the kept one's fixed values stay those it was built with
+    out.fixed_values = np.array(layout.fixed_values, dtype=float)
+    return out
+
+
 def _squared_rows(rows: dict[str, np.ndarray], records: dict, ids: Any) -> np.ndarray:
     """Squared row of every row of a system (family order, record order); -1: dropped."""
     gid = np.concatenate([rows[f] for f in records] or [np.zeros(0, dtype=np.int64)])
@@ -498,9 +545,10 @@ class SquaredSystem:
             state.sets, {**backend.var_domains, **backend.param_domains}, values, free
         )
         zperm = np.concatenate(zcols) if zcols else np.zeros(0, dtype=np.int64)
-        ctx = (backend.records, values, free)
         k = _squared_rows(tab.rows, backend.records, ids)
-        return backend.system(layout), zperm, k, ctx, layout
+        ctx = (backend.records, values, free, k)
+        system = _kept_system(backend, layout, ids.index, ("sp", period))
+        return system, zperm, k, ctx, layout
 
     @staticmethod
     def _cross_period_part(cross, mp, ids):
@@ -528,9 +576,10 @@ class SquaredSystem:
             zcols.append(cp)
         layout = VarLayout.from_state(sets, cross.var_domains, values, free)
         zperm = np.concatenate(zcols) if zcols else np.zeros(0, dtype=np.int64)
-        ctx = (cross.records, values, free)
         k = _squared_rows(tab.rows, cross.records, ids)
-        return cross.system(layout), zperm, k, ctx, layout
+        ctx = (cross.records, values, free, k)
+        system = _kept_system(cross, layout, ids.index, ("cross",))
+        return system, zperm, k, ctx, layout
 
     @classmethod
     def build(
@@ -673,18 +722,13 @@ class SquaredSystem:
         aligned with ``row_names``: ``max(1, |x_j|)`` over the free cells among the
         row's recorded leaves, before zero folding (see ``family.fscale``). Proxy rows
         get 1."""
-        from equilibria.family.fscale import record_fscale
+        from equilibria.family.fscale import leaf_table
 
         out = np.ones(self._n)
-        for records, values, free, row_name, single in self._fscale_ctx:
-            recs = {
-                f: r for f, r in records.items() if not (single and is_cross_period(f))
-            }
-            names = record_fscale(
-                recs, values, free, keep=lambda n, rn=row_name: rn(n) in self._row_pos
-            )
-            for n, v in names.items():
-                out[self._row_pos[row_name(n)]] = v
+        for records, values, free, k_of_row, _row_name, _single in self._fscale_ctx:
+            mag = leaf_table(records, values).fscale(values, free)
+            ok = k_of_row >= 0
+            out[k_of_row[ok]] = mag[ok]
         return out
 
     def F(self, x: np.ndarray) -> np.ndarray:

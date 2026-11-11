@@ -178,6 +178,9 @@ class FamilyRun:
     newton_tol: tuple[float, float] | None = None
     cell_index: Any = field(default=None, repr=False)
     adjacency: dict = field(default_factory=dict, repr=False)
+    # the MUMPS analysis of the last solve, for the next solve of the same pattern
+    # (``newton_tr(mumps_keep=)``: the check on the settle's); emptied when the run ends
+    mumps: dict = field(default_factory=dict, repr=False)
     # one record per Newton solve of the run, in order (:func:`solve_record`)
     solves: list = field(default_factory=list, repr=False)
 
@@ -298,7 +301,9 @@ _NEWTON_TOL: ContextVar[tuple[float, float] | None] = ContextVar(
 )
 
 
-def _newton(ss: Any, sq: Squared, border: Any = None) -> tuple[Any, float, int]:
+def _newton(
+    ss: Any, sq: Squared, border: Any = None, keep: dict | None = None
+) -> tuple[Any, float, int]:
     """Newton-TR on the squared system: ``(NewtonResult, ||F||_inf, code)``.
 
     ``border`` (a :class:`RatioBorder`): the system bordered with the world-income
@@ -309,7 +314,8 @@ def _newton(ss: Any, sq: Squared, border: Any = None) -> tuple[Any, float, int]:
     MUMPS runs with ICNTL(6)=7. ``code`` is 1 iff Newton succeeded and the residual of
     the squared system is below ``CODE_RESIDUAL`` (``_ok_sr``), else 2 as the Pyomo path.
     ``_NEWTON_TOL`` (the run's ``newton_tol``, set around the call) replaces the
-    environment's two stopping tolerances."""
+    environment's two stopping tolerances. ``keep`` (the run's ``mumps``): a MUMPS
+    analysis kept from the previous solve is reused when the pattern is the same."""
     from equilibria.solver.newton_tr import newton_tr
 
     linsolve = os.environ.get("EQUILIBRIA_GTAP_TR_LINSOLVE", "direct").lower()
@@ -372,6 +378,7 @@ def _newton(ss: Any, sq: Squared, border: Any = None) -> tuple[Any, float, int]:
             # analysed on the pattern alone (Pyomo's wrapper), ICNTL(6)=7 cannot use
             # the values and met a spurious null pivot on the 20x41 capFlex settle
             mumps_values_at_analysis=True,
+            mumps_keep=keep,
         )
     with phase("residual_check"):
         resid = float(np.linalg.norm(F(np.clip(res.x, lb, ub)), np.inf))
@@ -451,7 +458,7 @@ def _solve_period_inner(
     sq, mp_sq, ss = _period_system(run, mp1, period)
     token = _NEWTON_TOL.set(run.newton_tol)
     try:
-        res, resid, code = _newton(ss, sq)
+        res, resid, code = _newton(ss, sq, keep=run.mumps)
     finally:
         _NEWTON_TOL.reset(token)
     with phase("post_solve"):
@@ -793,7 +800,7 @@ def _solve_shock_ratio(
             )
         token = _NEWTON_TOL.set(run.newton_tol)
         try:
-            res, resid, code = _newton(ss, sq, border)
+            res, resid, code = _newton(ss, sq, border, keep=run.mumps)
         finally:
             _NEWTON_TOL.reset(token)
         w = float(res.x[-1])
@@ -972,6 +979,7 @@ def _solve_family(
                 shock_levels=shock_levels,
             )
         timing[f"{period}_s"] = time.perf_counter() - t
+    run.mumps.clear()  # the shock's factors: no later solve of the run reuses them
     timing["total_s"] = time.perf_counter() - t0
     return FamilyResult(
         cur,

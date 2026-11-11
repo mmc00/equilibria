@@ -38,6 +38,29 @@ class NewtonResult:
     factor_failures: int = 0
 
 
+def _mumps_pattern(m: Any, icntl6: int | None, values_at_analysis: bool) -> tuple:
+    """What a MUMPS analysis of the CSR matrix ``m`` depends on besides the values: its
+    pattern and the MUMPS settings ``newton_tr`` reads (``mumps_keep``)."""
+    import hashlib
+
+    m = m.tocsr()
+    env = tuple(
+        os.environ.get(k, "")
+        for k in (
+            "EQUILIBRIA_GTAP_MUMPS_ICNTL6",
+            "EQUILIBRIA_GTAP_MUMPS_ICNTL7",
+            "EQUILIBRIA_GTAP_MUMPS_ICNTL8",
+            "EQUILIBRIA_GTAP_MUMPS_ICNTL24",
+            "EQUILIBRIA_GTAP_MUMPS_CNTL3",
+        )
+    )
+    digest = hashlib.sha256(
+        np.ascontiguousarray(m.indptr, dtype=np.int64).tobytes()
+        + np.ascontiguousarray(m.indices, dtype=np.int64).tobytes()
+    ).hexdigest()
+    return (m.shape, m.nnz, digest, icntl6, env, bool(values_at_analysis))
+
+
 def _nm(names: Sequence | None, i: int) -> str:
     return str(names[i]) if names is not None else f"#{i}"
 
@@ -65,6 +88,7 @@ def newton_tr(
     gmin: float | None = None,
     gmin_policy: str = "always",
     mumps_values_at_analysis: bool = False,
+    mumps_keep: dict | None = None,
 ) -> NewtonResult:
     """Solve ``F(x) = 0`` from ``x0`` inside ``[lb, ub]``.
 
@@ -84,6 +108,10 @@ def newton_tr(
     ``mumps_values_at_analysis``: hand MUMPS the matrix values at the analysis (``job=1``)
     so a value-based ICNTL(6) (e.g. 7) can use them; the default analyses the pattern
     alone, as Pyomo's MUMPS wrapper does.
+    ``mumps_keep``: a dict the caller keeps across calls (default ``None``: off). A
+    MUMPS analysis of the plain J·P is stored in it after its first good numeric
+    factorization, and a later call (or step) whose J·P has the same pattern (and the
+    same MUMPS settings) factors on that analysis instead of analysing again.
     """
     if gmin_policy not in ("always", "on_null_pivot"):
         raise ValueError(f"unknown gmin_policy {gmin_policy!r}")
@@ -495,6 +523,17 @@ def newton_tr(
                 if _need_lu or _gmin_cfg > 0.0:
                     try:
                         _t_m = __import__("time").perf_counter()
+                        _keep_sig = None
+                        if _lu_tr is None and mumps_keep is not None and _gmin == 0.0:
+                            _keep_sig = _mumps_pattern(
+                                _Jm_tr, icntl6, mumps_values_at_analysis
+                            )
+                            if mumps_keep.get("sig") == _keep_sig:
+                                _lu_tr = mumps_keep["lu"]
+                                _keep_sig = None  # already kept
+                                _plog_m("symbolic analysis kept (same pattern)")
+                            else:
+                                mumps_keep.clear()  # free its factors before ours
                         if _lu_tr is None:
                             # sym=0 (unsymmetric). ICNTL(14): working-space %-increase
                             # (avoid fill-underestimate failures at 393k).
@@ -588,6 +627,9 @@ def newton_tr(
                         _lu_tr.do_numeric_factorization(_Jm_tr)
                         _tr_nfact += 1
                         _factored_now = True
+                        if _keep_sig is not None and mumps_keep is not None:
+                            mumps_keep.clear()
+                            mumps_keep.update(sig=_keep_sig, lu=_lu_tr)
                         if _gmin > 0.0:
                             _tr_gmin_factors += 1
                         _tr_cfg["gmin"] = _gmin_cfg
@@ -689,6 +731,8 @@ def newton_tr(
                         except Exception:
                             pass
                         _plog_m(f"MUMPS FAILED: {_e_m}{_infog}")
+                        if mumps_keep is not None and mumps_keep.get("lu") is _lu_tr:
+                            mumps_keep.clear()  # never factor on it again
                         _lu_tr = None
                         _tr_factor_failures += 1
                 else:

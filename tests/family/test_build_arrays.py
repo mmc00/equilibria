@@ -164,7 +164,6 @@ def _legacy_build(backend, state, mp, period, sq, cross=None, proxies=False):
     parts, covered, backend_cols = [], set(), np.zeros(len(sq.col_names), bool)
     fscale_ctx = []
     for i, (system, col_names, row_name, ctx) in enumerate(raw):
-        fscale_ctx.append((*ctx, row_name, i == 0))
         zperm = np.array([col_pos[n] for n in col_names], dtype=np.int64)
         backend_cols[zperm] = True
         fam_rows, fam_k = [], []
@@ -178,6 +177,7 @@ def _legacy_build(backend, state, mp, period, sq, cross=None, proxies=False):
         covered |= set(fam_k.tolist())
         row_of = np.full(system.n_rows, -1, dtype=np.int64)
         row_of[fam_rows] = fam_k
+        fscale_ctx.append((*ctx, row_of, row_name, i == 0))
         parts.append((system, fam_rows, fam_k, zperm, row_of))
     proxy_k = np.setdiff1d(np.arange(len(sq.row_names)), np.array(sorted(covered)))
     outside = np.flatnonzero(~backend_cols)
