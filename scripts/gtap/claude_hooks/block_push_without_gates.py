@@ -33,6 +33,25 @@ GUARDED = re.compile(
 )
 
 
+def target_dir(command: str, cwd: str) -> Path:
+    """The directory the push runs in: the path of ``git -C <path>`` or of a leading
+    ``cd <path>``, else ``cwd``. A session started in one worktree pushes another one
+    that way, and the stamp to check is that worktree's, not the hook's own."""
+    import shlex
+
+    base = Path(cwd)
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return base
+    for i, w in enumerate(words[:-1]):
+        if w == "git" and words[i + 1] == "-C" and i + 2 < len(words):
+            return base / words[i + 2]
+    if len(words) > 1 and words[0] == "cd":
+        return base / words[1]
+    return base
+
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -51,8 +70,10 @@ def main() -> int:
     repo = Path(__file__).resolve().parents[3]
     sys.path.insert(0, str(repo / "scripts/gtap"))
     try:
-        from check_parity_gates_stamp import check
-        ok, msg = check(repo)
+        from check_parity_gates_stamp import check, repo_root
+
+        cwd = payload.get("cwd") or os.getcwd()
+        ok, msg = check(repo_root(target_dir(command, cwd)))
     except Exception as exc:  # checker broken — fail open, but say so
         print(f"parity-gates hook: checker error ({exc}) — allowing", file=sys.stderr)
         return 0
