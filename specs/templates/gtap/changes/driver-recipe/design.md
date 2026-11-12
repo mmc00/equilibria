@@ -256,6 +256,16 @@ dev-tools `equilibria-tools/plans/research/docs-lego-references/`).
 
 ## Verification
 
+Approved by the maintainer on 2026-11-12 with one explicit condition: **every
+check and every Burfisher exercise gives the same result** as on `main` before
+the change. That is the gate for each step of the migration, not only for the
+switch.
+
+- Every check: the full test suite (CI and the local-only parity tests, with
+  `gdxdump` on the PATH so none is skipped silently), compared by test name and
+  skip reason, not only by count.
+- Every Burfisher exercise: each notebook and each `run_burfisher.py`
+  experiment against GEMPACK, cell by cell, with the same numbers as on `main`.
 - Every GTAP parity gate and the Burfisher notebooks give the same numbers
   through the new driver as through the old one, before the switch.
 - `simple_open` keeps its GAMS parity through the new driver.
