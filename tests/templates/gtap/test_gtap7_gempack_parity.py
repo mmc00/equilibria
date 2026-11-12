@@ -156,6 +156,10 @@ def _solve_shock(
             # GEMPACK is the reference: use the data's factor wedge (EVFP = EVFB +
             # FTRV + FBEP), the gtap7_gempack basis. The GAMS sign drops 15x10 to 93.9%.
             va_subsidy_basis="gempack",
+            # Exact sigma = 1 (log-form CD), as GEMPACK solves it, instead of the 1.01
+            # stand-in. Measured on 3x3..15x10: within-1pp unchanged, qga worst cell
+            # 0.04-0.09 pp closer.
+            unit_sigma="gempack",
         )
         if backend == "family":
             fres = solve_gtap_family(p, ac, rr, ref_gdx=gdx)
