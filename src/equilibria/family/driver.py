@@ -22,6 +22,7 @@ from typing import Any
 import numpy as np
 
 from equilibria.family.capflex import require_ref_gdx, stamp_capflex_risk
+from equilibria.family.disk_cache import _family_code_digest
 from equilibria.family.mp_arrays import MPArrays, Squared
 from equilibria.family.phases import PhaseTimer, activate, phase, scope
 from equilibria.solver.gc_tuning import (
@@ -181,6 +182,9 @@ class FamilyRun:
     mumps: dict = field(default_factory=dict, repr=False)
     # one record per Newton solve of the run, in order (:func:`solve_record`)
     solves: list = field(default_factory=list, repr=False)
+    # key of the opt-in settle cache over what ``prepare_run`` sees (``_settle_key``
+    # adds the nominal-savf rule); None = do not cache
+    settle_key: str | None = None
 
 
 @dataclass
@@ -289,8 +293,75 @@ def prepare_run(
         if_sub=bool(getattr(closure, "if_sub", False)),
         residual_region=str(residual_region),
         newton_tol=newton_tol,
+        settle_key=_settle_base_key(
+            params, closure, residual_region, ref_gdx, newton_tol
+        ),
     )
     return run, mp
+
+
+SETTLE_CACHE_ENV = "EQUILIBRIA_FAMILY_SETTLE_CACHE"
+# where the caches live, and the switch itself: they do not change the settle
+_SETTLE_KEY_ENV_SKIP = frozenset(
+    {
+        SETTLE_CACHE_ENV,
+        "EQUILIBRIA_FAMILY_CACHE",
+        "EQUILIBRIA_SEED_CACHE",
+        "EQUILIBRIA_SEED_CACHE_DISABLE",
+    }
+)
+
+
+def _settle_base_key(
+    params: Any,
+    closure: Any,
+    residual_region: str,
+    ref_gdx: Any,
+    newton_tol: tuple[float, float] | None,
+) -> str | None:
+    """The settle cache key over data, closure, residual region, ref GDX content, the
+    build + solve code (``blocks/gtap/fingerprint``) and ``equilibria/family``, the
+    Newton tolerances and every ``EQUILIBRIA_*`` variable (linear solver, tolerances,
+    ...). ``None`` unless ``EQUILIBRIA_FAMILY_SETTLE_CACHE=1``, under an @overwrite
+    hook, or when an input cannot be covered."""
+    if os.environ.get(SETTLE_CACHE_ENV) != "1":
+        return None
+    from equilibria.blocks.gtap.fingerprint import file_digest, fingerprint
+    from equilibria.blocks.gtap.overwrite import overwrite
+
+    if overwrite.active():
+        return None
+    gdx = "nogdx"
+    if ref_gdx is not None:
+        gdx = file_digest(ref_gdx)
+        if gdx is None:
+            return None
+    env = sorted(
+        (k, v)
+        for k, v in os.environ.items()
+        if k.startswith("EQUILIBRIA_") and k not in _SETTLE_KEY_ENV_SKIP
+    )
+    return fingerprint(
+        "family-seed",
+        params=params,
+        closure=closure,
+        residual_region=str(residual_region),
+        ref_gdx=gdx,
+        family_code=_family_code_digest(),
+        newton_tol=newton_tol,
+        env=env,
+    )
+
+
+def _settle_key(run: FamilyRun) -> str | None:
+    """``run.settle_key`` plus the nominal-savf rule (set on the run after
+    ``prepare_run``)."""
+    if run.settle_key is None:
+        return None
+    import hashlib
+
+    tail = hashlib.sha256(repr(tuple(run.nominal_savf)).encode()).hexdigest()[:8]
+    return f"{run.settle_key}-{tail}"
 
 
 # (reltol, ftol) of the solve in progress; set by ``_solve_period_inner`` from the run
@@ -599,6 +670,30 @@ def calibrate_base_arrays(
             tag=f"settle_{period}",
         )
     return settled_check_point(cur), results
+
+
+def calibrate_base_cached(
+    mp: MPArrays, run: FamilyRun
+) -> tuple[dict[str, dict], dict[str, dict[str, Any]]]:
+    """:func:`calibrate_base_arrays`, through the opt-in disk cache of the settled point
+    (``blocks/gtap/seed_cache`` storage). Only a settle whose every period converged
+    is saved; ``EQUILIBRIA_SEED_CACHE_DISABLE=1`` (which the benchmark settings
+    ``NEWTON_MUMPS`` set) turns it off like every seed cache. A hit returns the saved point and ``{"code": 1, "nit": 0, "cached":
+    True}`` per period; it runs no settle solve, so the first solve of the run (the
+    check) pays the one-time costs the settle paid."""
+    from equilibria.blocks.gtap import seed_cache
+
+    key = _settle_key(run)
+    if key is not None:
+        with phase("settle_cache_load"):
+            cached = seed_cache.load(key)
+        if cached is not None:
+            stats = {"code": 1, "nit": 0, "cached": True}
+            return cached, {p: dict(stats) for p in ("base", "check")}
+    settled, settle = calibrate_base_arrays(mp, run)
+    if key is not None and all(int(r.get("code", 0)) == 1 for r in settle.values()):
+        seed_cache.save(key, settled)
+    return settled, settle
 
 
 def solve_gtap_family(
@@ -955,7 +1050,7 @@ def _solve_family(
     _gc_freeze_now(_gc_freeze_from_env())
 
     t = time.perf_counter()
-    settled, settle = calibrate_base_arrays(mp, run)
+    settled, settle = calibrate_base_cached(mp, run)
     timing["calibrate_s"] = time.perf_counter() - t
 
     cur = dataclasses.replace(mp, settled_seed=settled, base_calibrated=True)
