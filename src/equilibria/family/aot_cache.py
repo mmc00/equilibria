@@ -34,6 +34,7 @@ _dir: Path | None = None
 _mem: dict[str, Any] = {}
 _verified: set[str] = set()  # executables that ran once in this process
 _env: dict[str, Any] | None = None
+_names: dict[tuple, str] = {}  # (kind, spec, live config) -> entry name, for this _env
 _warned_internals = False  # the "JAX internals changed" warning, once per process
 stats: dict[str, int] = {"hit": 0, "miss": 0, "corrupt": 0, "mem": 0}
 
@@ -52,6 +53,7 @@ def reset() -> None:
     """Forget the executables held in memory and zero the counters (a fresh process)."""
     _mem.clear()
     _verified.clear()
+    _names.clear()
     global _warned_internals
     _warned_internals = False
     for k in stats:
@@ -86,6 +88,7 @@ def environment() -> dict[str, Any]:
     """What a serialized executable depends on besides its program (part of every key)."""
     global _env
     if _env is None:
+        _names.clear()
         import jaxlib
 
         dev = jax.devices()[0]
@@ -104,12 +107,16 @@ def environment() -> dict[str, Any]:
             "cpu": _cpu_brand() if dev.client.platform == "cpu" else "",
             "code": h.hexdigest()[:24],
         }
-    # JAX config can change after the host part was memoized: read it every time
-    live = {
+    return {**_env, **_live()}
+
+
+def _live() -> dict[str, Any]:
+    """The compilation-affecting JAX config: it can change after the host part was
+    memoized, so it is read every time."""
+    return {
         "x64": bool(jax.config.jax_enable_x64),
         **{n: repr(getattr(jax.config, n, None)) for n in _JAX_CONFIG},
     }
-    return {**_env, **live}
 
 
 def _sig(a: Any) -> tuple:
@@ -117,8 +124,15 @@ def _sig(a: Any) -> tuple:
 
 
 def _name(kind: str, spec: tuple) -> str:
-    desc = repr((spec, sorted(environment().items())))
-    return f"{kind}-{hashlib.sha256(desc.encode()).hexdigest()[:32]}.aot"
+    """The entry name of ``spec``: hashed once per spec, host and live config (it is
+    asked for on every F / J call)."""
+    key = (kind, spec, tuple(_live().items()))
+    name = _names.get(key) if _env is not None else None
+    if name is None:
+        desc = repr((spec, sorted(environment().items())))
+        name = f"{kind}-{hashlib.sha256(desc.encode()).hexdigest()[:32]}.aot"
+        _names[key] = name
+    return name
 
 
 def _read(path: Path) -> Any:

@@ -262,3 +262,28 @@ def test_environment_follows_a_later_jax_config_update(aot):
     finally:
         jax.config.update("jax_default_matmul_precision", before)
     assert cache._name("f", ("spec",)) == name0
+
+
+def test_name_is_hashed_once_per_spec_and_environment(aot, monkeypatch):
+    import jax
+
+    cache, _ = aot
+    calls = []
+    real = cache.hashlib.sha256
+
+    def counting(*a, **k):
+        calls.append(1)
+        return real(*a, **k)
+
+    cache.environment()  # the host part hashes the code once; not counted below
+    monkeypatch.setattr(cache.hashlib, "sha256", counting)
+    name0 = cache._name("f", ("spec",))
+    assert cache._name("f", ("spec",)) == name0 and len(calls) == 1
+    assert cache._name("f", ("other",)) != name0 and len(calls) == 2
+    before = jax.config.jax_default_matmul_precision
+    try:
+        jax.config.update("jax_default_matmul_precision", "highest")
+        assert cache._name("f", ("spec",)) != name0  # a live config change re-keys
+    finally:
+        jax.config.update("jax_default_matmul_precision", before)
+    assert cache._name("f", ("spec",)) == name0
