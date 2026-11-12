@@ -4,6 +4,7 @@ Examples grouped by domain.
 
 ## Layout
 
+- `examples/demo_gtap_pep.py`: a two-minute demo. A GTAP tariff shock solved without commercial software, and the PEP reference shock matching the GAMS GDP.
 - `examples/cge/`: general examples of the CGE framework.
 - `examples/pep/`: examples of the PEP template and GDP/SAM parity.
 - `examples/gdx/`: examples and utilities to read, write and diagnose GDX.
