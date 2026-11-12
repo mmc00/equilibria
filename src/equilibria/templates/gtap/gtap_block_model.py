@@ -695,6 +695,25 @@ def build_block_model(
 
     ``residual_region="auto"`` (capFix only) picks it; see resolve_residual_region.
     """
+    from equilibria.blocks.gtap.overwrite import overwrite
+
+    # One user-facing build: warns about @overwrite hooks left from a previous one
+    # (#214). The builds made inside it (settle, capFlex risk) are part of it.
+    with overwrite.building():
+        return _build_block_model(
+            params, sets, closure, residual_region, base_calibrated, ref_gdx
+        )
+
+
+def _build_block_model(
+    params: Any,
+    sets: Any,
+    closure: Any,
+    residual_region: str,
+    base_calibrated: bool = False,
+    ref_gdx: Any = None,
+) -> tuple[ConcreteModel, GTAPBlockMultiPeriodModel]:
+    """The body of ``build_block_model``, without the build mark."""
     residual_region = resolve_residual_region(params, sets, closure, residual_region)
     # Propagate the value-added subsidy basis from the closure onto params, so
     # the pure derivation recipes (_va_wedge in _derived_params) and the driver's
