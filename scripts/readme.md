@@ -236,12 +236,9 @@ cada script y quién lo nombra (CI, tests, docs u otro código). Un script con
 | `compare_with_gams.py` | Compare solver solution with GAMS baseline. | tests, código |
 | `generate_baseline_manifest.py` | Generate strict-gams baseline manifest for a calibrated run. | — |
 | `generate_pep_gams_nlp_reference.py` | Generate an official GAMS + IPOPT + NLP reference manifest for PEP. | tests, docs |
-| `generate_simple_open_gams_reference.py` | Generate the official GAMS benchmark reference manifest for SimpleOpen. | tests, docs |
 | `measure_pep_jacobian_modes.py` | Benchmark analytic vs numeric Jacobian modes on the public PEP scenario pack. | tests, docs |
-| `measure_simple_open_jacobian_modes.py` | Benchmark analytic vs numeric Jacobian modes for the simple-open template. | tests, docs |
 | `probe.py` | Cached, flag-driven parity probe — Tool #1 of the cascade (seed-at-GAMS scan). | tests, código |
 | `run_pep_systemic_parity.py` | Run systemic parity gates for PEP model. | CI, tests, docs |
-| `run_simple_open_gams_parity.py` | Compare canonical SimpleOpen closures against GAMS benchmark GDX artifacts. | tests, docs |
 | `triage.py` | Generic equilibria parity-debug CLI: locate → isolate → trace → check-warmstart → check-solution. | docs, código |
 | `verify_pep2_full_parity.py` | Full parity audit between pep2 GAMS outputs and Python equilibria state. | código |
 

@@ -146,8 +146,5 @@ Hoy PEP consume:
 - la capa comun de `solver_stats`
 - la capa comun de reporting/gate
 
-Por eso, cuando el cambio toca la infraestructura comun, conviene correr tambien:
-
-```bash
-uv run python scripts/parity/measure_simple_open_jacobian_modes.py --gate
-```
+Hasta 2026-11-13 habia un segundo modelo (simple_open) para probar esa capa
+comun; hoy simple_open es el stdcge de Hosoe y ya no tiene harness propio.

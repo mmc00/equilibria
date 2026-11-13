@@ -86,6 +86,7 @@ tests/data/test_sources_derived.py
 tests/data/test_sources_job_lists.py
 tests/data/test_sources_reference.py
 tests/data/test_sources_schema.py
+tests/data/test_stdcge_reference.py
 tests/docs/test_doc_examples.py
 tests/docs/test_doc_links.py
 tests/docs/test_docs_theme.py
@@ -169,7 +170,6 @@ tests/parity/test_probe.py
 tests/qa/test_baseline_manifest.py
 tests/qa/test_gams_nlp_reference_manifest.py
 tests/qa/test_sam_qa.py
-tests/qa/test_simple_open_gams_reference_manifest.py
 tests/report/test_summary.py
 tests/report/test_summary_gtap.py
 tests/sam_tools/test_aggregation_helpers.py
@@ -199,7 +199,6 @@ tests/scripts/test_force_rdlt.py
 tests/scripts/test_gemsim_job.py
 tests/scripts/test_gen_burfisher_gams.py
 tests/scripts/test_generate_pep_gams_nlp_reference_cli.py
-tests/scripts/test_generate_simple_open_gams_reference_cli.py
 tests/scripts/test_har_to_consolidated.py
 tests/scripts/test_horridge_gams_job.py
 tests/scripts/test_inliner_interpreter.py
@@ -207,7 +206,6 @@ tests/scripts/test_levels_job.py
 tests/scripts/test_make_levels_tab.py
 tests/scripts/test_measure_altertax_cells.py
 tests/scripts/test_measure_pep_jacobian_modes_cli.py
-tests/scripts/test_measure_simple_open_jacobian_modes_cli.py
 tests/scripts/test_mk_exp_directos.py
 tests/scripts/test_neos_job.py
 tests/scripts/test_nl_compare_local.py
@@ -223,7 +221,6 @@ tests/scripts/test_run_parity_gates_exige_solvers.py
 tests/scripts/test_run_pep_base_export_tax_parity_cli.py
 tests/scripts/test_run_pep_core_scenarios_gate_cli.py
 tests/scripts/test_run_pep_systemic_parity_classification.py
-tests/scripts/test_run_simple_open_gams_parity_cli.py
 tests/scripts/test_spec_tools.py
 tests/scripts/test_swap_job.py
 tests/scripts/test_write_source.py
@@ -335,6 +332,11 @@ tests/templates/pep_pyomo/test_pep_phase23.py
 tests/templates/pep_pyomo/test_pep_pyomo_build.py
 tests/templates/pep_pyomo/test_pep_pyomo_sets_params.py
 tests/templates/pep_pyomo/test_pep_pyomo_solve.py
+tests/templates/simple_open/test_blocks_at_base.py
+tests/templates/simple_open/test_calibration.py
+tests/templates/simple_open/test_gams_parity.py
+tests/templates/simple_open/test_generality.py
+tests/templates/simple_open/test_template.py
 tests/templates/test_gams_comparison_unit.py
 tests/templates/test_init_strategies.py
 tests/templates/test_pep2_python_excel_parity.py
@@ -351,10 +353,6 @@ tests/templates/test_pep_pyomo_paths.py
 tests/templates/test_pep_sam.py
 tests/templates/test_pep_sam_compat.py
 tests/templates/test_pep_scenario_parity.py
-tests/templates/test_simple_open_constraint_jacobian.py
-tests/templates/test_simple_open_contract.py
-tests/templates/test_simple_open_parity_pipeline.py
-tests/templates/test_simple_open_parity_spec.py
 tests/templates/test_solver_transforms.py
 tests/templates/test_templates.py
 tests/templates/test_templates_deprecations.py

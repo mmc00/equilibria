@@ -52,6 +52,28 @@ class SimpleOpenEconomy(ModelTemplate):
     def calibration(self) -> Calibration:
         return calibrate(load_sam(self.sam_path), sigma=self.sigma, psi=self.psi)
 
+    def get_info(self) -> dict[str, Any]:
+        """The template as configured: the SAM's goods and factors, not defaults."""
+        sam = load_sam(self.sam_path)
+        return {
+            "name": self.name,
+            "description": self.description,
+            "sam": str(self.sam_path),
+            "goods": list(sam.goods),
+            "factors": list(sam.factors),
+            "sigma": self.sigma,
+            "psi": self.psi,
+            "numeraire": self.numeraire,
+            "blocks": [b.name for b in self.create_model().blocks],
+        }
+
+    def __repr__(self) -> str:
+        sam = load_sam(self.sam_path)
+        return (
+            f"{self.__class__.__name__}("
+            f"{len(sam.goods)} goods, {len(sam.factors)} factors)"
+        )
+
     def create_model(self, calibration: Calibration | None = None) -> Model:
         cal = calibration or self.calibration()
         model = Model(name=self.name, description=self.description)

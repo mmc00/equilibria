@@ -39,10 +39,10 @@ Each model still defines:
 - its benchmark/reference point
 - its analytic derivatives per row
 
-Today there are two real implementations on top of the base:
+Today there is one real implementation on top of the base (SimpleOpen had a second
+one until 2026-11-13, when it became Hosoe's stdcge and its harness was deleted):
 
 - PEP: `equilibria.templates.pep_constraint_jacobian`
-- SimpleOpen: `equilibria.templates.simple_open_constraint_jacobian`
 
 ## Minimum contract of a child implementation
 
@@ -74,25 +74,9 @@ It checks:
 - that `analytic` does not use finite differences above the allowed maximum
 - that the parity of `analytic` is no worse than that of `numeric`
 
-### simpleopen
-
-Script:
-
-- `scripts/parity/measure_simple_open_jacobian_modes.py`
-
-It checks:
-
-- exact benchmark residual in two closures
-- the same sparse structure in `analytic` and `numeric`
-- that `analytic` uses `0` finite differences
-- that `numeric` is no better than `analytic` against the analytic reference
-
 ## When to use each benchmark
 
 - use `measure_pep_jacobian_modes.py` when the change touches the PEP solver or its parity
-- use `measure_simple_open_jacobian_modes.py` when the change touches the common layer of the harness or of the reporting/gate
-
-If you change the common base and only PEP runs, you have not yet checked that the abstraction works outside PEP.
 
 ## Recommended pattern for a third model
 
@@ -116,8 +100,3 @@ from equilibria.solver import (
 )
 ```
 
-And for the second example model:
-
-```python
-from equilibria.templates import SimpleOpenConstraintJacobianHarness
-```
