@@ -131,23 +131,26 @@ def _freeze_inactive(c: _Ctx) -> None:
 
 
 def _recalibrate_shares(c: _Ctx) -> None:
-    """altertax: rebuild some share rows each period from the previous period.
+    """altertax: rebuild the and/ava rows each period from the previous period.
 
-    GAMS itself calibrates every share once, in the cal block (loop t0), and its
-    GDX holds them identical in base, check and shock. Two are already held:
-    - io/af (_recalibrate_io_af is not called): re-deriving af from the prior
+    GAMS sets every share in cal.gms, before the tsim loop, and its reference GDX
+    holds them identical in base, check and shock. Only and/ava is still rebuilt:
+    deleting it moves nlp gtap7_15x10 ifSUB=0 to another point (check 100% ->
+    87.35%; see the note above _recalibrate_and_ava). The others are held:
+    - io/af: re-deriving af from the prior
       pfa overweighted subsidized Land and slid pft[Land]; holding it raised the
       shock gate 98.21% -> 99.93%.
     - alphad/alpham: re-deriving them from the prior xd/xm/xa broke the tiny
       flows (~1e-9, at the solver's tolerance), and eq_paa raises pa to the
       power 1/(1 - 0.95) = 20 under altertax; 15x10 ifSUB=0 shock 99.45% -> 100%.
+    - gx/ax: the old rebuild never fired on the block model (no ``xscale``
+      component, and sigmas is infinite under altertax), so it was deleted.
+    - alphaa (investment, CDE household): deleting their rebuilds left every
+      cell of the 30 altertax gate rows within tolerance (step 0, 2026-11-12).
     Pure gtap recalibrates nothing.
     """
     d, prior = _drv(), _RECALIBRATE_FROM[c.period]
     d._recalibrate_and_ava(c.m, c.params, c.period, prior)
-    d._recalibrate_gx_ax(c.m, c.params, c.period, prior)
-    d._recalibrate_alphaa_gov_inv(c.m, c.params, c.period, prior)
-    d._recalibrate_alphaa_hhd(c.m, c.params, c.period, prior)
 
 
 def _seed_from_prior_if_asked(c: _Ctx) -> None:
