@@ -338,7 +338,7 @@ def test_solve_family_freezes_what_prepare_run_loaded(monkeypatch):
         raise Stop
 
     monkeypatch.setattr(drv, "prepare_run", fake_prepare)
-    monkeypatch.setattr(drv, "calibrate_base_arrays", fake_calibrate)
+    monkeypatch.setattr(drv, "calibrate_base_cached", fake_calibrate)
     monkeypatch.setattr(drv, "check_supported", lambda **k: None)
     monkeypatch.delenv("EQUILIBRIA_GTAP_GC_FREEZE", raising=False)
     gc.unfreeze()
