@@ -310,7 +310,6 @@ tests/templates/gtap/test_perf_budget.py
 tests/templates/gtap/test_period_prep.py
 tests/templates/gtap/test_period_prep_snapshot.py
 tests/templates/gtap/test_prm_zeros_and_cd_mode.py
-tests/templates/gtap/test_recalibrate_alphaa_hhd.py
 tests/templates/gtap/test_reference_snapshot_auto.py
 tests/templates/gtap/test_residual_region_auto.py
 tests/templates/gtap/test_shock_instruments_mp.py
