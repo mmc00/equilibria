@@ -44,6 +44,7 @@ VKB      pi[r] * kstock[r]                          2377
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable
 from pathlib import Path
 
@@ -311,7 +312,18 @@ def _elements(run: AltertaxRun) -> dict[str, list[str]]:
 
 def headers_at(run: AltertaxRun, period: str) -> dict[str, HeaderArray]:
     """The value headers of ``run`` at ``period`` (``shock``: the updated data;
-    ``check``: reproduces the input database)."""
+    ``check``: reproduces the input database). Built once per run and period (every
+    cell is a Python call); each caller gets its own copy of the arrays."""
+    cache = getattr(run, "_headers", None)
+    built = None if cache is None else cache.get(period)
+    if built is None:
+        built = _build_headers(run, period)
+        if cache is not None:
+            cache[period] = built
+    return {n: dataclasses.replace(h, array=h.array.copy()) for n, h in built.items()}
+
+
+def _build_headers(run: AltertaxRun, period: str) -> dict[str, HeaderArray]:
     P = _Period(run, period)
     els = _elements(run)
     out: dict[str, HeaderArray] = {}

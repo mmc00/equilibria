@@ -4,7 +4,7 @@ check and shock. No Pyomo here."""
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +34,9 @@ class AltertaxRun:
     # ``solve_altertax(decomp_steps=...)``: the path-integral decomposition
     # (``family.altertax.path.DecompPath``); None = the one-step ``decomp_headers``
     decomp_path: Any = None
+    # ``updated.headers_at``'s value headers per period, built once; not an init field,
+    # so ``dataclasses.replace`` (the decomp path's points) starts with none
+    _headers: dict = field(default_factory=dict, init=False, repr=False, compare=False)
 
     def solve_records(self) -> list[dict]:
         """Every Newton solve of the run (``FamilyResult.solves``: settle, check, shock
