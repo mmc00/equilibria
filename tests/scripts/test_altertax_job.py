@@ -7,16 +7,23 @@ import sys
 import numpy as np
 import pytest
 
-from equilibria.sources import DATA_ROOT, GEMPACK_MODEL_DIR, SourceError, find_reference, reference
+from equilibria.sources import (
+    DATA_ROOT,
+    GEMPACK_MODEL_DIR,
+    SourceError,
+    find_reference,
+    reference,
+)
 
 sys.path.insert(0, str(GEMPACK_MODEL_DIR / "tools"))
-import altertax_job as job  # noqa: E402
-import regenerate_altertax as regen  # noqa: E402
-import run_gempack_matrix as matrix  # noqa: E402
+import altertax_job as job  # noqa: E402  # ty: ignore[unresolved-import]
+import regenerate_altertax as regen  # noqa: E402  # ty: ignore[unresolved-import]
+import run_gempack_matrix as matrix  # noqa: E402  # ty: ignore[unresolved-import]
 
 REGIONS = ["USA", "EU_28", "ROW"]
 DATASETS = regen.DATASETS
-RECORDED = [*DATASETS, "9x10", "gtap7_20x41", "nus333"]  # the last 3 have no GAMS altertax
+# the last 3 have no GAMS altertax
+RECORDED = [*DATASETS, "9x10", "gtap7_20x41", "nus333"]
 PARAMETERS = regen.PARAMETERS
 
 
@@ -62,13 +69,24 @@ def test_ten_jobs_with_their_folder_names() -> None:
 @pytest.mark.parametrize("dataset", RECORDED)
 @pytest.mark.parametrize("parameters", PARAMETERS)
 def test_recorded_parameters(dataset: str, parameters: str) -> None:
-    folder = find_reference(dataset, "gempack", mode="altertax", parameters=parameters)
+    folder = find_reference(
+        dataset,
+        "gempack",
+        mode="altertax",
+        shock="tms-rate10",
+        steps="8-16-32",
+        closure="altertax",
+        parameters=parameters,
+    )
     if folder is None:
         pytest.skip("the altertax references are generated on the Windows machine")
+    assert folder is not None  # ty does not narrow on pytest.skip
     job.check_parameters(
         folder / job.PRM_NAME, DATA_ROOT / "gtap7" / dataset / "default.prm", parameters
     )
-    worst = job.check_rates(folder / "updated.har", DATA_ROOT / "gtap7" / dataset / "basedata.har")
+    worst = job.check_rates(
+        folder / "updated.har", DATA_ROOT / "gtap7" / dataset / "basedata.har"
+    )
     assert worst < 1e-4
     for name in ("updated.har", "decomp.har", "sl4dump.har", *job.EXTRA_OUTPUTS):
         assert (folder / name).stat().st_size > 0, name
@@ -76,8 +94,26 @@ def test_recorded_parameters(dataset: str, parameters: str) -> None:
 
 @pytest.mark.parametrize("dataset", DATASETS)
 def test_matrix_references_stay_unique(dataset: str) -> None:
-    if find_reference(dataset, "gempack", mode="altertax", parameters="gams") is None:
+    if (
+        find_reference(
+            dataset,
+            "gempack",
+            mode="altertax",
+            shock="tms-rate10",
+            steps="8-16-32",
+            closure="altertax",
+            parameters="gams",
+        )
+        is None
+    ):
         pytest.skip("the altertax references are generated on the Windows machine")
     assert reference(dataset, "gempack", shock=10, steps="8-16-32", closure="capFlex")
     with pytest.raises(SourceError):
-        reference(dataset, "gempack", mode="altertax")  # both sets of parameters match
+        reference(
+            dataset,
+            "gempack",
+            mode="altertax",
+            shock="tms-rate10",
+            steps="8-16-32",
+            closure="altertax",
+        )  # both sets of parameters match
