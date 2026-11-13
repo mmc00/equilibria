@@ -1144,10 +1144,8 @@ class GTAPModelEquations:
             mutable=True,
         )
         create_indexed_param("af_xf_param", ["r", "f", "a"], scaled_af_xf_param, 0.0)
-        # mutable=True: same per-period recalibration as and/ava/io/af — GAMS's
-        # iterloop.gms also recomputes gx(r,a,i,t)/ax(r,a,i,t) every period from
-        # that period's own solved x/xp/px/p (gx) and x/xs/p/ps/prdtx (ax).
-        # See _recalibrate_gx_ax.
+        # GAMS sets gx/ax in cal.gms, before the tsim loop; its reference GDX
+        # holds gx identical in base, check and shock.
         create_indexed_param(
             "gx_param",
             ["r", "a", "i"],

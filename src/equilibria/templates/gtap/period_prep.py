@@ -141,11 +141,12 @@ def _recalibrate_shares(c: _Ctx) -> None:
     - alphad/alpham: re-deriving them from the prior xd/xm/xa broke the tiny
       flows (~1e-9, at the solver's tolerance), and eq_paa raises pa to the
       power 1/(1 - 0.95) = 20 under altertax; 15x10 ifSUB=0 shock 99.45% -> 100%.
+    - gx/ax: the old rebuild never fired on the block model (no ``xscale``
+      component, and sigmas is infinite under altertax), so it was deleted.
     Pure gtap recalibrates nothing.
     """
     d, prior = _drv(), _RECALIBRATE_FROM[c.period]
     d._recalibrate_and_ava(c.m, c.params, c.period, prior)
-    d._recalibrate_gx_ax(c.m, c.params, c.period, prior)
     d._recalibrate_alphaa_gov_inv(c.m, c.params, c.period, prior)
     d._recalibrate_alphaa_hhd(c.m, c.params, c.period, prior)
 
