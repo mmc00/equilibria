@@ -71,7 +71,9 @@ tests/contracts/test_base_contract.py
 tests/core/test_core.py
 tests/core/test_layering.py
 tests/core/test_model.py
+tests/core/test_recipe.py
 tests/core/test_reflection.py
+tests/core/test_steps.py
 tests/data/test_data_tree.py
 tests/data/test_datasets_present.py
 tests/data/test_gams_model_present.py
