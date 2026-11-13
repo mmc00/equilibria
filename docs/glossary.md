@@ -13,9 +13,10 @@ variables it reads from other blocks.
 _Avoid_: module, component
 
 **Template**:
-A complete model of a known type (GTAP, PEP, simple open economy) with its data,
-closures and solve path. GTAP is assembled from blocks; PEP is still written as
-a monolith and a Pyomo rebuild.
+A complete model of a known type (GTAP, PEP, simple open economy): which blocks
+it has, the order they are built in, its default closure, its default recipe,
+and its data, which it is created with (ADR-0011). GTAP is assembled from
+blocks; PEP is still written as a monolith and a Pyomo rebuild.
 _Avoid_: model type, preset
 
 **Monolith**:
@@ -30,12 +31,27 @@ multi-period model is a copy of it per period.
 _Avoid_: single model, static model
 
 **Driver**:
-The code that prepares each period of a multi-period run and solves it.
+The code that flies a recipe: for each period it runs the steps before the
+solve, solves with the period's strategy and solver, runs the steps after, and
+freezes the period. It knows no model, shock or closure (ADR-0011).
 _Avoid_: runner, solver loop
 
 **Recipe**:
-The ordered list of preparation steps for one period in one mode.
+What a run does with a model: the periods in order, each with a period kind,
+and for each kind the steps before and after the solve, the solve strategy and
+the solver. It builds and solves nothing itself (ADR-0011).
 _Avoid_: pipeline, procedure
+
+**Period kind**:
+What a period is for, so a recipe can name its steps once: `calibrate` (GTAP
+`base`), `replicate` (GTAP `check`), `shock` (GTAP `shock`, PEP `sim1`) or
+`step` (one year of a recursive dynamic model).
+_Avoid_: period type, phase
+
+**Step**:
+A small function with one job that a recipe runs before or after a period's
+solve; it changes the model in place and returns nothing.
+_Avoid_: stage, action
 
 ## Closures and shocks
 
@@ -60,8 +76,10 @@ check period, written as the GEMPACK percentage.
 _Avoid_: experiment, perturbation
 
 **Exercise**:
-One simulation, usually one notebook, that may change one block with
-`@overwrite` for that exercise only.
+One simulation, usually one notebook: a template, a recipe, a shock and the
+exercise's own `@overwrite` blocks, run with `Exercise(...).run()`. It gets its
+own copy of the built model, so nothing it changes reaches the next exercise
+(ADR-0011).
 _Avoid_: run
 
 ## Periods and solving
