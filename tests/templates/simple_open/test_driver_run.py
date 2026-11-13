@@ -9,7 +9,7 @@ import pytest
 
 from equilibria.blocks.equilibrium import Numeraire
 from equilibria.core import Exercise
-from equilibria.templates.simple_open import SimpleOpenEconomy
+from equilibria.templates.simple_open import SimpleOpenEconomy, stdcge_static
 
 TARIFF_ABOLITION = {"tau_m": 0.0}
 
@@ -98,3 +98,29 @@ def test_two_exercises_from_one_cached_model_are_independent() -> None:
     calibrated = float(template.calibration().values["tau_m"][0])
     assert pyo.value(second.model.tau_m[good, "check"]) == pytest.approx(calibrated)
     assert second.model is not first.model
+
+
+def test_a_failed_solve_is_reported_and_leaves_the_cache_clean() -> None:
+    template = SimpleOpenEconomy()
+
+    def diverge(model: Any) -> str:
+        for good in template.calibration().goods:  # a solver that wanders off
+            model.M[good, "base"].set_value(1e6)
+            model.M[good, "check"].set_value(1e6)
+        return "infeasible"
+
+    failed = Exercise(template, recipe=stdcge_static(solver=diverge))
+    results = failed.run()
+    assert [r["code"] for r in results.values()] == [
+        "not solved",
+        "infeasible",
+        "infeasible",
+    ]
+    assert results["check"]["residual"] > 1.0
+
+    again = Exercise(template, shock=TARIFF_ABOLITION)
+    assert again.run()["check"]["code"] == "optimal"
+    good = template.calibration().goods[0]
+    base_imports = template.calibration().base["M"][0]
+    # base is never solved: it shows exactly what the template handed over
+    assert pyo.value(again.model.M[good, "base"]) == pytest.approx(base_imports)
