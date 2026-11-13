@@ -84,6 +84,9 @@ viz = ["matplotlib>=3.7", "plotly>=5.0"]
 # silent no-op: save() warns and writes nothing.
 modelcache = ["cloudpickle>=3.0"]
 
+# Family evaluation backend (perf prototype): JAX array templates per equation family.
+family = ["jax>=0.4.30"]
+
 # Development
 dev = [
     "pytest>=8.0",
@@ -226,6 +229,10 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["equilibria"]
+
+[tool.ty.analysis]
+# jax is the optional `family` extra: CI type-checks without it (`uv sync --dev`)
+allowed-unresolved-imports = ["jax", "jax.**", "jaxlib", "jaxlib.**"]
 
 [tool.mypy]
 python_version = "3.10"

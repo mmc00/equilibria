@@ -221,7 +221,10 @@ def test_path_capi_python_from_a_checkout_is_found(monkeypatch, tmp_path, no_pat
     (src / "path_capi_python").mkdir(parents=True)
     (src / "path_capi_python" / "__init__.py").write_text("")
     monkeypatch.setenv("EQUILIBRIA_PATH_CAPI_SRC", str(src))
-    monkeypatch.delitem(sys.modules, "path_capi_python", raising=False)
+    # setitem first: the undo then removes the fake checkout's module this test
+    # imports (a bare delitem records nothing when the module was not loaded)
+    monkeypatch.setitem(sys.modules, "path_capi_python", None)
+    monkeypatch.delitem(sys.modules, "path_capi_python")
     monkeypatch.setattr(
         sys, "path", [p for p in sys.path if "path-capi-python" not in p]
     )

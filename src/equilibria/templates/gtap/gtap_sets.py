@@ -330,16 +330,33 @@ class GTAPSets:
 
     def _set_activity_mappings(self, gdx_data: dict[str, Any]) -> None:
         """Populate activity/commodity mappings from make structure."""
-        self.i_to_a = {}
-        self.a_to_i = {}
-        self.output_pairs = []
-        self.activity_commodities = {activity: [] for activity in self.a}
-        self.commodity_activities = {commodity: [] for commodity in self.i}
-
         pairs = self._extract_output_pairs(gdx_data)
         if not pairs and self.is_diagonal:
             pairs = list(zip(self.a, self.i, strict=False))
+        self._apply_output_pairs(pairs)
 
+    def set_output_pairs_from_make(
+        self, makb: dict[tuple[str, str, str], float]
+    ) -> None:
+        """The activity/commodity maps from the make flows ``makb[(r, a, i)]``, in set
+        order. For a HAR load: the sets file has no make matrix, so without this a
+        dataset whose activity names are not the commodity names (``a_agricultur``
+        makes ``c_Crops`` and ``c_MeatLstk``) would keep empty maps. No make flow
+        leaves the maps as they are."""
+        made = {
+            (a, i)
+            for (_r, a, i), v in makb.items()
+            if v is not None and abs(float(v)) > 1e-10
+        }
+        pairs = [(a, i) for a in self.a for i in self.i if (a, i) in made]
+        if pairs:
+            self._apply_output_pairs(pairs)
+
+    def _apply_output_pairs(self, pairs: list[tuple[str, str]]) -> None:
+        self.i_to_a = {}
+        self.a_to_i = {}
+        self.activity_commodities = {activity: [] for activity in self.a}
+        self.commodity_activities = {commodity: [] for commodity in self.i}
         self.output_pairs = pairs
 
         for activity, commodity in pairs:

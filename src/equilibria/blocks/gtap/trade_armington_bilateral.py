@@ -47,6 +47,7 @@ import numpy as np
 from pyomo.environ import value
 
 from equilibria.blocks.base import Block
+from equilibria.blocks.gtap import _cd
 from equilibria.blocks.gtap import _derived_params as dp
 from equilibria.blocks.gtap import _ifsub_macros as mac
 from equilibria.blocks.gtap.agents import (
@@ -370,11 +371,18 @@ class ArmingtonBilateralBlock(Block):
         # top-Armington shares (benchmark-seed CARRY, monolith 6122-6229)
         arm_shares = dp.armington_shares(p, s)
 
-        def _shares(r, i, aa):
-            return arm_shares.get((r, i, aa), (0.0, 0.0))
-
         def _top_sigma(r, i, aa):
             return float(el.esubd.get((r, i), 2.0))
+
+        def _shares(r, i, aa):
+            """(alphad, alpham). Under exact CD the pair is normalised to sum to 1,
+            as EqPaa's weights are (``_cd``): the float32 data leave ad + am off 1 by
+            up to ~1e-7, and with raw shares sum(p*x) != pa*xaa by that much."""
+            ad, am = arm_shares.get((r, i, aa), (0.0, 0.0))
+            if _cd.exact_cd(p, _top_sigma(r, i, aa)) and ad + am > 0.0:
+                tot = ad + am
+                return ad / tot, am / tot
+            return ad, am
 
         # import-source share cache (monolith 6472-6485)
         import_src = p.shares.normalized.import_source_share
@@ -540,7 +548,7 @@ class ArmingtonBilateralBlock(Block):
                 if alpha <= 0.0:
                     return None
                 sigmamg = float(el.sigmam.get(i_str, 1.0))
-                if abs(sigmamg - 1.0) < 1e-8:
+                if abs(sigmamg - 1.0) < 1e-8 and not _cd.exact_cd(p, sigmamg):
                     sigmamg = 1.01
                 return model.xaa[r, i, _TMG] == (
                     alpha
@@ -670,6 +678,23 @@ class ArmingtonBilateralBlock(Block):
                 if alphad <= 0.0 and alpham <= 0.0:
                     return None
                 sigma_m = _top_sigma(r, i, aa)
+                if _cd.exact_cd(p, sigma_m):
+                    # CD: log pa = c + w_d log pdp + w_m log pmp, the shares at the
+                    # base pdp = 1+dintx0, pmp = 1+mintx0, pa = 1
+                    pdp0, pmp0 = dp.armington_base_prices(p, s, r, i, aa)
+                    alphas, qs, q0 = [], [], []
+                    if alphad > 0.0:
+                        alphas.append(alphad)
+                        qs.append((1.0 + model.dintx[r, i, aa]) * model.pd[r, i])
+                        q0.append(pdp0)
+                    if alpham > 0.0:
+                        alphas.append(alpham)
+                        qs.append((1.0 + model.mintx[r, i, aa]) * model.pmt[r, i])
+                        q0.append(pmp0)
+                    w, c = dp.cd_coefficients(alphas, q0)
+                    return _cd.cd_price_row(
+                        model.pa[r, i, aa], list(zip(w, qs, strict=True)), c
+                    )
                 expo = 1.0 - sigma_m
                 if abs(expo) < 1e-8:
                     return model.pa[r, i, aa] == (
@@ -768,6 +793,18 @@ class ArmingtonBilateralBlock(Block):
                 if not has_supply:
                     return model.ptmg[m] == model.pnum
                 sigmamg = float(el.sigmam.get(i_str, 1.0))
+                if _cd.exact_cd(p, sigmamg):
+                    # CD: log ptmg = c + sum_r w_r log pa(r,m,tmg); vst shares at 1
+                    alphas, qs = [], []
+                    for r in model.r:
+                        share = alphaa_tmg.get((str(r), i_str), 0.0)
+                        if share > 0.0:
+                            alphas.append(share)
+                            qs.append(model.pa[r, m, _TMG])
+                    w, c = dp.cd_coefficients(alphas, [1.0] * len(alphas))
+                    return _cd.cd_price_row(
+                        model.ptmg[m], list(zip(w, qs, strict=True)), c
+                    )
                 if abs(sigmamg - 1.0) < 1e-8:
                     sigmamg = 1.01
                 expo = 1.0 - sigmamg
@@ -814,19 +851,33 @@ class ArmingtonBilateralBlock(Block):
                 r, i = indices
                 esubm = el.esubm.get((r, i), 5.0)
                 expo = 1.0 - esubm
-                if abs(expo) < 1e-8:
+                cd = _cd.exact_cd(p, esubm)
+                if abs(expo) < 1e-8 and not cd:
                     return None
                 active_shares = [_get_import_source_share(r, i, rp) for rp in model.rp]
                 if not any(share > 0.0 for share in active_shares):
                     return model.pmt[r, i] == 1.0
                 terms = []
+                alphas, qs, q0 = [], [], []
                 for rp in model.rp:
                     amw = _get_import_source_share(r, i, rp)
                     if amw <= 0.0:
                         continue
                     lambdam = model.lambdam[rp, i, r]
+                    if cd:
+                        alphas.append(amw)
+                        qs.append(_m_pm(model, rp, i, r) / lambdam)
+                        q0.append(dp.pm_cal_value(p, r, i, rp))
+                        continue
                     # M_PM inline under if_sub=True (imptx shock reaches pmt here).
                     terms.append(amw * (_m_pm(model, rp, i, r) / lambdam) ** expo)
+                if cd and alphas:
+                    # CD: log pmt = c + sum_rp w_rp log(pm/lambdam); amw at the base
+                    # pm = (1+imptx)*pmcif and pmt = 1
+                    w, c = dp.cd_coefficients(alphas, q0)
+                    return _cd.cd_price_row(
+                        model.pmt[r, i], list(zip(w, qs, strict=True)), c
+                    )
                 if not terms:
                     return model.pmt[r, i] == 1.0
                 return model.pmt[r, i] ** expo == sum(terms)

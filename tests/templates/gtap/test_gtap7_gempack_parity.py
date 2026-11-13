@@ -43,12 +43,26 @@ def test_no_gempack_rows_is_a_clean_skip():
         pytest.skip("no reference='gempack' rows yet — awaiting RunGTAP SL4 dump")
 
 
+def _reference_gdx(dataset: str, ifsub: int) -> Path | None:
+    """The GAMS ``out.gdx`` both backends read (capFlex's ``risk`` and the Pyomo warm
+    start): the MCP reference where GAMS has one, else the NLP one (gtap7_20x41), or
+    ``None`` when neither exists."""
+    ref = find_reference(
+        dataset, "gams", form="mcp", mode="gtap", ifsub=ifsub, fbep="header"
+    ) or find_reference(
+        dataset, "gams", form="nlp", mode="gtap", ifsub=ifsub, fbep="header"
+    )
+    return None if ref is None else ref / "out.gdx"
+
+
 def _solve_shock(
     dataset: str,
     ifsub: int,
     savf_flag: str = "capFlex",
     solve_nlp: bool = False,
     residual_region: str | None = None,
+    backend: str | None = None,
+    unit_sigma: str = "gams",
 ):
     """Build + seed + solve base→check→shock (gtap pure MCP) and return the model.
 
@@ -65,8 +79,21 @@ def _solve_shock(
 
     ``residual_region`` defaults to the last region; "auto" (capFix only) lets the model
     pick the one with the largest base investment (see resolve_residual_region).
+
+    ``backend`` "pyomo" (the default) builds the Pyomo model; "family" runs the array
+    driver (equilibria.family.driver) and returns ``(FamilyResult, code)`` instead of
+    ``(m, code)``. ``EQUILIBRIA_GTAP_BACKEND=family`` sets the default; an unsupported
+    configuration raises before any work.
+
+    ``unit_sigma`` "gams" (the default) keeps the 1.01 stand-in for a unit elasticity,
+    as the recorded oracles (paper Table 1, the example-15 gaps) were solved; "gempack"
+    solves it as exact sigma = 1 (log-form CD), which the gtap7_gempack gate uses.
     """
     import os as _os
+
+    backend = backend or _os.environ.get("EQUILIBRIA_GTAP_BACKEND", "pyomo")
+    if backend not in ("pyomo", "family"):
+        raise ValueError(f"backend must be 'pyomo' or 'family', got {backend!r}")
 
     # NLP mode (maximize walras, IPOPT — read per-call inside run_gtap._run_path_capi_
     # nonlinear_full, which solve_multiperiod lazy-loads) is toggled by this env var. Set it
@@ -79,6 +106,33 @@ def _solve_shock(
     else:
         _os.environ.pop("EQUILIBRIA_GTAP_SOLVE_NLP", None)
     try:
+        # The GAMS ref GDX is a SPEEDUP, not a requirement: capFlex reads benchmark rore/rorg
+        # from it (fast) instead of a capFix twin-solve, and it warm-starts the shock. When it's
+        # absent (e.g. gtap7_3x4 ships no local GAMS ref — its shock is 2168 eqs > PATH's 1000-eq
+        # demo cap), the block SELF-SEEDS: base_calibrated stamps m._settled_seed, and the risk
+        # twin-solve fallback recovers rore/rorg. Verified on 3x4: shock code=1 with
+        # ref_gdx=None. So pass the GDX only if it exists; on small datasets the twin-solve
+        # fallback is cheap enough.
+        gdx = _reference_gdx(dataset, ifsub)
+        if backend == "family":
+            from equilibria.family.capflex import require_ref_gdx
+            from equilibria.family.driver import check_supported, solve_gtap_family
+
+            # The solve_multiperiod arguments below are the ones this function passes.
+            check_supported(
+                if_sub=bool(ifsub),
+                savf_flag=savf_flag,
+                mode="gtap",
+                skip_base_solve=True,
+                mute_welfare=True,
+                seed_from_prior=False,
+                solve_check=True,
+                shock_steps=None,
+                shock_method="nonlinear",
+            )
+            if savf_flag == "capFlex":
+                # capFlex reads rore/rorg from the GDX: refuse before any work
+                require_ref_gdx(gdx)
         from equilibria.templates.gtap import GTAPParameters
         from equilibria.templates.gtap.gtap_block_model import build_block_model
         from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
@@ -107,21 +161,11 @@ def _solve_shock(
             # GEMPACK is the reference: use the data's factor wedge (EVFP = EVFB +
             # FTRV + FBEP), the gtap7_gempack basis. The GAMS sign drops 15x10 to 93.9%.
             va_subsidy_basis="gempack",
+            unit_sigma=unit_sigma,
         )
-        # The GAMS ref GDX is a SPEEDUP, not a requirement: capFlex reads benchmark rore/rorg
-        # from it (fast) instead of a capFix twin-solve, and it warm-starts the shock. When it's
-        # absent (e.g. gtap7_3x4 ships no local GAMS ref — its shock is 2168 eqs > PATH's 1000-eq
-        # demo cap), the block SELF-SEEDS: base_calibrated stamps m._settled_seed, and the risk
-        # twin-solve fallback recovers rore/rorg. Verified on 3x4: shock code=1 with
-        # ref_gdx=None. So pass the GDX only if it exists; on small datasets the twin-solve
-        # fallback is cheap enough.
-        # MCP where GAMS has one; gtap7_20x41 only has the NLP (CONOPT) reference
-        _ref = find_reference(
-            dataset, "gams", form="mcp", mode="gtap", ifsub=ifsub, fbep="header"
-        ) or find_reference(
-            dataset, "gams", form="nlp", mode="gtap", ifsub=ifsub, fbep="header"
-        )
-        gdx = None if _ref is None else _ref / "out.gdx"
+        if backend == "family":
+            fres = solve_gtap_family(p, ac, rr, ref_gdx=gdx)
+            return fres, int(fres.results["shock"]["code"])
         m, mp = build_block_model(p, p.sets, ac, rr, base_calibrated=True, ref_gdx=gdx)
         res = solve_multiperiod(
             m,
@@ -274,8 +318,15 @@ def test_gtap7_gempack_parity(row):
     # Large datasets run as an NLP (their capFix MCP does not converge in PATH); small ones
     # keep the native MCP path.
     solve_nlp = row.dataset in _NLP_MODE_DATASETS
+    # Exact sigma = 1 (log-form CD), as GEMPACK solves it, instead of the 1.01
+    # stand-in. Measured on 3x3..15x10: within-1pp unchanged, qga worst cell
+    # 0.04-0.09 pp closer.
     m, code = _solve_shock(
-        row.dataset, row.ifsub, savf_flag=savf_flag, solve_nlp=solve_nlp
+        row.dataset,
+        row.ifsub,
+        savf_flag=savf_flag,
+        solve_nlp=solve_nlp,
+        unit_sigma="gempack",
     )
     assert code == 1, (
         f"[{row.dataset}/{savf_flag}/{'NLP' if solve_nlp else 'MCP'}] shock did not "

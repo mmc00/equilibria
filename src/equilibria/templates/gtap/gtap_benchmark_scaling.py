@@ -27,6 +27,8 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from equilibria.blocks.gtap._cd import exact_cd
+from equilibria.blocks.gtap._derived_params import cd_coefficients, pm_cal_value
 from equilibria.templates.gtap.gtap_parameters import (
     GTAP_GOVERNMENT_AGENT,
     GTAP_HOUSEHOLD_AGENT,
@@ -92,7 +94,7 @@ def align_xi_xaa_post_scaling(model: ConcreteModel, ctx: ScalingContext) -> None
         pi_val = max(float(pyo_value(model.pi[r])), 1e-8)
         xiagg = float(pyo_value(model.xiagg[r]))
         sigmai_raw = float(ctx.params.elasticities.esubi.get(r, 0.0))
-        if abs(sigmai_raw - 1.0) < 1e-8:
+        if abs(sigmai_raw - 1.0) < 1e-8 and not exact_cd(ctx.params, sigmai_raw):
             sigmai_raw = 1.01
         for i in model.i:
             share = float(pyo_value(model.i_share[r, i]))
@@ -718,7 +720,9 @@ def _refresh_macro_initial_state(model: ConcreteModel, ctx: ScalingContext) -> N
             for i in model.i:
                 esubm = ctx.params.elasticities.esubm.get((r, i), 5.0)
                 expo = 1.0 - esubm
+                cd = exact_cd(ctx.params, esubm)
                 terms = []
+                cd_alphas, cd_pm, cd_pm0 = [], [], []
                 for rp in model.r:
                     amw = float(
                         ctx.params.shares.normalized.import_source_share.get(
@@ -764,7 +768,20 @@ def _refresh_macro_initial_state(model: ConcreteModel, ctx: ScalingContext) -> N
                         pmcif = max(1.0 + export_tax + tmarg, 1e-8)
                     imptx = float(ctx.params.taxes.imptx.get((rp, i, r), 0.0) or 0.0)
                     pm = max((1.0 + imptx) * pmcif, 1e-8)
+                    if cd:
+                        cd_alphas.append(amw)
+                        cd_pm.append(pm)
+                        cd_pm0.append(pm_cal_value(ctx.params, r, i, rp))
+                        continue
                     terms.append(amw * (pm**expo))
+                if cd and cd_alphas:
+                    # sigma = 1 under unit_sigma="gempack": the eq_pmteq CD row
+                    # (blocks/gtap/_cd.py) solved for pmt at these pm
+                    w, c = cd_coefficients(cd_alphas, cd_pm0)
+                    log_pmt = c + sum(
+                        wi * math.log(q) for wi, q in zip(w, cd_pm, strict=True)
+                    )
+                    model.pmt[r, i].set_value(max(math.exp(log_pmt), 1e-8))
                 if terms:
                     rhs = sum(terms)
                     if rhs > 0.0:

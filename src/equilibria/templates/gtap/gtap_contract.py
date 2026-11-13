@@ -361,6 +361,14 @@ class GTAPClosureConfig(ModelClosureConfig):
     # agriculture; used by the gtap7_gempack closure. See _va_wedge in
     # blocks/gtap/_derived_params.py.
     va_subsidy_basis: Literal["gams", "gempack"] = "gams"
+    # CES nests at an elasticity of exactly 1.
+    # "gams" (default): the 1.01 guards of GAMS #192 (cal.gms): sigmap/sigmand/sigmav
+    # = 1 become 1.01 at load, sigmag/sigmai/sigmamg = 1 inside the blocks; a price
+    # dual left at sigma = 1 refuses to build. "gempack": every CES nest whose
+    # elasticity is exactly 1 is written in its exact Cobb-Douglas price form,
+    # log(P) = c + sum_i w_i log(q_i) (GEMPACK has no singularity at 1); used by the
+    # ALTERTAX closure. See blocks/gtap/_cd.py.
+    unit_sigma: Literal["gams", "gempack"] = "gams"
     if_sub: bool = True
     calibration_source: str = "python"
     calibration_dump: str | None = None

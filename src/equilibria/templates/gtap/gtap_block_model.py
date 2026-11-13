@@ -40,6 +40,8 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 from equilibria.backends.pyomo_backend import PyomoBackend
 from equilibria.blocks.gtap import _ifsub_macros as mac
 from equilibria.blocks.gtap import model_cache as _model_cache
@@ -196,7 +198,75 @@ def _aridad(fn) -> int:
 
 
 def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
-    """The ifSUB closure: deactivate the 9 report equations AND fix their report
+    """The ifSUB closure (see ``_apply_ifsub_closure_cells``).
+
+    On the family state each report variable is fixed from its macro evaluated on whole
+    arrays (``family/ifsub_arrays.py``, bitwise the cell-by-cell result); a Pyomo model,
+    or a variable whose operands are not aligned with it, goes through the cell-by-cell
+    code unchanged.
+    """
+    from equilibria.family.state import StateModel
+
+    if params is None or not isinstance(pm, StateModel):
+        return _apply_ifsub_closure_cells(pm, params)
+    from equilibria.family.ifsub_arrays import fix_report_var
+
+    macros = _ifsub_macro_map()
+    # Deactivation only. A family StateModel has no constraint components, so this loop
+    # is nine lookups returning 0; the fallback call below repeats it for the same cost.
+    # Kept (rather than skipped) so a model that does carry the equations stays correct.
+    n = _apply_ifsub_closure_cells(pm, params, ())  # deactivation only
+    macro_fallos: list[str] = []
+    rest: list[str] = []
+    for var_name in _IFSUB_REPORT_VARS:
+        if pm.component(var_name) is None:
+            continue
+        fn = macros[var_name]
+        if not fix_report_var(pm, params, var_name, fn, _aridad(fn), macro_fallos):
+            rest.append(var_name)
+    if rest:
+        n += _apply_ifsub_closure_cells(pm, params, tuple(rest), macro_fallos)
+    _raise_ifsub_failures(macro_fallos, [])
+    return n
+
+
+def _ifsub_macro_map() -> dict[str, Any]:
+    return {
+        "pfa": mac.m_pfa,
+        "pfy": mac.m_pfy,
+        "pp_rai": mac.m_pp,
+        "pwmg": mac.m_pwmg,
+        "pefob": mac.m_pefob,
+        "pmcif": mac.m_pmcif,
+        "pm": mac.m_pm,
+        "xwmg": mac.m_xwmg,
+        # xmgm toma CUATRO indices (mode, e, c, imp), no tres.
+        "xmgm": mac.m_xmgm,
+    }
+
+
+def _raise_ifsub_failures(macro_fallos: list[str], fix_fallos: list[str]) -> None:
+    if macro_fallos or fix_fallos:
+        raise RuntimeError(
+            "_apply_ifsub_closure no pudo fijar los vars de reporte ifSUB desde "
+            "su macro. Degradar al init en silencio es el bug que este camino "
+            "arregla, asi que se levanta.\n"
+            + "\n".join(
+                [f"  macro fallido: {m}" for m in macro_fallos[:10]]
+                + [f"  fix fallido:   {m}" for m in fix_fallos[:10]]
+            )
+        )
+
+
+def _apply_ifsub_closure_cells(
+    pm: ConcreteModel,
+    params: Any = None,
+    var_names: tuple[str, ...] = _IFSUB_REPORT_VARS,
+    macro_fallos: list[str] | None = None,
+) -> int:
+    """The ifSUB closure, cell by cell (the Pyomo path).
+
+    Deactivate the 9 report equations AND fix their report
     vars — mirrors the monolith's post-block.
 
     Deactivating alone left pfa/pfy as orphan free columns (the macros are inline in
@@ -227,7 +297,7 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
     from pyomo.environ import value
 
     n = 0
-    _macro_fallos: list[str] = []
+    _macro_fallos: list[str] = [] if macro_fallos is None else macro_fallos
     _fix_fallos: list[str] = []
     for eq_name in _IFSUB_REPORT_EQS:
         comp = pm.component(eq_name)
@@ -251,20 +321,8 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
     #   pwmg    352/1500            (0.001      vs 1.0)  <- factor 1000
     # y 11.118 celdas realmente distintas en el modelo multiperiodo al resolver
     # el shock (separando 52.455 de puro ruido de coma flotante).
-    _macro = {
-        "pfa": mac.m_pfa,
-        "pfy": mac.m_pfy,
-        "pp_rai": mac.m_pp,
-        "pwmg": mac.m_pwmg,
-        "pefob": mac.m_pefob,
-        "pmcif": mac.m_pmcif,
-        "pm": mac.m_pm,
-        "xwmg": mac.m_xwmg,
-        # xmgm toma CUATRO indices (mode, e, c, imp), no tres — por eso el
-        # guard de aridad de abajo se lee del macro y no esta fijado en 3.
-        "xmgm": mac.m_xmgm,
-    }
-    for var_name in _IFSUB_REPORT_VARS:
+    _macro = _ifsub_macro_map()
+    for var_name in var_names:
         v = pm.component(var_name)
         if v is None:
             continue
@@ -310,16 +368,7 @@ def _apply_ifsub_closure(pm: ConcreteModel, params: Any = None) -> int:
                 # aparece lejos de aqui.  Se acumula y se levanta al final.
                 _fix_fallos.append(f"{var_name}{k}: {type(exc).__name__} {exc}")
 
-    if _macro_fallos or _fix_fallos:
-        raise RuntimeError(
-            "_apply_ifsub_closure no pudo fijar los vars de reporte ifSUB desde "
-            "su macro. Degradar al init en silencio es el bug que este camino "
-            "arregla, asi que se levanta.\n"
-            + "\n".join(
-                [f"  macro fallido: {m}" for m in _macro_fallos[:10]]
-                + [f"  fix fallido:   {m}" for m in _fix_fallos[:10]]
-            )
-        )
+    _raise_ifsub_failures(_macro_fallos, _fix_fallos)
     return n
 
 
@@ -443,19 +492,17 @@ def _fix_instruments(pm: Any) -> int:
     return n
 
 
-def build_block_single_period(
+def compose_block_sp(
     params: Any,
     sets: Any,
     closure: Any = None,
     residual_region: str | None = None,
-    apply_scaling: bool = True,
-) -> ConcreteModel:
-    """Compose the 7 blocks into a single-period Pyomo model.
+) -> tuple[Model, list[Any], Any, str | None]:
+    """Compose the 7 blocks into an equilibria ``Model`` (no backend yet).
 
-    Steps: build an ``equilibria.model.Model`` (sets before blocks), add each block
-    in dependency order, translate via ``PyomoBackend``, strip the ``_con`` suffix,
-    and (default) apply the monolith's benchmark scaling so the warm-start matches
-    GAMS. Returns the Pyomo ``ConcreteModel``.
+    Returns ``(model, units, targets, residual_region)``. Any backend can translate the
+    model: ``build_block_single_period`` hands it to ``PyomoBackend``; the family backend
+    records the same blocks.
     """
     if residual_region:
         residual_region = resolve_residual_region(
@@ -494,6 +541,108 @@ def build_block_single_period(
 
     targets = collect_targets(units)
     add_targets(model, targets)
+    return model, units, targets, residual_region
+
+
+def compose_block_state(
+    params: Any,
+    sets: Any,
+    closure: Any = None,
+    residual_region: str | None = None,
+) -> tuple[Model, Any]:
+    """Compose the blocks and run the composer's post-build steps on ARRAYS.
+
+    The same step functions ``build_block_single_period`` applies to the Pyomo model
+    (benchmark scaling, xi/xaa alignment, Fisher snapshot, cell fixes) run here on a
+    ``StateModel`` over the Model's variables, so a non-Pyomo backend gets the same
+    levels, fixed cells and bounds. The Fisher snapshot is written into the CLOSURE
+    block's Parameters (``pf0``, ``xf0``, ``mqfactr_bb``, ``mqfactw_bb``) of the
+    returned Model, where the Pyomo path rebuilds its rows instead; equations that read
+    those Parameters must be (re)built from the returned Model.
+
+    The Model's own variable values stay at their build-time levels: rules that read
+    ``value(var)`` see what they see under ``PyomoBackend``.
+
+    Returns ``(model, state)``. With ifSUB=1, ``state.ifsub_skipped`` names the
+    report equations a backend must not record.
+    """
+    from equilibria.blocks.gtap.overwrite import endogenous_cells, shock_rows
+    from equilibria.family.state import StateModel
+
+    if_sub = bool(getattr(closure, "if_sub", False))
+    model, units, targets, residual_region = compose_block_sp(
+        params, sets, closure, residual_region
+    )
+    state = StateModel(model)
+    state._endogenous_instrument_cells = endogenous_cells(units)
+    state._targets = targets
+    state._shock_rows = shock_rows(units)
+
+    ctx = ScalingContext(
+        params=params, sets=sets, residual_region=residual_region or "NAmerica"
+    )
+    apply_production_scaling(state, ctx)
+    align_xi_xaa_post_scaling(state, ctx)
+
+    snap, agg = _fisher_snapshot(state)
+    regions, facs, acts = snap["regions"], snap["facs"], snap["acts"]
+    cube = [[[0.0] * len(acts) for _ in facs] for _ in regions]
+    for name in ("pf0", "xf0"):
+        arr = np.array(cube)
+        for i, r in enumerate(regions):
+            for j, f in enumerate(facs):
+                for k, a in enumerate(acts):
+                    arr[i, j, k] = snap[name][(r, f, a)]
+        _set_param(model, state, name, arr)
+    _set_param(
+        model, state, "mqfactr_bb", np.array([snap["mqfactr_bb"][r] for r in regions])
+    )
+    _set_param(model, state, "mqfactw_bb", np.array([snap["mqfactw_bb"]]))
+    _fisher_reseed(state, agg, regions)
+    state.fisher = snap
+
+    # ifSUB=1: the 9 report rows are left out of the recording (the Pyomo path
+    # deactivates them) and their report vars are fixed from the macros.
+    state.ifsub_skipped = _IFSUB_REPORT_EQS if if_sub else ()
+    if if_sub:
+        _apply_ifsub_closure(state, params)
+
+    _fix_no_demand_cells(state)
+    _fix_cd_welfare(state, params, sets)
+    _fix_instruments(state)
+    state._residual_region = residual_region
+    return model, state
+
+
+def _set_param(model: Model, state: Any, name: str, value: np.ndarray) -> None:
+    """Overwrite a Parameter's values in the Model and in the state's view of it."""
+    p = model.parameter_manager.get(name)
+    p.value = np.asarray(value, dtype=float).reshape(np.shape(p.value))
+    comp = state.find_component(name)
+    if comp is not None:
+        comp.data = p.value.reshape(comp.data.shape)
+
+
+def build_block_single_period(
+    params: Any,
+    sets: Any,
+    closure: Any = None,
+    residual_region: str | None = None,
+    apply_scaling: bool = True,
+) -> ConcreteModel:
+    """Compose the 7 blocks into a single-period Pyomo model.
+
+    Steps: build an ``equilibria.model.Model`` (sets before blocks), add each block
+    in dependency order, translate via ``PyomoBackend``, strip the ``_con`` suffix,
+    and (default) apply the monolith's benchmark scaling so the warm-start matches
+    GAMS. Returns the Pyomo ``ConcreteModel``.
+    """
+    from equilibria.blocks.gtap.overwrite import endogenous_cells, shock_rows
+
+    model, units, targets, residual_region = compose_block_sp(
+        params, sets, closure, residual_region
+    )
+    if_sub = bool(getattr(closure, "if_sub", False))
     backend = PyomoBackend()
     # Cada instancia de macro ifSUB (M_PM[e,c,imp], ...) se arma UNA vez y la
     # comparten todas las filas que la usan; la copia multiperiodo
@@ -722,6 +871,10 @@ def _build_block_model(
     # the gtap7_gempack closure sets "gempack" (EVFP subsidy basis) and recalibrates
     # gx/ava with the data's factor wedge (calibration ran at load, closure-blind).
     params.set_va_subsidy_basis(getattr(closure, "va_subsidy_basis", "gams"))
+    # Same for unit_sigma: "gempack" undoes the load's #192 guard of the production
+    # nests and the blocks write every nest at sigma = 1 as exact Cobb-Douglas
+    # (blocks/gtap/_cd.py); "gams" leaves the parameters as they are.
+    params.set_unit_sigma(getattr(closure, "unit_sigma", "gams"))
 
     # capFlex needs risk[r] = rorg/rore(r) calibrated from a benchmark (capFix) solve
     # BEFORE the multi-period model folds mutable params to numbers (gtap_model_multiperiod
@@ -928,33 +1081,14 @@ def solve_block_model(
     )
 
 
-def apply_fisher_snapshot_overwrite(pm: ConcreteModel) -> dict[str, Any]:
-    """Rebuild the factor-price Fisher rows against the POST-SCALING snapshot.
+def _fisher_snapshot(pm: Any) -> tuple[dict[str, Any], Any]:
+    """The composer's post-scaling Fisher snapshot, read off any Pyomo-like model.
 
-    ``blocks/gtap/__init__.py`` item 3 states this is the composer's job::
-
-        The composer MUST snapshot pf0=pf.l, xf0=xf.l and recompute
-        mqfactr_bb=sum_{f,a} pf0*xf0/xscale (and mqfactw_bb globally) from the
-        SCALED model, OVERWRITE the CLOSURE block's pf0/xf0/mqfactr_bb/
-        mqfactw_bb Params
-
-    Nothing was doing it. The CLOSURE block seeds ``xf0`` from the UN-scaled
-    benchmark (``_vfm_init``), while the monolith snapshots ``xf.l`` after
-    ``apply_production_scaling``. Measured on gtap7_3x3: the two differ by exactly
-    ``xscale`` — 10.0 in 26 of 45 cells — and ``mqfactw_bb`` comes out 3020.22
-    against the monolith's 66.75, a factor of 45.2. ``pf0`` already matches.
-
-    The Params are immutable, so their values are already folded into the
-    constraint expressions and cannot be reassigned: the rows themselves are
-    rebuilt here from post-scaling ``xf``/``pf`` levels.
-
-    Both backends were carrying the un-scaled value, so this bias cancelled in any
-    POI-vs-Pyomo comparison and only shows against the monolith or GAMS.
-
-    Returns a summary of what was rebuilt.
+    Returns ``(snapshot, agg)``: the snapshot holds ``regions``/``facs``/``acts``,
+    ``pf0``/``xf0`` (current pf/xf levels), ``xscale`` and the constants
+    ``mqfactr_bb``/``mqfactw_bb``; ``agg(kind, region)`` is one Fisher aggregate over
+    the live pf/xf (a Pyomo expression on a Pyomo model, a number on a StateModel).
     """
-    from pyomo.environ import Constraint
-    from pyomo.environ import sqrt as _sqrt
     from pyomo.environ import value as _value
 
     regions = [str(r) for r in pm.r]
@@ -1012,6 +1146,65 @@ def apply_fisher_snapshot_overwrite(pm: ConcreteModel) -> dict[str, Any]:
                             continue
                         total = total + pm.pf[r, f, a] * xf0[(r, f, a)] / xs
         return total
+
+    snap = {
+        "regions": regions,
+        "facs": facs,
+        "acts": acts,
+        "pf0": pf0,
+        "xf0": xf0,
+        "xscale": xscale,
+        "mqfactr_bb": mqfactr_bb,
+        "mqfactw_bb": mqfactw_bb,
+    }
+    return snap, _agg
+
+
+def _fisher_reseed(pm: Any, agg: Any, regions: list[str]) -> None:
+    """Reseed mfw_*/mfr_* at the post-scaling aggregates (see the caller)."""
+    from pyomo.environ import value as _value
+
+    for tag in ("bs", "sb", "ss"):
+        w = pm.find_component(f"mfw_{tag}")
+        if w is not None:
+            w.set_value(float(_value(agg(tag, None))), skip_validation=True)
+        rv = pm.find_component(f"mfr_{tag}")
+        if rv is not None:
+            for r in regions:
+                rv[r].set_value(float(_value(agg(tag, r))), skip_validation=True)
+
+
+def apply_fisher_snapshot_overwrite(pm: ConcreteModel) -> dict[str, Any]:
+    """Rebuild the factor-price Fisher rows against the POST-SCALING snapshot.
+
+    ``blocks/gtap/__init__.py`` item 3 states this is the composer's job::
+
+        The composer MUST snapshot pf0=pf.l, xf0=xf.l and recompute
+        mqfactr_bb=sum_{f,a} pf0*xf0/xscale (and mqfactw_bb globally) from the
+        SCALED model, OVERWRITE the CLOSURE block's pf0/xf0/mqfactr_bb/
+        mqfactw_bb Params
+
+    Nothing was doing it. The CLOSURE block seeds ``xf0`` from the UN-scaled
+    benchmark (``_vfm_init``), while the monolith snapshots ``xf.l`` after
+    ``apply_production_scaling``. Measured on gtap7_3x3: the two differ by exactly
+    ``xscale`` — 10.0 in 26 of 45 cells — and ``mqfactw_bb`` comes out 3020.22
+    against the monolith's 66.75, a factor of 45.2. ``pf0`` already matches.
+
+    The Params are immutable, so their values are already folded into the
+    constraint expressions and cannot be reassigned: the rows themselves are
+    rebuilt here from post-scaling ``xf``/``pf`` levels.
+
+    Both backends were carrying the un-scaled value, so this bias cancelled in any
+    POI-vs-Pyomo comparison and only shows against the monolith or GAMS.
+
+    Returns a summary of what was rebuilt.
+    """
+    from pyomo.environ import Constraint
+    from pyomo.environ import sqrt as _sqrt
+
+    snap, _agg = _fisher_snapshot(pm)
+    regions = snap["regions"]
+    mqfactr_bb, mqfactw_bb = snap["mqfactr_bb"], snap["mqfactw_bb"]
 
     rebuilt: list[str] = []
 
@@ -1074,14 +1267,7 @@ def apply_fisher_snapshot_overwrite(pm: ConcreteModel) -> dict[str, Any]:
     # post-escalado, pero el nivel de mfw_*/mfr_* sigue en el valor con que las
     # seedeo el bloque (sin escalar): dejarlo asi mete un residual de ~2 en
     # eq_pfact, justo donde el benchmark debe empezar en cero.
-    for tag in ("bs", "sb", "ss"):
-        w = pm.find_component(f"mfw_{tag}")
-        if w is not None:
-            w.set_value(float(_value(_agg(tag, None))), skip_validation=True)
-        rv = pm.find_component(f"mfr_{tag}")
-        if rv is not None:
-            for r in regions:
-                rv[r].set_value(float(_value(_agg(tag, r))), skip_validation=True)
+    _fisher_reseed(pm, _agg, regions)
 
     return {
         "rebuilt": rebuilt,

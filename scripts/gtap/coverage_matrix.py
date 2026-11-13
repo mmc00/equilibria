@@ -338,6 +338,19 @@ _MCP_ROWS: list[Row] = [
 ]
 ROWS.extend(_MCP_ROWS)
 
+# --- ALTERTAX on the JAX family route against GEMPACK (Burfisher altax), local ---
+# scripts/family/run_altertax.py --compare: updated/summary/volume/decomp/pct/levels vs a
+# GEMPACK run folder. The CONTRACT is the per-output gates of family/altertax/gates.py
+# (levels, updated, summary 1e-4 relative; volume/decomp/pct at TOL_CHANGE 2e-2 on the
+# change, pct also a 1e-6 pp floor; known misses only for this nus333 reference). gap_min
+# below is a PLACEHOLDER the schema requires of an "altertax" row: no test consumes it as
+# a floor for this row. ifsub=1 is the GTAPv7 default.
+ROWS.append(
+    Row("nus333", "altertax", 1, ("check", "shock"), 99.0, "gates.py contract: see comment", "local",
+        "scripts/family/run_altertax.py --compare data/gtap7/nus333/gemsim_burfisher_gragg/altax",
+        reference="gempack")
+)
+
 
 def nl_rows() -> list[Row]:
     return [r for r in ROWS if r.kind == "gtap"]

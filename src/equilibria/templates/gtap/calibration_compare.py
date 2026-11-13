@@ -160,7 +160,7 @@ def _compute_agent_trade_levels(
 
 
 def _two_key_value(raw_map: dict[Any, Any], region: str, commodity: str) -> float:
-    val = raw_map.get((region, commodity), None)
+    val = raw_map.get((region, commodity))
     if val is None:
         val = raw_map.get((commodity, region), 0.0)
     return float(val or 0.0)

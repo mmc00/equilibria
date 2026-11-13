@@ -49,7 +49,9 @@ from equilibria._local_refs import path_capi_src
 
 # (dataset, ifsub_int, gap_min, ci_status) per altertax matrix row
 _ALTERTAX_CASES = [
-    (r.dataset, r.ifsub, r.gap_min, r.ci_status) for r in altertax_rows()
+    (r.dataset, r.ifsub, r.gap_min, r.ci_status)
+    for r in altertax_rows()
+    if r.reference == "gams"  # the gempack row is run by scripts/family/run_altertax.py
 ]
 
 # Exclusion sets (denominator), identical to the session measurement harness.
@@ -213,7 +215,9 @@ def _solve_and_match(dataset: str, if_sub: bool):
 @pytest.mark.parametrize(
     "dataset,ifsub,gap_min,ci_status",
     _ALTERTAX_CASES,
-    ids=[f"{r.dataset}-ifsub{r.ifsub}" for r in altertax_rows()],
+    ids=[
+        f"{r.dataset}-ifsub{r.ifsub}" for r in altertax_rows() if r.reference == "gams"
+    ],
 )
 def test_altertax_multiperiod_parity(dataset, ifsub, gap_min, ci_status):
     if ci_status == "blocked":

@@ -1,0 +1,76 @@
+"""The two Phase 0 GTAP families build the expected rows and pattern from data alone."""
+
+import numpy as np
+import pytest
+
+pytest.importorskip("jax")
+
+from equilibria.blocks.gtap import _derived_params as dp  # noqa: E402
+from equilibria.family.gtap_phase0 import PHASE0_VARS, build_phase0_system  # noqa: E402
+from equilibria.family.layout import VarLayout  # noqa: E402
+from equilibria.templates.gtap.gtap_block_model import _set_elems  # noqa: E402
+from tests.family._data import load_params  # noqa: E402
+
+
+def _all_free_layout(sets):
+    shapes = {v: tuple(len(sets[d]) for d in doms) for v, doms in PHASE0_VARS.items()}
+    return VarLayout.from_state(
+        sets,
+        PHASE0_VARS,
+        values={v: np.ones(s) for v, s in shapes.items()},
+        free={v: np.ones(s, bool) for v, s in shapes.items()},
+    )
+
+
+def test_shapes_3x3():
+    p = load_params("gtap7_3x3")
+    sets = _set_elems(p.sets)
+    layout = _all_free_layout(sets)
+    system = build_phase0_system(p, p.sets, layout, residual_region=sets["r"][-1])
+
+    r, i, a, f = (sets[k] for k in "riaf")
+    io = dp.to_array(dp.io_param_data(p, p.sets), [r, i, a], 0.0)
+    xfflag = dp.to_array(dp.xfflag_data(p, p.sets), [r, f, a], 0.0)
+    n_pnd = int((io > 0).any(axis=1).sum())
+    af = dp.to_array(dp.af_param_data(p, p.sets), [r, f, a], 0.0)
+    n_pva = int((af > 0).any(axis=1).sum())
+
+    by_family = {}
+    for name, _ in system.rows:
+        by_family[name] = by_family.get(name, 0) + 1
+    assert by_family == {"eq_pndeq": n_pnd, "eq_pvaeq": n_pva, "eq_facty": len(r)}
+    assert system.nnz == (
+        n_pnd
+        + int((io > 0).sum())
+        + n_pva
+        + 2 * int((af > 0).sum())  # pfa and lambdaf, both free in this layout
+        + 3 * len(r)
+        + 2 * int((xfflag > 0).sum())
+    )
+    assert len(layout.col_names) == system.n_cols
+    assert layout.col_names[0] == f"pa[{r[0]},{i[0]},{sets['aa'][0]}]"
+
+
+def test_row_names_are_pyomo_style():
+    p = load_params("gtap7_3x3")
+    sets = _set_elems(p.sets)
+    system = build_phase0_system(p, p.sets, _all_free_layout(sets), sets["r"][-1])
+    names = system.row_names
+    assert f"eq_facty[{sets['r'][0]}]" in names
+    assert any(n.startswith("eq_pndeq[") and n.count(",") == 1 for n in names)
+
+
+def test_precomputed_data_gives_same_system():
+    from equilibria.family.gtap_phase0 import phase0_data
+
+    p = load_params("gtap7_3x3")
+    sets = _set_elems(p.sets)
+    layout = _all_free_layout(sets)
+    rr = sets["r"][-1]
+    data = phase0_data(p, p.sets, rr)
+    assert all(isinstance(v, np.ndarray) for v in data.arrays.values())
+    a = build_phase0_system(p, p.sets, layout, rr)
+    b = build_phase0_system(p, p.sets, layout, rr, data=data)
+    z = np.linspace(0.9, 1.1, layout.n_cols)
+    np.testing.assert_array_equal(a.F(z), b.F(z))
+    assert a.row_names == b.row_names and a.nnz == b.nnz

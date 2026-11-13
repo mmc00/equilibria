@@ -1,0 +1,283 @@
+"""Two-photo capture of the Pyomo period preparation, the oracle for its array port.
+
+Per solve call of the multiperiod driver:
+
+* **A** — the whole multiperiod state at entry of ``PeriodPreparer.prepare(m, t)``
+  (every Var cell of every period: value, fixed, lb, ub; every Constraint cell:
+  active). **A2** is the same photo at the end of ``prepare``.
+* **B** — the squared system right before PyomoNLP is built (``path_capi`` after
+  its SOLVE_NLP deactivate/fix loop): active rows, free columns in paired order,
+  every cell of the active period, and each active row's incidence.
+
+Reference of the solve itself, for the parity gates of the family driver:
+
+* **P** — the active period's Var cells right after the Newton writeback.
+* **S** — ``<n>_S_<period>.json``: code, ``nit``, factorizations, the per-iteration
+  ``‖F‖∞`` / ``‖F/fscale‖∞`` trace, final residual, the ``EQUILIBRIA_GTAP_TR_*``
+  and MUMPS environment, GMIN, ICNTL, null pivots.
+* ``final.pkl`` — every Var cell and row flag after ``solve_multiperiod``;
+  ``settled.pkl`` — the dict ``calibrate_base`` returns.
+
+Opt-in with ``EQUILIBRIA_FAMILY_PREP_CAPTURE=<dir>``; unset, every call returns at
+once. Files are ``<n>_<tag>_<period>.pkl`` with ``n`` counting ``prepare`` calls in
+this process, so the settle's check and the main check do not collide.
+"""
+
+from __future__ import annotations
+
+import os
+import pickle
+from collections import Counter
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+ENV = "EQUILIBRIA_FAMILY_PREP_CAPTURE"
+_state: dict[str, Any] = {"n": 0, "period": None}
+
+
+def _dir() -> Path | None:
+    d = os.environ.get(ENV)
+    return Path(d) if d else None
+
+
+def reset() -> None:
+    _state["n"] = 0
+    _state["period"] = None
+
+
+@dataclass
+class VarCells:
+    keys: list[tuple]
+    value: np.ndarray
+    fixed: np.ndarray
+    lb: np.ndarray
+    ub: np.ndarray
+
+
+@dataclass
+class RowCells:
+    keys: list[tuple]
+    active: np.ndarray
+
+
+@dataclass
+class Photo:
+    tag: str
+    n: int
+    period: str
+    vars: dict[str, VarCells]
+    rows: dict[str, RowCells]
+    con_names: list[str] = field(default_factory=list)
+    var_names: list[str] = field(default_factory=list)
+    incidence: list[list[str]] = field(default_factory=list)
+    n_deact: int = 0
+    n_fixed: int = 0
+    forced: list[tuple[str, str, bool]] = field(default_factory=list)
+
+
+def _key(idx: Any) -> tuple:
+    if idx is None:
+        return ()
+    return tuple(str(i) for i in idx) if isinstance(idx, tuple) else (str(idx),)
+
+
+def _num(x: Any, none: float) -> float:
+    return none if x is None else float(x)
+
+
+def _vars(m: Any, period: str | None) -> dict[str, VarCells]:
+    from pyomo.environ import Var
+
+    out = {}
+    for comp in m.component_objects(Var, descend_into=True):
+        keys, val, fx, lb, ub = [], [], [], [], []
+        for idx in comp:
+            k = _key(idx)
+            if period is not None and (not k or k[-1] != period):
+                continue
+            vd = comp[idx]
+            keys.append(k)
+            val.append(_num(vd.value, np.nan))
+            fx.append(bool(vd.fixed))
+            lb.append(_num(vd.lb, -np.inf))
+            ub.append(_num(vd.ub, np.inf))
+        if keys:
+            out[comp.name] = VarCells(
+                keys, np.array(val), np.array(fx, bool), np.array(lb), np.array(ub)
+            )
+    return out
+
+
+def _rows(m: Any) -> dict[str, RowCells]:
+    from pyomo.environ import Constraint
+
+    out = {}
+    for comp in m.component_objects(Constraint, descend_into=True):
+        keys = [_key(idx) for idx in comp]
+        act = np.array([comp[idx].active and comp.active for idx in comp], bool)
+        out[comp.name] = RowCells(keys, act)
+    return out
+
+
+def _write(photo: Photo) -> None:
+    d = _dir()
+    assert d is not None
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / f"{photo.n:03d}_{photo.tag}_{photo.period}.pkl"
+    with path.open("wb") as fh:
+        pickle.dump(photo, fh, protocol=5)
+
+
+def capture_state(m: Any, period: str, tag: str = "A") -> None:
+    """Photo A (``tag="A"``, starts a new call) or A2 (end of the same ``prepare``)."""
+    if _dir() is None:
+        return
+    if tag == "A":
+        _state["n"] += 1
+    _write(Photo(tag, _state["n"], period, _vars(m, None), _rows(m)))
+
+
+def capture_squared(
+    model: Any,
+    constraints: list,
+    free_variables: list,
+    n_deact: int,
+    n_fixed: int,
+    forced: Any = (),
+) -> None:
+    """Photo B: the squared system PyomoNLP is about to receive. ``forced`` are the
+    GAMS pairs handed to the matching as ``(eq, var, hard)``: hard ones are locked
+    (and may lie outside the row's incidence), soft ones are only a starting point."""
+    if _dir() is None:
+        return
+    from pyomo.core.expr.visitor import identify_variables
+
+    periods = Counter(_key(c.index())[-1] for c in constraints if c.index() is not None)
+    period = periods.most_common(1)[0][0]
+    _state["period"] = period
+    _write(
+        Photo(
+            "B",
+            _state["n"],
+            period,
+            _vars(model, period),
+            _rows(model),
+            con_names=[c.name for c in constraints],
+            var_names=[v.name for v in free_variables],
+            incidence=[
+                [v.name for v in identify_variables(c.body, include_fixed=True)]
+                for c in constraints
+            ],
+            n_deact=int(n_deact),
+            n_fixed=int(n_fixed),
+            forced=[
+                (str(fp[0]), str(fp[1]), len(fp) > 2 and bool(fp[2])) for fp in forced
+            ],
+        )
+    )
+
+
+def load(path: Path) -> Photo:
+    with Path(path).open("rb") as fh:
+        return pickle.load(fh)
+
+
+def pairs(d: Path) -> list[tuple[Photo, Photo]]:
+    """(A, B) per solve call, in call order (an A with no B — a skipped solve — is
+    dropped)."""
+    d = Path(d)
+    out = []
+    for b_path in sorted(d.glob("*_B_*.pkl")):
+        b = load(b_path)
+        a_path = d / f"{b.n:03d}_A_{b.period}.pkl"
+        out.append((load(a_path), b))
+    return out
+
+
+def load_a2(d: Path, a: Photo) -> Photo | None:
+    path = Path(d) / f"{a.n:03d}_A2_{a.period}.pkl"
+    return load(path) if path.exists() else None
+
+
+def capture_solve(
+    model: Any,
+    *,
+    code: int,
+    nit: int,
+    nfact: int | None,
+    trace: list | None,
+    residual: float,
+    method: str,
+    linsolve: str | None,
+    cfg: dict | None,
+    null_pivots: list | None,
+    converged: bool,
+    wall: float,
+) -> None:
+    """Photo P and stats S of the solve that just wrote its solution back to ``model``."""
+    d = _dir()
+    if d is None:
+        return
+    import json
+
+    period = _state["period"]
+    n = _state["n"]
+    _write(Photo("P", n, period, _vars(model, period), {}))
+    cfg = cfg or {}
+    stats = {
+        "n": n,
+        "period": period,
+        "code": int(code),
+        "converged": bool(converged),
+        "nit": int(nit),
+        "nfact": nfact,
+        "residual": float(residual),
+        "method": method,
+        "linsolve": linsolve,
+        "trace_f_inf": [t[0] for t in trace or []],
+        "trace_f_scaled_inf": [t[1] for t in trace or []],
+        "tr_env": {
+            k: v
+            for k, v in sorted(os.environ.items())
+            if k.startswith("EQUILIBRIA_GTAP_TR_")
+        },
+        "mumps_env": {
+            k: v
+            for k, v in sorted(os.environ.items())
+            if k.startswith("EQUILIBRIA_GTAP_MUMPS_") or k == "EQUILIBRIA_GTAP_GMIN"
+        },
+        "gmin": cfg.get("gmin"),
+        "icntl": cfg.get("icntl"),
+        "null_pivots": list(null_pivots or []),
+        "wall_s": float(wall),
+    }
+    (d / f"{n:03d}_S_{period}.json").write_text(json.dumps(stats, indent=1))
+
+
+def capture_final(model: Any) -> None:
+    """``final.pkl``: every Var cell of every period and every row flag, once the whole
+    ``solve_multiperiod`` is done."""
+    if _dir() is None:
+        return
+    _write_named(
+        "final.pkl",
+        Photo("final", _state["n"], "all", _vars(model, None), _rows(model)),
+    )
+
+
+def capture_settled(settled: dict) -> None:
+    """``settled.pkl``: the dict ``calibrate_base`` returns."""
+    if _dir() is None:
+        return
+    _write_named("settled.pkl", settled)
+
+
+def _write_named(name: str, obj: Any) -> None:
+    d = _dir()
+    assert d is not None
+    d.mkdir(parents=True, exist_ok=True)
+    with (d / name).open("wb") as fh:
+        pickle.dump(obj, fh, protocol=5)

@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import math
 import warnings
+from collections.abc import Sequence
 from typing import Any
 
 from equilibria.blocks.gtap.agents import (
@@ -40,6 +41,7 @@ from equilibria.blocks.gtap.agents import (
 from equilibria.blocks.gtap.factor_wedge import (
     factor_wedge_rates,
     factor_wedge_values,
+    pfa_bench,
     va_subsidy_basis,
 )
 
@@ -1418,3 +1420,55 @@ def demand_income_params(
         "zcons_init": zcons_init_data,  # var init, not a Param
         "regy_bench": regy_bench_data,  # var init helper, not a Param
     }
+
+
+# ----------------------------------------------------------------------------
+# Exact Cobb-Douglas price duals at sigma = 1 (unit_sigma="gempack", blocks/gtap/_cd)
+# ----------------------------------------------------------------------------
+
+
+def cd_coefficients(
+    alphas: Sequence[float], q0: Sequence[float], p0: float = 1.0
+) -> tuple[list[float], float]:
+    """``(w, c)`` of ``log(P) = c + sum_i w_i log(q_i)`` from the CES shares ``alphas``
+    of one nest and the base input prices ``q0`` they were calibrated at.
+
+    ``w_i = alpha_i / S`` with ``S = sum_i alpha_i`` (1 up to rounding when the shares
+    were calibrated at sigma = 1); ``c = log(p0) - sum_i w_i log(q0_i)``, so the row
+    holds at the base prices of that calibration."""
+    total = math.fsum(alphas)
+    if not total > 0.0:
+        raise ValueError(f"CD nest with shares summing to {total}")
+    w = [float(a) / total for a in alphas]
+    c = math.log(p0) - math.fsum(wi * math.log(q) for wi, q in zip(w, q0, strict=True))
+    return w, c
+
+
+def pfa_bench_value(params: Any, r: str, f: str, a: str) -> float:
+    """Base ``pfa`` the VA shares ``af`` were calibrated at (``calibrate_from_benchmark``,
+    with the parameters' value-added subsidy basis)."""
+    return pfa_bench(params.benchmark, params.taxes, r, f, a, va_subsidy_basis(params))
+
+
+def pm_cal_value(params: Any, importer: str, commodity: str, exporter: str) -> float:
+    """Base ``pm = (1+imptx)*pmcif`` the import-source shares ``amw`` were calibrated at
+    (``GTAPShareParameters._calibrate_trade_shares``), keyed like ``amw``:
+    (importer, commodity, exporter)."""
+    bm = params.benchmark
+    xw = _f(bm.vxsb.get((exporter, commodity, importer), 0.0))
+    vcif = _f(bm.vcif.get((exporter, commodity, importer), 0.0))
+    pmcif = (vcif / xw) if (vcif > 0.0 and xw > 0.0) else 1.0
+    vmsb = _f(bm.vmsb.get((exporter, commodity, importer), 0.0))
+    imptx = ((vmsb - vcif) / max(pmcif * xw, 1e-12)) if vmsb > 0.0 else 0.0
+    return max((1.0 + imptx) * pmcif, 1e-8)
+
+
+def armington_base_prices(
+    params: Any, sets: Any, r: str, i: str, aa: str
+) -> tuple[float, float]:
+    """Base ``(pdp, pmp)`` the top-Armington shares were calibrated at
+    (:func:`armington_shares`: ``pdp = 1 + dintx0``, ``pmp = 1 + mintx0``, ``pa = 1``)."""
+    return (
+        max(1.0 + _dintx_target(params, sets, r, i, aa), 1e-8),
+        max(1.0 + _mintx_target(params, sets, r, i, aa), 1e-8),
+    )

@@ -537,6 +537,9 @@ class FactorBlock(Block):
                 m, params, closure, ref_gdx, mode="gtap", settle_only=True
             )
             settled = self._settled_check_point(m)
+            from equilibria.family.prep_capture import capture_settled
+
+            capture_settled(settled)  # opt-in reference for the family port
         finally:
             if estado is not None:
                 model_state.restore(m, estado)

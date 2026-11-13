@@ -677,18 +677,62 @@ class GTAPMultiPeriodModel:
             _agg_defs.setdefault(name, {})[idx] = expr
             return var[idx]
 
+        # GAMS mqgdp (model.gms 1306) values trade at M_PEFOB / M_PMCIF. Under ifSUB
+        # the pefob / pmcif report Vars are frozen inside the solve, so the macros are
+        # expanded to the live pe / ptmg / lambdamg (family.cross_period, same constants).
+        _if_sub = bool(getattr(self.closure, "if_sub", False))
+        if _if_sub:
+            from equilibria.family.cross_period import _ifsub_params
+
+            _ip = _ifsub_params(self.params)
+            _pos_r = {e: n for n, e in enumerate(m.r)}
+            _pos_i = {e: n for n, e in enumerate(m.i)}
+            _ms = list(self.sets.m)
+
+            def _ip_at(name, *k):
+                doms, arr = _ip[name]
+                pos = [
+                    _pos_r[x]
+                    if d in ("r", "rp")
+                    else _pos_i[x]
+                    if d == "i"
+                    else _ms.index(x)
+                    for d, x in zip(doms, k, strict=True)
+                ]
+                return float(arr[tuple(pos)])
+
+        def _m_pefob(e, c, d, t):
+            return _ip_at("efac", e, c, d) * m.pe[e, c, d, t]
+
+        def _m_pmcif(e, c, d, t):
+            pwmg = sum(
+                _ip_at("amgm", mm, e, c, d)
+                * m.ptmg[mm, t]
+                / (m.lambdamg[mm, e, c, d, t] + 1e-12)
+                for mm in _ms
+            )
+            return _m_pefob(e, c, d, t) + pwmg * _ip_at("tmarg", e, c, d)
+
         def _mqgdp(tp: str, tq: str, r: str):
             """Fisher cross-product of absorption + net exports."""
             # Final-demand absorption: Σ_{i,fd} pa[r,i,fd,tp] · xaa[r,i,fd,tq]
             ab = sum(m.pa[r, i, a, tp] * m.xaa[r, i, a, tq] for i in m.i for a in fd)
             # Net export value: Σ_{i,rp} ( pefob[r,i,rp,tp]·xw[r,i,rp,tq]
             #                              − pmcif[rp,i,r,tp]·xw[rp,i,r,tq] )
-            tr = sum(
-                m.pefob[r, i, rp, tp] * m.xw[r, i, rp, tq]
-                - m.pmcif[rp, i, r, tp] * m.xw[rp, i, r, tq]
-                for i in m.i
-                for rp in m.r
-            )
+            if _if_sub:
+                tr = sum(
+                    _m_pefob(r, i, rp, tp) * m.xw[r, i, rp, tq]
+                    - _m_pmcif(rp, i, r, tp) * m.xw[rp, i, r, tq]
+                    for i in m.i
+                    for rp in m.r
+                )
+            else:
+                tr = sum(
+                    m.pefob[r, i, rp, tp] * m.xw[r, i, rp, tq]
+                    - m.pmcif[rp, i, r, tp] * m.xw[rp, i, r, tq]
+                    for i in m.i
+                    for rp in m.r
+                )
             return ab + tr
 
         # Remove intra-period eq_rgdpmp / eq_pgdpmp (created by build_equations_intra)

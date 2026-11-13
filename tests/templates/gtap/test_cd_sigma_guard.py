@@ -71,6 +71,46 @@ def test_a_model_built_at_sigma_one_refuses(nest, builder):
             GTAPModelEquations(p.sets, p, closure).build_model()
 
 
+@pytest.mark.parametrize("nest", NESTS)
+def test_the_monolith_refuses_also_under_gempack(nest):
+    """``unit_sigma="gempack"`` is a blocks feature: the monolith keeps the #192
+    refusal whatever the closure says."""
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
+
+    p = _params("gtap7_3x3")
+    r, a = next(iter(getattr(p.elasticities, nest)))
+    getattr(p.elasticities, nest)[(r, a)] = 1.0
+    closure = GTAPClosureConfig(name="base", closure_type="MCP", unit_sigma="gempack")
+    with pytest.raises(ValueError, match="#192"):
+        GTAPModelEquations(p.sets, p, closure).build_model()
+
+
+@pytest.mark.parametrize("nest", NESTS)
+def test_blocks_build_at_sigma_one_under_gempack(nest):
+    """With ``unit_sigma="gempack"`` the same cell builds: its price dual is the exact
+    Cobb-Douglas row ``log(P) == c + sum w log(q)``, not 1 = 1."""
+    from pyomo.core.expr.visitor import identify_variables
+
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+
+    p = _params("gtap7_3x3")
+    r, a = next(iter(getattr(p.elasticities, nest)))
+    getattr(p.elasticities, nest)[(r, a)] = 1.0
+    closure = GTAPClosureConfig(name="base", closure_type="MCP", unit_sigma="gempack")
+    m, _ = build_block_model(p, p.sets, closure, residual_region="ROW")
+    eq = {"sigmap": "eq_pxeq", "sigmand": "eq_pndeq", "sigmav": "eq_pvaeq"}[nest]
+    price = {"sigmap": "px", "sigmand": "pnd", "sigmav": "pva"}[nest]
+    con = getattr(m, eq)
+    rows = [k for k in con if k[0] == r and k[1] == a]
+    assert rows, (eq, r, a)
+    body = str(con[rows[0]].body)
+    assert "log(" in body and price in {
+        v.parent_component().name for v in identify_variables(con[rows[0]].body)
+    }, body[:200]
+
+
 @pytest.mark.integration
 @pytest.mark.needs_path
 @pytest.mark.needs_gdxdump  # seed_all_periods reads the GDX with gdxdump
