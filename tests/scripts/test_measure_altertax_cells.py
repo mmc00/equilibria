@@ -116,3 +116,21 @@ def test_a_row_that_failed_in_base_is_reported():
     base = {ROW: {"error": "RuntimeError: no model captured"}}
     reasons = mac.verdict(base, BASE)
     assert any(ROW in r and "failed in base" in r for r in reasons), reasons
+
+
+def test_only_the_gams_rows_of_the_multiperiod_gate_are_measured():
+    """altertax_rows() also lists rows checked against GEMPACK; the gate skips them."""
+    from types import SimpleNamespace as NS
+
+    def row(ds, ref):
+        return NS(dataset=ds, ifsub=0, ci_status="local", reference=ref)
+
+    gates = {
+        "mcp": NS(_GAMS_MCP_ROWS=[]),
+        "nlp": NS(_NLP_CASES=[]),
+        "mp": NS(
+            altertax_rows=lambda: [row("gtap7_3x3", "gams"), row("9x10", "gempack")],
+            _reference_gdx=lambda ds, if_sub: Path(f"{ds}.gdx"),
+        ),
+    }
+    assert [r[1] for r in mac._rows(gates)] == ["gtap7_3x3"]

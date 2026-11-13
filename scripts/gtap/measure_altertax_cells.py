@@ -151,7 +151,8 @@ def _rows(gates: dict[str, Any]) -> Iterator[tuple[str, str, int, Path | None]]:
         if mode == "altertax" and status != "blocked":
             yield "nlp", ds, ifsub, gates["nlp"]._fixture_gdx(ds, "altertax", ifsub)
     for r in gates["mp"].altertax_rows():
-        if r.ci_status != "blocked":
+        # the gate skips the rows checked against GEMPACK (scripts/family)
+        if r.ci_status != "blocked" and getattr(r, "reference", "gams") == "gams":
             yield (
                 "mp",
                 r.dataset,
