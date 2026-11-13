@@ -10,9 +10,13 @@ source: 'equilibria''s drivers of the RunGTAP GEMPACK solver (gtapv7.exe): tools
   a console names, tools/levels_job.py, tools/swap_job.py and tools/gemsim_job.py
   are the phase 3a-2 job modules (tools/cmf/ keeps the swap-closure .cmf of runs/),
   tools/target_shocks.py writes RunGTAP''s target% shocks (TBL53) as plain shocks.
-  The compiled models (gtapv7.exe, gtapuv7.exe) are not redistributed here.'
+  tools/altertax_job.py solves one altertax reference (RunGTAP''s AlterTax parameters
+  or those of GAMS altertax) and tools/regenerate_altertax.py runs the ten of them
+  under write_source. The compiled models (gtapv7.exe, gtapuv7.exe) are not redistributed
+  here.'
 outputs:
   tools/_job_cli.py: e7f25cc85890c54cc879fae36c6e2e132bdfc5b8f8d3a9b307a772b449f7dd5d
+  tools/altertax_job.py: d462b9cdc54f6682d013ef4ae88aec25816f88cb4dd3c6c4cc20f1960c743b1b
   tools/burfisher_job.py: 653c50361576302a9a1f55ab704d607b60b9800594cf5bc5c2db5fe906425ed4
   tools/cmf/9x10_tm10_dpsaveswap.cmf: 97842333032392ea8e0e543b9520465829a33488c1dab68657176f72a6032a1f
   tools/cmf/gtap7_20x41_tm10_dpsaveswap.cmf: fba601626927290a341865a55e99e52320135180286fe34fcc72a277aebc8154
@@ -21,6 +25,7 @@ outputs:
   tools/gemsim_job.py: 5feb9074e7e0fda993dbe0b9ac6a3553be42e9301dc959b10889a0467bee65c5
   tools/levels_job.py: aa4073da35de5ab1504cb3bc3e555b2f0c05bf9f80eed1f88d6be3f77d733d5d
   tools/make_levels_tab.py: 52e58f847f0033b2dcc3c223cbdf99993638633d4a524057adf71d1c583bb80a
+  tools/regenerate_altertax.py: fc82331149bc76f5e981f96444c3707dd9043ef18d6b8c363f5bd1ff17f6cd17
   tools/regenerate_gempack.py: ecb1099c39fb686315c0b5a2e7935d6a7481578475688980aa84f6345d5b94a6
   tools/regenerate_paper.py: 80f057d8c274ee06d1d34a09b369eedc2e54b05f341a8bd1e9b23f53553222b6
   tools/release_check.py: 7ef240328c439d32ff203b6a30d4a84f39266c6a4b082d314977c34866241b5e

@@ -1,0 +1,91 @@
+kind: result
+model: gtap7
+dataset: 9x10
+tool: gempack
+tool_version: 12.1.003
+variant:
+  mode: altertax
+  parameters: gams
+  shock: tms-rate10
+  steps: 8-16-32
+  closure: altertax
+phases:
+- shock
+generated_from:
+  model:
+    path: gtap7/gempack
+    sha256:
+      tools/_job_cli.py: e7f25cc85890c54cc879fae36c6e2e132bdfc5b8f8d3a9b307a772b449f7dd5d
+      tools/altertax_job.py: d462b9cdc54f6682d013ef4ae88aec25816f88cb4dd3c6c4cc20f1960c743b1b
+      tools/burfisher_job.py: 653c50361576302a9a1f55ab704d607b60b9800594cf5bc5c2db5fe906425ed4
+      tools/cmf/9x10_tm10_dpsaveswap.cmf: 97842333032392ea8e0e543b9520465829a33488c1dab68657176f72a6032a1f
+      tools/cmf/gtap7_20x41_tm10_dpsaveswap.cmf: fba601626927290a341865a55e99e52320135180286fe34fcc72a277aebc8154
+      tools/cmf/nus333_tm10_dpsaveswap.cmf: ac916d48f03c5c02db91be028377765e9e6672c0c89c627f88465076053e8d0b
+      tools/export_sl4_levels.py: d3fe47958ee23e21c778b467a650007edcfe0b08390fec1af0a5ce97f3ea1c45
+      tools/gemsim_job.py: 5feb9074e7e0fda993dbe0b9ac6a3553be42e9301dc959b10889a0467bee65c5
+      tools/levels_job.py: aa4073da35de5ab1504cb3bc3e555b2f0c05bf9f80eed1f88d6be3f77d733d5d
+      tools/make_levels_tab.py: 52e58f847f0033b2dcc3c223cbdf99993638633d4a524057adf71d1c583bb80a
+      tools/regenerate_altertax.py: fc82331149bc76f5e981f96444c3707dd9043ef18d6b8c363f5bd1ff17f6cd17
+      tools/regenerate_gempack.py: ecb1099c39fb686315c0b5a2e7935d6a7481578475688980aa84f6345d5b94a6
+      tools/regenerate_paper.py: 80f057d8c274ee06d1d34a09b369eedc2e54b05f341a8bd1e9b23f53553222b6
+      tools/release_check.py: 7ef240328c439d32ff203b6a30d4a84f39266c6a4b082d314977c34866241b5e
+      tools/run_gempack_matrix.py: dad828823ecafc5b55022454e35d83e0a0d5e200ee6e5e5d4ca1acc16af0ff6d
+      tools/swap_job.py: 850f58385cceba171d9451ac5d89b75f6d1d2e32c455e93a423a990357a33902
+      tools/target_shocks.py: 983253cd6adac881107450837959cde36a371a1d2e2ec819f967c61fa015f4cc
+  data:
+    path: gtap7/9x10
+    sha256:
+      9x10Dat.gdx: 2f45c492213370f06da48e537664d145b29b3b02c71222f9c0f969e5f0be543c
+      9x10Prm.gdx: 19d99a6c3b7094d754f44e97a58ef0fe1cd7ffa5ddb78d71c7de0c42fa598efa
+      9x10Sets.gdx: 6da94a328ea9982ed604b10bd34929b51e93c059d7973dceefb6055e3e4ab1f8
+      basedata-9x10.gdx: 2f45c492213370f06da48e537664d145b29b3b02c71222f9c0f969e5f0be543c
+      basedata.har: 1485b5d66a997e7502dc106d390d2a72b887f4c3c9a1d09d9e3c65c7d1e97054
+      default-9x10.gdx: 19d99a6c3b7094d754f44e97a58ef0fe1cd7ffa5ddb78d71c7de0c42fa598efa
+      default.prm: 1b180fbfa725f413ae4bf9bd50c4a4cd085d44ae95e5d4055625ba5bb358611d
+      sets-9x10.gdx: 6da94a328ea9982ed604b10bd34929b51e93c059d7973dceefb6055e3e4ab1f8
+      sets.har: 317f6905ebc458bf7ad3aa01fca1ffbfd362e8dff8c9d9208a200f85832af533
+      v7_consolidated.gdx: f96a23f852e615e693ced16030741d1b563e642669f660954ae9958c76e9845f
+external:
+  gtapv7.exe:
+    path: C:\runGTAP375\gtapv7.exe
+    sha256: 0d298829f9f56836798c6280fee0711fa9c099de169d41962eeed9b4f729420a
+    release: 12.1.003
+  altparv7.exe:
+    path: C:\runGTAP375\altparv7.exe
+    sha256: 6f63c4770bc9facb5fb77ce447f26f7698dccbba6300e4ae0b1b851453733c90
+    release: 12.1.003
+  sltoht.exe:
+    path: C:\GP\sltoht.exe
+    sha256: 8f9b37c53d42cae5272fc70576abb0f5bd4c62ea0fa97896c25e8d6f02a91d20
+    release: 11.3.004
+solver:
+  name: gtapv7
+command: '''C:\Documentos\proyectos\equilibria\.venv\Scripts\python.exe'' ''C:\Documentos\proyectos\equilibria\data\gtap7\gempack\tools\altertax_job.py''
+  --dataset 9x10 --parameters gams --out ''C:\Documentos\proyectos\equilibria\data\gtap7\9x10\gempack_altertax-gams_tms-rate10_s8-16-32''
+  --gtapv7 ''C:\runGTAP375\gtapv7.exe'' --altparv7 ''C:\runGTAP375\altparv7.exe''
+  --sltoht ''C:\GP\sltoht.exe'' --expect-release 12.1.003 --release altparv7.exe=12.1.003'
+equilibria_commit: 7da90526
+exit:
+  code: 0
+outputs:
+  altpar_console.txt: 504bfe5cceb91819bbeef2cae06cca1dd901bf22a41d53b6dcb8de9c07cbad9d
+  decomp.har: fb3504cc611b6858e2ddf38ba15055ef569b5ddeede1b072e15fdb33c08ead3f
+  parameters.prm: 2d8d9ae94b0d4579e14c8e00699c99a1f9b05ddfed256cef81c7ca3ed6ddf6cb
+  run.cmf: a0745524edf036c9ea60c246dd121e0866d0d1301ca94c450b3528cc07205c91
+  sl4dump.har: e0f3cdd33908eb2f17aa9a5e4cb771b762babec8a2bfb159c14e7efcbf680351
+  sltoht_console.txt: 5cf261223941c1d30b729f3a035b978da971ec50052c22ca78565bae2934eef0
+  solve_console.txt: 74f325444fdaeaa19e64911a40b6e173dcdc201a5ca7f2807b5162d99b9081bf
+  summary.har: e5d5d707520601c19e94c3f16667bcffe09de606dffe7c91ca400b80631e07ef
+  tms_rate10.shk: a26a92cb68a9dec9c80be70b4de5924f095a9b4f17973a0c99792fcd3b16dc1a
+  updated.har: 31309d05f365ba434c8a5b4eb138e53cfd960b79f65c72aa6faebde1dcefdc80
+  volume.har: 3391b64d208e9943424de9c1393a6495b39052bd38a54f338037d32a85e5a9ad
+run:
+  date: '2026-11-09T11:36:44-06:00'
+  duration_s: 15.273
+  machine:
+    os: Windows 11 (10.0.26200)
+    cpu: 13th Gen Intel(R) Core(TM) i7-1365U
+    cores: 10
+    ram_gb: 31.4
+status: verified
+notes: ''
