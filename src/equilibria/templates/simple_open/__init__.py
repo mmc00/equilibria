@@ -1,6 +1,7 @@
 """simple_open: Hosoe's standard CGE model (gamslib stdcge), built from blocks."""
 
 from equilibria.templates.simple_open.calibration import Calibration, calibrate
+from equilibria.templates.simple_open.recipe import stdcge_static
 from equilibria.templates.simple_open.sam import (
     SimpleOpenSAM,
     SpecialAccounts,
@@ -15,4 +16,5 @@ __all__ = [
     "SpecialAccounts",
     "calibrate",
     "load_sam",
+    "stdcge_static",
 ]

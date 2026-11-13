@@ -7,11 +7,16 @@ for common CGE model types.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from equilibria.model import Model
+
+if TYPE_CHECKING:
+    from equilibria.blocks.base import Block
+    from equilibria.core.recipe import Recipe
 
 
 class ModelTemplate(BaseModel, ABC):
@@ -39,6 +44,10 @@ class ModelTemplate(BaseModel, ABC):
 
     model_config = {"arbitrary_types_allowed": True}
 
+    # reflected models by period list; the template carries its data, so the
+    # instance is the content key (ADR-0011)
+    _built: dict[tuple[str, ...], Any] = PrivateAttr(default_factory=dict)
+
     @abstractmethod
     def create_model(self) -> Model:
         """Create a model from this template.
@@ -47,6 +56,32 @@ class ModelTemplate(BaseModel, ABC):
             Configured Model instance
         """
         ...
+
+    def period_model(self, overwrite: Sequence[Block] = ()) -> Any:
+        """The single-period Pyomo model, each ``overwrite`` block replacing the
+        template's block of the same name (ADR-0004). Templates that run under
+        a recipe implement it."""
+        raise NotImplementedError(f"{type(self).__name__} has no period model")
+
+    def default_recipe(self) -> Recipe:
+        """The recipe an ``Exercise`` uses when it is given none."""
+        raise NotImplementedError(f"{type(self).__name__} has no default recipe")
+
+    def build(self, periods: Sequence[str], overwrite: Sequence[Block] = ()) -> Any:
+        """A fresh model with ``periods``, never shared with another call.
+
+        Without ``overwrite`` the reflected model is built once per period list
+        and every call returns a copy of it; with ``overwrite`` it is built
+        fresh and kept nowhere.
+        """
+        from equilibria.core.reflection import reflect
+
+        if overwrite:
+            return reflect(self.period_model(overwrite), periods)
+        key = tuple(periods)
+        if key not in self._built:
+            self._built[key] = reflect(self.period_model(), periods)
+        return self._built[key].clone()
 
     def get_default_sector_names(self) -> list[str]:
         """Get default sector names.

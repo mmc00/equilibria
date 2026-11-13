@@ -83,3 +83,30 @@ def max_residual(pm: Any, equation_names: Iterable[str]) -> float:
         for c in con.values():
             worst = max(worst, abs(pyo.value(c.body) - pyo.value(c.upper)))
     return worst
+
+
+TARIFF_ABOLITION = {"tau_m": 0.0}
+
+
+def run_tariff_abolition(template: Any) -> Any:
+    """Base, check and the tariff abolition through the core driver; the
+    finished ``Exercise`` (its model holds the three periods)."""
+    from equilibria.core import Exercise
+
+    ex = Exercise(template, shock=TARIFF_ABOLITION)
+    results = ex.run()
+    assert results["check"]["code"] == results["shock"]["code"] == "optimal", results
+    return ex
+
+
+def period_levels(model: Any, period: str) -> dict[tuple[str, Any], float]:
+    """``{(variable, index without the period): level}`` of one period."""
+    out = {}
+    for v in model.component_objects(pyo.Var, active=True):
+        for k in v:
+            key: tuple[Any, ...] = k if isinstance(k, tuple) else (k,)
+            if key[-1] == period:
+                body = key[:-1]
+                cell = next(iter(body)) if len(body) == 1 else body
+                out[(v.name, cell)] = pyo.value(v[k])
+    return out

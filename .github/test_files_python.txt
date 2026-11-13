@@ -340,6 +340,7 @@ tests/templates/pep_pyomo/test_pep_pyomo_sets_params.py
 tests/templates/pep_pyomo/test_pep_pyomo_solve.py
 tests/templates/simple_open/test_blocks_at_base.py
 tests/templates/simple_open/test_calibration.py
+tests/templates/simple_open/test_driver_run.py
 tests/templates/simple_open/test_gams_parity.py
 tests/templates/simple_open/test_generality.py
 tests/templates/simple_open/test_template.py
