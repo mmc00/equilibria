@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pyomo.environ as pyo
 import pytest
 from tests.templates.simple_open._helpers import max_residual
@@ -49,7 +50,7 @@ def test_check_returns_base() -> None:
     }
     for v in pm.component_objects(pyo.Var, active=True):
         for k in v:
-            if v.name != "WALRAS":
+            if v.name != "WALRAS" and not v[k].fixed:  # instruments stay put
                 v[k].set_value(base[(v.name, k)] * 1.05)
     assert template.solve(pm) == "optimal"
     for (name, k), b in base.items():
@@ -61,3 +62,15 @@ def test_check_returns_base() -> None:
 def test_unknown_numeraire_is_rejected() -> None:
     with pytest.raises(ValueError, match=r"\('CAP', 'LAB'\)"):
         SimpleOpenEconomy(numeraire="XYZ").build()
+
+
+def test_tax_rates_are_fixed_variables() -> None:
+    template = SimpleOpenEconomy()
+    pm = template.build()
+    values = template.calibration().values
+    for name in ("tau_d", "tau_z", "tau_m"):
+        rate = pm.find_component(name)
+        assert rate.ctype is pyo.Var, name
+        assert all(rate[k].fixed for k in rate), name
+        got = [pyo.value(rate[k]) for k in rate]
+        assert got == pytest.approx(list(np.atleast_1d(values[name]))), name

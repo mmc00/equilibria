@@ -9,7 +9,7 @@ same equilibrium.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pyomo.environ as pyo
@@ -18,7 +18,7 @@ from pydantic import Field
 from equilibria.backends.pyomo_backend import PyomoBackend
 from equilibria.blocks.demand import CobbDouglasHousehold
 from equilibria.blocks.equilibrium import FactorMarket, GoodsMarket, Numeraire
-from equilibria.blocks.institutions import ExternalSector, TaxGovernment
+from equilibria.blocks.institutions import ExternalSector, TaxGovernment, TaxRates
 from equilibria.blocks.production import (
     CETOutput,
     CobbDouglasValueAdded,
@@ -31,6 +31,9 @@ from equilibria.templates.base import ModelTemplate
 from equilibria.templates.simple_open.blocks import StdcgeInvestment
 from equilibria.templates.simple_open.calibration import Calibration, calibrate
 from equilibria.templates.simple_open.sam import load_sam
+
+# the tax rates are instruments: fixed variables a shock changes (ADR-0003)
+INSTRUMENTS: tuple[str, ...] = ("tau_d", "tau_z", "tau_m")
 
 
 def _default_sam() -> Path:
@@ -108,6 +111,7 @@ class SimpleOpenEconomy(ModelTemplate):
         kw: dict[str, Any] = {"values": cal.values, "start": cal.base}
         numeraire = self.numeraire_factor()
         for block in (
+            TaxRates(**kw),
             CobbDouglasValueAdded(**kw),
             LeontiefComposite(**kw),
             CETOutput(**kw),
@@ -129,6 +133,8 @@ class SimpleOpenEconomy(ModelTemplate):
         backend.build(self.create_model(calibration))
         pm = backend.pyomo_model
         assert pm is not None  # PyomoBackend.build populates pyomo_model
+        for rate in INSTRUMENTS:
+            cast("Any", pm.find_component(rate)).fix()
         pm.add_component("_obj", pyo.Objective(expr=0.0))
         return pm
 

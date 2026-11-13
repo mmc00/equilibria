@@ -1599,21 +1599,20 @@ class ArmingtonComposite(LevelBlock):
     ``Q = gamma_A*(delta_M*M**eta + delta_D*D**eta)**(1/eta)``,
     ``M = (gamma_A**eta*delta_M*PQ/((1+tau_m)*PM))**(1/(1-eta))*Q`` and
     ``D = (gamma_A**eta*delta_D*PQ/PD)**(1/(1-eta))*Q``,
-    ``eta = (sigma_A-1)/sigma_A`` (stdcge eqpqs, eqM, eqD). ``tau_m`` is mutable:
-    a tariff shock changes it.
+    ``eta = (sigma_A-1)/sigma_A`` (stdcge eqpqs, eqM, eqD). ``tau_m`` is an
+    instrument declared by ``TaxRates``.
     """
 
     name: str = Field(default="ArmingtonComposite")
 
     def model_post_init(self, __context: Any) -> None:
         self.required_sets = ["I"]
-        self.uses = ["D", "PD", "PM"]
+        self.uses = ["D", "PD", "PM", "tau_m"]
 
     def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
         ni = len(set_manager.get("I"))
         for name in ("gamma_A", "delta_M", "delta_D", "sigma_A"):
             self.param(parameters, name, ("I",))
-        self.param(parameters, "tau_m", ("I",), mutable=True)
         self.var(variables, "Q", ("I",), (ni,))
         self.var(variables, "M", ("I",), (ni,))
         self.var(variables, "PQ", ("I",), (ni,))

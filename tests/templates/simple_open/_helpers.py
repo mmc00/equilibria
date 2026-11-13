@@ -10,6 +10,7 @@ import pyomo.environ as pyo
 
 from equilibria.backends.pyomo_backend import PyomoBackend
 from equilibria.blocks.base import Block
+from equilibria.blocks.institutions import TaxRates
 from equilibria.core.sets import Set as ESet
 from equilibria.core.variables import Variable
 from equilibria.model import Model
@@ -62,6 +63,8 @@ def block_at_base(block: Block, calibration: Any) -> Any:
     model = Model(name=f"{block.name}_at_base")
     model.add_sets(model_sets(calibration))
     model.add_block(block)
+    if block.name != "TaxRates":  # the rates a block reads are instruments
+        model.add_block(TaxRates(values=calibration.values))
     others = {
         k: v for k, v in calibration.base.items() if k not in model.variable_manager
     }

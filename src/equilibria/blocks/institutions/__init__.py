@@ -669,6 +669,33 @@ class ExternalSector(LevelBlock):
         ]
 
 
+class TaxRates(LevelBlock):
+    """The tax rates as instruments: fixed variables, no equations (ADR-0003).
+
+    ``tau_d`` (direct tax on factor income), ``tau_z`` (production tax by
+    sector) and ``tau_m`` (import tariff by good). The template fixes them; a
+    shock changes their value in the shock period, never an equation.
+    """
+
+    name: str = Field(default="TaxRates")
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["I", "J"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        ni, nj = len(set_manager.get("I")), len(set_manager.get("J"))
+        free = float("-inf")
+        for name, domains, shape in (
+            ("tau_d", (), ()),
+            ("tau_z", ("J",), (nj,)),
+            ("tau_m", ("I",), (ni,)),
+        ):
+            self.var(variables, name, domains, shape, lower=free)
+            # an instrument starts at its calibrated rate, not at a level
+            variables[name].value = np.atleast_1d(self.value(name)).copy()
+        return []
+
+
 class TaxGovernment(LevelBlock):
     """Direct, production and import taxes; fixed saving rate; fixed shares.
 
@@ -682,13 +709,10 @@ class TaxGovernment(LevelBlock):
 
     def model_post_init(self, __context: Any) -> None:
         self.required_sets = ["I", "J", "F"]
-        self.uses = ["WF", "PZ", "Z", "PM", "M", "PQ"]
+        self.uses = ["WF", "PZ", "Z", "PM", "M", "PQ", "tau_d", "tau_z", "tau_m"]
 
     def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
         ni, nj = len(set_manager.get("I")), len(set_manager.get("J"))
-        self.param(parameters, "tau_d", ())
-        self.param(parameters, "tau_z", ("J",))
-        self.param(parameters, "tau_m", ("I",), mutable=True)
         self.param(parameters, "mu_G", ("I",))
         self.param(parameters, "ssg", ())
         self.param(parameters, "FF", ("F",))
