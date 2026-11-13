@@ -66,12 +66,19 @@ class LevelBlock(Block):
     ) -> None:
         init = np.asarray(self.start.get(name, 1.0), dtype=float)
         value = np.broadcast_to(init, shape).copy() if shape else np.atleast_1d(init)
+        # a cell that is 0 at the base (a zero SAM flow) must be allowed to stay
+        # 0: the floor would put the base point outside the bounds
+        floor: float | np.ndarray = lower
+        if lower > 0 and (value == 0).any():
+            floor = np.where(value == 0, 0.0, lower)
+            if not shape:
+                floor = float(floor[0])
         variables[name] = Variable(
             name=name,
             value=value,
             domains=domains,
             domain=domain,
-            lower=lower,
+            lower=floor,
             upper=float("inf"),
         )
 
