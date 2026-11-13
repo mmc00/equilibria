@@ -26,6 +26,7 @@ It also cannot serve PEP or any other model. ADR-0002 already says the driver
   model). An **Exercise** (template + recipe + shock + `@overwrite`) is the
   public way to run: `Exercise(...).run()`.
 - `simple_open` is the second user of the core, to prove the driver is generic.
+  It is never solved today, so it first becomes a real model (design, step 4).
 - The new driver is built **next to** the old one. GTAP switches over in one
   move, once the new driver gives the same numbers on every gate; the Burfisher
   notebooks move to `Exercise` then.

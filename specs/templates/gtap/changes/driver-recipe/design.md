@@ -10,7 +10,7 @@ What the driver file holds today (measured 2026-11-11, `0d02b205`):
 | Content | ~Lines | Belongs in the driver? |
 |---|---|---|
 | Period orchestration (`_solve_multiperiod_inner`, `solve_multiperiod`) | 430 | yes |
-| Per-period equation rewrites (`_recalibrate_*`, altertax only) | 600 | no: likely deleted (step 0) |
+| Per-period equation rewrites (`_recalibrate_*`, altertax only) | 600 | no: four deleted in step 0 (#243); `_recalibrate_and_ava` stays for now |
 | GTAP squaring fixes (`_collapse_pft_pfteq`, `_holdfix_fnm_pf`, `_apply_gams_bounds`, `_recompute_ifsub_report_vars`, welfare tail, Fisher duplicates) | 545 | no: GTAP recipe steps or GTAP blocks |
 | Single-period reference model and its snapshot (`_build_sp_reference`, `SPSnapshot`, `_replicate_*`) | 280 | no: GTAP recipe step |
 | Shock methods (in steps, Johansen, Richardson) | 135 | as pluggable steps |
@@ -29,7 +29,11 @@ PEP (`templates/pep_pyomo/`) has no periods: a scenario edits the calibrated
 state and the model is rebuilt (`pep_pyomo_scenarios.py`). It uses its own
 blocks (`pep_pyomo_blocks.py`), not `blocks/`. `simple_open` is a small
 single-country template on the generic blocks (`blocks/production`, `trade`,
-`demand`, ...) with its own GAMS parity pipeline.
+`demand`, ...), but it is **never solved** (found 2026-11-13): its
+`create_model` builds a three-block demo with no trade, and its "GAMS parity"
+compares nine hand-written benchmark levels and six parameters
+(`simple_open_parity_spec.py`) against a GDX, with no solve, shock or period.
+It has to become a real model before it can fly a recipe (migration step 3).
 
 Constraints:
 
@@ -190,12 +194,13 @@ dev-tools `equilibria-tools/plans/research/docs-lego-references/`).
   step; the GTAP quickstart moved to `Exercise`. All told with the rocket. "How
   to write a new template" waits for a second real template (PEP, Ricardo).
 - **When:** the drawings are designed in step 3 (they also guide the build); the
-  pages are published in step 7, when the code exists, because the CI runs the
+  pages are published in step 8, when the code exists, because the CI runs the
   docs examples (#183).
 
 ### Migration: a new driver next to the old one
 
 1. **Fix #214** on the old driver (exercises leaking `@overwrite` hooks).
+   Done: #240, a warning at build plus `overwrite.clear()` in the notebooks.
 2. **Step 0, cleanup**, on the old driver: one PR per deletion, failing test
    first, measured against GAMS on every gate that exercises it (for the
    altertax recalibrations: the altertax rows of Table A1, ifSUB 0 and 1, NLP
@@ -206,20 +211,30 @@ dev-tools `equilibria-tools/plans/research/docs-lego-references/`).
    alphad/alpham (#222) took 15x10 altertax 99.45 % -> 100 %. First candidates:
    `_recalibrate_and_ava`, `_gx_ax`, `_alphaa_gov_inv`, `_alphaa_hhd` (GAMS
    calibrates every share once, in `loop(tsim$t0)`).
-3. **New ADR** superseding ADR-0002, the glossary updated (Template, Recipe,
-   Driver, Exercise), and the drawings designed.
-4. **Core** (`Recipe`, `Step`, driver, `Exercise`, reflection) with
+   Done: #242 (cell-level measurement, `scripts/gtap/measure_altertax_cells.py`)
+   and #243. The maintainer narrowed the rule to "no cell that is within the
+   gates' tolerance ends up outside it, and no stage's match % goes down".
+   Deleted `_io_af` and `_gx_ax` (dead), `_alphaa_gov_inv` and `_alphaa_hhd`
+   (30 altertax rows stay at 100 %); `_recalibrate_and_ava` stays: without it
+   NLP gtap7_15x10 ifSUB=0 moves to another point (check 100 % -> 87.35 %).
+3. **New ADR** superseding ADR-0002 (ADR-0011), the glossary updated
+   (Template, Recipe, Driver, Exercise, Period kind, Step), and the drawings
+   designed (the drawings on mockups, after this PR).
+4. **`simple_open` becomes a real model** (decided 2026-11-13): blocks with
+   trade, a closure and a shock, solved, with a GAMS reference regenerated for
+   base, check and shock. Its own design, before the core.
+5. **Core** (`Recipe`, `Step`, driver, `Exercise`, reflection) with
    `simple_open` as its first user.
-5. **GTAP**: the `GTAP` template, `GTAPStatic` and its steps, from `_RECIPES` and
+6. **GTAP**: the `GTAP` template, `GTAPStatic` and its steps, from `_RECIPES` and
    the surviving pieces of the old driver.
-6. **Compare** every GTAP gate through both drivers (same codes, same values
+7. **Compare** every GTAP gate through both drivers (same codes, same values
    within the gates' tolerances).
-7. **Switch** `solve_multiperiod` to the new driver in one PR (it keeps its
+8. **Switch** `solve_multiperiod` to the new driver in one PR (it keeps its
    signature during the transition **(builder's call: whether it becomes a thin
    wrapper)**), regenerate the Burfisher notebooks with their generator so they
    use `Exercise(...).run()` (same numbers against GEMPACK), and publish the
    docs pages.
-8. **Delete** the old driver and `period_prep.py`.
+9. **Delete** the old driver and `period_prep.py`.
 
 ### Out of scope
 
@@ -268,7 +283,8 @@ switch.
   experiment against GEMPACK, cell by cell, with the same numbers as on `main`.
 - Every GTAP parity gate and the Burfisher notebooks give the same numbers
   through the new driver as through the old one, before the switch.
-- `simple_open` keeps its GAMS parity through the new driver.
+- `simple_open` reproduces its GAMS reference (base, check and shock) through
+  the new driver.
 - The core (`Recipe`, `Step`, driver, `Exercise`) imports nothing from
   `templates/` (a layering test, like `tests/core/test_layering.py`).
 - The core driver stays small: a test or check that fails if it grows past
