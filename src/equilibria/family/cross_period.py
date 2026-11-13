@@ -437,12 +437,19 @@ def record_cross_period(
 
 
 def cache_path(
-    params: Any, closure: Any, residual_region: str | None, root: Path
+    params: Any,
+    closure: Any,
+    residual_region: str | None,
+    root: Path,
+    *,
+    key: Any = ...,
 ) -> Path | None:
-    """Next to the single-period records (same key; its digest covers this module)."""
+    """Next to the single-period records (same key; its digest covers this module).
+    ``key``: that key when the caller has it, else it is computed here."""
     from equilibria.family.disk_cache import cache_key
 
-    key = cache_key(params, closure, residual_region)
+    if key is ...:
+        key = cache_key(params, closure, residual_region)
     return None if key is None else Path(root) / key / "cross_records.pkl"
 
 
@@ -454,13 +461,15 @@ def load_or_record(
     *,
     sets: dict[str, list[str]],
     var_domains: dict[str, tuple[str, ...]],
+    key: Any = ...,
 ) -> Any:
-    """The cross-period backend from the disk cache, recording (and saving) on a miss."""
+    """The cross-period backend from the disk cache, recording (and saving) on a miss.
+    ``key``: as in ``cache_path``."""
     from equilibria.backends.family_backend import FamilyBackend
     from equilibria.family.phases import phase
 
     with phase("cross_cache_key"):
-        path = cache_path(params, closure, residual_region, root)
+        path = cache_path(params, closure, residual_region, root, key=key)
     if path is not None and path.exists():
         with phase("cross_records_load"):
             return FamilyBackend.load(path)

@@ -46,11 +46,18 @@ def cache_key(params: Any, closure: Any, residual_region: str | None) -> str | N
 
 
 def load_or_build(
-    params: Any, closure: Any, residual_region: str | None, root: Path
+    params: Any,
+    closure: Any,
+    residual_region: str | None,
+    root: Path,
+    *,
+    key: Any = ...,
 ) -> tuple[Any, Any]:
     """``(backend, state)``: records from ``root/<key>/records.pkl`` when present.
 
-    Without a key (see ``cache_key``) the records are built and not saved."""
+    Without a key (see ``cache_key``) the records are built and not saved. ``key``:
+    the caller's ``cache_key`` of these inputs (``None`` included), so it is not
+    computed twice."""
     from equilibria.backends.family_backend import FamilyBackend
     from equilibria.family.phases import phase
     from equilibria.templates.gtap.gtap_block_model import compose_block_state
@@ -59,8 +66,9 @@ def load_or_build(
         model, state = compose_block_state(
             params, params.sets, closure, residual_region
         )
-    with phase("sp_cache_key"):
-        key = cache_key(params, closure, residual_region)
+    if key is ...:
+        with phase("sp_cache_key"):
+            key = cache_key(params, closure, residual_region)
     path = None if key is None else Path(root) / key / "records.pkl"
     if path is not None and path.exists():
         with phase("sp_records_load"):

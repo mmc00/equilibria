@@ -200,15 +200,26 @@ class ArrayIncidence:
     order), the sorted positions of the free columns it reads, in the order of
     ``period_incidence`` (layout order for the recorded rows, the cross pattern's order
     for the cross-period ones), each once. It is ``prep_square._adjacency`` on the names
-    of ``period_incidence``, computed on the CSR pattern."""
+    of ``period_incidence``, computed on the CSR pattern.
 
-    def __init__(self, backend: Any, state: Any, period: str, cross: Any = None):
+    ``store``: the run's records folder (``disk_cache``), where ``square`` keeps the
+    pairing of each set of rows and columns; ``None`` keeps it in memory only."""
+
+    def __init__(
+        self,
+        backend: Any,
+        state: Any,
+        period: str,
+        cross: Any = None,
+        store: Any = None,
+    ):
         self.backend, self.state, self.period, self.cross = (
             backend,
             state,
             period,
             cross,
         )
+        self.store = store
         self.pat = incidence_csr(backend, state)
         self._cross_pat = _cross_pattern(cross) if cross is not None else {}
 

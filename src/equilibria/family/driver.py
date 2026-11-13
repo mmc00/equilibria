@@ -185,6 +185,9 @@ class FamilyRun:
     # key of the opt-in settle cache over what ``prepare_run`` sees (``_settle_key``
     # adds the nominal-savf rule); None = do not cache
     settle_key: str | None = None
+    # the records' cache folder (``disk_cache``), where ``square`` keeps its pairings;
+    # None = keep them in memory only
+    records_dir: Path | None = None
 
 
 @dataclass
@@ -248,7 +251,7 @@ def prepare_run(
     Under capFlex ``ref_gdx`` gives ``params._capflex_risk`` (see ``family.capflex``), set
     before the cache keys are taken."""
     from equilibria.family import cross_period
-    from equilibria.family.disk_cache import enable_jax_cache, load_or_build
+    from equilibria.family.disk_cache import cache_key, enable_jax_cache, load_or_build
     from equilibria.family.prep_recipe import sp_reference_arrays
     from equilibria.family.prep_square import ConditionalMasks
     from equilibria.templates.gtap.residual_region import resolve_residual_region
@@ -263,7 +266,10 @@ def prepare_run(
     if jax_cache:
         with phase("jax_cache_setup"):
             enable_jax_cache(root)
-    backend, state = load_or_build(params, closure, residual_region, root)
+    # one key for the single- and cross-period records (and the pairings next to them)
+    with phase("sp_cache_key"):
+        key = cache_key(params, closure, residual_region)
+    backend, state = load_or_build(params, closure, residual_region, root, key=key)
     cross = cross_period.load_or_record(
         params,
         closure,
@@ -271,6 +277,7 @@ def prepare_run(
         root,
         sets=backend.sets,
         var_domains=backend.var_domains,
+        key=key,
     )
     # the loaded records are long-lived and large: freeze them before mp_build and the
     # later steps churn allocations over them (the entry-point freeze predates them)
@@ -296,6 +303,7 @@ def prepare_run(
         settle_key=_settle_base_key(
             params, closure, residual_region, ref_gdx, newton_tol
         ),
+        records_dir=None if key is None else root / key,
     )
     return run, mp
 
@@ -605,7 +613,7 @@ def _period_system(run: FamilyRun, mp1: MPArrays, period: str) -> tuple[Any, Any
             run.cell_index = CellIndex(mp1)
         if period not in run.adjacency:
             run.adjacency[period] = ArrayIncidence(
-                run.backend, run.state, period, run.cross
+                run.backend, run.state, period, run.cross, store=run.records_dir
             )
         sq, mp_sq = square(
             mp1,
