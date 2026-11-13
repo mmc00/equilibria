@@ -23,6 +23,7 @@ pytestmark = pytest.mark.skipif(
 # eq_pg/eq_xg rows on gtap7_3x3, so a test on them could not fail.
 HELD = [
     "_eq_xi_recal_",  # _recalibrate_alphaa_gov_inv (investment)
+    "_eq_zcons_recal_",  # _recalibrate_alphaa_hhd (CDE household)
 ]
 
 
