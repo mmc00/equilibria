@@ -1,0 +1,40 @@
+# Hosoe's stdcge (gamslib SEQ=276): equilibria's simple_open (A) against GAMS (B),
+# in levels. A: SimpleOpenEconomy().run(), read with from_pyomo. B: the three GDX of
+# data/stdcge/hosoe_2x2/gams_nlp_tariff0 (base, check, shock), read with from_gdx.
+# One row per variable of the .gms. WALRAS (equilibria's Walras slack) has no GAMS
+# side and is not listed: tests check it is ~0.
+# Sets: goods I (GAMS i) and sectors J (GAMS j) share elements; factors F (GAMS h).
+
+variables:
+  - {name: Y, a: {var: VA, dims: [J]}, b: {var: Y, dims: [J]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: F, a: {var: FD, dims: [F, J]}, b: {var: F, dims: [F, J]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: X, a: {var: XI, dims: [I, J]}, b: {var: X, dims: [I, J]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: Z, a: {var: Z, dims: [J]}, b: {var: Z, dims: [J]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: Xp, a: {var: XP, dims: [I]}, b: {var: Xp, dims: [I]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: Xg, a: {var: XG, dims: [I]}, b: {var: Xg, dims: [I]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: Xv, a: {var: XV, dims: [I]}, b: {var: Xv, dims: [I]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: E, a: {var: E, dims: [I]}, b: {var: E, dims: [I]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: M, a: {var: M, dims: [I]}, b: {var: M, dims: [I]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: Q, a: {var: Q, dims: [I]}, b: {var: Q, dims: [I]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: D, a: {var: D, dims: [I]}, b: {var: D, dims: [I]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: pf, a: {var: WF, dims: [F]}, b: {var: pf, dims: [F]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: py, a: {var: PVA, dims: [J]}, b: {var: py, dims: [J]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: pz, a: {var: PZ, dims: [J]}, b: {var: pz, dims: [J]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: pq, a: {var: PQ, dims: [I]}, b: {var: pq, dims: [I]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: pe, a: {var: PE, dims: [I]}, b: {var: pe, dims: [I]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: pm, a: {var: PM, dims: [I]}, b: {var: pm, dims: [I]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: pd, a: {var: PD, dims: [I]}, b: {var: pd, dims: [I]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: epsilon, a: {var: EPS, dims: []}, b: {var: epsilon, dims: []}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: Sp, a: {var: SP, dims: []}, b: {var: Sp, dims: []}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: Sg, a: {var: SG, dims: []}, b: {var: Sg, dims: []}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: Td, a: {var: TD, dims: []}, b: {var: Td, dims: []}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: Tz, a: {var: TZ, dims: [J]}, b: {var: Tz, dims: [J]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: Tm, a: {var: TM, dims: [I]}, b: {var: Tm, dims: [I]}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+  - {name: UU, a: {var: UU, dims: []}, b: {var: UU, dims: []}, tol: {rel: 1.0e-6, abs_floor: 1.0e-8}}
+
+exclude:
+  - var: UU
+    where: {period: [base]}
+    why: "stdcge.gms does not initialize UU before the first solve, so base.gdx has no level for it"
+
+thresholds: [1.0e-6, 1.0e-4, 1.0e-2]

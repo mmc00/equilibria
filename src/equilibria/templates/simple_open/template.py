@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pyomo.environ as pyo
 from pydantic import Field
 
@@ -97,3 +98,27 @@ class SimpleOpenEconomy(ModelTemplate):
         if status not in ("optimal", "locallyOptimal"):
             raise RuntimeError(f"{self.name}: IPOPT ended {status}")
         return "optimal"
+
+    def run(self) -> dict[str, pyo.ConcreteModel]:
+        """Base (built, not solved), check (solved, no shock) and shock (every
+        import tariff set to zero, solved), each on a fresh build."""
+        cal = self.calibration()
+        out = {"base": self.build(cal)}
+        out["check"] = self.build(cal)
+        self.solve(out["check"])
+        out["shock"] = shock = self.build(cal)
+        tau_m: Any = shock.find_component("tau_m")
+        for i in tau_m:
+            tau_m[i] = 0.0
+        self.solve(shock)
+        return out
+
+
+def equivalent_variation(calibration: Calibration, shock: pyo.ConcreteModel) -> float:
+    """Hicksian equivalent variation at base prices (stdcge lines 351-360).
+
+    ``ep = UU / prod_i alpha_H**alpha_H``; ``EV = ep(shock) - ep(base)``.
+    """
+    alpha = np.asarray(calibration.values["alpha_H"], dtype=float)
+    scale = float(np.prod(alpha**alpha))
+    return (pyo.value(shock.UU) - calibration.base["UU"]) / scale
