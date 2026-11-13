@@ -7,12 +7,14 @@ This module provides consumer demand-related equation blocks including:
 
 from __future__ import annotations
 
+import math
 import typing
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field
 
+from equilibria.blocks._levels import LevelBlock, eq
 from equilibria.blocks.base import Block, ParameterSpec, VariableSpec
 from equilibria.core.calibration_phase import CalibrationPhase
 from equilibria.core.parameters import Parameter
@@ -437,3 +439,42 @@ class CobbDouglasConsumer(Block):
             var_manager.get("QD").value = calibrated["QD0"].copy()
         if "Y0" in calibrated and "Y" in var_manager:
             var_manager.get("Y").value = np.array([calibrated["Y0"]])
+
+
+class CobbDouglasHousehold(LevelBlock):
+    """One household: factor income, fixed saving rate, Cobb-Douglas demand.
+
+    ``SP = ssp*sum_f WF*FF``, ``XP = alpha_H*(sum_f WF*FF - SP - TD)/PQ`` and the
+    utility ``UU = prod_i XP**alpha_H`` (stdcge eqSp, eqXp, obj). ``UU`` is a
+    defined variable: the system stays square and the level can be compared.
+    """
+
+    name: str = Field(default="CobbDouglasHousehold")
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["I", "F"]
+        self.uses = ["WF", "PQ", "TD"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        ni = len(set_manager.get("I"))
+        self.param(parameters, "alpha_H", ("I",))
+        self.param(parameters, "ssp", ())
+        self.param(parameters, "FF", ("F",))
+        self.var(variables, "XP", ("I",), (ni,))
+        self.var(variables, "SP", (), ())
+        self.var(variables, "UU", (), ())
+
+        def income(m):
+            return sum(m.WF[f] * m.FF[f] for f in m.F)
+
+        def sp(m, idx):
+            return m.ssp * income(m) == m.SP
+
+        def xp(m, idx):
+            (i,) = idx
+            return m.XP[i] == m.alpha_H[i] * (income(m) - m.SP - m.TD) / m.PQ[i]
+
+        def uu(m, idx):
+            return math.prod(m.XP[i] ** m.alpha_H[i] for i in m.I) == m.UU
+
+        return [eq("eq_sp", (), sp), eq("eq_xp", ("I",), xp), eq("eq_uu", (), uu)]

@@ -11,22 +11,39 @@ from equilibria.blocks.base import (
     ParameterSpec,
     VariableSpec,
 )
-from equilibria.blocks.demand import CobbDouglasConsumer, LESConsumer
+from equilibria.blocks.demand import (
+    CobbDouglasConsumer,
+    CobbDouglasHousehold,
+    LESConsumer,
+)
 from equilibria.blocks.equilibrium import (
+    FactorMarket,
     FactorMarketClearing,
+    GoodsMarket,
     MarketClearing,
+    Numeraire,
     PEPMacroClosureInit,
     PriceNormalization,
 )
-from equilibria.blocks.institutions import Government, Household, RestOfWorld
+from equilibria.blocks.institutions import (
+    ExternalSector,
+    Government,
+    Household,
+    RestOfWorld,
+    TaxGovernment,
+)
 from equilibria.blocks.production import (
     CESValueAdded,
+    CETOutput,
     CETTransformation,
+    CobbDouglasValueAdded,
+    LeontiefComposite,
     LeontiefIntermediate,
     PEPProductionAccountingInit,
 )
 from equilibria.blocks.trade import (
     ArmingtonCES,
+    ArmingtonComposite,
     CETExports,
     PEPCommodityBalanceInit,
     PEPTradeFlowInit,
@@ -35,6 +52,16 @@ from equilibria.blocks.trade import (
 )
 
 __all__ = [
+    "ArmingtonComposite",
+    "CETOutput",
+    "CobbDouglasHousehold",
+    "CobbDouglasValueAdded",
+    "ExternalSector",
+    "FactorMarket",
+    "GoodsMarket",
+    "LeontiefComposite",
+    "Numeraire",
+    "TaxGovernment",
     "Block",
     "ParameterSpec",
     "VariableSpec",

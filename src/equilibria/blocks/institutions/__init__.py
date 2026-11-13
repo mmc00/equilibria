@@ -667,3 +667,62 @@ class ExternalSector(LevelBlock):
             eq("eq_pm", ("I",), pm),
             eq("eq_bop", (), bop),
         ]
+
+
+class TaxGovernment(LevelBlock):
+    """Direct, production and import taxes; fixed saving rate; fixed shares.
+
+    ``TD = tau_d*sum_f WF*FF``, ``TZ = tau_z*PZ*Z``, ``TM = tau_m*PM*M``,
+    ``SG = ssg*(TD + sum TZ + sum TM)`` and
+    ``XG = mu_G*(TD + sum TZ + sum TM - SG)/PQ`` (stdcge eqTd, eqTz, eqTm, eqSg,
+    eqXg).
+    """
+
+    name: str = Field(default="TaxGovernment")
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["I", "J", "F"]
+        self.uses = ["WF", "PZ", "Z", "PM", "M", "PQ"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        ni, nj = len(set_manager.get("I")), len(set_manager.get("J"))
+        self.param(parameters, "tau_d", ())
+        self.param(parameters, "tau_z", ("J",))
+        self.param(parameters, "tau_m", ("I",), mutable=True)
+        self.param(parameters, "mu_G", ("I",))
+        self.param(parameters, "ssg", ())
+        self.param(parameters, "FF", ("F",))
+        self.var(variables, "TD", (), ())
+        self.var(variables, "TZ", ("J",), (nj,), lower=0.0)
+        self.var(variables, "TM", ("I",), (ni,), lower=0.0)
+        self.var(variables, "XG", ("I",), (ni,))
+        self.var(variables, "SG", (), ())
+
+        def revenue(m):
+            return m.TD + sum(m.TZ[j] for j in m.J) + sum(m.TM[i] for i in m.I)
+
+        def td(m, idx):
+            return m.tau_d * sum(m.WF[f] * m.FF[f] for f in m.F) == m.TD
+
+        def tz(m, idx):
+            (j,) = idx
+            return m.TZ[j] == m.tau_z[j] * m.PZ[j] * m.Z[j]
+
+        def tm(m, idx):
+            (i,) = idx
+            return m.TM[i] == m.tau_m[i] * m.PM[i] * m.M[i]
+
+        def xg(m, idx):
+            (i,) = idx
+            return m.XG[i] == m.mu_G[i] * (revenue(m) - m.SG) / m.PQ[i]
+
+        def sg(m, idx):
+            return m.ssg * revenue(m) == m.SG
+
+        return [
+            eq("eq_td", (), td),
+            eq("eq_tz", ("J",), tz),
+            eq("eq_tm", ("I",), tm),
+            eq("eq_xg", ("I",), xg),
+            eq("eq_sg", (), sg),
+        ]
