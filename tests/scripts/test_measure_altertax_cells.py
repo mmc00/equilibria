@@ -109,3 +109,10 @@ def test_a_new_measurement_does_not_keep_old_rows(tmp_path):
     assert mac.initial_results(out, resume=False) == {}
     assert ROW in mac.initial_results(out, resume=True)
     assert mac.initial_results(tmp_path / "absent.json", resume=True) == {}
+
+
+def test_a_row_that_failed_in_base_is_reported():
+    """A base failure cannot be compared: say so instead of accepting in silence."""
+    base = {ROW: {"error": "RuntimeError: no model captured"}}
+    reasons = mac.verdict(base, BASE)
+    assert any(ROW in r and "failed in base" in r for r in reasons), reasons

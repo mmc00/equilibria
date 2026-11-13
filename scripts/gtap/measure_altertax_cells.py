@@ -62,6 +62,7 @@ def verdict(base: dict, new: dict) -> list[str]:
             reasons.append(f"{row}: missing in the new run (skipped or not measured)")
             continue
         if "error" in b:
+            reasons.append(f"{row}: failed in base, not compared: {b['error']}")
             continue
         if "error" in n:
             reasons.append(f"{row}: failed in the new run: {n['error']}")
