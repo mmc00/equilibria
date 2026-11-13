@@ -1,5 +1,8 @@
 tests/compare/test_gtap3x3.py
 tests/data/test_fbep_variants.py
+tests/family/test_capflex_risk.py
+tests/family/test_family_e2e_capflex.py
+tests/family/test_gate1_all_families.py
 tests/scripts/test_fbep_switch.py
 tests/scripts/test_nl_compare_local.py
 tests/templates/gtap/test_altertax_multiperiod_parity.py
