@@ -19,9 +19,14 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
 
+    # `--extra family` (jax) so tests/family RUNS in CI instead of being skipped
+    # by its conftest (HAS_JAX false). ~85 MB wheel (jaxlib + jax + ml-dtypes +
+    # opt-einsum). Every job that uses this action installs it, so `collect`
+    # and the test groups see the same set of tests. pymumps is not installed:
+    # the tests that need it skip by themselves (importorskip / skipif).
     - name: Install dependencies
       shell: bash
-      run: uv sync --dev --python ${{ inputs.python-version }}
+      run: uv sync --dev --extra family --python ${{ inputs.python-version }}
 
     # --- solvers: sin esto, 64 de 1151 tests se SALTABAN en silencio -------
     # Los guards de solver (tests/conftest.py) saltan needs_path/needs_ipopt

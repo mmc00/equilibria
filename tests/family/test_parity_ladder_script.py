@@ -24,6 +24,19 @@ def _script():
     return mod
 
 
+@pytest.fixture(autouse=True)
+def _keep_environ():
+    # run() setdefaults the NEWTON_MUMPS settings before it may raise; without
+    # this they outlive the test and switch later GTAP solves to Newton (#245).
+    old = {k: os.environ.get(k) for k in _newton_mumps()}
+    yield
+    for k, v in old.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+
+
 @pytest.fixture(scope="module")
 def linsolve():
     return "mumps" if importlib.util.find_spec("mumps") else "direct"

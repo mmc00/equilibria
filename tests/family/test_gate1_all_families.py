@@ -46,6 +46,7 @@ def test_all_families_match_pyomo_ifsub1(dataset, point):
 
 @pytest.mark.parametrize("point", ["calibrated", "perturbed"])
 @pytest.mark.parametrize("dataset", DATASETS)
+@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_all_families_match_pyomo_capflex(dataset, point):
     """capFlex (ifSUB=1): ``risk`` stamped from the GAMS GDX, eq_savf in every region."""
     o = oracle(dataset, if_sub=True, savf_flag="capFlex")

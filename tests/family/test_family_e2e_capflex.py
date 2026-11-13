@@ -106,6 +106,7 @@ def family_run(reference, linsolve, tmp_path_factory):
     return res, code, calls
 
 
+@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_family_route_builds_no_pyomo_model(family_run):
     _, _, calls = family_run
     assert calls == {"ConcreteModel": 0, "PyomoNLP": 0, "identify_variables": 0}
@@ -130,6 +131,7 @@ def test_spy_sees_the_pyomo_route():
     assert ConcreteModel.__init__ is orig
 
 
+@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_every_cell_of_the_three_periods_equals_final_pkl(family_run, reference):
     from equilibria.family.prep_capture import load
 
@@ -141,6 +143,7 @@ def test_every_cell_of_the_three_periods_equals_final_pkl(family_run, reference)
     assert diff_to_photo(res.mp, final, 1e-9, lb_rtol=1e-9) == []
 
 
+@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_codes_and_iteration_counts(family_run, reference):
     import json
 
@@ -173,6 +176,7 @@ def _closure_flex():
     return comp_stat_closure(True, SAVF)
 
 
+@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_cache_key_differs_from_capfix(stamped):
     from equilibria.family.disk_cache import cache_key
     from tests.family._oracle import comp_stat_closure
@@ -210,6 +214,7 @@ def built(stamped, tmp_path_factory):
     return p, closure, rr, backend, state, mp
 
 
+@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_mparrays_rows_equal_pyomos_with_eq_savf_everywhere(built, reference):
     from equilibria.family.prep_capture import load
 
@@ -224,6 +229,7 @@ def test_mparrays_rows_equal_pyomos_with_eq_savf_everywhere(built, reference):
     assert diff_to_photo(mp, photo) == []
 
 
+@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_phase_timing_covers_the_run(family_run):
     res, _, _ = family_run
     ph = res.phases
@@ -237,6 +243,7 @@ def test_phase_timing_covers_the_run(family_run):
     assert sum(ph.values()) <= res.timing["total_s"] + 1e-6
 
 
+@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_max_relative_difference_per_period_reported(family_run, reference):
     from equilibria.family.prep_capture import load
 
