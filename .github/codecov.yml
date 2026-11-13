@@ -58,6 +58,7 @@ component_management:
     paths:
     - ^src/equilibria/templates/simple_open
     - ^src/equilibria/baseline/simple_open_
+    - ^src/equilibria/blocks/_levels\.py
     - ^src/equilibria/blocks/production/
     - ^src/equilibria/blocks/trade/
     - ^src/equilibria/blocks/demand/
