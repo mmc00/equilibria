@@ -1,0 +1,10 @@
+kind: data
+model: stdcge
+dataset: hosoe_2x2
+source: the SAM table of gamslib stdcge (Hosoe et al. 2004, ch. 6), written by tools/gams_job.py
+  sam
+license: distributed with GAMS in its model library
+outputs:
+  sam.csv: 10f42e3746578ebefc673cb430bead45b62a95cbe29538ed5df2b643dbf51a7a
+status: verified
+notes: ''
