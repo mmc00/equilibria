@@ -178,8 +178,8 @@ class CESValueAdded(Block):
                             mp = beta[f_idx] * (VA / FD[f_idx]) ** (1 - rho)
                         else:
                             mp = 0.0
-                        constraints[(f, j)] = lambda wf=WF, pva=PVA, mp=mp: (
-                            wf - pva * mp
+                        constraints[(f, j)] = (
+                            lambda wf=WF, pva=PVA, mp=mp: wf - pva * mp
                         )
 
                 return constraints
@@ -507,8 +507,8 @@ class CETTransformation(Block):
                         price_ratio = 1.0
 
                     if PE > 1e-10:
-                        constraints[(j,)] = lambda pd=PD, pe=PE, pr=price_ratio: (
-                            pd / pe - pr
+                        constraints[(j,)] = (
+                            lambda pd=PD, pe=PE, pr=price_ratio: pd / pe - pr
                         )
                     else:
                         constraints[(j,)] = lambda: 0.0
