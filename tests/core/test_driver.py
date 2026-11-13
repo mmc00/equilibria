@@ -111,3 +111,24 @@ def test_steps_see_the_template_shock_and_prior() -> None:
 
 def test_driver_stays_small() -> None:
     assert len(Path(driver.__file__).read_text().splitlines()) <= 300
+
+
+def test_a_solver_that_raises_is_reported_and_the_next_period_still_runs() -> None:
+    log: list[str] = []
+
+    def explode(model: Any) -> str:
+        raise ZeroDivisionError("division by zero in the writer")
+
+    recipe = Recipe(
+        PERIODS,
+        {
+            "calibrate": logging_plan(log, "optimal"),
+            "replicate": KindPlan(solver=explode),
+            "shock": logging_plan(log, "optimal"),
+        },
+    )
+    results = fly(model(), recipe)
+    assert results["check"]["code"].startswith("error: ZeroDivisionError")
+    assert "division by zero" in results["check"]["code"]
+    assert results["shock"]["code"] == "optimal"
+    assert log[-1] == "shock:after"
