@@ -147,7 +147,6 @@ def _recalibrate_shares(c: _Ctx) -> None:
     """
     d, prior = _drv(), _RECALIBRATE_FROM[c.period]
     d._recalibrate_and_ava(c.m, c.params, c.period, prior)
-    d._recalibrate_alphaa_gov_inv(c.m, c.params, c.period, prior)
     d._recalibrate_alphaa_hhd(c.m, c.params, c.period, prior)
 
 
