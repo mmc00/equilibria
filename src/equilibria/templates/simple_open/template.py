@@ -1,0 +1,99 @@
+"""simple_open: Hosoe's standard CGE model (gamslib stdcge), from blocks.
+
+The goods and factors come from the SAM (``sam_path``); the book's SAM (bread,
+milk, capital, labour) is the default. The model is the square system of the
+.gms in levels, solved with a zero objective: at the GAMS NLP optimum it is the
+same equilibrium.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import pyomo.environ as pyo
+from pydantic import Field
+
+from equilibria.backends.pyomo_backend import PyomoBackend
+from equilibria.blocks.demand import CobbDouglasHousehold
+from equilibria.blocks.equilibrium import FactorMarket, GoodsMarket, Numeraire
+from equilibria.blocks.institutions import ExternalSector, TaxGovernment
+from equilibria.blocks.production import (
+    CETOutput,
+    CobbDouglasValueAdded,
+    LeontiefComposite,
+)
+from equilibria.blocks.trade import ArmingtonComposite
+from equilibria.core import Set
+from equilibria.model import Model
+from equilibria.templates.base import ModelTemplate
+from equilibria.templates.simple_open.blocks import StdcgeInvestment
+from equilibria.templates.simple_open.calibration import Calibration, calibrate
+from equilibria.templates.simple_open.sam import load_sam
+
+
+def _default_sam() -> Path:
+    from equilibria.sources import dataset_dir
+
+    return dataset_dir("hosoe_2x2") / "sam.csv"
+
+
+class SimpleOpenEconomy(ModelTemplate):
+    """Hosoe, Gasawa and Hashimoto's standard CGE model (stdcge), from blocks."""
+
+    name: str = Field(default="SimpleOpenEconomy")
+    description: str = Field(default="Hosoe's standard CGE model (stdcge)")
+    sam_path: Path = Field(default_factory=_default_sam)
+    sigma: float = Field(default=2.0, gt=0, description="Armington elasticity")
+    psi: float = Field(default=2.0, gt=0, description="CET elasticity")
+    numeraire: str = Field(default="LAB", description="factor whose price is 1")
+
+    def calibration(self) -> Calibration:
+        return calibrate(load_sam(self.sam_path), sigma=self.sigma, psi=self.psi)
+
+    def create_model(self, calibration: Calibration | None = None) -> Model:
+        cal = calibration or self.calibration()
+        model = Model(name=self.name, description=self.description)
+        model.add_sets(
+            [
+                Set(name="I", elements=cal.goods, description="goods"),
+                Set(name="J", elements=cal.goods, description="sectors"),
+                Set(name="F", elements=cal.factors, description="factors"),
+            ]
+        )
+        kw: dict[str, Any] = {"values": cal.values, "start": cal.base}
+        for block in (
+            CobbDouglasValueAdded(**kw),
+            LeontiefComposite(**kw),
+            CETOutput(**kw),
+            ArmingtonComposite(**kw),
+            ExternalSector(**kw),
+            CobbDouglasHousehold(**kw),
+            TaxGovernment(**kw),
+            StdcgeInvestment(**kw),
+            GoodsMarket(**kw),
+            FactorMarket(numeraire=self.numeraire, **kw),
+            Numeraire(numeraire=self.numeraire, **kw),
+        ):
+            model.add_block(block)
+        return model
+
+    def build(self, calibration: Calibration | None = None) -> pyo.ConcreteModel:
+        """The Pyomo model at the calibrated base, with a zero objective."""
+        backend = PyomoBackend()
+        backend.build(self.create_model(calibration))
+        pm = backend.pyomo_model
+        assert pm is not None  # PyomoBackend.build populates pyomo_model
+        pm.add_component("_obj", pyo.Objective(expr=0.0))
+        return pm
+
+    def solve(self, pm: pyo.ConcreteModel) -> str:
+        """Solve the square system with IPOPT; raise unless it converged."""
+        opt = pyo.SolverFactory("ipopt")
+        opt.options["tol"] = 1e-10
+        opt.options["constr_viol_tol"] = 1e-10
+        res = opt.solve(pm, load_solutions=True)
+        status = str(res.solver.termination_condition)
+        if status not in ("optimal", "locallyOptimal"):
+            raise RuntimeError(f"{self.name}: IPOPT ended {status}")
+        return "optimal"
