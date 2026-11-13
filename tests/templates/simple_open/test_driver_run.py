@@ -6,6 +6,7 @@ from typing import Any
 
 import pyomo.environ as pyo
 import pytest
+from tests.templates.simple_open._helpers import run_tariff_abolition
 
 from equilibria.blocks.equilibrium import Numeraire
 from equilibria.core import Exercise
@@ -124,3 +125,15 @@ def test_a_failed_solve_is_reported_and_leaves_the_cache_clean() -> None:
     base_imports = template.calibration().base["M"][0]
     # base is never solved: it shows exactly what the template handed over
     assert pyo.value(again.model.M[good, "base"]) == pytest.approx(base_imports)
+
+
+def test_changing_the_template_rebuilds_its_model() -> None:
+    template = SimpleOpenEconomy()
+    run_tariff_abolition(template)
+    template.sigma = 8.0
+    changed = run_tariff_abolition(template).model
+    fresh = run_tariff_abolition(SimpleOpenEconomy(sigma=8.0)).model
+    for good in template.calibration().goods:
+        assert pyo.value(changed.M[good, "shock"]) == pytest.approx(
+            pyo.value(fresh.M[good, "shock"]), rel=1e-9
+        )

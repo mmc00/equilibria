@@ -44,9 +44,9 @@ class ModelTemplate(BaseModel, ABC):
 
     model_config = {"arbitrary_types_allowed": True}
 
-    # reflected models by period list; the template carries its data, so the
-    # instance is the content key (ADR-0011)
-    _built: dict[tuple[str, ...], Any] = PrivateAttr(default_factory=dict)
+    # reflected models, keyed by the period list and the template's fields: a
+    # template changed in place (e.g. an elasticity sweep) gets a new model
+    _built: dict[tuple[tuple[str, ...], str], Any] = PrivateAttr(default_factory=dict)
 
     @abstractmethod
     def create_model(self) -> Model:
@@ -71,14 +71,16 @@ class ModelTemplate(BaseModel, ABC):
         """A fresh model with ``periods``, never shared with another call.
 
         Without ``overwrite`` the reflected model is built once per period list
-        and every call returns a copy of it; with ``overwrite`` it is built
-        fresh and kept nowhere.
+        and per value of the template's fields, and every call returns a copy
+        of it; with ``overwrite`` it is built fresh and kept nowhere. The key
+        is the fields, not the files they point to: a data file edited on disk
+        needs a new template.
         """
         from equilibria.core.reflection import reflect
 
         if overwrite:
             return reflect(self.period_model(overwrite), periods)
-        key = tuple(periods)
+        key = (tuple(periods), self.model_dump_json())
         if key not in self._built:
             self._built[key] = reflect(self.period_model(), periods)
         return self._built[key].clone()
