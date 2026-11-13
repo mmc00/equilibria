@@ -43,6 +43,7 @@ def _params():
     return copy.deepcopy(load_params(DATASET))
 
 
+@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_risk_equals_pyomo_helpers(gdx):
     from equilibria.family.capflex import capflex_risk
     from equilibria.templates.gtap.gtap_block_model import (
@@ -94,6 +95,7 @@ def test_prepare_run_raises_before_load_or_build(monkeypatch, tmp_path):
         prepare_run(p, _capflex(), "ROW", cache_root=tmp_path, ref_gdx=None)
 
 
+@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_keys_split_capfix_and_capflex(gdx):
     from equilibria.family.capflex import stamp_capflex_risk
     from equilibria.family.disk_cache import cache_key
@@ -117,6 +119,7 @@ def test_keys_split_capfix_and_capflex(gdx):
     assert cache_key(changed, capflex, "ROW") != k_flex
 
 
+@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_cross_period_path_follows_the_stamp(gdx, tmp_path):
     from equilibria.family import cross_period
     from equilibria.family.capflex import stamp_capflex_risk
@@ -132,6 +135,7 @@ def test_cross_period_path_follows_the_stamp(gdx, tmp_path):
     assert len(paths) == 3
 
 
+@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_stamp_refuses_a_stale_risk(gdx):
     from equilibria.family.capflex import stamp_capflex_risk
 
@@ -143,6 +147,7 @@ def test_stamp_refuses_a_stale_risk(gdx):
         stamp_capflex_risk(p, _capflex(), gdx)
 
 
+@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_capfix_drops_a_stale_stamp_so_its_keys_do_not_move(gdx):
     from equilibria.family.capflex import stamp_capflex_risk
     from equilibria.family.disk_cache import cache_key

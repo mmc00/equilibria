@@ -28,6 +28,8 @@ import pytest
 
 pytest.importorskip("jax")
 
+from tests.family._data import skip_unless_golden_env  # noqa: E402
+
 GOLDEN = Path(__file__).parent / "golden" / "unit_sigma_rows.json"
 ALTAX_DATASETS = ("nus333", "gtap7_10x7")
 RUNGTAP = "gempack_altertax-rungtap_tms-rate10_s8-16-32"
@@ -402,6 +404,7 @@ def test_cd_coefficients_normalise():
     "case", ["gtap7_3x3_default", "gtap7_10x7_default", "nus333_altertax_s1.01"]
 )
 def test_rows_match_golden(case):
+    skip_unless_golden_env(platform="darwin")
     gold = json.loads(GOLDEN.read_text())[case]
     params, closure, rr = _golden_cases()[case]
     snap = _snapshot(*_record(params, closure, rr))

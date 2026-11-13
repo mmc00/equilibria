@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("pyomo")
 
-from tests.family._data import load_params  # noqa: E402
+from tests.family._data import load_params, skip_unless_golden_env  # noqa: E402
 
 VARS = ("pfa", "pfy", "pp_rai", "pwmg", "pefob", "pmcif", "pm", "xwmg", "xmgm")
 GOLDEN = Path(__file__).parent / "golden"
@@ -57,6 +57,7 @@ def _compose(monkeypatch, dataset, impl=None):
 
 @pytest.mark.parametrize("dataset", ["gtap7_3x3", "gtap7_10x7"])
 def test_matches_golden(dataset, monkeypatch):
+    skip_unless_golden_env()
     gold = np.load(GOLDEN / f"ifsub_closure_{dataset}.npz")
     state, calls = _compose(monkeypatch, dataset)
     assert calls == gold["count"].tolist()
