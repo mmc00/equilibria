@@ -8,12 +8,14 @@ This module provides production-related equation blocks including:
 
 from __future__ import annotations
 
+import math
 import typing
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field
 
+from equilibria.blocks._levels import LevelBlock, eq
 from equilibria.blocks.base import Block, ParameterSpec, VariableSpec
 from equilibria.core.calibration_phase import CalibrationPhase
 from equilibria.core.parameters import Parameter
@@ -176,8 +178,8 @@ class CESValueAdded(Block):
                             mp = beta[f_idx] * (VA / FD[f_idx]) ** (1 - rho)
                         else:
                             mp = 0.0
-                        constraints[(f, j)] = (
-                            lambda wf=WF, pva=PVA, mp=mp: wf - pva * mp
+                        constraints[(f, j)] = lambda wf=WF, pva=PVA, mp=mp: (
+                            wf - pva * mp
                         )
 
                 return constraints
@@ -505,8 +507,8 @@ class CETTransformation(Block):
                         price_ratio = 1.0
 
                     if PE > 1e-10:
-                        constraints[(j,)] = (
-                            lambda pd=PD, pe=PE, pr=price_ratio: pd / pe - pr
+                        constraints[(j,)] = lambda pd=PD, pe=PE, pr=price_ratio: (
+                            pd / pe - pr
                         )
                     else:
                         constraints[(j,)] = lambda: 0.0
@@ -731,3 +733,82 @@ class PEPProductionAccountingInit(Block):
                 float(di.get((i, j), 0.0)) for j in J
             )
         return residuals
+
+
+# --- level-form blocks (Hosoe's stdcge): exact equations, calibrated values ---
+
+
+class CobbDouglasValueAdded(LevelBlock):
+    """Cobb-Douglas composite factor and factor demands, in levels.
+
+    ``VA[j] = b_VA[j] * prod_f FD[f,j]**beta_VA[f,j]`` and
+    ``FD[f,j] = beta_VA[f,j] * PVA[j] * VA[j] / WF[f]`` (stdcge eqpy, eqF).
+    """
+
+    name: str = Field(default="CobbDouglasValueAdded")
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["J", "F"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        nj, nf = len(set_manager.get("J")), len(set_manager.get("F"))
+        self.param(parameters, "b_VA", ("J",))
+        self.param(parameters, "beta_VA", ("F", "J"))
+        self.var(variables, "VA", ("J",), (nj,))
+        self.var(variables, "FD", ("F", "J"), (nf, nj))
+        self.var(variables, "PVA", ("J",), (nj,))
+        self.var(variables, "WF", ("F",), (nf,))
+
+        def va(m, idx):
+            (j,) = idx
+            return m.VA[j] == m.b_VA[j] * math.prod(
+                m.FD[f, j] ** m.beta_VA[f, j] for f in m.F
+            )
+
+        def fd(m, idx):
+            f, j = idx
+            return m.FD[f, j] == m.beta_VA[f, j] * m.PVA[j] * m.VA[j] / m.WF[f]
+
+        return [eq("eq_va", ("J",), va), eq("eq_fd", ("F", "J"), fd)]
+
+
+class LeontiefComposite(LevelBlock):
+    """Fixed intermediate and composite-factor requirements and unit cost.
+
+    ``XI[i,j] = a_X[i,j] * Z[j]``, ``VA[j] = a_VA[j] * Z[j]`` and
+    ``PZ[j] = a_VA[j] * PVA[j] + sum_i a_X[i,j] * PQ[i]`` (stdcge eqX, eqY, eqpzs).
+    """
+
+    name: str = Field(default="LeontiefComposite")
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["I", "J"]
+        self.uses = ["VA", "PVA", "PQ"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        ni, nj = len(set_manager.get("I")), len(set_manager.get("J"))
+        self.param(parameters, "a_X", ("I", "J"))
+        self.param(parameters, "a_VA", ("J",))
+        self.var(variables, "XI", ("I", "J"), (ni, nj))
+        self.var(variables, "Z", ("J",), (nj,))
+        self.var(variables, "PZ", ("J",), (nj,))
+
+        def xi(m, idx):
+            i, j = idx
+            return m.XI[i, j] == m.a_X[i, j] * m.Z[j]
+
+        def va_z(m, idx):
+            (j,) = idx
+            return m.VA[j] == m.a_VA[j] * m.Z[j]
+
+        def pz(m, idx):
+            (j,) = idx
+            return m.PZ[j] == m.a_VA[j] * m.PVA[j] + sum(
+                m.a_X[i, j] * m.PQ[i] for i in m.I
+            )
+
+        return [
+            eq("eq_xi", ("I", "J"), xi),
+            eq("eq_va_z", ("J",), va_z),
+            eq("eq_pz", ("J",), pz),
+        ]
