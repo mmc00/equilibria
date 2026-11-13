@@ -135,7 +135,7 @@ def _recalibrate_shares(c: _Ctx) -> None:
 
     GAMS itself calibrates every share once, in the cal block (loop t0), and its
     GDX holds them identical in base, check and shock. Two are already held:
-    - io/af (_recalibrate_io_af is not called): re-deriving af from the prior
+    - io/af: re-deriving af from the prior
       pfa overweighted subsidized Land and slid pft[Land]; holding it raised the
       shock gate 98.21% -> 99.93%.
     - alphad/alpham: re-deriving them from the prior xd/xm/xa broke the tiny

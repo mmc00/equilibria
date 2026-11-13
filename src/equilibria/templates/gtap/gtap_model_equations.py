@@ -1119,9 +1119,8 @@ class GTAPModelEquations:
         create_indexed_param(
             "ava_param", ["r", "a"], adjusted_ava_param, 0.0, mutable=True
         )
-        # mutable=True: same per-period recalibration as and_param/ava_param —
-        # GAMS's iterloop.gms recomputes io(r,i,a,t)/af(r,fp,a,t) every period too
-        # (same "Calibration of parameters" block). See _recalibrate_io_af.
+        # GAMS sets io/af in cal.gms ("Calibration of parameters"), included
+        # before the tsim loop; iterloop.gms does not touch them.
         create_indexed_param(
             "io_param",
             ["r", "i", "a"],

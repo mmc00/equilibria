@@ -247,152 +247,9 @@ def _benchmark_factor_wedge(params):
 
 
 # ---------------------------------------------------------------------------
-# _recalibrate_io_af — replicate GAMS iterloop's per-period io/af recalibration
-# ---------------------------------------------------------------------------
-# Same block, same mechanism as _recalibrate_and_ava — GAMS recomputes:
-#   io(r,i,a,t) = (xa.l(r,i,a,t)/nd.l(r,a,t)) * (pa.l(r,i,a,t)/pnd.l(r,a,t))**sigmand(r,a)
-#   af(r,fp,a,t) = (xf.l(r,fp,a,t)/va.l(r,a,t)) * (pfa.l(r,fp,a,t)/pva.l(r,a,t))**sigmav(r,a)
-# every period from that period's own solved values. Python's io_param/af_param
-# are also benchmark-frozen constants (same substitution mechanism as and/ava).
-# Rebuilds eq_xaa_activity (io) and eq_xfeq (af) for the active period.
-def _recalibrate_io_af(m, params, active_period: str, prior_period: str) -> int:
-    """Rebuild eq_xaa_activity/eq_xfeq for active_period using io/af recomputed
-    from prior_period's own solved xaa/nd/pa/pnd (io) and xf/va/pfa/pva (af).
-
-    Returns the count of cells rebuilt (io+af combined).
-    """
-    from pyomo.environ import Constraint
-    from pyomo.environ import value as _V
-
-    eq_xaa = getattr(m, "eq_xaa_activity", None)
-    xaa = getattr(m, "xaa", None)
-    nd = getattr(m, "nd", None)
-    pa = getattr(m, "pa", None)
-    pnd = getattr(m, "pnd", None)
-    lambdaio = getattr(m, "lambdaio", None)
-
-    eq_xfeq = getattr(m, "eq_xfeq", None)
-    xf = getattr(m, "xf", None)
-    va = getattr(m, "va", None)
-    pfa = getattr(m, "pfa", None)
-    pva = getattr(m, "pva", None)
-    pf = getattr(m, "pf", None)
-
-    sigmand_map = getattr(params.elasticities, "sigmand", {}) or {}
-    sigmav_map = getattr(params.elasticities, "sigmav", {}) or {}
-    lambdaf_map = getattr(params.shifts, "lambdaf", {}) or {}
-
-    # if_sub: GAMS's xfeq uses the LIVE macro M_PFA = pf*(1+fctts+fcttx), NOT the
-    # pfa Var (which is eliminated under if_sub). The rebuilt eq_xfeq below must
-    # keep the same live pf-dependence, else xf stops responding to pf and the
-    # factor price becomes a free DOF that explodes (pf[Land] 11.4 vs GAMS 0.98).
-    # The wedge (fctts+fcttx) = (ftrv-fbep)/evfb is a constant per (r,f,a).
-    # if_sub detection: under if_sub the pfa Var is eliminated (no eq_pfaeq pins
-    # it), so xfeq uses the live macro. Detect by the pfaeq being absent/inactive.
-    _eq_pfaeq = getattr(m, "eq_pfaeq", None)
-    _if_sub = True
-    if _eq_pfaeq is not None:
-        try:
-            _if_sub = not any(_eq_pfaeq[_i].active for _i in _eq_pfaeq)
-        except Exception:
-            _if_sub = True
-    _wedge = _benchmark_factor_wedge(params)
-
-    n_rebuilt = 0
-
-    if None not in (eq_xaa, xaa, nd, pa, pnd, lambdaio):
-        for idx in list(eq_xaa):
-            if not (isinstance(idx, tuple) and idx[-1] == active_period):
-                continue
-            r, i, a, _t = idx
-            prior_idx = (r, i, a, prior_period)
-            nd_prior_idx = (r, a, prior_period)
-            try:
-                xaa_prior = float(_V(xaa[prior_idx]))
-                nd_prior = float(_V(nd[nd_prior_idx]))
-                pa_prior = float(_V(pa[prior_idx]))
-                pnd_prior = float(_V(pnd[nd_prior_idx]))
-            except (KeyError, Exception):
-                continue
-            if nd_prior <= 0.0 or pnd_prior <= 0.0:
-                continue
-            sigmand = float(sigmand_map.get((r, a), 1.0))
-            io_new = (xaa_prior / nd_prior) * (pa_prior / pnd_prior) ** sigmand
-            if io_new <= 0.0 or not eq_xaa[idx].active:
-                continue
-            eq_xaa[idx].deactivate()
-            lio = max(
-                float(_V(lambdaio[idx[:-1]])) if idx[:-1] in lambdaio else 1.0, 1e-8
-            )
-            nd_idx = (r, a, active_period)
-            if abs(sigmand) < 1e-12:
-                m.add_component(
-                    f"_eq_xaa_recal_{r}_{i}_{a}_{active_period}",
-                    Constraint(expr=xaa[idx] == io_new * nd[nd_idx] / lio),
-                )
-            else:
-                m.add_component(
-                    f"_eq_xaa_recal_{r}_{i}_{a}_{active_period}",
-                    Constraint(
-                        expr=xaa[idx]
-                        == io_new
-                        * nd[nd_idx]
-                        * (pnd[nd_idx] / pa[idx]) ** sigmand
-                        * (lio ** (sigmand - 1.0))
-                    ),
-                )
-            n_rebuilt += 1
-
-    if None not in (eq_xfeq, xf, va, pfa, pva):
-        for idx in list(eq_xfeq):
-            if not (isinstance(idx, tuple) and idx[-1] == active_period):
-                continue
-            r, f, a, _t = idx
-            prior_idx = (r, f, a, prior_period)
-            va_prior_idx = (r, a, prior_period)
-            try:
-                xf_prior = float(_V(xf[prior_idx]))
-                va_prior = float(_V(va[va_prior_idx]))
-                pfa_prior = float(_V(pfa[prior_idx]))
-                pva_prior = float(_V(pva[va_prior_idx]))
-            except (KeyError, Exception):
-                continue
-            if va_prior <= 0.0 or pva_prior <= 0.0:
-                continue
-            sigmav = float(sigmav_map.get((r, a), 1.0))
-            af_new = (xf_prior / va_prior) * (pfa_prior / pva_prior) ** sigmav
-            if af_new <= 0.0 or not eq_xfeq[idx].active:
-                continue
-            eq_xfeq[idx].deactivate()
-            lf = max(float(lambdaf_map.get((r, f, a), 1.0)), 1e-8)
-            va_idx = (r, a, active_period)
-            # Denominator = M_PFA. Under if_sub use the LIVE macro pf*(1+wedge) so
-            # xf responds to the live pf (anchoring the factor price); else the
-            # eliminated pfa Var bakes to a constant and pf becomes a free DOF that
-            # explodes (pf[Land] 11.4 vs GAMS 0.98). Not if_sub → the live pfa Var.
-            if _if_sub and pf is not None:
-                _m_pfa_live = pf[idx] * (1.0 + _wedge(r, f, a))
-            else:
-                _m_pfa_live = pfa[idx]
-            m.add_component(
-                f"_eq_xfeq_recal_{r}_{f}_{a}_{active_period}",
-                Constraint(
-                    expr=xf[idx]
-                    == af_new
-                    * va[va_idx]
-                    * (pva[va_idx] / _m_pfa_live) ** sigmav
-                    * (lf ** (sigmav - 1.0))
-                ),
-            )
-            n_rebuilt += 1
-
-    return n_rebuilt
-
-
-# ---------------------------------------------------------------------------
 # _recalibrate_gx_ax — replicate GAMS iterloop's per-period gx/ax recalibration
 # ---------------------------------------------------------------------------
-# Same block, same mechanism as and/ava and io/af — GAMS recomputes:
+# Same block, same mechanism as and/ava — GAMS recomputes:
 #   gx(r,a,i,t) = (x.l/xp.l)*(px.l/p.l)**omegas(r,a)           [omegas != inf]
 #   ax(r,a,i,t) = (x.l/xs.l)*((1+prdtx.l)*p.l/ps.l)**sigmas(r,i)  [sigmas != inf]
 # every period from that period's own solved values. Python's gx_param/p_ax
@@ -1623,8 +1480,7 @@ def _recompute_ifsub_report_vars(m, params, period: str) -> int:
     # The factor tax/subsidy wedge fctts+fcttx (factor_wedge_rate) comes from the
     # benchmark HAR, NOT from model Vars/Params (m.fctts/m.fcttx are 0 under altertax).
     # Reading them off the model gave pfa=pf (missing the wedge) → pfa[EU_28,UnSkLab,
-    # Food] 1.37 vs GAMS 2.26 (39% off). Compute it from the benchmark like
-    # _recalibrate_io_af._wedge does. (Same subsidy-wedge omission class as the af fix.)
+    # Food] 1.37 vs GAMS 2.26 (39% off). Compute it from the benchmark.
     _pfa_wedge = _benchmark_factor_wedge(params)
 
     # --- factor prices: pfa, pfy ---
