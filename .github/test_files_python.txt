@@ -140,6 +140,7 @@ tests/family/test_incidence_csr.py
 tests/family/test_mp_arrays.py
 tests/family/test_mp_build.py
 tests/family/test_newton_checkpoint.py
+tests/family/test_pairing_cache.py
 tests/family/test_parity_ladder_script.py
 tests/family/test_phases.py
 tests/family/test_post_solve.py
