@@ -11,7 +11,7 @@ import pytest
 from equilibria.solver._matching import match_rows
 
 
-def reference(n, adjacency, forced):
+def _recursive_matching(n, adjacency, forced):
     """The loop body of the pre-extraction ``structural_matching``, recursive DFS."""
     pair_left = [-1] * n
     pair_right = [-1] * n
@@ -93,21 +93,21 @@ def test_equals_recursive_reference(seed):
     rng = random.Random(seed)
     n = rng.randint(1, 40)
     adj, forced = _random_case(rng, n, rng.choice([0.05, 0.1, 0.3]), rng.randint(0, 8))
-    assert match_rows(n, adj, forced) == reference(n, adj, forced)
+    assert match_rows(n, adj, forced) == _recursive_matching(n, adj, forced)
 
 
 def test_ties_complete_bipartite():
     n = 12
     adj = [list(range(n)) for _ in range(n)]
-    assert match_rows(n, adj) == reference(n, adj, [])
+    assert match_rows(n, adj) == _recursive_matching(n, adj, [])
     adj = [list(range(n))[::-1] for _ in range(n)]
-    assert match_rows(n, adj) == reference(n, adj, [])
+    assert match_rows(n, adj) == _recursive_matching(n, adj, [])
 
 
 def test_later_forced_pair_overwrites():
     adj = [[0, 1], [0, 1]]
     forced = [(0, 0, False), (0, 1, False), (1, 1, True)]
-    assert match_rows(2, adj, forced) == reference(2, adj, forced)
+    assert match_rows(2, adj, forced) == _recursive_matching(2, adj, forced)
 
 
 def _chain(n):
@@ -125,7 +125,7 @@ def test_deep_augmenting_path_equals_reference():
     old = sys.getrecursionlimit()
     sys.setrecursionlimit(20000)
     try:
-        want = reference(n, adj, forced)
+        want = _recursive_matching(n, adj, forced)
     finally:
         sys.setrecursionlimit(old)
     got = match_rows(n, adj, forced)
