@@ -11,9 +11,9 @@ import pytest
 HERE = Path(__file__).parent
 
 # The family route is the optional ``family`` extra (jax). Without it (CI installs the
-# dev group only) nothing here can import, so the directory is not collected.
-if importlib.util.find_spec("jax") is None:
-    collect_ignore_glob = ["test_*.py"]
+# dev group only) every test here is skipped; CI names the files one by one, which
+# ``collect_ignore`` does not cover.
+HAS_JAX = importlib.util.find_spec("jax") is not None
 
 
 def _wants_slow(config: pytest.Config) -> bool:
@@ -24,6 +24,12 @@ def _wants_slow(config: pytest.Config) -> bool:
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list) -> None:
+    if not HAS_JAX:
+        no_jax = pytest.mark.skip(reason="needs the family extra (jax)")
+        for item in items:
+            if item.path.is_relative_to(HERE):
+                item.add_marker(no_jax)
+        return
     if _wants_slow(config):
         return
     skip = pytest.mark.skip(reason="slow: run with -m slow or EQUILIBRIA_RUN_SLOW=1")

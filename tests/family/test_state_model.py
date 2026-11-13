@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 pytest.importorskip("pyomo")
+pytest.importorskip("jax")  # tests.family._oracle imports the family route
 
 from tests.family._data import DATASETS, load_params  # noqa: E402
 from tests.family._oracle import comp_stat_closure  # noqa: E402
