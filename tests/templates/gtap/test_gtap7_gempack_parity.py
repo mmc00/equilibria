@@ -62,6 +62,7 @@ def _solve_shock(
     solve_nlp: bool = False,
     residual_region: str | None = None,
     backend: str | None = None,
+    unit_sigma: str = "gams",
 ):
     """Build + seed + solve base→check→shock (gtap pure MCP) and return the model.
 
@@ -83,6 +84,10 @@ def _solve_shock(
     driver (equilibria.family.driver) and returns ``(FamilyResult, code)`` instead of
     ``(m, code)``. ``EQUILIBRIA_GTAP_BACKEND=family`` sets the default; an unsupported
     configuration raises before any work.
+
+    ``unit_sigma`` "gams" (the default) keeps the 1.01 stand-in for a unit elasticity,
+    as the recorded oracles (paper Table 1, the example-15 gaps) were solved; "gempack"
+    solves it as exact sigma = 1 (log-form CD), which the gtap7_gempack gate uses.
     """
     import os as _os
 
@@ -156,10 +161,7 @@ def _solve_shock(
             # GEMPACK is the reference: use the data's factor wedge (EVFP = EVFB +
             # FTRV + FBEP), the gtap7_gempack basis. The GAMS sign drops 15x10 to 93.9%.
             va_subsidy_basis="gempack",
-            # Exact sigma = 1 (log-form CD), as GEMPACK solves it, instead of the 1.01
-            # stand-in. Measured on 3x3..15x10: within-1pp unchanged, qga worst cell
-            # 0.04-0.09 pp closer.
-            unit_sigma="gempack",
+            unit_sigma=unit_sigma,
         )
         if backend == "family":
             fres = solve_gtap_family(p, ac, rr, ref_gdx=gdx)
@@ -316,8 +318,15 @@ def test_gtap7_gempack_parity(row):
     # Large datasets run as an NLP (their capFix MCP does not converge in PATH); small ones
     # keep the native MCP path.
     solve_nlp = row.dataset in _NLP_MODE_DATASETS
+    # Exact sigma = 1 (log-form CD), as GEMPACK solves it, instead of the 1.01
+    # stand-in. Measured on 3x3..15x10: within-1pp unchanged, qga worst cell
+    # 0.04-0.09 pp closer.
     m, code = _solve_shock(
-        row.dataset, row.ifsub, savf_flag=savf_flag, solve_nlp=solve_nlp
+        row.dataset,
+        row.ifsub,
+        savf_flag=savf_flag,
+        solve_nlp=solve_nlp,
+        unit_sigma="gempack",
     )
     assert code == 1, (
         f"[{row.dataset}/{savf_flag}/{'NLP' if solve_nlp else 'MCP'}] shock did not "
