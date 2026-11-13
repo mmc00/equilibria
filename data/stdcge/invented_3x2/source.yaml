@@ -3,9 +3,11 @@ model: stdcge
 dataset: invented_3x2
 source: 'invented in this repo to test that simple_open is not tied to the book''s
   SAM: three goods (AGR, IND, SER), the book''s two factors, every flow nonzero, balanced
-  by construction (household demand closes each good row)'
+  by construction (household demand closes each good row); closure.yaml names the
+  numeraire factor'
 license: written in this repository
 outputs:
+  closure.yaml: 307e9af3550e3c53b9bf03579caa2b9d2b1495ff403d81f85aabd9f8c59e3de9
   sam.csv: 13f5600f7968c5a15879ffaa1f2e3ac95404010a52e0ece5ab157d21e00648b0
 status: verified
 notes: ''

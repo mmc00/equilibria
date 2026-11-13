@@ -69,7 +69,6 @@ def test_no_dataset_names_in_code() -> None:
             text = f.read_text()
             if "blocks" in f.parts and f.name == "__init__.py":
                 text = _new_level_blocks(text)
-            text = text.replace('default="LAB"', "")
             found += [
                 f"{f.name}: {m}" for m in re.findall(r"\b(?:BRD|MLK|CAP|LAB)\b", text)
             ]
@@ -98,6 +97,7 @@ def _sparse_sam(tmp_path: Path) -> Path:
     add("MLK", "HOH", 14.0)
     path = tmp_path / "sam.csv"
     path.write_text("\n".join(",".join(r) for r in rows) + "\n")
+    (tmp_path / "closure.yaml").write_text("numeraire: LAB\n")
     return path
 
 
@@ -111,3 +111,20 @@ def test_zero_cells_outside_trade_solve(tmp_path: Path) -> None:
     for key, b in base.items():
         assert check[key] == pytest.approx(b, rel=1e-8, abs=1e-8), key
     assert abs(pyo.value(cast("Any", run["shock"]).WALRAS)) <= 1e-8
+
+
+def test_numeraire_comes_from_the_data() -> None:
+    template = SimpleOpenEconomy()
+    assert template.numeraire is None
+    assert template.numeraire_factor() == "LAB"
+    other = SimpleOpenEconomy(sam_path=dataset_dir("invented_3x2") / "sam.csv")
+    assert other.numeraire_factor() == "LAB"
+
+
+def test_missing_closure_file_is_rejected(tmp_path: Path) -> None:
+    sam = tmp_path / "sam.csv"
+    sam.write_text((dataset_dir("hosoe_2x2") / "sam.csv").read_text())
+    with pytest.raises(ValueError, match="closure.yaml"):
+        SimpleOpenEconomy(sam_path=sam).build()
+    # an explicit numeraire needs no file
+    assert SimpleOpenEconomy(sam_path=sam, numeraire="CAP").numeraire_factor() == "CAP"

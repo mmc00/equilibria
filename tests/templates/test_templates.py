@@ -20,7 +20,8 @@ class TestSimpleOpenEconomy:
     def test_template_default_creation(self):
         template = SimpleOpenEconomy()
         assert template.name == "SimpleOpenEconomy"
-        assert (template.sigma, template.psi, template.numeraire) == (2.0, 2.0, "LAB")
+        assert (template.sigma, template.psi) == (2.0, 2.0)
+        assert template.numeraire_factor() == "LAB"
 
     def test_create_model_takes_sets_from_the_sam(self):
         model = SimpleOpenEconomy().create_model()

@@ -173,13 +173,15 @@ def regenerate(args: argparse.Namespace) -> int:
                   "(this repo) runs it")  # fmt: skip
     if not (data / SOURCE_FILE).exists():
         data.mkdir(parents=True, exist_ok=True)
+        (data / "closure.yaml").write_text("numeraire: LAB\n")
         rc |= sam(argparse.Namespace(gams=args.gams, model_dir=gams_dir,
                                      out=data / "sam.csv"))  # fmt: skip
         rc |= _ws("--data-root", str(root), "--folder", str(data), "--kind", "data",
                   "--model", MODEL, "--dataset", DATASET, "--no-run", "--license",
                   "distributed with GAMS in its model library", "--source",
                   "the SAM table of gamslib stdcge (Hosoe et al. 2004, ch. 6), "
-                  "written by tools/gams_job.py sam")  # fmt: skip
+                  "written by tools/gams_job.py sam; closure.yaml (this repo) "
+                  "names the numeraire factor, pf.fx('LAB') = 1 in the .gms")  # fmt: skip
     if not (result / SOURCE_FILE).exists():
         rc |= _ws("--data-root", str(root), "--folder", str(result), "--kind",
                   "result", "--model", MODEL, "--dataset", DATASET, "--tool", "gams",

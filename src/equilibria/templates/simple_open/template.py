@@ -47,7 +47,28 @@ class SimpleOpenEconomy(ModelTemplate):
     sam_path: Path = Field(default_factory=_default_sam)
     sigma: float = Field(default=2.0, gt=0, description="Armington elasticity")
     psi: float = Field(default=2.0, gt=0, description="CET elasticity")
-    numeraire: str = Field(default="LAB", description="factor whose price is 1")
+    numeraire: str | None = Field(
+        default=None,
+        description="factor whose price is 1; None reads closure.yaml next to the SAM",
+    )
+
+    def numeraire_factor(self) -> str:
+        """The numeraire factor: the field, or ``numeraire`` in the
+        ``closure.yaml`` that sits next to the SAM (it belongs to the data)."""
+        if self.numeraire is not None:
+            return self.numeraire
+        closure = self.sam_path.parent / "closure.yaml"
+        if not closure.exists():
+            raise ValueError(
+                f"no numeraire: pass numeraire= or write {closure} "
+                "with a line 'numeraire: <factor>'"
+            )
+        import yaml
+
+        data = yaml.safe_load(closure.read_text()) or {}
+        if "numeraire" not in data:
+            raise ValueError(f"{closure} has no 'numeraire' entry")
+        return str(data["numeraire"])
 
     def calibration(self) -> Calibration:
         return calibrate(load_sam(self.sam_path), sigma=self.sigma, psi=self.psi)
@@ -63,7 +84,7 @@ class SimpleOpenEconomy(ModelTemplate):
             "factors": list(sam.factors),
             "sigma": self.sigma,
             "psi": self.psi,
-            "numeraire": self.numeraire,
+            "numeraire": self.numeraire_factor(),
             "blocks": [b.name for b in self.create_model().blocks],
         }
 
@@ -85,6 +106,7 @@ class SimpleOpenEconomy(ModelTemplate):
             ]
         )
         kw: dict[str, Any] = {"values": cal.values, "start": cal.base}
+        numeraire = self.numeraire_factor()
         for block in (
             CobbDouglasValueAdded(**kw),
             LeontiefComposite(**kw),
@@ -95,8 +117,8 @@ class SimpleOpenEconomy(ModelTemplate):
             TaxGovernment(**kw),
             StdcgeInvestment(**kw),
             GoodsMarket(**kw),
-            FactorMarket(numeraire=self.numeraire, **kw),
-            Numeraire(numeraire=self.numeraire, **kw),
+            FactorMarket(numeraire=numeraire, **kw),
+            Numeraire(numeraire=numeraire, **kw),
         ):
             model.add_block(block)
         return model

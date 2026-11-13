@@ -11,10 +11,14 @@ generated_from:
     path: stdcge/gams
     sha256:
       stdcge_points.gms: a8ea5723d9b0021dbbd4ace6015041789eeb8fadb671da2cdbae4f1eec140f4f
-      tools/gams_job.py: 1b2de9cd53e76670995a65d50ab865ab61822facce0763ccaf526018a4dbfe3e
+      tools/gams_job.py: b3d035af16d1086c06301987f4951d59dcf53bb73eec88790344befe711c35dc
   data:
     path: stdcge/hosoe_2x2
     sha256:
+      closure.yaml: 307e9af3550e3c53b9bf03579caa2b9d2b1495ff403d81f85aabd9f8c59e3de9
+      gams_nlp_tariff0/base.gdx: 565adb1171b7858a832fbfe47b2c852a51920d1e265cb883bdee0aea188c8912
+      gams_nlp_tariff0/check.gdx: bfa66af8d6e29007e7cb1d58ac76082e1be579a69f98a2ed4c71d0cedefd4553
+      gams_nlp_tariff0/shock.gdx: ea4975ae780debd9ad8c742f8a29c1fc585005bb7e47d18de2ad701c4b42e22b
       sam.csv: 10f42e3746578ebefc673cb430bead45b62a95cbe29538ed5df2b643dbf51a7a
 solver:
   name: CONOPT
@@ -22,7 +26,7 @@ command: /Users/marmol/proyectos/Pedro/.venv/bin/python /Users/marmol/proyectos/
   run --model-dir /Users/marmol/proyectos/equilibria-wt-so/data/stdcge/gams --out
   /Users/marmol/proyectos/equilibria-wt-so/data/stdcge/hosoe_2x2/gams_nlp_tariff0
   --gams gams --tool-version 53.5.0
-equilibria_commit: f8957bd6
+equilibria_commit: 8ddf1e8c
 exit:
   code: 0
 outputs:
@@ -30,8 +34,8 @@ outputs:
   check.gdx: bfa66af8d6e29007e7cb1d58ac76082e1be579a69f98a2ed4c71d0cedefd4553
   shock.gdx: ea4975ae780debd9ad8c742f8a29c1fc585005bb7e47d18de2ad701c4b42e22b
 run:
-  date: '2026-11-13T10:23:27-06:00'
-  duration_s: 1.109
+  date: '2026-11-13T13:11:23-06:00'
+  duration_s: 0.993
   machine:
     os: macOS 26.2 (Darwin 25.2.0)
     cpu: Apple M3 Pro

@@ -81,7 +81,10 @@ accounts):
   household demand must be the exact Cobb-Douglas of the `.gms`.
   (`blocks/production` `CESValueAdded` today switches to a "log-linearized
   Cobb-Douglas form" when σ = 1; that is not acceptable here.)
-- Goods or factor names hard-coded anywhere in the template or its blocks.
+- Goods or factor names hard-coded anywhere in the template or its blocks. The
+  numeraire factor belongs to the data: `closure.yaml` next to each SAM
+  (`numeraire: LAB` for the book's), or an explicit `numeraire=` (decided with
+  the maintainer after the final review).
 
 ## Decisions
 
