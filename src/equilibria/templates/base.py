@@ -27,7 +27,7 @@ class ModelTemplate(BaseModel, ABC):
         num_factors: Number of factors of production
 
     Example:
-        >>> template = SimpleOpenEconomy(num_sectors=3)
+        >>> template = SimpleOpenEconomy()
         >>> model = template.create_model()
         >>> print(model.statistics)
     """

@@ -9,7 +9,7 @@ implementation.
 |---|---|---|---|
 | `equilibria.templates.gtap` | GTAP Standard 7 | MCP (PATH) · NLP (IPOPT), single- and multi-period | See the [GTAP 7 coverage matrix](gtap7_coverage_matrix.md) |
 | `equilibria.templates.pep_pyomo` | PEP-1-1 v2.1 | NLP (IPOPT) · MCP (PATH) | 100% vs GAMS — see the [PEP coverage matrix](pep_coverage_matrix.md) |
-| `equilibria.templates.simple_open` | Didactic open economy | NLP | GAMS-parity contract (`simple_open_contract.py`) |
+| `equilibria.templates.simple_open` | Hosoe's standard CGE (gamslib `stdcge`) | square system (IPOPT, PATH or Newton) | 100% vs GAMS at base, check and tariff shock |
 | `equilibria.templates` (legacy PEP) | PEP-1-1 (cyipopt) | NLP | Superseded by `pep_pyomo`; to be removed |
 
 ## GTAP Standard 7 (`gtap`)
@@ -37,8 +37,15 @@ The original cyipopt-based PEP template (`pep_*` modules under
 
 ## simple_open (`simple_open`)
 
-A small open-economy model used to exercise the framework end-to-end and
-as a didactic entry point — one SAM, a handful of sectors, an explicit
-GAMS-parity contract (`simple_open_contract.py`,
-`simple_open_parity_pipeline.py`). It has no dedicated quickstart; its
-parity pipeline doubles as the usage example.
+The standard CGE model of Hosoe, Gasawa and Hashimoto (chapter 6 of their
+handbook), shipped with GAMS as `stdcge`: Cobb-Douglas value added, fixed
+intermediates, CET exports, Armington imports with tariffs, one household,
+a government and investment. It is built from the generic level-form blocks
+(`blocks/production`, `trade`, `demand`, `institutions`, `equilibrium`) and
+reads its goods and factors from the SAM, so any SAM with the same accounts
+works; the book's SAM (bread and milk) is the default.
+
+`SimpleOpenEconomy().run()` returns the base, the check and the shock (every
+import tariff set to zero); it matches GAMS in every cell of the three
+(`equilibria.compare` with the `stdcge` map, reference in `data/stdcge/`).
+Example: `examples/cge/example_07_templates.py`.

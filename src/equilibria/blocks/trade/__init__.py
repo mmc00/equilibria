@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 from pydantic import Field
 
+from equilibria.blocks._levels import LevelBlock, eq
 from equilibria.blocks.base import Block, ParameterSpec, VariableSpec
 from equilibria.core.calibration_phase import CalibrationPhase
 from equilibria.core.parameters import Parameter
@@ -1590,3 +1591,70 @@ class PEPTradeMarketClearingInit(Block):
                 residuals[f"EQ88_{i}"] = supply - float(dd.get(i, 0.0))
 
         return residuals
+
+
+class ArmingtonComposite(LevelBlock):
+    """Armington CES of imports and domestic goods with a tariff, in levels.
+
+    ``Q = gamma_A*(delta_M*M**eta + delta_D*D**eta)**(1/eta)``,
+    ``M = (gamma_A**eta*delta_M*PQ/((1+tau_m)*PM))**(1/(1-eta))*Q`` and
+    ``D = (gamma_A**eta*delta_D*PQ/PD)**(1/(1-eta))*Q``,
+    ``eta = (sigma_A-1)/sigma_A`` (stdcge eqpqs, eqM, eqD). ``tau_m`` is mutable:
+    a tariff shock changes it.
+    """
+
+    name: str = Field(default="ArmingtonComposite")
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["I"]
+        self.uses = ["D", "PD", "PM"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        ni = len(set_manager.get("I"))
+        for name in ("gamma_A", "delta_M", "delta_D", "sigma_A"):
+            self.param(parameters, name, ("I",))
+        self.param(parameters, "tau_m", ("I",), mutable=True)
+        self.var(variables, "Q", ("I",), (ni,))
+        self.var(variables, "M", ("I",), (ni,))
+        self.var(variables, "PQ", ("I",), (ni,))
+
+        def eta(m, i):
+            return (m.sigma_A[i] - 1) / m.sigma_A[i]
+
+        def arm(m, idx):
+            (i,) = idx
+            e = eta(m, i)
+            return m.Q[i] == m.gamma_A[i] * (
+                m.delta_M[i] * m.M[i] ** e + m.delta_D[i] * m.D[i] ** e
+            ) ** (1 / e)
+
+        def imports(m, idx):
+            (i,) = idx
+            e = eta(m, i)
+            return (
+                m.M[i]
+                == (
+                    m.gamma_A[i] ** e
+                    * m.delta_M[i]
+                    * m.PQ[i]
+                    / ((1 + m.tau_m[i]) * m.PM[i])
+                )
+                ** (1 / (1 - e))
+                * m.Q[i]
+            )
+
+        def domestic(m, idx):
+            (i,) = idx
+            e = eta(m, i)
+            return (
+                m.D[i]
+                == (m.gamma_A[i] ** e * m.delta_D[i] * m.PQ[i] / m.PD[i])
+                ** (1 / (1 - e))
+                * m.Q[i]
+            )
+
+        return [
+            eq("eq_arm", ("I",), arm),
+            eq("eq_m", ("I",), imports),
+            eq("eq_d", ("I",), domestic),
+        ]

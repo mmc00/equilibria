@@ -51,6 +51,7 @@ templates = [
 "templates/simple_open" = [
   "src/equilibria/templates/simple_open",
   "src/equilibria/baseline/simple_open_",
+  "src/equilibria/blocks/_levels.py",
   "src/equilibria/blocks/production/",
   "src/equilibria/blocks/trade/",
   "src/equilibria/blocks/demand/",
@@ -95,7 +96,7 @@ parity = [
   "docs/site/api/templates_pep_pyomo.md",
   "docs/notes/pep/pep_*.md",
 ]
-"templates/simple_open" = ["docs/notes/guides/simple_open_*.md"]
+"templates/simple_open" = ["docs/site/guide/templates.md"]
 templates = ["docs/site/guide/templates.md", "docs/notes/guides/simulations_api.md"]
 blocks = [
   "docs/site/api/blocks.md",

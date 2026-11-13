@@ -1,0 +1,8 @@
+kind: model
+model: stdcge
+source: GAMS model library, stdcge (SEQ=276), copied unchanged from GAMS 53.5.0 gamslib_ml/stdcge.276.
+  Hosoe, Gasawa and Hashimoto, Handbook of CGE Modeling (2004), ch. 6
+outputs:
+  stdcge.gms: 180e7140869595cdd457423e6dd4b0e291394dbc910ab03763d3c71256fdc255
+status: verified
+notes: ''

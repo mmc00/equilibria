@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from pydantic import Field
 
+from equilibria.blocks._levels import LevelBlock, eq
 from equilibria.blocks.base import Block, ParameterSpec, VariableSpec
 from equilibria.core.calibration_phase import CalibrationPhase
 from equilibria.core.parameters import Parameter
@@ -661,3 +662,73 @@ class PEPMacroClosureInit(Block):
             "EQ87": it - it_rhs,
             "EQ93": gdp_fd - gdp_fd_rhs,
         }
+
+
+class GoodsMarket(LevelBlock):
+    """Composite goods clear: ``Q = XP + XG + XV + sum_j XI`` (stdcge eqpqd)."""
+
+    name: str = Field(default="GoodsMarket")
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["I", "J"]
+        self.uses = ["Q", "XP", "XG", "XV", "XI"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        def q(m, idx):
+            (i,) = idx
+            return m.Q[i] == m.XP[i] + m.XG[i] + m.XV[i] + sum(m.XI[i, j] for j in m.J)
+
+        return [eq("eq_q", ("I",), q)]
+
+
+class FactorMarket(LevelBlock):
+    """Factors clear: ``sum_j FD = FF`` (stdcge eqpf), with a Walras slack.
+
+    Fixing the numeraire's price leaves one equation redundant (Walras' law).
+    A free ``WALRAS`` variable enters the numeraire factor's row, so the system
+    stays square without dropping an equation; it must be ~0 at a solution.
+    """
+
+    name: str = Field(default="FactorMarket")
+    numeraire: str
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["F", "J"]
+        self.uses = ["FD"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        factors = list(set_manager.get("F"))
+        if self.numeraire not in factors:
+            raise ValueError(
+                f"numeraire {self.numeraire!r} is not a factor; "
+                f"the factors are {tuple(factors)}"
+            )
+        self.param(parameters, "FF", ("F",))
+        self.var(variables, "WALRAS", (), (), lower=float("-inf"))
+        num = self.numeraire
+
+        def ff(m, idx):
+            (h,) = idx
+            slack = m.WALRAS if h == num else 0
+            return sum(m.FD[h, j] for j in m.J) + slack == m.FF[h]
+
+        return [eq("eq_ff", ("F",), ff)]
+
+
+class Numeraire(LevelBlock):
+    """The numeraire factor's price is one: ``WF[numeraire] = 1``."""
+
+    name: str = Field(default="Numeraire")
+    numeraire: str
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["F"]
+        self.uses = ["WF"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        num = self.numeraire
+
+        def norm(m, idx):
+            return m.WF[num] == 1
+
+        return [eq("eq_num", (), norm)]

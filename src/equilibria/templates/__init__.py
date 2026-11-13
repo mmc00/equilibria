@@ -11,23 +11,6 @@ from typing import Any
 __all__ = [
     "ModelTemplate",
     "SimpleOpenEconomy",
-    "SimpleOpenContract",
-    "SimpleOpenClosureConfig",
-    "SimpleOpenEquationConfig",
-    "SimpleOpenBoundsConfig",
-    "build_simple_open_closure_config",
-    "build_simple_open_contract",
-    "SimpleOpenRuntimeConfig",
-    "SimpleOpenReferenceConfig",
-    "build_simple_open_runtime_config",
-    "SimpleOpenConstraintJacobianHarness",
-    "SimpleOpenBenchmarkParameters",
-    "SimpleOpenParitySpec",
-    "build_simple_open_parity_spec",
-    "SimpleOpenGAMSReference",
-    "SimpleOpenParityComparison",
-    "load_simple_open_gams_reference",
-    "compare_simple_open_gams_parity",
     "PEPContract",
     "PEPClosureConfig",
     "PEPEquationConfig",
@@ -94,93 +77,6 @@ def __getattr__(name: str) -> Any:
         from equilibria.templates.simple_open import SimpleOpenEconomy
 
         return SimpleOpenEconomy
-
-    if name in {
-        "SimpleOpenContract",
-        "SimpleOpenClosureConfig",
-        "SimpleOpenEquationConfig",
-        "SimpleOpenBoundsConfig",
-        "build_simple_open_closure_config",
-        "build_simple_open_contract",
-    }:
-        from equilibria.templates.simple_open_contract import (
-            SimpleOpenBoundsConfig,
-            SimpleOpenClosureConfig,
-            SimpleOpenContract,
-            SimpleOpenEquationConfig,
-            build_simple_open_closure_config,
-            build_simple_open_contract,
-        )
-
-        return {
-            "SimpleOpenContract": SimpleOpenContract,
-            "SimpleOpenClosureConfig": SimpleOpenClosureConfig,
-            "SimpleOpenEquationConfig": SimpleOpenEquationConfig,
-            "SimpleOpenBoundsConfig": SimpleOpenBoundsConfig,
-            "build_simple_open_closure_config": build_simple_open_closure_config,
-            "build_simple_open_contract": build_simple_open_contract,
-        }[name]
-
-    if name in {
-        "SimpleOpenRuntimeConfig",
-        "SimpleOpenReferenceConfig",
-        "build_simple_open_runtime_config",
-    }:
-        from equilibria.templates.simple_open_runtime_config import (
-            SimpleOpenReferenceConfig,
-            SimpleOpenRuntimeConfig,
-            build_simple_open_runtime_config,
-        )
-
-        return {
-            "SimpleOpenRuntimeConfig": SimpleOpenRuntimeConfig,
-            "SimpleOpenReferenceConfig": SimpleOpenReferenceConfig,
-            "build_simple_open_runtime_config": build_simple_open_runtime_config,
-        }[name]
-
-    if name == "SimpleOpenConstraintJacobianHarness":
-        from equilibria.templates.simple_open_constraint_jacobian import (
-            SimpleOpenConstraintJacobianHarness,
-        )
-
-        return SimpleOpenConstraintJacobianHarness
-
-    if name in {
-        "SimpleOpenBenchmarkParameters",
-        "SimpleOpenParitySpec",
-        "build_simple_open_parity_spec",
-    }:
-        from equilibria.templates.simple_open_parity_spec import (
-            SimpleOpenBenchmarkParameters,
-            SimpleOpenParitySpec,
-            build_simple_open_parity_spec,
-        )
-
-        return {
-            "SimpleOpenBenchmarkParameters": SimpleOpenBenchmarkParameters,
-            "SimpleOpenParitySpec": SimpleOpenParitySpec,
-            "build_simple_open_parity_spec": build_simple_open_parity_spec,
-        }[name]
-
-    if name in {
-        "SimpleOpenGAMSReference",
-        "SimpleOpenParityComparison",
-        "load_simple_open_gams_reference",
-        "compare_simple_open_gams_parity",
-    }:
-        from equilibria.templates.simple_open_parity_pipeline import (
-            SimpleOpenGAMSReference,
-            SimpleOpenParityComparison,
-            compare_simple_open_gams_parity,
-            load_simple_open_gams_reference,
-        )
-
-        return {
-            "SimpleOpenGAMSReference": SimpleOpenGAMSReference,
-            "SimpleOpenParityComparison": SimpleOpenParityComparison,
-            "load_simple_open_gams_reference": load_simple_open_gams_reference,
-            "compare_simple_open_gams_parity": compare_simple_open_gams_parity,
-        }[name]
 
     if name in {
         "PEPContract",

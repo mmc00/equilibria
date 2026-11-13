@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from pydantic import Field
 
+from equilibria.blocks._levels import LevelBlock, eq
 from equilibria.blocks.base import Block, ParameterSpec, VariableSpec
 from equilibria.core.calibration_phase import CalibrationPhase
 from equilibria.core.parameters import Parameter
@@ -623,3 +624,105 @@ class RestOfWorld(Block):
             )
         if "FSAV0" in calibrated and "FSAV" in var_manager:
             var_manager.get("FSAV").value = np.array([calibrated["FSAV0"]])
+
+
+class ExternalSector(LevelBlock):
+    """World prices and the balance of payments, in levels.
+
+    ``PE = EPS*pWe``, ``PM = EPS*pWm`` and ``sum pWe*E + Sf = sum pWm*M``: world
+    prices and foreign saving ``Sf`` are fixed, the exchange rate ``EPS`` clears
+    the balance (stdcge eqpe, eqpm, eqepsilon).
+    """
+
+    name: str = Field(default="ExternalSector")
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["I"]
+        self.uses = ["E", "M"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        ni = len(set_manager.get("I"))
+        self.param(parameters, "pWe", ("I",))
+        self.param(parameters, "pWm", ("I",))
+        self.param(parameters, "Sf", ())
+        self.var(variables, "PE", ("I",), (ni,))
+        self.var(variables, "PM", ("I",), (ni,))
+        self.var(variables, "EPS", (), ())
+
+        def pe(m, idx):
+            (i,) = idx
+            return m.PE[i] == m.EPS * m.pWe[i]
+
+        def pm(m, idx):
+            (i,) = idx
+            return m.PM[i] == m.EPS * m.pWm[i]
+
+        def bop(m, idx):
+            return sum(m.pWe[i] * m.E[i] for i in m.I) + m.Sf == sum(
+                m.pWm[i] * m.M[i] for i in m.I
+            )
+
+        return [
+            eq("eq_pe", ("I",), pe),
+            eq("eq_pm", ("I",), pm),
+            eq("eq_bop", (), bop),
+        ]
+
+
+class TaxGovernment(LevelBlock):
+    """Direct, production and import taxes; fixed saving rate; fixed shares.
+
+    ``TD = tau_d*sum_f WF*FF``, ``TZ = tau_z*PZ*Z``, ``TM = tau_m*PM*M``,
+    ``SG = ssg*(TD + sum TZ + sum TM)`` and
+    ``XG = mu_G*(TD + sum TZ + sum TM - SG)/PQ`` (stdcge eqTd, eqTz, eqTm, eqSg,
+    eqXg).
+    """
+
+    name: str = Field(default="TaxGovernment")
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["I", "J", "F"]
+        self.uses = ["WF", "PZ", "Z", "PM", "M", "PQ"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        ni, nj = len(set_manager.get("I")), len(set_manager.get("J"))
+        self.param(parameters, "tau_d", ())
+        self.param(parameters, "tau_z", ("J",))
+        self.param(parameters, "tau_m", ("I",), mutable=True)
+        self.param(parameters, "mu_G", ("I",))
+        self.param(parameters, "ssg", ())
+        self.param(parameters, "FF", ("F",))
+        self.var(variables, "TD", (), ())
+        self.var(variables, "TZ", ("J",), (nj,), lower=0.0)
+        self.var(variables, "TM", ("I",), (ni,), lower=0.0)
+        self.var(variables, "XG", ("I",), (ni,))
+        self.var(variables, "SG", (), ())
+
+        def revenue(m):
+            return m.TD + sum(m.TZ[j] for j in m.J) + sum(m.TM[i] for i in m.I)
+
+        def td(m, idx):
+            return m.tau_d * sum(m.WF[f] * m.FF[f] for f in m.F) == m.TD
+
+        def tz(m, idx):
+            (j,) = idx
+            return m.TZ[j] == m.tau_z[j] * m.PZ[j] * m.Z[j]
+
+        def tm(m, idx):
+            (i,) = idx
+            return m.TM[i] == m.tau_m[i] * m.PM[i] * m.M[i]
+
+        def xg(m, idx):
+            (i,) = idx
+            return m.XG[i] == m.mu_G[i] * (revenue(m) - m.SG) / m.PQ[i]
+
+        def sg(m, idx):
+            return m.ssg * revenue(m) == m.SG
+
+        return [
+            eq("eq_td", (), td),
+            eq("eq_tz", ("J",), tz),
+            eq("eq_tm", ("I",), tm),
+            eq("eq_xg", ("I",), xg),
+            eq("eq_sg", (), sg),
+        ]

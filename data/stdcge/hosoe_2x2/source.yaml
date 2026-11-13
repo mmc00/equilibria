@@ -1,0 +1,15 @@
+kind: data
+model: stdcge
+dataset: hosoe_2x2
+source: the SAM table of gamslib stdcge (Hosoe et al. 2004, ch. 6), written by tools/gams_job.py
+  sam; closure.yaml (this repo) names the numeraire factor, pf.fx('LAB') = 1 in the
+  .gms
+license: distributed with GAMS in its model library
+outputs:
+  closure.yaml: 307e9af3550e3c53b9bf03579caa2b9d2b1495ff403d81f85aabd9f8c59e3de9
+  gams_nlp_tariff0/base.gdx: 565adb1171b7858a832fbfe47b2c852a51920d1e265cb883bdee0aea188c8912
+  gams_nlp_tariff0/check.gdx: bfa66af8d6e29007e7cb1d58ac76082e1be579a69f98a2ed4c71d0cedefd4553
+  gams_nlp_tariff0/shock.gdx: ea4975ae780debd9ad8c742f8a29c1fc585005bb7e47d18de2ad701c4b42e22b
+  sam.csv: 10f42e3746578ebefc673cb430bead45b62a95cbe29538ed5df2b643dbf51a7a
+status: verified
+notes: ''

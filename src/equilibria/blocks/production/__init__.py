@@ -8,12 +8,14 @@ This module provides production-related equation blocks including:
 
 from __future__ import annotations
 
+import math
 import typing
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field
 
+from equilibria.blocks._levels import LevelBlock, eq
 from equilibria.blocks.base import Block, ParameterSpec, VariableSpec
 from equilibria.core.calibration_phase import CalibrationPhase
 from equilibria.core.parameters import Parameter
@@ -731,3 +733,141 @@ class PEPProductionAccountingInit(Block):
                 float(di.get((i, j), 0.0)) for j in J
             )
         return residuals
+
+
+# --- level-form blocks (Hosoe's stdcge): exact equations, calibrated values ---
+
+
+class CobbDouglasValueAdded(LevelBlock):
+    """Cobb-Douglas composite factor and factor demands, in levels.
+
+    ``VA[j] = b_VA[j] * prod_f FD[f,j]**beta_VA[f,j]`` and
+    ``FD[f,j] = beta_VA[f,j] * PVA[j] * VA[j] / WF[f]`` (stdcge eqpy, eqF).
+    """
+
+    name: str = Field(default="CobbDouglasValueAdded")
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["J", "F"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        nj, nf = len(set_manager.get("J")), len(set_manager.get("F"))
+        self.param(parameters, "b_VA", ("J",))
+        self.param(parameters, "beta_VA", ("F", "J"))
+        self.var(variables, "VA", ("J",), (nj,))
+        self.var(variables, "FD", ("F", "J"), (nf, nj))
+        self.var(variables, "PVA", ("J",), (nj,))
+        self.var(variables, "WF", ("F",), (nf,))
+
+        def va(m, idx):
+            (j,) = idx
+            return m.VA[j] == m.b_VA[j] * math.prod(
+                m.FD[f, j] ** m.beta_VA[f, j] for f in m.F
+            )
+
+        def fd(m, idx):
+            f, j = idx
+            return m.FD[f, j] == m.beta_VA[f, j] * m.PVA[j] * m.VA[j] / m.WF[f]
+
+        return [eq("eq_va", ("J",), va), eq("eq_fd", ("F", "J"), fd)]
+
+
+class LeontiefComposite(LevelBlock):
+    """Fixed intermediate and composite-factor requirements and unit cost.
+
+    ``XI[i,j] = a_X[i,j] * Z[j]``, ``VA[j] = a_VA[j] * Z[j]`` and
+    ``PZ[j] = a_VA[j] * PVA[j] + sum_i a_X[i,j] * PQ[i]`` (stdcge eqX, eqY, eqpzs).
+    """
+
+    name: str = Field(default="LeontiefComposite")
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["I", "J"]
+        self.uses = ["VA", "PVA", "PQ"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        ni, nj = len(set_manager.get("I")), len(set_manager.get("J"))
+        self.param(parameters, "a_X", ("I", "J"))
+        self.param(parameters, "a_VA", ("J",))
+        self.var(variables, "XI", ("I", "J"), (ni, nj))
+        self.var(variables, "Z", ("J",), (nj,))
+        self.var(variables, "PZ", ("J",), (nj,))
+
+        def xi(m, idx):
+            i, j = idx
+            return m.XI[i, j] == m.a_X[i, j] * m.Z[j]
+
+        def va_z(m, idx):
+            (j,) = idx
+            return m.VA[j] == m.a_VA[j] * m.Z[j]
+
+        def pz(m, idx):
+            (j,) = idx
+            return m.PZ[j] == m.a_VA[j] * m.PVA[j] + sum(
+                m.a_X[i, j] * m.PQ[i] for i in m.I
+            )
+
+        return [
+            eq("eq_xi", ("I", "J"), xi),
+            eq("eq_va_z", ("J",), va_z),
+            eq("eq_pz", ("J",), pz),
+        ]
+
+
+class CETOutput(LevelBlock):
+    """CET split of output between exports and the domestic market, in levels.
+
+    ``Z = theta_T*(xi_E*E**phi + xi_D*D**phi)**(1/phi)`` and the two supplies
+    ``E = (theta_T**phi*xi_E*(1+tau_z)*PZ/PE)**(1/(1-phi))*Z`` (``D`` with
+    ``xi_D``, ``PD``), ``phi = (psi_T+1)/psi_T`` (stdcge eqpzd, eqE, eqDs).
+    """
+
+    name: str = Field(default="CETOutput")
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["I", "J"]
+        self.uses = ["Z", "PZ", "PE"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        ni = len(set_manager.get("I"))
+        for name in ("theta_T", "xi_E", "xi_D", "psi_T"):
+            self.param(parameters, name, ("I",))
+        self.param(parameters, "tau_z", ("J",))
+        self.var(variables, "E", ("I",), (ni,))
+        self.var(variables, "D", ("I",), (ni,))
+        self.var(variables, "PD", ("I",), (ni,))
+
+        def phi(m, i):
+            return (m.psi_T[i] + 1) / m.psi_T[i]
+
+        def cet(m, idx):
+            (i,) = idx
+            p = phi(m, i)
+            return m.Z[i] == m.theta_T[i] * (
+                m.xi_E[i] * m.E[i] ** p + m.xi_D[i] * m.D[i] ** p
+            ) ** (1 / p)
+
+        def supply(qty, share, price):
+            def rule(m, idx):
+                (i,) = idx
+                p = phi(m, i)
+                return (
+                    getattr(m, qty)[i]
+                    == (
+                        m.theta_T[i] ** p
+                        * getattr(m, share)[i]
+                        * (1 + m.tau_z[i])
+                        * m.PZ[i]
+                        / getattr(m, price)[i]
+                    )
+                    ** (1 / (1 - p))
+                    * m.Z[i]
+                )
+
+            return rule
+
+        return [
+            eq("eq_cet", ("I",), cet),
+            eq("eq_e", ("I",), supply("E", "xi_E", "PE")),
+            eq("eq_ds", ("I",), supply("D", "xi_D", "PD")),
+        ]

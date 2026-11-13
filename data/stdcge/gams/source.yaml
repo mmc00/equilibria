@@ -1,0 +1,23 @@
+kind: model
+model: stdcge
+source: gamslib stdcge with three execute_unload lines; tools/gams_job.py (this repo)
+  runs it
+derived_from: stdcge/gamslib
+changes:
+- file: stdcge_points.gms
+  change: added
+  what: copy of gamslib/stdcge.gms with three lines, execute_unload 'base.gdx' before
+    the first solve, 'check.gdx' after it, 'shock.gdx' at the end
+  why: simple_open is compared with GAMS at base, check and shock; nothing else in
+    the model changes
+  commit: this commit
+- file: tools/gams_job.py
+  change: added
+  what: runs stdcge_points.gms, writes hosoe_2x2/sam.csv and records every folder
+  why: generators live with the data (ADR-0010)
+  commit: this commit
+outputs:
+  stdcge_points.gms: a8ea5723d9b0021dbbd4ace6015041789eeb8fadb671da2cdbae4f1eec140f4f
+  tools/gams_job.py: b3d035af16d1086c06301987f4951d59dcf53bb73eec88790344befe711c35dc
+status: verified
+notes: ''
