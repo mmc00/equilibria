@@ -97,6 +97,15 @@ def test_notebooks_name_the_prm_files_as_they_are() -> None:
         assert prm in files, (nb.name, prm)
 
 
+def test_every_notebook_clears_hooks_before_registering() -> None:
+    """Hooks last for the whole kernel: one exercise's would change the next (#214)."""
+    for nb in sorted(NB_DIR.glob("*.ipynb")):
+        code = _code(nb)
+        assert "overwrite.clear()" in code, nb.name
+        if "@overwrite" in code:
+            assert code.index("overwrite.clear()") < code.index("@overwrite"), nb.name
+
+
 @pytest.mark.needs_path
 @pytest.mark.parametrize("exp", MATCHED)
 def test_notebook_matches_gempack(exp: str, tmp_path: Path) -> None:

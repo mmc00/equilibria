@@ -113,7 +113,11 @@ from equilibria.blocks.gtap.closure import ClosureBlock
 from equilibria.blocks.gtap.demand_utility import DemandUtilityBlock
 from equilibria.blocks.gtap.factor import FactorBlock
 from equilibria.blocks.gtap.income import IncomeBlock
-from equilibria.blocks.gtap.overwrite import overwrite, ppriv_tornqvist
+from equilibria.blocks.gtap.overwrite import (
+    StaleOverwriteWarning,
+    overwrite,
+    ppriv_tornqvist,
+)
 from equilibria.blocks.gtap.production_supply import ProductionSupplyBlock
 from equilibria.blocks.gtap.shock import ShockBlock
 from equilibria.blocks.gtap.trade_armington_bilateral import ArmingtonBilateralBlock
@@ -141,6 +145,7 @@ __all__ = [
     "IncomeBlock",
     "ProductionSupplyBlock",
     "ShockBlock",
+    "StaleOverwriteWarning",
     "TradeCETBlock",
     "overwrite",
     "ppriv_tornqvist",
