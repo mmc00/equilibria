@@ -204,6 +204,7 @@ tests/scripts/test_horridge_gams_job.py
 tests/scripts/test_inliner_interpreter.py
 tests/scripts/test_levels_job.py
 tests/scripts/test_make_levels_tab.py
+tests/scripts/test_measure_altertax_cells.py
 tests/scripts/test_measure_pep_jacobian_modes_cli.py
 tests/scripts/test_measure_simple_open_jacobian_modes_cli.py
 tests/scripts/test_mk_exp_directos.py
