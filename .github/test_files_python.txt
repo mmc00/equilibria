@@ -133,6 +133,7 @@ tests/family/test_gate1_all_families.py
 tests/family/test_gate1_fidelity.py
 tests/family/test_gate1_recorded.py
 tests/family/test_gtap_phase0_build.py
+tests/family/test_headers_cache.py
 tests/family/test_hybrid_nlp.py
 tests/family/test_ifsub_closure_vectorized.py
 tests/family/test_incidence_csr.py
