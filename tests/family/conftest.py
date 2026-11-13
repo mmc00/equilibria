@@ -2,12 +2,18 @@
 ``EQUILIBRIA_RUN_SLOW=1``). Only the items under this directory are touched, and a
 single slow node id run without ``-m slow`` is skipped too."""
 
+import importlib.util
 import os
 from pathlib import Path
 
 import pytest
 
 HERE = Path(__file__).parent
+
+# The family route is the optional ``family`` extra (jax). Without it (CI installs the
+# dev group only) nothing here can import, so the directory is not collected.
+if importlib.util.find_spec("jax") is None:
+    collect_ignore_glob = ["test_*.py"]
 
 
 def _wants_slow(config: pytest.Config) -> bool:

@@ -76,6 +76,7 @@ component_management:
     paths:
     - ^src/equilibria/solver/
     - ^src/equilibria/backends/
+    - ^src/equilibria/family/
     - ^src/equilibria/report/
     - ^src/equilibria/doctor/
   - component_id: parity
