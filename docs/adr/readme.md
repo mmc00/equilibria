@@ -8,7 +8,7 @@ ADR supersedes the old one. Create one with
 | ADR | Decision |
 | --- | --- |
 | [0001](0001-blocks-are-the-model.md) | Blocks are the model; a monolith is only a starting point and an oracle |
-| [0002](0002-driver-prepares-and-solves.md) | The driver prepares and solves; it holds no model logic |
+| [0002](0002-driver-prepares-and-solves.md) | The driver prepares and solves; it holds no model logic (superseded by 0011) |
 | [0003](0003-shock-lives-in-shock-block.md) | The shock lives in the ShockBlock and is written as in GEMPACK |
 | [0004](0004-overwrite-one-block-per-exercise.md) | An exercise changes one block with `@overwrite` and leaves the others alone |
 | [0005](0005-one-name-one-declaration.md) | One name, one declaration; each block declares what it uses |
@@ -16,5 +16,7 @@ ADR supersedes the old one. Create one with
 | [0007](0007-no-block-registry.md) | No block registry |
 | [0008](0008-reference-models-are-the-source-of-truth.md) | GAMS and GEMPACK are the source of truth; fidelity outranks match % |
 | [0009](0009-one-name-dictionary-per-model.md) | One name dictionary per model, checked for completeness against both sides |
+| [0010](0010-one-data-folder.md) | One `data/` folder, and every reference file says where it came from |
+| [0011](0011-one-driver-fed-by-a-recipe.md) | One driver for every model, fed by a recipe |
 
 Vocabulary: [`docs/glossary.md`](../glossary.md).

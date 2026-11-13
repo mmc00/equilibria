@@ -3111,7 +3111,6 @@
  "tests/templates/gtap/test_prm_zeros_and_cd_mode.py::test_subpar_conserva_los_ceros": 0.02003524500014464,
  "tests/templates/gtap/test_prm_zeros_and_cd_mode.py::test_subpar_mixto_avisa": 0.2549253909999152,
  "tests/templates/gtap/test_prm_zeros_and_cd_mode.py::test_un_cero_de_subpar_sobrevive_la_carga_completa": 0.021032609000144475,
- "tests/templates/gtap/test_recalibrate_alphaa_hhd.py::test_rebuilt_zcons_row_holds_at_the_gams_level": 0.0006480359999159191,
  "tests/templates/gtap/test_reference_snapshot_auto.py::test_auto_seeds_the_reference_base": 2.0328834100000677,
  "tests/templates/gtap/test_reference_snapshot_auto.py::test_reference_is_the_recorded_9x10_gams_result": 0.018091034999997646,
  "tests/templates/gtap/test_residual_region_auto.py::test_auto_picks_largest_base_investment": 0.04365827700007685,

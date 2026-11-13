@@ -204,6 +204,7 @@ tests/scripts/test_horridge_gams_job.py
 tests/scripts/test_inliner_interpreter.py
 tests/scripts/test_levels_job.py
 tests/scripts/test_make_levels_tab.py
+tests/scripts/test_measure_altertax_cells.py
 tests/scripts/test_measure_pep_jacobian_modes_cli.py
 tests/scripts/test_measure_simple_open_jacobian_modes_cli.py
 tests/scripts/test_mk_exp_directos.py
@@ -241,6 +242,7 @@ tests/solver/test_newton_tr_gmin.py
 tests/solver/test_newton_tr_mumps_analysis.py
 tests/templates/gtap/test_altertax.py
 tests/templates/gtap/test_altertax_armington_shares_fixed.py
+tests/templates/gtap/test_altertax_shares_held.py
 tests/templates/gtap/test_blocks_diag.py
 tests/templates/gtap/test_blocks_nl_parity.py
 tests/templates/gtap/test_blocks_no_demand_fix.py
@@ -309,7 +311,6 @@ tests/templates/gtap/test_perf_budget.py
 tests/templates/gtap/test_period_prep.py
 tests/templates/gtap/test_period_prep_snapshot.py
 tests/templates/gtap/test_prm_zeros_and_cd_mode.py
-tests/templates/gtap/test_recalibrate_alphaa_hhd.py
 tests/templates/gtap/test_reference_snapshot_auto.py
 tests/templates/gtap/test_residual_region_auto.py
 tests/templates/gtap/test_shock_instruments_mp.py

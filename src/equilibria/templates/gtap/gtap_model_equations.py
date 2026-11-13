@@ -1119,9 +1119,8 @@ class GTAPModelEquations:
         create_indexed_param(
             "ava_param", ["r", "a"], adjusted_ava_param, 0.0, mutable=True
         )
-        # mutable=True: same per-period recalibration as and_param/ava_param —
-        # GAMS's iterloop.gms recomputes io(r,i,a,t)/af(r,fp,a,t) every period too
-        # (same "Calibration of parameters" block). See _recalibrate_io_af.
+        # GAMS sets io/af in cal.gms ("Calibration of parameters"), included
+        # before the tsim loop; iterloop.gms does not touch them.
         create_indexed_param(
             "io_param",
             ["r", "i", "a"],
@@ -1145,10 +1144,8 @@ class GTAPModelEquations:
             mutable=True,
         )
         create_indexed_param("af_xf_param", ["r", "f", "a"], scaled_af_xf_param, 0.0)
-        # mutable=True: same per-period recalibration as and/ava/io/af — GAMS's
-        # iterloop.gms also recomputes gx(r,a,i,t)/ax(r,a,i,t) every period from
-        # that period's own solved x/xp/px/p (gx) and x/xs/p/ps/prdtx (ax).
-        # See _recalibrate_gx_ax.
+        # GAMS sets gx/ax in cal.gms, before the tsim loop; its reference GDX
+        # holds gx identical in base, check and shock.
         create_indexed_param(
             "gx_param",
             ["r", "a", "i"],
@@ -1958,9 +1955,8 @@ class GTAPModelEquations:
         create_indexed_param("yg_share_reg", ["r"], regional_government_share_data, 0.0)
         create_indexed_param("yi_share_reg", ["r"], regional_investment_share_data, 0.0)
         create_indexed_param("c_share", ["r", "i"], private_share_data, 0.0)
-        # mutable=True: same per-period recalibration as and/ava/io/af/alphad —
-        # GAMS's iterloop.gms also recomputes alphaa(r,i,gov,t)/alphaa(r,i,inv,t)
-        # every period. See _recalibrate_alphaa_gov_inv.
+        # GAMS sets alphaa(r,i,gov/inv,t) in cal.gms, before the tsim loop; its
+        # reference GDX holds alphaa identical in base, check and shock.
         create_indexed_param(
             "g_share", ["r", "i"], government_share_data, 0.0, mutable=True
         )
@@ -3641,9 +3637,8 @@ class GTAPModelEquations:
             return max(get_benchmark_yi(r), 1e-8)
 
         def get_pi_benchmark_init(m, r):
-            # value() (not bare float()) is required once i_share is mutable=True
-            # (recalibrated per-period by _recalibrate_alphaa_gov_inv) — a bare
-            # float() on a mutable ParamData raises TypeError; float() on an
+            # value() (not bare float()) is required once i_share is mutable=True:
+            # a bare float() on a mutable ParamData raises TypeError; float() on an
             # immutable one worked by accident (Pyomo treats it as a near-literal).
             from pyomo.environ import value as _pyo_value
 
@@ -6105,7 +6100,7 @@ class GTAPModelEquations:
         # form was internally consistent with itself (share calibrated once at
         # sigmag=1 exact) but became inconsistent once and_ava-class per-period
         # recalibration supplies alphaa computed via GAMS's real sigmag=1.01 CES
-        # formula — see _recalibrate_alphaa_gov_inv, gtap_multiperiod_driver.py.
+        # formula.
         def eq_xg_rule(model, r, i):
             share = value(model.g_share[r, i])
             if share <= 0.0:
