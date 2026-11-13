@@ -149,6 +149,17 @@ def freeze_period(m, period: str) -> int:
 # 2/2) per feedback_faithful_over_match_pct: fidelity to GAMS is the criterion,
 # never match%/convergence. A faithful change regressing means ANOTHER link is
 # missing/infaithful — diagnose and fix THAT, do not revert this.
+#
+# Step 0 of the driver recipe (2026-11-12) tried deleting it and KEPT it, measured
+# with scripts/gtap/measure_altertax_cells.py over the 30 altertax gate rows. Note
+# that today's GAMS reference GDXs hold and/ava identical in base, check and shock
+# (gtap7_3x3, gtap7_10x7), so the July CONVERT reading above is not what the
+# references say. Without this rebuild, 29 rows move by at most 2.4e-4 (relative)
+# and keep their worst gap to GAMS, but nlp:gtap7_15x10:ifsub0 (IPOPT) moves to
+# another point: check 100% -> 87.35%, shock 100% -> 95.17%, codes still 1, and
+# 5703 cells leave the 1% tolerance (mostly xm, xd, xa, pa; zero-flow cells such
+# as xa[ROW,Energy,inv,shock] go 8e-12 -> 9.4e-6 against GAMS 0). The rule is that
+# no cell leaves tolerance, so it stays until that row is understood.
 def _recalibrate_and_ava(m, params, active_period: str, prior_period: str) -> int:
     """Rebuild eq_nd/eq_va for active_period using and/ava recomputed from
     prior_period's OWN solved nd/va/xp/pnd/pva/px (GAMS's iterloop formula).
