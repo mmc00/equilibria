@@ -236,6 +236,7 @@ tests/simulations/test_simulator.py
 tests/simulations/test_types.py
 tests/solver/test_constraint_jacobian_base.py
 tests/solver/test_gtap_mode_explicito.py
+tests/solver/test_ipopt.py
 tests/solver/test_jacobian_reporting.py
 tests/solver/test_matching.py
 tests/solver/test_newton_tr_extract.py
