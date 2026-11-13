@@ -84,8 +84,8 @@ def _substitutes(sp: Any, m: Any, period: str) -> dict[int, Any]:
     return sub
 
 
-def _emit(body: Any, lb: Any, ub: Any) -> Any:
-    if lb is not None and ub is not None and lb == ub:
+def _emit(body: Any, lb: float | None, ub: float | None, equality: bool) -> Any:
+    if equality:
         return body == lb
     if lb is not None and ub is not None:
         return (lb, body, ub)
@@ -110,10 +110,13 @@ def _reflect_constraints(sp: Any, m: Any, periods: list[str]) -> None:
             for k, cell in cells.items():
                 if not cell.active:
                     continue
+                # the bounds as numbers: a mutable parameter in a bound would
+                # otherwise stay a live reference to the throwaway SP model
                 rows[(*k, t)] = (
                     visitors[t].walk_expression(cell.body),
-                    cell.lower,
-                    cell.upper,
+                    cell.lb,
+                    cell.ub,
+                    cell.equality,
                 )
 
         def rule(_m: Any, *key: Any, rows: dict = rows) -> Any:

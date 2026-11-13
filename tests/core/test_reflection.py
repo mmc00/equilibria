@@ -82,3 +82,13 @@ def test_scalar_rows_are_indexed_by_period() -> None:
 def test_bad_periods_raise(periods: tuple[str, ...]) -> None:
     with pytest.raises(ValueError):
         reflect(single_period(), periods)
+
+
+def test_mutable_params_in_bounds_are_folded_too() -> None:
+    sp = single_period()
+    sp.e = pyo.Constraint(expr=sp.y == sp.p - 1)  # rhs constant: p sits in a bound
+    sp.r = pyo.Constraint(expr=pyo.inequality(sp.p - 3, sp.y, sp.p + 7))
+    m = reflect(sp, PERIODS)
+    sp.p.set_value(99.0)
+    assert m.e["check"].lb == m.e["check"].ub == 2.0
+    assert (m.r["check"].lb, m.r["check"].ub) == (0.0, 10.0)
