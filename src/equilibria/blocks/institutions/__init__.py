@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from pydantic import Field
 
+from equilibria.blocks._levels import LevelBlock, eq
 from equilibria.blocks.base import Block, ParameterSpec, VariableSpec
 from equilibria.core.calibration_phase import CalibrationPhase
 from equilibria.core.parameters import Parameter
@@ -623,3 +624,46 @@ class RestOfWorld(Block):
             )
         if "FSAV0" in calibrated and "FSAV" in var_manager:
             var_manager.get("FSAV").value = np.array([calibrated["FSAV0"]])
+
+
+class ExternalSector(LevelBlock):
+    """World prices and the balance of payments, in levels.
+
+    ``PE = EPS*pWe``, ``PM = EPS*pWm`` and ``sum pWe*E + Sf = sum pWm*M``: world
+    prices and foreign saving ``Sf`` are fixed, the exchange rate ``EPS`` clears
+    the balance (stdcge eqpe, eqpm, eqepsilon).
+    """
+
+    name: str = Field(default="ExternalSector")
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["I"]
+        self.uses = ["E", "M"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        ni = len(set_manager.get("I"))
+        self.param(parameters, "pWe", ("I",))
+        self.param(parameters, "pWm", ("I",))
+        self.param(parameters, "Sf", ())
+        self.var(variables, "PE", ("I",), (ni,))
+        self.var(variables, "PM", ("I",), (ni,))
+        self.var(variables, "EPS", (), ())
+
+        def pe(m, idx):
+            (i,) = idx
+            return m.PE[i] == m.EPS * m.pWe[i]
+
+        def pm(m, idx):
+            (i,) = idx
+            return m.PM[i] == m.EPS * m.pWm[i]
+
+        def bop(m, idx):
+            return sum(m.pWe[i] * m.E[i] for i in m.I) + m.Sf == sum(
+                m.pWm[i] * m.M[i] for i in m.I
+            )
+
+        return [
+            eq("eq_pe", ("I",), pe),
+            eq("eq_pm", ("I",), pm),
+            eq("eq_bop", (), bop),
+        ]

@@ -812,3 +812,62 @@ class LeontiefComposite(LevelBlock):
             eq("eq_va_z", ("J",), va_z),
             eq("eq_pz", ("J",), pz),
         ]
+
+
+class CETOutput(LevelBlock):
+    """CET split of output between exports and the domestic market, in levels.
+
+    ``Z = theta_T*(xi_E*E**phi + xi_D*D**phi)**(1/phi)`` and the two supplies
+    ``E = (theta_T**phi*xi_E*(1+tau_z)*PZ/PE)**(1/(1-phi))*Z`` (``D`` with
+    ``xi_D``, ``PD``), ``phi = (psi_T+1)/psi_T`` (stdcge eqpzd, eqE, eqDs).
+    """
+
+    name: str = Field(default="CETOutput")
+
+    def model_post_init(self, __context: Any) -> None:
+        self.required_sets = ["I", "J"]
+        self.uses = ["Z", "PZ", "PE"]
+
+    def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
+        ni = len(set_manager.get("I"))
+        for name in ("theta_T", "xi_E", "xi_D", "psi_T"):
+            self.param(parameters, name, ("I",))
+        self.param(parameters, "tau_z", ("J",))
+        self.var(variables, "E", ("I",), (ni,))
+        self.var(variables, "D", ("I",), (ni,))
+        self.var(variables, "PD", ("I",), (ni,))
+
+        def phi(m, i):
+            return (m.psi_T[i] + 1) / m.psi_T[i]
+
+        def cet(m, idx):
+            (i,) = idx
+            p = phi(m, i)
+            return m.Z[i] == m.theta_T[i] * (
+                m.xi_E[i] * m.E[i] ** p + m.xi_D[i] * m.D[i] ** p
+            ) ** (1 / p)
+
+        def supply(qty, share, price):
+            def rule(m, idx):
+                (i,) = idx
+                p = phi(m, i)
+                return (
+                    getattr(m, qty)[i]
+                    == (
+                        m.theta_T[i] ** p
+                        * getattr(m, share)[i]
+                        * (1 + m.tau_z[i])
+                        * m.PZ[i]
+                        / getattr(m, price)[i]
+                    )
+                    ** (1 / (1 - p))
+                    * m.Z[i]
+                )
+
+            return rule
+
+        return [
+            eq("eq_cet", ("I",), cet),
+            eq("eq_e", ("I",), supply("E", "xi_E", "PE")),
+            eq("eq_ds", ("I",), supply("D", "xi_D", "PD")),
+        ]
