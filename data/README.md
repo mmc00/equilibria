@@ -7,11 +7,15 @@ small files the readers are tested with. `src/` holds code, `tests/` holds
 tests; neither holds data.
 
 > Migration in progress (`specs/data/changes/one-data-folder/`). Until each
-> phase lands, its files are still in their old places: `tests/fixtures/`,
-> `src/equilibria/templates/reference/`, `runs/`. The input datasets moved in
+> phase lands, its files are still in their old place,
+> `src/equilibria/templates/reference/`. The input datasets moved in
 > phase 1; the GAMS model and the GAMS results that run locally in phase 2a;
 > the GAMS results that need NEOS, both FBEP variants, nus333 and 9x10 in
-> phase 2b.
+> phase 2b; the reader, solver and snapshot fixtures in phase 4
+> (`gdx_tests/specimens/`, `solver_tests/`, `sam_tests/`, and the `equilibria_*`
+> and `gams_burfisher_levels` folders next to their dataset). Phase 3b moved
+> the GEMPACK results and what is computed from them, and removed
+> `tests/fixtures/` and `runs/`.
 
 ## Layout
 
@@ -47,7 +51,9 @@ data/
   horridge_simple/            Horridge's SIMPLE (kind: model) and its gemsim_<experiment>/ results
   gtap6/ ...
   pep/ ...
-  gdx_tests/                  GDX format specimens for the reader tests
+  gdx_tests/                  GDX format specimens for the reader tests (specimens/: one folder per generator)
+  solver_tests/               solver output files (.sol) for the backend tests
+  sam_tests/                  input-output tables for the sam_tools tests
 ```
 
 ## source.yaml

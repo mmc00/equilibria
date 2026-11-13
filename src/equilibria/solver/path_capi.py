@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from equilibria._local_refs import path_capi_lib_dir, path_capi_src
+from equilibria._local_refs import path_capi_libs, path_capi_src
 from equilibria.templates.gtap import GTAPParameters, GTAPSolver
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 from equilibria.templates.gtap.gtap_parameters import (
@@ -32,10 +32,13 @@ from equilibria.templates.gtap.gtap_parameters import (
 
 logger = logging.getLogger(__name__)
 
-_PATH_CAPI_CACHE = path_capi_lib_dir()
 PATH_CAPI_SRC_DEFAULT = Path(str(path_capi_src()))
-PATH_CAPI_LIB_DEFAULT = _PATH_CAPI_CACHE / "libpath50.silicon.dylib"
-PATH_CAPI_LUSOL_DEFAULT = _PATH_CAPI_CACHE / "liblusol.silicon.dylib"
+
+
+def _path_capi_libs() -> tuple[Path, Path | None]:
+    """PATH and LUSOL libraries to load (see ``_local_refs.path_capi_libs``,
+    which ``equilibria doctor`` also uses so the two cannot drift apart)."""
+    return path_capi_libs()
 
 
 @contextlib.contextmanager
@@ -120,7 +123,28 @@ def _default_jacobian_eval_mode() -> str:
     never written back, and the Fisher row shows the residual of an UNSOLVED
     model).
     """
-    return os.environ.get("EQUILIBRIA_GTAP_JAC_MODE", "asl").strip().lower()
+    explicit = os.environ.get("EQUILIBRIA_GTAP_JAC_MODE")
+    if explicit:
+        return explicit.strip().lower()
+    if _asl_available():
+        return "asl"
+    # pip does not install pynumero_ASL (and `pyomo download-extensions` does not
+    # ship it for macOS arm64); without it the callbacks fail to build and the
+    # solve returns code 0.
+    logger.warning(
+        "PyNumero's ASL library (pynumero_ASL) is not installed; evaluating the "
+        "Jacobian with reverse_numeric instead. Set EQUILIBRIA_GTAP_JAC_MODE to "
+        "choose explicitly."
+    )
+    return "reverse_numeric"
+
+
+def _asl_available() -> bool:
+    try:
+        from pyomo.contrib.pynumero.asl import AmplInterface
+    except Exception:
+        return False
+    return bool(AmplInterface.available())
 
 
 def _resolver_gtap_mode(model, explicito: bool | None) -> bool:
@@ -131,7 +155,7 @@ def _resolver_gtap_mode(model, explicito: bool | None) -> bool:
     declara free-row. Apagarlo por accidente no rompe nada de forma visible:
     `deactivate_zero_unique_var_eqs` desactiva una ecuacion REAL para cuadrar el
     sistema y el solve aterriza en otra raiz (ver
-    docs/architecture/, y el caso medido de eq_xseq[USA,VegFruit]).
+    docs/notes/architecture/, y el caso medido de eq_xseq[USA,VegFruit]).
 
     Por eso el modo se PASA. El marcador `model._gtap_mode` que estampa el
     driver sigue valiendo como respaldo —hay llamadores que no pueden pasar el
@@ -755,7 +779,9 @@ def _run_path_capi_nonlinear_full(
     except Exception as exc:
         if not os.environ.get("EQUILIBRIA_GTAP_SOLVE_NLP"):
             raise RuntimeError(
-                "Unable to import path_capi_python. Set EQUILIBRIA_PATH_CAPI_SRC to the path-capi-python checkout src dir."
+                "Unable to import path_capi_python. Install it with "
+                '`pip install "equilibria[path]"` (or set EQUILIBRIA_PATH_CAPI_SRC '
+                "to a path-capi-python checkout's src dir)."
             ) from exc
         PATHLoader = PyomoMCPAdapter = solve_nonlinear_mcp = None  # type: ignore
 
@@ -1068,12 +1094,7 @@ def _run_path_capi_nonlinear_full(
         adapter = PyomoMCPAdapter()
         model_summary = adapter.summarize_model(model)
 
-        path_lib = Path(
-            os.environ.get("PATH_CAPI_LIBPATH", str(PATH_CAPI_LIB_DEFAULT))
-        ).expanduser()
-        lusol_lib = Path(
-            os.environ.get("PATH_CAPI_LIBLUSOL", str(PATH_CAPI_LUSOL_DEFAULT))
-        ).expanduser()
+        path_lib, lusol_lib = _path_capi_libs()
 
         loader = PATHLoader(path_lib=path_lib, lusol_lib=lusol_lib)
         runtime = loader.load()

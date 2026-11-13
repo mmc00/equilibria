@@ -19,10 +19,10 @@ def example_3d_parameter():
     # En un modelo CGE real, podrías tener:
     # PARAMETER TRADE(i,r,rp) "Trade flows from region r to rp for good i"
 
-    gdx_file = Path("tests/fixtures/multidim_test.gdx")
+    gdx_file = Path("data/gdx_tests/specimens/multidim_test/multidim_test.gdx")
     if not gdx_file.exists():
         print("⚠️  Archivo de prueba no encontrado")
-        print("Ejecutar: gams tests/fixtures/generate_multidim_test.gms")
+        print("Ejecutar: cd data/gdx_tests/specimens/multidim_test && gams generate_multidim_test.gms")
         return
 
     data = read_gdx(gdx_file)
@@ -52,7 +52,7 @@ def example_4d_parameter():
     print("Ejemplo 2: Parámetro 4D - Tabla Input-Output")
     print("="*60)
 
-    gdx_file = Path("tests/fixtures/multidim_test.gdx")
+    gdx_file = Path("data/gdx_tests/specimens/multidim_test/multidim_test.gdx")
     if not gdx_file.exists():
         print("⚠️  Archivo de prueba no encontrado")
         return
@@ -86,7 +86,7 @@ def example_slicing():
     print("Ejemplo 3: Slicing de Parámetros Multidimensionales")
     print("="*60)
 
-    gdx_file = Path("tests/fixtures/multidim_test.gdx")
+    gdx_file = Path("data/gdx_tests/specimens/multidim_test/multidim_test.gdx")
     if not gdx_file.exists():
         print("⚠️  Archivo de prueba no encontrado")
         return
@@ -138,7 +138,7 @@ def example_aggregation():
     print("Ejemplo 4: Agregación de Parámetros")
     print("="*60)
 
-    gdx_file = Path("tests/fixtures/multidim_test.gdx")
+    gdx_file = Path("data/gdx_tests/specimens/multidim_test/multidim_test.gdx")
     if not gdx_file.exists():
         print("⚠️  Archivo de prueba no encontrado")
         return

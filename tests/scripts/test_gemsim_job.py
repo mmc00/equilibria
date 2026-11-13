@@ -1,6 +1,6 @@
 """gemsim_job.py (gragg) and target_shocks.py: Burfisher with Gragg on the levels TABs.
 
-Step 5 of corridas_paper.ps1 in data/: each .exp of data/gtap7/nus333 runs under
+regenerate_paper.py's ``gragg`` group: each .exp of data/gtap7/nus333 runs under
 GEMSIM on a TAB compiled from data/gtap7/gempack_rungtap375_levels. Johansen
 1-step experiments become Gragg 2-4-6, and TBL53's ``target%`` shocks (which
 only the RunGTAP GUI solves) become plain shocks (maintainer, 2026-11-03).
@@ -19,8 +19,8 @@ from equilibria.babel.har.writer import write_har
 from equilibria.sources import DATA_ROOT, GEMPACK_MODEL_DIR
 
 sys.path.insert(0, str(GEMPACK_MODEL_DIR / "tools"))
-import gemsim_job  # noqa: E402
-import target_shocks  # noqa: E402
+import gemsim_job  # noqa: E402  # ty: ignore[unresolved-import]
+import target_shocks  # noqa: E402  # ty: ignore[unresolved-import]
 
 ROOT = Path(__file__).resolve().parents[2]
 NUS333 = DATA_ROOT / "gtap7" / "nus333"
@@ -32,7 +32,7 @@ COMM = ["AGR", "MFG", "SER"]
 
 def test_shk_reader_agrees_with_mk_exp_directos() -> None:
     sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
-    from mk_exp_directos import leer_shk_etiquetado
+    from mk_exp_directos import leer_shk_etiquetado  # ty: ignore[unresolved-import]
 
     assert target_shocks.read_shk(NUS333 / "tfd.shk") == leer_shk_etiquetado(
         NUS333 / "tfd.shk"
@@ -42,7 +42,9 @@ def test_shk_reader_agrees_with_mk_exp_directos() -> None:
 def test_tbl53_target_becomes_plain_shocks() -> None:
     text = (NUS333 / "tbl53.exp").read_text(encoding="latin-1")
     out, targets = target_shocks.translate(text, NUS333)
-    shocks = [ln.strip() for ln in out.splitlines() if ln.lstrip().startswith("Shock tfd(")]
+    shocks = [
+        ln.strip() for ln in out.splitlines() if ln.lstrip().startswith("Shock tfd(")
+    ]
     assert len(shocks) == 9 and len(targets) == 9
     # 100*[(1 + X/100)*(1 + HAT/100) - 1]: AGR,AGR,USA has a -3.95% rate, target 5%
     agr = next(s for s in shocks if s.startswith('Shock tfd("AGR", "AGR", "USA")'))
@@ -126,8 +128,12 @@ def _gragg(tmp_path: Path, exp: str = "me9c") -> list[str]:
             "--out", str(out), "--expect-release", "11.3.004"]  # fmt: skip
 
 
-def test_runs_from_a_copy_of_the_package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    run, seen = _fake_gemsim(BANNER + "completed without error\n", ("solution.sl4", "updated.har"))
+def test_runs_from_a_copy_of_the_package(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run, seen = _fake_gemsim(
+        BANNER + "completed without error\n", ("solution.sl4", "updated.har")
+    )
     monkeypatch.setattr(gemsim_job, "run", run)
     assert gemsim_job.main(_gragg(tmp_path)) == 0
     cwd = Path(str(seen["cwd"]))
@@ -141,21 +147,29 @@ def test_runs_from_a_copy_of_the_package(tmp_path: Path, monkeypatch: pytest.Mon
     assert 'solution file = "' in cmf and "Steps = 6 8 10;" in cmf
 
 
-def test_gemsim_needs_normal_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gemsim_needs_normal_end(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """gemsim writes the .sl4 even when it fails (ME4A/B: "Accuracy too low")."""
-    run, _ = _fake_gemsim(BANNER + "Accuracy too low\n", ("solution.sl4", "updated.har"))
+    run, _ = _fake_gemsim(
+        BANNER + "Accuracy too low\n", ("solution.sl4", "updated.har")
+    )
     monkeypatch.setattr(gemsim_job, "run", run)
     assert gemsim_job.main(_gragg(tmp_path)) == 1
 
 
-def test_gragg_refuses_another_release(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gragg_refuses_another_release(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     run, _ = _fake_gemsim(" <GEMPACK Release 12.1.003   January 2020>\ncompleted without error\n",
                           ("solution.sl4", "updated.har"))  # fmt: skip
     monkeypatch.setattr(gemsim_job, "run", run)
     assert gemsim_job.main(_gragg(tmp_path)) == 1
 
 
-def test_tbl53_checks_its_targets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_tbl53_checks_its_targets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """TBL53 is recorded only if the updated data has the target tax rates."""
 
     def run(cmd: list[str], cwd: Path, console_path: Path) -> int:
@@ -190,7 +204,9 @@ def test_compile_refuses_an_unverified_model(tmp_path: Path) -> None:
                                       root=root)  # fmt: skip
 
 
-def test_compile_runs_tablo_in_work(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_compile_runs_tablo_in_work(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     calls: list[Path] = []
 
     def run(cmd: list[str], cwd: Path, console_path: Path) -> int:
@@ -207,20 +223,32 @@ def test_compile_runs_tablo_in_work(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         gemsim_job.compile_levels_tab("gtapuv7_levels", levels_model=model, work=work,
                                       tablo=tmp_path / "tablo.exe", root=DATA_ROOT)  # fmt: skip
     assert calls == [work]
-    assert (work / "gtapuv7_levels.tab").read_bytes() == (model / "gtapuv7_levels.tab").read_bytes()
+    assert (work / "gtapuv7_levels.tab").read_bytes() == (
+        model / "gtapuv7_levels.tab"
+    ).read_bytes()
 
 
-def test_gemsim_scratch_files_are_not_kept(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gemsim_scratch_files_are_not_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """GEMSIM leaves <cmf>-GPXXX<n>.ud<k> work files and the solution's .slc next to
     the solution: not results (the .sl4 and the updated data are the record;
     maintainer, 2026-11-03)."""
-    files = ("solution.sl4", "updated.har", "solution.slc", "solution.aal",
-             "run-GPXXX7.ud8", "run-GPXXX2.ud3")
+    files = (
+        "solution.sl4",
+        "updated.har",
+        "solution.slc",
+        "solution.aal",
+        "run-GPXXX7.ud8",
+        "run-GPXXX2.ud3",
+    )
     run, _ = _fake_gemsim(BANNER + "completed without error\n", files)
     monkeypatch.setattr(gemsim_job, "run", run)
     assert gemsim_job.main(_gragg(tmp_path)) == 0
     left = sorted(p.name for p in (tmp_path / "out").iterdir())
-    assert not any("GPXXX" in name or name.endswith((".slc", ".aal")) for name in left), left
+    assert not any(
+        "GPXXX" in name or name.endswith((".slc", ".aal")) for name in left
+    ), left
 
 
 # --- horridge and levels6 ------------------------------------------------------
@@ -259,7 +287,13 @@ def test_horridge_runs_tablo_gemsim_sltoht(tmp_path: Path, fake) -> None:
 
 def _levels6(tmp_path: Path, rordelta: str) -> list[str]:
     closure = "capfix" if rordelta == "0" else "capflex"
-    dump = DATA_ROOT / "gtap7" / "gtap7_3x3" / f"gempack_tm10_s8-16-32_{closure}" / "sl4dump.har"
+    dump = (
+        DATA_ROOT
+        / "gtap7"
+        / "gtap7_3x3"
+        / f"gempack_tm10_s8-16-32_{closure}"
+        / "sl4dump.har"
+    )
     return ["levels6", "--dataset", "gtap7_3x3", "--rordelta", rordelta,
             "--aux", str(tmp_path / "work" / "gtapv7_levels" / "gtapv7_levels"),
             "--sl4dump", str(dump), "--gemsim", "C:/GP/gemsim.exe", "--sltoht", "C:/GP/sltoht.exe",
@@ -279,14 +313,16 @@ def test_levels6_runs_the_patched_tab(tmp_path: Path, fake) -> None:
 
 
 def test_levels6_capfix_keeps_its_prm(tmp_path: Path, fake) -> None:
-    """default_rdlt0.prm replaces tests/fixtures/.../default_gtap7_20x41_rdlt0_windows.prm."""
+    """default_rdlt0.prm is _force_rdlt's .prm (it replaced the hand-made Windows one in 3b)."""
     sys.path.insert(0, str(GEMPACK_MODEL_DIR / "tools"))
-    from run_gempack_matrix import _force_rdlt
+    from run_gempack_matrix import _force_rdlt  # ty: ignore[unresolved-import]
 
     assert gemsim_job.main(_levels6(tmp_path, "0")) == 0
     prm = tmp_path / "out" / "default_rdlt0.prm"
     expected = tmp_path / "expected.prm"
-    expected.write_bytes((DATA_ROOT / "gtap7" / "gtap7_3x3" / "default.prm").read_bytes())
+    expected.write_bytes(
+        (DATA_ROOT / "gtap7" / "gtap7_3x3" / "default.prm").read_bytes()
+    )
     _force_rdlt(expected, 0)
     assert prm.read_bytes() == expected.read_bytes()
 

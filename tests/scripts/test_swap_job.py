@@ -18,8 +18,8 @@ from equilibria.sources import GEMPACK_MODEL_DIR
 
 sys.path.insert(0, str(GEMPACK_MODEL_DIR / "tools"))
 sys.path.insert(0, str(Path(__file__).parent))
-import gemsim_job  # noqa: E402
-import swap_job  # noqa: E402
+import gemsim_job  # noqa: E402  # ty: ignore[unresolved-import]
+import swap_job  # noqa: E402  # ty: ignore[unresolved-import]
 from _fake_gempack import FakeGempack  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -68,7 +68,10 @@ def test_only_aux_and_shock_change() -> None:
     old, new = template.splitlines(), out.splitlines()
     changed = [(a, b) for a, b in zip(old, new, strict=True) if a != b]
     assert changed == [
-        (r"Auxiliary files = C:\runGTAP375\gtapv7 ;", r"Auxiliary files = C:\x\gtapv7 ;"),
+        (
+            r"Auxiliary files = C:\runGTAP375\gtapv7 ;",
+            r"Auxiliary files = C:\x\gtapv7 ;",
+        ),
         ("Shock tm = uniform 10 ;", "Shock tm = uniform 3 ;"),
     ]
 
@@ -76,6 +79,7 @@ def test_only_aux_and_shock_change() -> None:
 def test_swap_lines_kept() -> None:
     nus = (CMF / "nus333_tm10_dpsaveswap.cmf").read_text(encoding="latin-1")
     assert 'swap dpsave("USA") = del_tbalry("USA") ;' in nus
+
     def swaps(ds: str) -> int:  # statements, not the comments that mention the recipe
         text = (CMF / f"{ds}_tm10_dpsaveswap.cmf").read_text(encoding="latin-1")
         return sum(ln.startswith("swap dpsave(") for ln in text.splitlines())
@@ -85,7 +89,9 @@ def test_swap_lines_kept() -> None:
     assert swaps("gtap7_20x41") == 40
 
 
-def _argv(tmp_path: Path, mode: str, ds: str = "nus333", shock: str = "10") -> list[str]:
+def _argv(
+    tmp_path: Path, mode: str, ds: str = "nus333", shock: str = "10"
+) -> list[str]:
     out = tmp_path / "out"
     out.mkdir()
     return [mode, "--dataset", ds, "--shock", shock,
@@ -110,7 +116,10 @@ def test_expected_abort_only_on_signature(tmp_path: Path, fake: FakeGempack) -> 
     fake.abort = True
     assert swap_job.main(_argv(tmp_path, "abort", "gtap7_20x41")) == 0
     assert {p.name for p in (tmp_path / "out").iterdir()} == {
-        "run.cmf", "solve_console.txt", "assert_arith_fail.har"}
+        "run.cmf",
+        "solve_console.txt",
+        "assert_arith_fail.har",
+    }
 
 
 def test_a_converged_run_is_not_the_abort(tmp_path: Path, fake: FakeGempack) -> None:

@@ -22,7 +22,7 @@ them as one-line delegators — they mutate the model's VarData by name
 Este modulo ya NO importa el monolito. La reflexion multi-periodo heredada de
 ``GTAPMultiPeriodModel`` pide su modelo SP a ``_build_sp()``, que esta clase
 sobrescribe; antes habia que hacerle monkey-patch a
-``GTAPModelEquations.build_model``. Ver ``docs/architecture/monolito_vs_bloques.md``.
+``GTAPModelEquations.build_model``. Ver ``docs/notes/architecture/monolith_vs_blocks.md``.
 
 :class:`GTAPBlockMultiPeriodModel` subclasses ``GTAPMultiPeriodModel`` and swaps the
 single-period model source to the block-composed SP model by overriding
@@ -695,6 +695,25 @@ def build_block_model(
 
     ``residual_region="auto"`` (capFix only) picks it; see resolve_residual_region.
     """
+    from equilibria.blocks.gtap.overwrite import overwrite
+
+    # One user-facing build: warns about @overwrite hooks left from a previous one
+    # (#214). The builds made inside it (settle, capFlex risk) are part of it.
+    with overwrite.building():
+        return _build_block_model(
+            params, sets, closure, residual_region, base_calibrated, ref_gdx
+        )
+
+
+def _build_block_model(
+    params: Any,
+    sets: Any,
+    closure: Any,
+    residual_region: str,
+    base_calibrated: bool = False,
+    ref_gdx: Any = None,
+) -> tuple[ConcreteModel, GTAPBlockMultiPeriodModel]:
+    """The body of ``build_block_model``, without the build mark."""
     residual_region = resolve_residual_region(params, sets, closure, residual_region)
     # Propagate the value-added subsidy basis from the closure onto params, so
     # the pure derivation recipes (_va_wedge in _derived_params) and the driver's

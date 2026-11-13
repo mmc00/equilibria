@@ -6,7 +6,7 @@
 
 Computation times
 =================
-**00:00.333** total execution time for 1 file **from all galleries**:
+**00:00.304** total execution time for 1 file **from all galleries**:
 
 .. container::
 
@@ -33,5 +33,5 @@ Computation times
      - Time
      - Mem (MB)
    * - :ref:`sphx_glr_gallery_example_mip_to_sam.py` (``examples_src/example_mip_to_sam.py``)
-     - 00:00.333
+     - 00:00.304
      - 0.0

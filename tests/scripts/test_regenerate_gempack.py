@@ -171,10 +171,11 @@ def test_end_to_end_with_fake_gempack(tmp_path: Path) -> None:
     )
 
     root = tmp_path / "data"
-    # the data only: its gams_*/gempack_* results point at models not copied here
+    # the data only: its results (gams_*, gempack_*, and phase 3a-2's gemsim_*
+    # and sltoht_*) point at models and inputs not copied here
     shutil.copytree(
         dataset_dir("gtap7_3x3"), root / "gtap7" / "gtap7_3x3",
-        ignore=shutil.ignore_patterns("gams_*", "gempack_*"),
+        ignore=shutil.ignore_patterns("gams_*", "gempack_*", "gemsim_*", "sltoht_*"),
     )  # fmt: skip
     shutil.copytree(
         GEMPACK_MODEL_DIR, root / "gtap7" / "gempack",

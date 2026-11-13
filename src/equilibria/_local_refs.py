@@ -138,6 +138,25 @@ def path_capi_lib_dir() -> Path:
     return local
 
 
+def path_capi_libs() -> tuple[Path, Path | None]:
+    """PATH and LUSOL libraries a solve loads: env vars first, else by platform.
+
+    ``PATH_CAPI_LIBPATH`` / ``PATH_CAPI_LIBLUSOL`` win and are returned as given
+    (PATHLoader raises on a LUSOL file that does not exist). Without the env
+    var, LUSOL is optional for PATH, so a missing file yields ``None``. The
+    solve (``solver.path_capi``) and ``equilibria doctor`` both call this.
+    """
+    import os
+
+    lib = os.environ.get("PATH_CAPI_LIBPATH")
+    path_lib = Path(lib).expanduser() if lib else path_capi_lib()
+    lusol = os.environ.get("PATH_CAPI_LIBLUSOL")
+    if lusol:
+        return path_lib, Path(lusol).expanduser()
+    found = path_capi_lusol()
+    return path_lib, found if found.exists() else None
+
+
 def path_capi_lib_names() -> tuple[str, ...]:
     """Nombres posibles de la libreria PATH en esta plataforma.
 

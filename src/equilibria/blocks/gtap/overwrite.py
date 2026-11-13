@@ -34,12 +34,19 @@ La regla de ``equation`` (y ``quantity``) se escribe sobre el modelo de UN perio
 ``value(...)`` dentro de una regla de ``equation`` es una constante de BASE; para
 anclar al check (que en ME9 no reproduce la base) usar ``b.target``.
 
+Hooks last for the whole process, so the hooks of one exercise would change the next
+exercise built in the same process (#214). ``build_block_model`` warns
+(``StaleOverwriteWarning``) when hooks registered before the previous build are still
+active; call ``overwrite.clear()`` before registering a new exercise's hooks.
+
 Spec: dev-tools/equilibria-tools/plans/superpowers/specs/2026-10-01-overwrite-bloques-design.md
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import contextlib
+import warnings
+from collections.abc import Callable, Iterator
 from typing import Any, NamedTuple
 
 from equilibria.blocks.base import Block
@@ -50,6 +57,18 @@ Hook = Callable[["BlockEdit"], None]
 
 # clase del bloque -> {nombre de la funcion: hook}, en orden de registro.
 _HOOKS: dict[type, dict[str, Hook]] = {}
+
+# (block class, hook name) -> number of top-level builds done when it was registered.
+# A hook stamped before the last build belongs to an earlier exercise or is reused
+# on purpose; building() warns about it (#214).
+_STAMPS: dict[tuple[type, str], int] = {}
+_BUILDS = 0
+_DEPTH = 0
+
+
+class StaleOverwriteWarning(UserWarning):
+    """A model is built with ``@overwrite`` hooks left from a previous build (#214)."""
+
 
 # Orden en que se busca el set de cada etiqueta de una celda (``equation``).
 _SET_ORDER = ("r", "f", "a", "i", "aa", "rp")
@@ -110,13 +129,47 @@ class _Overwrite:
         def deco(fn: Hook) -> Hook:
             # Clave = nombre de la funcion: re-ejecutar la celda del notebook
             # reemplaza el hook en vez de apilarlo.
-            _HOOKS.setdefault(cls, {})[getattr(fn, "__name__", repr(fn))] = fn
+            name = getattr(fn, "__name__", repr(fn))
+            _HOOKS.setdefault(cls, {})[name] = fn
+            _STAMPS[(cls, name)] = _BUILDS
             return fn
 
         return deco
 
     def clear(self) -> None:
         _HOOKS.clear()
+        _STAMPS.clear()
+
+    @contextlib.contextmanager
+    def building(self) -> Iterator[None]:
+        """Mark one top-level model build (``build_block_model``).
+
+        Re-entrant: the builds made inside it (the settle of ``base_calibrated``,
+        the capFlex risk build) are part of the same one. On the outermost entry it
+        warns if any hook was registered before the previous build.
+        """
+        global _BUILDS, _DEPTH
+        if _DEPTH == 0:
+            stale = sorted(
+                f"{cls.__name__}.{name}"
+                for (cls, name), stamp in _STAMPS.items()
+                if stamp < _BUILDS
+            )
+            if stale:
+                warnings.warn(
+                    "@overwrite hooks registered before the previous model build are "
+                    f"still active: {', '.join(stale)}. If they belong to an earlier "
+                    "exercise, call overwrite.clear() before registering this one's "
+                    "hooks (#214).",
+                    StaleOverwriteWarning,
+                    stacklevel=4,
+                )
+            _BUILDS += 1
+        _DEPTH += 1
+        try:
+            yield
+        finally:
+            _DEPTH -= 1
 
     def registered(self, cls: type) -> list[str]:
         return list(_HOOKS.get(cls, {}))
@@ -203,8 +256,9 @@ class BlockEdit:
         self.equation(
             target_row(name),
             cell,
-            lambda m, *c: quantity(m, *c)
-            == getattr(m, name)[c] * float(value(quantity(m, *c))),
+            lambda m, *c: (
+                quantity(m, *c) == getattr(m, name)[c] * float(value(quantity(m, *c)))
+            ),
             domains=doms,
         )
 

@@ -21,7 +21,9 @@ class FakeGempack:
         "gtapv7.exe": "12.1.003", "gtapuv7.exe": "12.1.003",
         "gemsim.exe": "11.3.004", "tablo.exe": "11.3.004", "sltoht.exe": "11.3.004",
     })  # fmt: skip
-    fail_start: set[str] = field(default_factory=set)  # program names that never start once
+    fail_start: set[str] = field(
+        default_factory=set
+    )  # program names that never start once
     abort: bool = False  # gtapv7 aborts with the 20x41 signature
     mismatch: int = 0  # xcheck-mismatch the export reports
     calls: list[tuple[str, Path]] = field(default_factory=list)
@@ -53,7 +55,8 @@ class FakeGempack:
         text = cmf.read_text(encoding="latin-1")
         if self.abort:
             (cwd / f"{stem}-assert-arith-fail.har").write_bytes(b"dump")
-            # the lines of runs/gempack_20x41_validation/solve_console.txt (2725-2730)
+            # the lines 2725-2730 of the console archived in
+            # docs/archive/findings/rungtap_compare/gempack_20x41_validation/solve_console.txt
             console.write_text(banner + '     in equation "E_u".\n\n'
                                "    Attempt to take LOGE of zero or of a negative number.\n"
                                "    value of LOGE argument is -0.2668599\n"

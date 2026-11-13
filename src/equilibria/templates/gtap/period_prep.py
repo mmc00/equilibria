@@ -114,18 +114,21 @@ def _freeze_inactive(c: _Ctx) -> None:
 
 
 def _recalibrate_shares(c: _Ctx) -> None:
-    """altertax: GAMS iterloop recalibra las participaciones cada periodo.
+    """altertax: rebuild some share rows each period from the previous period.
 
-    NO se recalibra io/af (_recalibrate_io_af): GAMS los mantiene constantes entre
-    periodos (iterloop.gms no asigna af( ni io(); el GDX los muestra identicos
-    base=check=shock). Recalibrar af desde el pfa del periodo previo sobrepesaba la
-    Land subsidiada y deslizaba pft[Land]; quitarlo subio el gate de shock
-    98.21% -> 99.93%.  gtap puro no recalibra nada: GAMS calibra UNA vez en t0.
+    GAMS itself calibrates every share once, in the cal block (loop t0), and its
+    GDX holds them identical in base, check and shock. Two are already held:
+    - io/af (_recalibrate_io_af is not called): re-deriving af from the prior
+      pfa overweighted subsidized Land and slid pft[Land]; holding it raised the
+      shock gate 98.21% -> 99.93%.
+    - alphad/alpham: re-deriving them from the prior xd/xm/xa broke the tiny
+      flows (~1e-9, at the solver's tolerance), and eq_paa raises pa to the
+      power 1/(1 - 0.95) = 20 under altertax; 15x10 ifSUB=0 shock 99.45% -> 100%.
+    Pure gtap recalibrates nothing.
     """
     d, prior = _drv(), _RECALIBRATE_FROM[c.period]
     d._recalibrate_and_ava(c.m, c.params, c.period, prior)
     d._recalibrate_gx_ax(c.m, c.params, c.period, prior)
-    d._recalibrate_alphad_alpham(c.m, c.params, c.period, prior)
     d._recalibrate_alphaa_gov_inv(c.m, c.params, c.period, prior)
     d._recalibrate_alphaa_hhd(c.m, c.params, c.period, prior)
 

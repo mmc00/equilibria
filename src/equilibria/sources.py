@@ -37,6 +37,15 @@ GAMS_MODEL_DIR = DATA_ROOT / "gtap7" / "gams"
 # The scripts that generate GAMS results live with the model, so the model
 # folder hash every result records covers them too.
 GAMS_TOOLS_DIR = GAMS_MODEL_DIR / "tools"
+# Drivers that only list the jobs and run, for each, a command its source.yaml
+# records whole. Adding a dataset to a list changes no recorded result, so they
+# are not inputs: no record hashes them and none is checked against them.
+JOB_LISTS = frozenset(
+    {
+        "gtap7/gams/tools/regenerate_gams.py",
+        "gtap7/gempack/tools/regenerate_gempack.py",
+    }
+)
 
 _ALLOWED = frozenset(
     {
@@ -119,12 +128,34 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+_YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+# Parsed records by file, valid while the file's mtime and size are unchanged:
+# reference() and dataset_dir() walk every source.yaml under data/ on each call.
+_RECORDS: dict[Path, tuple[tuple[int, int], SourceRecord]] = {}
+
+
+def _read_yaml(file: Path) -> Any:
+    return yaml.load(file.read_text(encoding="utf-8"), Loader=_YAML_LOADER)
+
+
 def load_source(folder: Path) -> SourceRecord:
     """Read and validate ``<folder>/source.yaml``."""
     file = folder / SOURCE_FILE
-    if not file.exists():
-        raise SourceError(f"{file}: missing")
-    data = yaml.safe_load(file.read_text(encoding="utf-8"))
+    try:
+        st = file.stat()
+    except FileNotFoundError:
+        raise SourceError(f"{file}: missing") from None
+    stamp = (st.st_mtime_ns, st.st_size)
+    hit = _RECORDS.get(file)
+    if hit is not None and hit[0] == stamp:
+        return hit[1]
+    record = _parse_source(folder, file)
+    _RECORDS[file] = (stamp, record)
+    return record
+
+
+def _parse_source(folder: Path, file: Path) -> SourceRecord:
+    data = _read_yaml(file)
     if not isinstance(data, Mapping):
         raise SourceError(f"{file}: not a mapping")
 
@@ -327,6 +358,19 @@ def own_files(folder: Path) -> list[Path]:
     ]
 
 
+def _is_job_list(path: Path, root: Path) -> bool:
+    try:
+        return path.relative_to(root).as_posix() in JOB_LISTS
+    except ValueError:
+        return False
+
+
+def input_files(folder: Path, root: Path = DATA_ROOT) -> list[Path]:
+    """The files of ``folder`` a result records as its inputs: own_files() less
+    the job lists (JOB_LISTS)."""
+    return [p for p in own_files(folder) if not _is_job_list(p, root)]
+
+
 def check_tree(root: Path = DATA_ROOT, *, allow_pending: bool = False) -> list[str]:
     """Every problem under ``root``, one message each; empty when clean.
 
@@ -420,6 +464,8 @@ def _check_inputs(root: Path, where: Path, inputs: Mapping[str, Any]) -> list[st
         files = {"": hashes} if isinstance(hashes, str) else hashes
         for rel, expected in files.items():
             f = base / rel if rel else base
+            if _is_job_list(f, root):
+                continue  # recorded before JOB_LISTS existed; not an input
             if not f.exists():
                 msgs.append(f"{where}: input {name} {f.relative_to(root)} is missing")
             elif sha256_file(f) != expected:

@@ -1,0 +1,10 @@
+kind: data
+model: sam
+dataset: sam_tests
+source: 3-sector test input-output table (MIP) for sam_tools, committed in tests/sam_tools/fixtures
+  (last at 4e91d12a)
+license: test specimen written for equilibria
+outputs:
+  simple_mip.xlsx: e9b24e8f9b9e5a85899f498af6cb8db26a5bd06713484f71042ef9a3afd0b314
+status: verified
+notes: ''

@@ -1,0 +1,756 @@
+kind: result
+model: gtap7
+dataset: nus333
+tool: sltoht
+variant:
+  method: gragg
+  output: welfare
+generated_from:
+  dump_altax:
+    path: gtap7/nus333/sltoht_burfisher_gragg/altax
+    sha256:
+      export_console.txt: 6e3da001696a2102dd652546e64f2eade53d90fea10b4944fea23a03c94f6884
+      sl4dump.har: 06b05ea553cc6cc3f596e10d7365bf314b98d0dafd9db8a2a807870461ffe43b
+      sl4levels.har: 3f0a4d1c13046d7f11d77979698a2a082159d908dc03cda2ce875d7474660ce9
+      sltoht_console.txt: aca7a10ca5d38102603006d6449d4d0d47f81483ca2de2f54e2015e6ba496259
+  run_altax:
+    path: gtap7/nus333/gemsim_burfisher_gragg/altax
+    sha256:
+      decomp.har: 66af053ea57330201fd8db9266011d37c65eda1cea1ff7f079cdbccfbf71c43b
+      gemsim_console.txt: 79629df6c441019ef623914d8894ecfa340ffdaff81e0d94fb69a415cf8ab6d4
+      run.cmf: 879a1b788e8126f160db1bdee7573fafdaf28d5b46fad8fc83c4cf7caf2036d7
+      solution.sl4: 17af9b6c88e346f888533aca73f2d35d79b04bcf6142652c2b07f9fa5f1743eb
+      summary.har: 6cf524dadc9ded415eb5d40494937463f67b3bd39d0dd7df5acdf15243757cab
+      updated.har: d6790ed16dfcdd37f64dd1975fd23ad9c96672ae7441f59ca64da0b9d8050802
+      volume.har: c3f55a8d29b8cad1b79148527b18097385b2bfbed8139c9d3e9dee03f7a6dafd
+  dump_closures:
+    path: gtap7/nus333/sltoht_burfisher_gragg/closures
+    sha256:
+      export_console.txt: 177f62e17ef5d740fa9bafa01e2288981662d68996761c47aeb1363f7a693b9a
+      sl4dump.har: 6383d9bb15a42e8ae3877cfb22e0a695798c73566bd8ab6c69ece9c332c6dca5
+      sl4levels.har: f79f40bf1f60b8b28414e856c506fe222ed5937767428abb61ca8b2021981a0a
+      sltoht_console.txt: 26ca3a5e061c00f3d9165b84b9dddafdc9a5846f7d22413c761d2cd52905f69c
+  run_closures:
+    path: gtap7/nus333/gemsim_burfisher_gragg/closures
+    sha256:
+      decomp.har: 4bbda0d16b7707b88120246d0e49038a08ec08dd22dda71feeaf8d8d7c2a5ffd
+      gemsim_console.txt: e664867fbabfee535855c718c85dadce3dd8d26f49d9e1521c85f1d3cd07c9ac
+      run.cmf: cd5be40ce52e0e5e450bc5e72b86c969d72d70dd3171c00bea4d96425f765c68
+      solution.sl4: 7475af9e01f217d0a5731e0a228d0a1e9c8bc72ed579b1d075eea22816281979
+      summary.har: 15d71523d421fc6f4f62984dbcbe4f1e6ef62724e8cab4250ea51a180c6de19a
+      updated.har: 8258b366d236166726428dd4598e6ec9fab9445bf5304dd06285cbbb4519c016
+      volume.har: a5076c37ecb6e69ca84419b78ebf6258fddf0e45a886404c9275dea5fda21355
+  dump_gtapuv7:
+    path: gtap7/nus333/sltoht_burfisher_gragg/gtapuv7
+    sha256:
+      export_console.txt: d427ea1d4914f1daa594477db6f8a8d028a7509fd8b2a0d1ca8b1628dc84395c
+      sl4dump.har: ccade1a5953e66728eb5d35d7d02b740d329262c1f8315f08607eca602b4fa01
+      sl4levels.har: cb6ab34d260534f932953a3fdc76047bceeb1dfb3c2b2c5f0d48f38c57b02121
+      sltoht_console.txt: f23c4bda2037cefca7b09a9eb75f6984f34d1d2ebdef419e2d290cc473563437
+  run_gtapuv7:
+    path: gtap7/nus333/gemsim_burfisher_gragg/gtapuv7
+    sha256:
+      decomp.har: 69bab526de5a4721a9228b8cbddacebfbbdbaac8d9a49166cfa50e8f722ceae0
+      gemsim_console.txt: 1cdee64718e2859887ccf959570a0368d9d4182ac72bb76742e1c60ec3fed7ae
+      run.cmf: d7634d00d07016c037e865c676bdd24cd891a757e9d1f2aa1ca37fa2768005ef
+      solution.sl4: 1bcc02b6c7062e1999eecc599183d7f5360b6f399f846dbc65f428a08a408885
+      summary.har: 091d8df397db3cfee64c1a84a66befaf217da1c8f7a3937c59a9a4cda506f9dd
+      updated.har: 5c8d4e1ca90189e05b10f7989b728998e8f7810bff6d7281048d4ec40632a2eb
+      volume.har: f005c09422c1fe1b2744e497c10f0e9bfff0e4dd322622a91459ef07c929e435
+  dump_gtapv7:
+    path: gtap7/nus333/sltoht_burfisher_gragg/gtapv7
+    sha256:
+      export_console.txt: 24ff59113105b38b9178c79b59618fee8b3b283ed8791aac569f4f2ff7f6bd70
+      sl4dump.har: ec31f0e11d6b576224b1f36616e67e6738117e255ac5bd79cdd231e1262ba044
+      sl4levels.har: 28bc2ba9e3b54a5d812fe325c80bf3e3884bc1618c9ef60f11cb2f4f2bc50e60
+      sltoht_console.txt: 7adfac6bbecf0fd399e7dafe3093bef983f80aa338888ac0171baf13760e02d5
+  run_gtapv7:
+    path: gtap7/nus333/gemsim_burfisher_gragg/gtapv7
+    sha256:
+      decomp.har: 3f4912f279e14e062a8c32cf0be7c12fcc382e495eb09cbfea34f71a3472a6d8
+      gemsim_console.txt: f50b80d584c4cec0cb607da3f5a57e4f237aeb003886e8938c1b2c71a3257834
+      run.cmf: 29ad914dba993ec8d9ff47a59be6e44994d5c617f0a862bea5cc1d08da304366
+      solution.sl4: 686e5db54564e61e24827c48236e940a8d80293d70fabd2891bd31114b5444f1
+      summary.har: e0022e18a6e424b256a65b650066cf4a6c4c43ac23b8c51da0b3023c5703194c
+      updated.har: e65c5ece48b3fdfe86d561597990ba72842387d594b307cf2b368a09c540972c
+      volume.har: 18293eb4800ef8f5cabe8f7c7a3333af382048d261273e27e62d046b9ebcb687
+  dump_me3a:
+    path: gtap7/nus333/sltoht_burfisher_gragg/me3a
+    sha256:
+      export_console.txt: 3bc2113b9a39851ffcd4b1a3bcfdb8415c13c08d5bd60d97d9538cc56c1a0f54
+      sl4dump.har: 4099cf4299d0239886b813186cf7b1d1ae6e9e3106a271f2ee67b9133bf4d8e9
+      sl4levels.har: f79f40bf1f60b8b28414e856c506fe222ed5937767428abb61ca8b2021981a0a
+      sltoht_console.txt: 3cae1d37b447218f1030e68d7a8cdca7ed08f3b739367223931b2387cfe52485
+  run_me3a:
+    path: gtap7/nus333/gemsim_burfisher_gragg/me3a
+    sha256:
+      decomp.har: d3d3035bdeca094a297b070ca0b76018c468b95ac21ac22ec7fe0a7629657912
+      gemsim_console.txt: c3cc8e1c90c3fce8f6375f1ec160a52f0fc182ccc156e28fc3f6bb7b8630ad26
+      run.cmf: 99189ec7e86c79bead3b5d11dc305eae4888e19c75ed84ab3e14116db1e7f3ce
+      solution.sl4: c9495b853fc25980098007de195bea1e1eb9363be1e72d3d4fceb77ccedef3eb
+      summary.har: 90e74371ebe6fe6abda5b0bde334dfa990d1b5f87bee2fdced19bae7d3a88eaa
+      updated.har: 8302ed672284fd46425a15fdd8302c5f5209e5e4645deea85c30549080832730
+      volume.har: b77b545340fe1b57477572537a07c643497826c72f3465f203da33691edb9491
+  dump_me3b:
+    path: gtap7/nus333/sltoht_burfisher_gragg/me3b
+    sha256:
+      export_console.txt: b4be3143c6332c91efe75a8ac1613ca9fed1c0a9d9245e0042c5136631354335
+      sl4dump.har: 3ae30a20632aaec7e39685a56441ef9a7ac97ef3631249d9466ca96bc46c54e0
+      sl4levels.har: 979f29aede018acad1843b2feb8060d6c035ed88320c7a87ac422528fe09074a
+      sltoht_console.txt: 4b89a82ad6feaf39275c554a3a18b4701e7b14bd2228a3a71117b278f9976f0e
+  run_me3b:
+    path: gtap7/nus333/gemsim_burfisher_gragg/me3b
+    sha256:
+      decomp.har: 3d42f5df6eef90208dab21fdb299a68c0e465639207b2e0e6eaf1f0c5e3b2090
+      gemsim_console.txt: 47a7022c50d264b28de3a5a670beecec64efedf1a2933f74b71958e09af3699e
+      run.cmf: c306910bf5c7d9f9a8a46f8a009e589a61b115c1d695a64008e14eed0865cfe7
+      solution.sl4: 7232be417048e8c15e04e1734c891f0c197a1bf68c94ed7a262e697d6356bfd6
+      summary.har: dc31b372c3c3168434510ab401f3e738338aa581e4432afde7f29700f8f29838
+      updated.har: 7bf7937db7949be89d58e235d456dd491734f65ba76732a9283f6949a9f84340
+      volume.har: 5c806dedcb795167ae64a4e56e264b078ecb43ff1ac9feb3d13d5af15ffb84d4
+  dump_me3c:
+    path: gtap7/nus333/sltoht_burfisher_gragg/me3c
+    sha256:
+      export_console.txt: 94e874e30ce132b645ce6cd4f8259ca8fad662e1da0775f3b80db4286d6d6452
+      sl4dump.har: 859e766b513261c1daee1d8d1813d6458402903010db93e652970c4a53efb514
+      sl4levels.har: a8941f7d9a64ebe02a8a8f5ed058e579e6c46868ea74ff99c7fae07e639a5d46
+      sltoht_console.txt: 196148e9c7b603db73d6d30af2f7b90772e782d1a540db4fe6ae91185380e61a
+  run_me3c:
+    path: gtap7/nus333/gemsim_burfisher_gragg/me3c
+    sha256:
+      decomp.har: 6c2d41ca495a5200cb2d51b86ad150bfa317c7712622e1cf74acc312cb3738c6
+      gemsim_console.txt: f3eb5b6abbbe37c79c3a8f5e22328da64952d3cc84773e6cf28c16c86a9534fa
+      run.cmf: afcc8a71798174c128cde152c54365bacaec4b62f13b65c77abc9dc4366b4ca6
+      solution.sl4: 624db7a465189e30f8ac2144658bae6f75455f19140d0b8c1a7a971f5fd2ab74
+      summary.har: 6fbe2a095b13832e62b4a4b8b6120d1ca1248a9dd2d08de3b1c6bab328d6c442
+      updated.har: 1a74622bd19dfef0159f430d8a106be4a7f683c7ea25ac94f563acc3ffaf8858
+      volume.har: cc2b0fd2022abf1f218662249189098b47e8a0ad904e55bad6f6dbce3508fb50
+  dump_me5:
+    path: gtap7/nus333/sltoht_burfisher_gragg/me5
+    sha256:
+      export_console.txt: f9df060ffd883d2319c22d9271c74b0bbaef5008dd59138c2b911344f46bff21
+      sl4dump.har: 61e12bd571bc786d88be203172136c3b276aae5ea52b7be5dd5b417e001b3655
+      sl4levels.har: cc71a3a800dd639bc4e4cf17a4f5e6b16731ee7bd9060360098ec78d28bbcdab
+      sltoht_console.txt: bb630a5449d0d27fbfbe78d6895fb6b5378eee69260465a6a3c6a1c7bd952cfc
+  run_me5:
+    path: gtap7/nus333/gemsim_burfisher_gragg/me5
+    sha256:
+      decomp.har: 2231ee27ce746feeac0ccffcaed84bf22fbd4a044efe03d2bf05ed3708b0dcd3
+      gemsim_console.txt: df304e3421badc3bfc41efd5e6456fb406b587b12aa4cd6a1adec82d8381adfd
+      run.cmf: c5656b3f99a4c3ee1f07e28d644a226b1899e44f7886bbb83e10a81926588007
+      solution.sl4: cc73c1d47e422ee6379a7292fed10d5c4e2c3eb0ba9b2be524e3f9a4c5255e0a
+      summary.har: 48acfbcd3680224cb7576207b5a0a4b91386afedf827e2b56253e7e23b8eab85
+      updated.har: 0708782238ad2af7edfc3d555adb5c3ae582da269d4422c3d93f9ef56ac1bf57
+      volume.har: 17d8cb05e75b8b2fa67f5caf5a56552dae3d0f9198b450eb6207875ce9ea3cd0
+  dump_me7a:
+    path: gtap7/nus333/sltoht_burfisher_gragg/me7a
+    sha256:
+      export_console.txt: a832d44b2c47d3e7f34ca1f14c76b54655090dfb7fd6c1e1ec14b161de86814a
+      sl4dump.har: 701f45384bec32e7707562867c6e7632c37bcf93e86bd42e51b53b8b025a01b6
+      sl4levels.har: 75f34f90b6e373482ca48a3880deb87718418e6f34a599d7ead2cc62f0c534b6
+      sltoht_console.txt: c1e1c51ac80cfcb66807717769fd73da7db74de2dc1ec3b3bda1eb90220a6029
+  run_me7a:
+    path: gtap7/nus333/gemsim_burfisher_gragg/me7a
+    sha256:
+      decomp.har: 55da1501b6b4f611c988ddbd9e5b159061244117b03e5a42d97be9a2a159fc60
+      gemsim_console.txt: fbadc628109ce48951f4600e36ab031a6ba65cd0629a6463abb94868d45625f6
+      run.cmf: 913abc22279971db817d82957aa81a432bc13dd709d383982bb656d19061e1e0
+      solution.sl4: 875d5cc9f45178264207c939c6dc46c6ff87fac4a998b2687dcd2879034fffa2
+      summary.har: 04a63d3fc3bf2968823745b2851731c73b46c3926eeb4509ff2fc746b5e8f3f2
+      updated.har: f42dab3b07a52852c10f9908efdf540e9aa8492b27b6f994fcfd17b6f2bd7c97
+      volume.har: 52f890e33b34d4ca5e0d0fcbaefede6fd6eb50532424196aafe47f3d8cfb20c6
+  dump_me7b:
+    path: gtap7/nus333/sltoht_burfisher_gragg/me7b
+    sha256:
+      export_console.txt: cbc73ea44208869990a1a15184b90da169008d4631ca5915b0b816d4c6b7ae6e
+      sl4dump.har: 69711c15e16721d567cb3ecd966cdf6cb4f74fecbb119544a5d99eea5461ea75
+      sl4levels.har: e243227b15907c9d30b36bed4c4e4693c8fb1e326ae7a5f50ce26bb97503bcbf
+      sltoht_console.txt: 307706dfea8cc4b4012775507f64b5b94208e0b3d0069a67209b620c45f9b504
+  run_me7b:
+    path: gtap7/nus333/gemsim_burfisher_gragg/me7b
+    sha256:
+      decomp.har: 3e02c799deb885d42987d6e37eb5ef4ee36dce1253b431951a20f7c41aea7026
+      gemsim_console.txt: 873dddaa2c7886fb2c6cc993cbb3a7c4d1a7ca6fd7551f76bb53b788082ec771
+      run.cmf: 6642c7cc528c1a2276b8957c19da4aa229e222bcf3766cfaf80ebb18bdc01cc0
+      solution.sl4: 1e8dba2eab7c43e78efca566553f23355725e98ab9677a397c64573cf02c99db
+      summary.har: a4a4b7d12ecc1c2f2acf53742f4fbb735bcdf725162fdb0a0f5a49c6fd112671
+      updated.har: 4d611397a614726397d52d27c1824a96ccac7766713f3b056110c22e1f1223d0
+      volume.har: d9bcff5be4be34bd94d2fc6cbc377ff9c986cf5ebf592c89f62042241575c3c5
+  dump_me8:
+    path: gtap7/nus333/sltoht_burfisher_gragg/me8
+    sha256:
+      export_console.txt: fe067400b5554b0a096906799c45f459fc706eb2b7fe366968d42c192d63afb2
+      sl4dump.har: 35d39af0fd0075f6b3e7ec8f0a9b680e6f14ff47b7d6bbac1c12c63039d685a6
+      sl4levels.har: 900efdbb8aeb6952f8396062c45145b5db9a53b1c6da943ce0301b288da0e81b
+      sltoht_console.txt: e753165a81dac4d76ce3791938b80f384f97b76a883dfbad4522a4d28fcda536
+  run_me8:
+    path: gtap7/nus333/gemsim_burfisher_gragg/me8
+    sha256:
+      decomp.har: a647261715017fff1462b419617ba626bd57ad9d9c654a86c501652f297a3f86
+      gemsim_console.txt: 2f6515d62b62291de966809886c68157b452e90b62d35235339d67ef69d30754
+      run.cmf: cc96aaa370ef7a783261324e2ba2ea02f9ee678976f41c89188cba8b1de728fe
+      solution.sl4: 275f2a1d1b64f277a10fdb3e03fd462671bc616fed8f0162aafae3080adba157
+      summary.har: 948fe8b3f619bf6231457db1e0b0ef575110e2044398878c7a33f3770257412c
+      updated.har: 6651d86202d830af20b4eacac922aff275c7f6e628807e6a97826f96626c0bf3
+      volume.har: 9fa3b2ee67d813af38cb7f5a14a8c0de74e4ca76cdcd60ce2ccb4b0ad37ad686
+  dump_me9a:
+    path: gtap7/nus333/sltoht_burfisher_gragg/me9a
+    sha256:
+      export_console.txt: 8a111ba99db0ac530fe075f74673db098b5244d23b0dc78ef9cb927c6bb77f2e
+      sl4dump.har: 8e482370f032f24ab63a2591b68a7b20d4d6722badfb87f2a24f665fa51895e1
+      sl4levels.har: 04c21780fc7466997acaa7d09ff87d6b463cf65a2f1b5cdf6a495dca8210d058
+      sltoht_console.txt: a5246e643526d6efbfdedd7a2485c2b719a136c601d8983a1bfd8f15dec57175
+  run_me9a:
+    path: gtap7/nus333/gemsim_burfisher_gragg/me9a
+    sha256:
+      decomp.har: a495297dc4fa3cde3155269a09e0a9e45af8c62f3ea77209ffc7c4a2e7d6bd96
+      gemsim_console.txt: 9a4d2ca1353598604c4bac58c265eb23557db1fd085adf4bda4ed8c992dac9dd
+      run.cmf: 55856cfa2bb5e0deb0705501e3a6a9bd588beff4368b7d29a3453e9a6af25b97
+      solution.sl4: 8680da496d35c779812ab258911f99cf948ad1d3c6f9e0fa1a6edc6540181515
+      summary.har: 1eee79e147c891159d7e95e7bcb1767db6f27de310261242ba8f862cd8664a32
+      updated.har: 04451cb9ebbe6220be6da9527c8966ffed7b6ef8a9f52182282d52c430519151
+      volume.har: 87e40f8a51cf2a5818b1436cd58361b0e5a4821954e022bd21270da0ce147400
+  dump_me9b:
+    path: gtap7/nus333/sltoht_burfisher_gragg/me9b
+    sha256:
+      export_console.txt: 32ccf6c1a4bd34d5972fe42be71b40a57334f2786174edeb906262ea37daf961
+      sl4dump.har: f1ef225a7f3a09e9554c4c4bf1300915e7aa65af70ba0b195b899d5a92f62377
+      sl4levels.har: 4b77ed2e6f5659f22f2b314c30383377b2c5ffff8300f00f2bf1c5bc0c23088b
+      sltoht_console.txt: 646fb3e4139ee3a736497d067254e98fc869b66724b3cab6739ae8f26d2805dc
+  run_me9b:
+    path: gtap7/nus333/gemsim_burfisher_gragg/me9b
+    sha256:
+      decomp.har: 4f7cc409dafb2e2b5bc6541054defb7c5145d52d68620d059e5c6e6085cc5fa9
+      gemsim_console.txt: a332f0ccd2c6f792546617f91615bbd795ab59d7077cbf444565bae09122da94
+      run.cmf: f0c43a5ab0cfb56a106104f536021aed5ed35d3ab175eda092b7597a82e7a3ec
+      solution.sl4: 697633ba2ba35617cbf7791c1c61d19dc6f53b2eac9090b3c7a31168bda648cf
+      summary.har: 761fe2ce914c283fbf99adcb0e9f30f309a1e06a861d1c62c8dbc8df436267ab
+      updated.har: 46dc9af4f7c8882279189c11e221d2a504f64a3ad16ddf9e9c693cab5bdeb10d
+      volume.har: 9d8758a1b00ffbf2dc34eeb582f0256439e5c3330be72294981616a186df531f
+  dump_me9c:
+    path: gtap7/nus333/sltoht_burfisher_gragg/me9c
+    sha256:
+      export_console.txt: 227b3b59a2a4d40007876a721e29766b2af8d7f4c6e8cdd87c6759765a7f9f7e
+      sl4dump.har: 3280d979f7441c98080a6f941424d44daaaea776d9975167663355720a015a2f
+      sl4levels.har: 78e118677093440476c16db22deec00084fe8aa3cd4d3442adcf552765c2b2f1
+      sltoht_console.txt: 32393e06629edaedb073a44d022f61c20bebdacacc28932c8a81a055ee720149
+  run_me9c:
+    path: gtap7/nus333/gemsim_burfisher_gragg/me9c
+    sha256:
+      decomp.har: 55c2db2676b4c4aa602efb3ae5d156cd130488c3bf8020223e75cb67ef88902c
+      gemsim_console.txt: 0a80a409c147fd7614c62559dc63a4522218c92bd7cd03edf18012ffc3c52877
+      run.cmf: 8419aa5c3ae85ac84e513c8dda0887d44ec0093744bfb13c2f777bb97ca85e2f
+      solution.sl4: 9dabc4d1a7d550985720fa8fd74355b683c3cfc50c7aec7b195f47e2d0f3b8d1
+      summary.har: b0c1365d0dbf28058bdef79d77ba4882f53b8daa0558947ec5c4b502402e536c
+      updated.har: 560473ea29bad26ae361319de4df62e44293772f2f18e091cadd4108f3ed88e4
+      volume.har: 7d03c9bf5c6d1ab7ab7833504defdf69674b4e564bb80235bb3d4d5dad44bb9f
+  dump_me9d:
+    path: gtap7/nus333/sltoht_burfisher_gragg/me9d
+    sha256:
+      export_console.txt: 28b289694abf16576f3561986fbf1b6eb624ab33db6e98c2add7c9cdd9a0ce60
+      sl4dump.har: 3beb0e0ffd2ce3ae126214b2357fe72735ae0a734ee0d8ce8b8851a4e3ca575a
+      sl4levels.har: 1faad13a43357b681d522110057d0579a7a5cbde1e150ef459acd2de242c3134
+      sltoht_console.txt: 34827be9347b818d9fc43cbecc43d48318deda4bf9d199bec81915bed14bf1fe
+  run_me9d:
+    path: gtap7/nus333/gemsim_burfisher_gragg/me9d
+    sha256:
+      decomp.har: 26d2889dcf747612dee757b95b2c1a5181fcb3e812977ae8e2f62001b6c6f5df
+      gemsim_console.txt: 1853ec110ed623d0fd2405eb8cfeac01abfbb5775032e38990b628a823abc7f4
+      run.cmf: 1537c044a094257076be52ab4a52ca33d8650eb1204c548dfc229ed60960344c
+      solution.sl4: 9b0997379ef73b6ed31cc5a710cd86bb85a92e79861543c27b873a5b91d79ed1
+      summary.har: c93d197bb670e8d3f4f136227d975cb28792264902f7344dda5aa7ecc212d60d
+      updated.har: ad800c7cb911feeae27fa862f4b875a1a0a8f36b1df9d9a4e3cc85662d67b4a5
+      volume.har: bea70a755c9b048510beaf516c7d5ebe62164fb72bd1dd114c790f702594010c
+  dump_tbl45a:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl45a
+    sha256:
+      export_console.txt: f5c1332cbdb2cf4a883bdcacf9caf5527248c780bd982fcdb5f53e32d718a2f9
+      sl4dump.har: 340dee4ce18879c71c1576d2f0411baaebdfce5ac227ff2f7138e8ac6d39d98d
+      sl4levels.har: 443e396fe261878650cd0dd7aa46447866f5aa72f90a1b03f5202e26b2f8daef
+      sltoht_console.txt: 0bfd1650492dd71685f71ae364e6a448452b9836ae51882404e27cc95d7a5a33
+  run_tbl45a:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl45a
+    sha256:
+      decomp.har: 22f60e95ae8df6de438c9f71b2f91d3189b4640adc4cc4459f88a4f506110985
+      gemsim_console.txt: 7ee4b0b4a1e4b69ecaccdc66154b1cd24e062dc45f6d8502fab898a15d0253d0
+      run.cmf: 19bd1b7b4090cdf0700f02da11b35c163ffe22fa6bffa873937e79b4c9506477
+      solution.sl4: bc72aeeb70c892caff0114db4b0a862f5630d5f19ee67796e5d52d90141c41f8
+      summary.har: 47631013ef94b95980f8d04f6b15278c4cbbc9ebf1c67825a3a0f7ce50b92a06
+      updated.har: 7a935bec75278ad7b260da5648026d09f9aba21a36876777a1d617fc13984c49
+      volume.har: fdde87d402576fc52f584d982a21ac0dd26dc11dcd4651b6d01cbf1b3c7143f2
+  dump_tbl45b:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl45b
+    sha256:
+      export_console.txt: d80a7fb22db3267d3c9760fd1861b8fded2d01209e37a54e3dc0ead13164b210
+      sl4dump.har: 0c67e833f0fc5165f875ad77d77160b4e8d99adc2ea07ebe62bf06fa8db38b9c
+      sl4levels.har: 530446b59d9bae4670e3328792cf45942d2ff566ea4ad645db7d37713b892b8e
+      sltoht_console.txt: 1f939e080917e4dca4fe25b0180a7a05375111c023adcb421b29f3ee5ce593f4
+  run_tbl45b:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl45b
+    sha256:
+      decomp.har: 5a92be867afc6f319b740e5604bfac8eb0af91a2eb50ff08346dc0df83126e21
+      gemsim_console.txt: 5e3d78182aa1b9e3ac82aed84a48aa57a99f8d86727a7e83055691a35ea6fdef
+      run.cmf: c82ea68d6733b983df0b86d854c3527991af21146aee8a5b442d2f9fa32381ae
+      solution.sl4: 3cb0763e8014e370662235ab535c2a0469d8eb7e981ecd4f23473b9d07322079
+      summary.har: 8adff84a8ae3f2c6a746e7d213dd342ccaeedc0549eead81a10f7f19fe652135
+      updated.har: 9e98bfea46773002342707a90a56ec4a926e52cb55a86ed343cb6944753ab953
+      volume.har: bb051a2b03ecb6fc058cb0a4d89d937553e281837f8e30e5eb81914069f0e596
+  dump_tbl45c:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl45c
+    sha256:
+      export_console.txt: 80c3cb6cc77786eed39b1a5b36482e27b32917aa8d4d1def3ad2af4b04c982e8
+      sl4dump.har: c34291346064a769c8a0dde5b5f096d564c9fde75ac84b0efa67644d14536068
+      sl4levels.har: 411c986e6c22b9c0428ee947a1231671dc88a3467220d3661216d59af1b81d82
+      sltoht_console.txt: 481ec59554316fe3f990f081637bf030aa6a1dbd8b73dec6f47e352bbbff1d99
+  run_tbl45c:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl45c
+    sha256:
+      decomp.har: 933bf0b4076b8e24b0c05d2ba489246ac156babe25cef38b77763a9d7fa20616
+      gemsim_console.txt: 3e5508df917e27a2ad5e50c528bbccb9310454db5681e02279390903639f72ff
+      run.cmf: 3ecf1ce69825110e0749cb05a601543b0f4c91cd60c5f8be2c1af564561d3eca
+      solution.sl4: a387f889482fbd3d5344f419dcafd7ed5bf79d3d2696f24308dff3cf7b5c3f2f
+      summary.har: 994bf35a553a5dfd1becb26f44028e457e7b1061fe4f8e4f521b5e661d5da3be
+      updated.har: a93a6c30f0fdd5fc32b665631c4129c51f16f1d5530a76ab720b9f70eb486868
+      volume.har: 39ae67692d821240943c907f3df3f939a5b2cc47a432608e8b97c3cb2ab08574
+  dump_tbl46a:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl46a
+    sha256:
+      export_console.txt: 51ec9e235e2e56c04a505bfe448e361698e5ed010ef75b7f7edda67f0c072a6a
+      sl4dump.har: 92709f6e2157a42cadeea8699a25640fcf3e0ecac4c71577854e24e912d14f13
+      sl4levels.har: 8d63de7ef0cb166fec8a16188453f556000f9acbf53acdf2c50d00d55a4d7789
+      sltoht_console.txt: 779df3abd991c50fa980838c79aa1472ecbe243b1709d51f3d1d2decb8545892
+  run_tbl46a:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl46a
+    sha256:
+      decomp.har: c35420a736586a94004daf10e8b63613745df541de11d52229cf6c7e008a0e60
+      gemsim_console.txt: 28b39dc1ff7fbcc12140741ef63131fe5d0dbb0cedebfc3ec7ffa2182c6a5715
+      run.cmf: f4dd368af6cce7d0ff3786974ea4ea935ae05a0b637c3f00b9337a6f3ecad797
+      solution.sl4: 0e11c954e076c52b14153f5affbc1fd96a8d48bf31823174d96a9fff615e608f
+      summary.har: dca05eeab2c9e7e51fabd03774b3bb2b18a5b1297286abb3c37409d74c0d2be6
+      updated.har: 35946ba6375e426ca0324327d3f0dfcfddc4a1466905a3b49b023897dca4b4ca
+      volume.har: 9da5b29bf36367886ea787fcd2d84a370850fc88ff4caa82bda85cad8d53787c
+  dump_tbl46b:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl46b
+    sha256:
+      export_console.txt: a1a65ca233b6e2603bdb3e74842d73e8b75842bc1fa289ae1b277706b255970a
+      sl4dump.har: b8c77f691a1aca820dcae14100e48c03ecace93b238d0b3da09c42f9de74269b
+      sl4levels.har: 51f74bd13cbccdff432a836bfe59782aa9bb53022ab1452ba2e9c580b4d0a20f
+      sltoht_console.txt: 933f39ae46b3c367b68f540b4bf5c9be55069b56c23f990f0277915671847aba
+  run_tbl46b:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl46b
+    sha256:
+      decomp.har: 18794d257d16ef6c2ac901a8da55a5955dc4c644b8391300b84b55b0636b4aaf
+      gemsim_console.txt: 85e14768acc9a273a25becc037a8ac55d54eefdd2c316ada5590ebd945d4d211
+      run.cmf: 7b60382f1f260cbffe52c27671316e3a0a6fdd5b1243c36c044e90fc9fb5eb26
+      solution.sl4: 2cafa92143a2f3be9a57ef29f45afaffb94a3354304f83f94f10803743d3eff8
+      summary.har: 494dde3e84c2f6c15ed4084eed4435020ab8572d11afe9ecb3220e12536ba2af
+      updated.har: ca05d029cc485befab1969f94031c2607c679cc8837b07f73abb48867f473d52
+      volume.har: f81866c73d710f030c6a1ecd789884d795abc6e4160ef4fea7fc240a90ad9db0
+  dump_tbl46c:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl46c
+    sha256:
+      export_console.txt: 351533476f9d017a07199d600a91a244d69ac038c36907e85fb52c9014285821
+      sl4dump.har: c29941ab80b26ac6ddd1666e59aaec80b42e0527f282dd167560cd17dd3bb7bd
+      sl4levels.har: 5094b4298f66a5d06a10c684f6050ebaa9f40383060aecad8978db5527bd0b5f
+      sltoht_console.txt: 7622ffddda90d139a817d7c90d2415c82a7d6f8cda9ecbdb96e6c84be2e90b80
+  run_tbl46c:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl46c
+    sha256:
+      decomp.har: bc9bc438b98bce5429261a12aa656fe554b3c2f4f8020745f91b2facdf7842ee
+      gemsim_console.txt: be62823d540b346adeb981dd34a2e129fdbdaaeb91c7c6ca5d433bc91ad49b98
+      run.cmf: 491b0f5c7a9587ab595a98be7cf6dc88a7430f7723673e1f9ea53e3ceaa8362e
+      solution.sl4: cf5e3b9b2dd0e8eb0cb6107404a8cbc7f0bb4bdd67b9c462842c8737a12af869
+      summary.har: fd98958a35da9ed055c9c86c5757b90bc7c505979c2e14d2c2de7dca92c9b9a3
+      updated.har: e798bdd4761458834c5f99f8354a90b2ee3bb4d2f40368196f39329e55f1174a
+      volume.har: 7db2252a9d9d910926c866136ac92aa471c413d417acad1d5d3208cd7a2c791d
+  dump_tbl53:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl53
+    sha256:
+      export_console.txt: 27bfb88110ddcc766c2c46c8aa25ed92b2a36b35a504ce3a03b2e3deed21e507
+      sl4dump.har: 3f35409011ca28b4a8c2724f61aa7cbf87838d6b07f4b03aabd5ad27be9a7387
+      sl4levels.har: 5100c287aea7be2d946a470e9202eaca2d526ff57671474cd785022dd7d458ff
+      sltoht_console.txt: 8eeaa4c75b5bf66903606ddd8851e778235bd7cb07de5582fc010ad5adc3f4fe
+  run_tbl53:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl53
+    sha256:
+      decomp.har: 15dfb425c638fbf8ceecc91bf2766f3b1676bf527de496c58b60a6d2fee22a5d
+      gemsim_console.txt: c2f560d8356dbef5af0aec43785d38b9d1f2cf00869928d6c3274cb3d7660e0c
+      run.cmf: b59f4e0367760893b58e1d89e95d99ce3867fc8072f944a0ec32bc002c3fdaf4
+      solution.sl4: 457b1b44979878b10c32262ea9c781af4ab68b6a09f9f5cb33f2987df68a001b
+      summary.har: ecc18f6c2afe39465bd8f7c0bb1547a27cac2b6e0fe409852b4846f0d0e3ab80
+      updated.har: 597dae6464c26ca9b4650d739f21332bef24adea24db4e4de14a4ad673a8ca86
+      volume.har: c9f54fff2eb41ed9fd272016b042033200cd24ecb343152bbab3f6fe89f12f43
+  dump_tbl54a:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl54a
+    sha256:
+      export_console.txt: e1c0354866b333ddcc235ec9354d48c143eafea303c0ccedca69ddefd4f30190
+      sl4dump.har: 8e7cd77ba58e7d08a9e8e96e6660001df7745e35e1e89b0714fba01f67776f95
+      sl4levels.har: 251a0baf2b38bf19801b353552d2136c39b9f184a89ca2c55cea44c4349f2b07
+      sltoht_console.txt: 2852945a3a40d9887728a5d16f2da93945fb5e226c58a86d361ca5fc397f5d7c
+  run_tbl54a:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl54a
+    sha256:
+      decomp.har: 3bc6c909cc5fbabb5664a989eac1747aeb6c64580c462358e137b5568fcf308a
+      gemsim_console.txt: d687f20fded8754e0ba7c03dfffac38131759476c09371ff97c1f36da9582aa3
+      run.cmf: cb4ed4ac6f5fb48b49ea51b392527671feafa89a8fc2072dcbeb2ea08d244ae8
+      solution.sl4: 774f1fd53958e838190b16edbde41703ea3a334b4aa4891690521a04e566b1ec
+      summary.har: cbc392fd848242cbf02f1dc0de03017a4073a6e33257287215febc2ec89eba85
+      updated.har: ffa063c10ac84de3034e6c23a94dd763e5d0599f55d3dd83cc7c90f3470caed7
+      volume.har: 0c78d4796813eeccc20093009a8ecd4d46005f0389f5699adacd0b2913717d17
+  dump_tbl54b:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl54b
+    sha256:
+      export_console.txt: 7af484843f78989422f158b7866d6e66f101246250f98e3c5113fec86b861c88
+      sl4dump.har: 7bc139dbbba9e5dadc2287c3bc2316ed6257cf870f184899e9b2529c6bc07861
+      sl4levels.har: f95cef5c831da6d66561b503da2f55ed41c3c1baf91686b75bf11584c79371f1
+      sltoht_console.txt: c3ab802f8caeb88eb6cee34576a137c8b99730a7f95e9ed1ac5d70c67d0c6de2
+  run_tbl54b:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl54b
+    sha256:
+      decomp.har: 3f9570f36941da5c2ad57f57a2f278be8ad600173641f18ca404f2ecd4563496
+      gemsim_console.txt: ef0810478e93f3517acd73bcc6e4374e276815449bf2bb73688f7e22b04d4eba
+      run.cmf: 08ffe5e986b3592a3ca6b890ea954feaf1a0a39e4b98f4a7f69c9cdc0987403b
+      solution.sl4: fa0d8bf9f87f25e423c53a39708b9012020e7b1f6d35828becb3addc41bcd1f5
+      summary.har: fba3f092b6aa1b36cc4ac834432e281264bdffafdd7943d6ac7d2848cee5d11b
+      updated.har: cb7f821f75a913f94718f23c79094434ae3f865b3dd1c091de2e5f16279edaf3
+      volume.har: 5dde27161c2b4dcb9a301cdf41a08f063c338fe1f832399b70e3c9cb6197f876
+  dump_tbl55:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl55
+    sha256:
+      export_console.txt: 7ef748082987774f152d1699e7679a565430df94d53891c40ae2d3b797cc961f
+      sl4dump.har: 7e29169b42b154d5076c11f833ccaa8181dc766016446a30f37db7e56f42ecac
+      sl4levels.har: 90d70e42dec6c36529927b9e4fa1b053be1345476af5fefe3b92abe67566fb7c
+      sltoht_console.txt: 4d1677f4d2ef7ec2d828451b3b1c11153ace4713d869a668eaab4365d707663e
+  run_tbl55:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl55
+    sha256:
+      decomp.har: 9c12957b8892e5e111dbeaaaefbb9ff889484897638da52f57bbf5e35c8ee2c8
+      gemsim_console.txt: aafb9e8f4895848ae722116c12e814b9c9387be8c65f87959d937088cbf4cc15
+      run.cmf: 980a07107c853b3b0426b0cb57170608e8cc8f72996d859b573abce094b0da54
+      solution.sl4: d082b2a0d4f063837bd7c281e05c59f442b38c4b98b8e893cf5cec73378cbd07
+      summary.har: 44cc064f09964e2d659686afbe2dff8149661d4731c79a4432656ba0b9e18569
+      updated.har: 5e135fd9e7ae9bafff1d6db2a4b9386483932c5b188bdd81990b6e78c469c09f
+      volume.har: 51c020453b545f80af2db862c3db8925bd136cc5089a2334a6e6410f3ed04a25
+  dump_tbl62a:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl62a
+    sha256:
+      export_console.txt: 5a921be908be6fe5c96b893a5f088d004bb70931a94831a5a366c689bbc1b3ff
+      sl4dump.har: a393bf31df8dc518a1f7e46c91cde8c4b5445a494e9e1fab409164da4df021d2
+      sl4levels.har: 3fcf993712278f160786d7122a58dc698f5f6fe1496fcb6426cdca594a9786b1
+      sltoht_console.txt: 9723b5fd16c9fe890c6d882d352a2e68339d55556e6dca91c0d2e336295a7d80
+  run_tbl62a:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl62a
+    sha256:
+      decomp.har: 7e6e7d14631902324824d794c515382c8b20e5691b78a0cd3967ea1a8f6a60ad
+      gemsim_console.txt: 8c88f202a5e0bf0ef0fb80afcbe97186765785a1e4d9b6973559074877a327fa
+      run.cmf: 4f3462cc27239eaceb0e89c8edc3d82a1d322889eb954b20d3255c592a708996
+      solution.sl4: c4ad9cd864ff46a7031cec03f75ecf8c6fae6c6b3c745dee1d5af3a8c0f019a8
+      summary.har: b81961578429b1036b9096c7f01b71ff89d9e4116be95647052d805e413c95a6
+      updated.har: 370176a4bcd950a285fb9e35dd6f48662c461271b40704ac71269d842b3a20f5
+      volume.har: 3e6b859a308910535134d5267847ebb339fa4c2ee23a9d47f79471c6c4189c1d
+  dump_tbl62b:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl62b
+    sha256:
+      export_console.txt: c43db1beab400a55f48169b6629b7e22071d5d8da4a3b128ce544ef728e41e7b
+      sl4dump.har: 9bbfdc22def0acecb4ed6857259192640bf789e94db0d57df30f80141340b621
+      sl4levels.har: e07cafa23434c016aa5814e7bb2a1582ad61b4551dac711454bd309d4575072c
+      sltoht_console.txt: 57bac7a62a143a919e41383f86dada576fe7081d644ddca0eabee44a2114d90b
+  run_tbl62b:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl62b
+    sha256:
+      decomp.har: cd99bf4251cbdcfe8da62387e6c1660af837f1e9a41f8430ebdedef3d5738f67
+      gemsim_console.txt: 38e8eec7e9c0a08d3837c171c2f3393e0eda2563498bcebec451df799edfabef
+      run.cmf: 8685244f0053357a8c246d9c4c3c221258e28035d3e567e07adead58da704eef
+      solution.sl4: 60aa5eb354b5e5160ee3c6e875558efef04575ef9c84036cde0be91f8fb3929c
+      summary.har: cf437f7a103ce91279e4795a8bcfb0d0d4b897f4d155047d418ad567b5a23f37
+      updated.har: 32ffd5c4aa4c9c5f7841de9019c91145dd26fac14078a06f2c445c71333673d6
+      volume.har: 54fcaec9bd99a30a133f72e2165bc7cdc7ccace4657cffb1c415444172c93753
+  dump_tbl62c:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl62c
+    sha256:
+      export_console.txt: fc0c2d24614d067c5462db9433d7f48a8ee9f324d5c67e085a73eb259c7abbe4
+      sl4dump.har: 94dfb1a9cfde2881f1dcd1eaef34500d30f9aee3d3bc2572382dd1388792eb51
+      sl4levels.har: 7eb7550346a68d4fddd92aef0fb05ac0a5523aea79d73b17d75d597b416d7431
+      sltoht_console.txt: 2e3a523fd426b8317605c3bc51df51fbdbcb53bea3be15c2b578918dd4f507c4
+  run_tbl62c:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl62c
+    sha256:
+      decomp.har: 14ab9f52565719710cfd408d4b6a91e17732ecc436a61d9a9fdddbb756a9124a
+      gemsim_console.txt: 225f6016586365be9d9466c97e4b3e288587121f1185b15b096f1068390593be
+      run.cmf: cdb966c30ff4da36796e95adfb59d0689a16e016d04d85bdfb62c03e0d28152c
+      solution.sl4: 978f18993601b64f43fb6afa85d2e6769f30717f311d278c3bcf2e9a97c87486
+      summary.har: 354f7126a24eb6a657335e4e77cd479c213fc32c4bcb5948749353552658d428
+      updated.har: fa363cfca362417383c8d3b6366ffb7f5c44ab9bccef1ffc89ad775e3bb4c49c
+      volume.har: 82d27aee7333c9a244068f24492f37bc7fd3b4f4c1edf0fc2c3f571a467bb5c3
+  dump_tbl63a:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl63a
+    sha256:
+      export_console.txt: 4c5303107ac0af35c94d8d6119e7c706396f3972580db66f97c3216bed9620fe
+      sl4dump.har: c754c652fa490ad0e6c407a885ad52b50624c2bd3f202be267b30091915169fb
+      sl4levels.har: 2403aeb46bd80225d58aa8c5a68727de85ade84a5e37bda9b4fe8db872c5a522
+      sltoht_console.txt: 1c785667eb075a869db34877f7687ab4acb644b8a294cf71d1acd5b390d12d34
+  run_tbl63a:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl63a
+    sha256:
+      decomp.har: a2eee8c4bb3c2407637f3836c264e361580e51ccc06b19568f3154d92f71fc9c
+      gemsim_console.txt: d59b688c112894ae4e5ab49296ea9f451095dec296c0bf82eff8b63d2d3b539d
+      run.cmf: e4663949bd0d619bc95341c60b1a5285e9aa89c48dec47c500929339868af163
+      solution.sl4: 2dc6c38354a50ac56c93d5b4d41a205339cb4c74b9660b10f8a1704d2ae7d45d
+      summary.har: cada7a97b359919c1e3188f01fb02a7e314c2dfcfc648afad8082f96217db110
+      updated.har: 2e2cd771b1e3844a1100a3ba775e09cafa3fa37e2312c7a9fc9d44ee6ffc7ef8
+      volume.har: e18f348c50ac17f592bafe95515f9afea44387b285b9651150007e1e701a7d91
+  dump_tbl63b:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl63b
+    sha256:
+      export_console.txt: b3e2d47cf28419ebced4179cfb8cd5d7c5d84c8074973c41d77df8df4767ec82
+      sl4dump.har: 8d9146f8bccf634fd972152010959a6538f63384d287d958db3720311021a018
+      sl4levels.har: 9452651852152a41e87022867127f5fd0383556b8e7e14927938eb46bbfc7446
+      sltoht_console.txt: 512055eddb900a58920e899790ded9d6eebee88b9f125cbd8ea8a87ed1395002
+  run_tbl63b:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl63b
+    sha256:
+      decomp.har: 664889a8616ac2dd2d15cdcc99c580e9cede76a9a2fb2cac3d70fea440b7df1b
+      gemsim_console.txt: 8f04cc6d6ddae47963402d107c0a0abb62f2472e4b8ac580dd34c89c158aa403
+      run.cmf: f37eade3275d8252bc86762221a096e6d93b57e1f25d7236e308d38ff94a2b09
+      solution.sl4: 58aafe871456cbe9937b3e9b51b290c96f945ca0cfa84c2dee1510f9db6a13d1
+      summary.har: 7f0461634e3ef955fc8cb2ed3a88bda3e4417c668605820a3c3451ea64a66a89
+      updated.har: bc53f1de004d12d818a30eed753fa3e46ee5b60d24605b1f9124e6225d2d5fcc
+      volume.har: dc81cc5b576124473694ae086e2d036cdc8147827c5b4498ec337a34318972e9
+  dump_tbl64:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl64
+    sha256:
+      export_console.txt: 734865cb2c356d0606143cc04255713e3675cdc4457cbf590ffc046cabfc3c0d
+      sl4dump.har: e23213e786cdb577118b402f65aa0ef3c26e88609d672e7236007181056dc95b
+      sl4levels.har: e6504ac3014417fcac8ccde75c745163c2476f45e1ab90b2e67a3b1d21b5e855
+      sltoht_console.txt: 59d3f9eb681b440e588508af84fb1027b116a63a109576d33e81e4e3e9d853e0
+  run_tbl64:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl64
+    sha256:
+      decomp.har: a8a23adde1f2c50cc0980d2e6eb4f2de12270e671b641e1ee3de2c113fe54e6b
+      gemsim_console.txt: 96caf4ab2a3bc1722247beb20ac87d3f874637abc499ebc1597bfd621175a2de
+      run.cmf: 7c640b21969e2256b41634682f17efc7c42161880e59352df1176404710331bf
+      solution.sl4: cd38278476ae6ab63dcfbe98d2933282fda7a424846328c8dadaafa259750a36
+      summary.har: 98d861aedcae14ca82f73aff66f3208f8dfefe40562d52bbf5d2aad64ebb373a
+      updated.har: 714177111c90ca21b23bd47f02a1ffa3c1ec2960a77584f2c6b4fded4303ac3c
+      volume.har: ed4caf5dcd42fd67ccaba00a51bbcec0d677302fb645b35ccda7692fd53a8fe7
+  dump_tbl65a:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl65a
+    sha256:
+      export_console.txt: 721f05073f9d1395a848d3bfe53e81d96099542e5cde3afcf1065064c883d789
+      sl4dump.har: f46f511003941b67bab8cd18fc9a826e5766aa485155018248f78cbebe896e17
+      sl4levels.har: f79f40bf1f60b8b28414e856c506fe222ed5937767428abb61ca8b2021981a0a
+      sltoht_console.txt: 2819ea27d7a701b4d135f20d80db7d71aaa252f11e2382c3725fcbd6ebe8d36f
+  run_tbl65a:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl65a
+    sha256:
+      decomp.har: bff977d160b37cc72119f2e511c7ac7c8e0c0a67d3288619aa4d1b9fc3cba222
+      gemsim_console.txt: 777c4b6000ee0a6ddb4f32ed3748694753410e5e8c79a3821ad19611053efb63
+      run.cmf: 4e2a2d53a4cfde43acf3e699d7cc965dfc150a0dbb925bbd90bb8153c814eeb7
+      solution.sl4: 80bf95cfa769ab735df98f02c2d74eeb9bdd2ee2930fb80d65322d5c3d8d8c19
+      summary.har: 37cc1c1033e3fba34a4427e5c0df59cc769796f0fd484d03263a7b0ef808ee87
+      updated.har: 461a6297f8856a9441386ae06d4c1ef57260eb48a88971a5c30b79a61a39cec5
+      volume.har: fec3df97865625dd9d65c1ef0ba51ed632bacc10d3fddd2333a03e73060bafa5
+  dump_tbl65b:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl65b
+    sha256:
+      export_console.txt: c0d9863c79212df54493ed932cdd7556d5a533a1fca1deb6809676eafcc41b3a
+      sl4dump.har: 5c53ac607aa5f0464b87143e545920377ad009d7b16364b9ed46c6372ed0fc78
+      sl4levels.har: a8941f7d9a64ebe02a8a8f5ed058e579e6c46868ea74ff99c7fae07e639a5d46
+      sltoht_console.txt: b64f195274f0adc179117f0fe2b44c9e969ba4e10d83419babbb6b4404dc8876
+  run_tbl65b:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl65b
+    sha256:
+      decomp.har: d3ab7e79dd87cf71e6785d6ae385877e06104c7b29fbc1de19ed0b4f489a669c
+      gemsim_console.txt: 1f0b1d187fe0bad0b0f730882af08bd7eb6b2c7d1b251d620040c3a042e4a573
+      run.cmf: 2e96c656474c140717383bc250efd06dd36e7b04afab161bb7556e38e04cbd9b
+      solution.sl4: 17f78b7d8718ed29269f1d100f847d5075bc2d6bf584f0bfe2906f139d869a13
+      summary.har: ab0696335dd9c244f87751317fb5cd5f8d46b168b78d633d79cb05f87376a53d
+      updated.har: ac2bacf86069fec37cae972e85cc3fda51fa50f9cc78b89094a365e308fed1ea
+      volume.har: 760e9ea60d888e3da3e06dea664fd87aa535c1b37be5388bed749527be40230e
+  dump_tbl66:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl66
+    sha256:
+      export_console.txt: 6617582fee256bf9e115209840356bbbce903a4e7511ef31932acdaa88371e91
+      sl4dump.har: c7420a0a31afe66463193f2b4f66527b8d2abdf60a53144689f6d0d673bd4af6
+      sl4levels.har: 47d024f933bc956935ce4b1c6834ffc6e2f1dbbba631684ff338866868297240
+      sltoht_console.txt: 9f73e91a633012b2a97e8fbd3e9763d8779f0f5fba3e31ea25561cef7d617abd
+  run_tbl66:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl66
+    sha256:
+      decomp.har: edf7d81faa52383c590ea0427b794c9f07b7a8c4b406b9de271d0d40ef61adb6
+      gemsim_console.txt: 39c0a75d974a1eda92c2009252692ee6ae7a930e6d8b10266350efcb3fd22b7c
+      run.cmf: cdaf63d8b81295d3440a11ec6f57f54495162ff3b908fb61300894fc49dbc9c9
+      solution.sl4: 90f10555d2674e989b6cbdab5e57c034a355b492b0df73f36ad0000ac0615bea
+      summary.har: 95ae2453709f8e361239956f4cee609ab4c7249dd6bce232d77f39b6a86b85be
+      updated.har: 2a7964a8639b9b425b6d0d05eebe0f1e3449f6115e696af6c5de4d8757d7958f
+      volume.har: 56738ce234fbbaf0bf0cf32dd3988db8ea8403135156c52cbfbf8b99c49665b5
+  dump_tbl67:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl67
+    sha256:
+      export_console.txt: 1203ea5a6839b667934a79fede3a59b9b7ffaa8b26270a4db51cd77e4ca650b8
+      sl4dump.har: f2859deb5e485f3875fe95662a163c0d98a0b9feb614cc43eb992d14191e97b6
+      sl4levels.har: 97c5f5d73cc82c35f5ac10d025664d9921771ee42e8181af9e9f6bceb19e7f2a
+      sltoht_console.txt: 8f66942c9eac19572973d572d6a02f9a8686f10514bced783a3be05034b8ee3b
+  run_tbl67:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl67
+    sha256:
+      decomp.har: 93bfd8b5bb0b074d2d4f1967b52c1db00009b71bbbd90f0699ef723dccff3c45
+      gemsim_console.txt: 157b6cfacdf27a27ba39acc1d3933b634696454615998f7df14bd9c198f08d54
+      run.cmf: f30929ae94e04ee8ae7dc2f509a5267630fff544c1b2603a860fc98db0c487cc
+      solution.sl4: 45ed7b2b44424287aa13f48ff1fa7ed3a2b2e2a216cb4848efd5d3ffb778fbb9
+      summary.har: 1c729a3de18d7506a8a8483179fe95a1ac94f5267403f738443284f717cb0753
+      updated.har: 8463bd212b5bbc171af35c5c59d9f18e16b432076da6127bd87f56db734fde68
+      volume.har: 2971ddab61482a0f646ebd3de602157d47cca7ace55f300f07b6d844fde38046
+  dump_tbl75a:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl75a
+    sha256:
+      export_console.txt: 29483745abb78fd2863a325f54ca92872352c19f760266eb428039a879cea98e
+      sl4dump.har: 85e2f410c4a999074fe5b13b2962b372fd1a767fe4f6d39da73fdcb62634c947
+      sl4levels.har: 9bc6a6b29ef0da256f8600f07bae1d193f0e1e3d817ae49143fe3fe201ad1221
+      sltoht_console.txt: fb48179fa9c10cf7eb807063921d0d4380d545931c57384fd8f3deeaa868d582
+  run_tbl75a:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl75a
+    sha256:
+      decomp.har: 8475d2a19cbbc95a2569ec77c82155e0e65acb5dd986eee4342b91171fe4dce0
+      gemsim_console.txt: 37b24eb46abb9bac29f0b3db477c8a97e86430721b431bda90400205ee355e4e
+      run.cmf: 6fb11a3ee65a72bcafd58263f9ed2cfb3eafbe68baaa73bede8af8c3a4bb208e
+      solution.sl4: 1b11aef9d218d117be7dcc3daf412f6942347cd24f05f02416a75548c49d3c8a
+      summary.har: 81fdf51ffc66e0f603f3e23009db2678b8f0dbb1e9d83d39863afa8e18ecc973
+      updated.har: 23b35298d706b83f007c59bd73525e8cd138926d47e8331e740b091bbf3c3631
+      volume.har: 21e4ceab3d5e37c35b6b51de45009bbe126574813b9a3d1557aeb9b14a156f29
+  dump_tbl75b:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl75b
+    sha256:
+      export_console.txt: d52f96f7ee81865165bbd703af7b5cbbf23eeb4ce747a8567431cfcceca2d0a2
+      sl4dump.har: f9269ecfa0227eb76002b6df5ead8607e8947503c97bca4b7f299d00b74c9937
+      sl4levels.har: 6044100e18455a8dce10f3ea8535c9dd3a0d7e1f47a5c8e5a4b5a7d34da0bde8
+      sltoht_console.txt: fb6a2ab02eb20498596d9858ebb68d1e50ef0252fa3f3ca374221bf58513daf2
+  run_tbl75b:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl75b
+    sha256:
+      decomp.har: d52e4c646f14c374d391bb4b703ee6dc7ca127f12f6632c83771c2197a942efa
+      gemsim_console.txt: 9338cc3d390d2a06a472cdb112864574820aeeda1702a4990d2734ef6b3ff28d
+      run.cmf: b8f01778e3b67877d630eef6027fa137af5e427e9166757ea677b06356a02c7e
+      solution.sl4: 0c01db7b0935991b8bdebfc54d02dfb04dfa6bda686729f9a49fc11b116e60c1
+      summary.har: e303be5d74a556d9ce77acb9f7ed1fa5f73575aa70649bff25ce7eefb5983bf0
+      updated.har: 8e82a206b161b8bc1ecc573f3283dbaf390988765a62dddb99ff4e795cb8fd19
+      volume.har: d909fd29dd9bc140c9e5b54593ed8e9d56c5cc2af31c46b0ad21fe0109fde815
+  dump_tbl77:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl77
+    sha256:
+      export_console.txt: 0adcbef58d93710249783177ce8b3d1cbac9bdeb3dbc422f66635180535eaa09
+      sl4dump.har: 82e8052d35a589b3c3f082f91b4421fd31e28c4489f9bdbf9fe680679df73a90
+      sl4levels.har: 172a4a7cf4cb9bb7b59a9456e6fe3a16c624cb0eef1da0fb0a6ba2bf7e6dd471
+      sltoht_console.txt: 7e731975e25e4293825f7cd49e4153f8bb208f8d2459b4016bb5638d87cae268
+  run_tbl77:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl77
+    sha256:
+      decomp.har: 410ab086ea1f76c589b1a8a7e1571f38baa5a1b63e396360ee09b1d4dc6c49ad
+      gemsim_console.txt: 81771b851f6d74a54bee89c0748bdf6a7499d7c56dc19057889530d0d03cb8c6
+      run.cmf: 8f278ca95c5c6717750c0dd5a83348c26143a965546813aa29ca53af8cadc692
+      solution.sl4: 694d62998ea4822715de2e62e321cc30f532e2ae25bff178538e88bf877eae3d
+      summary.har: 509d323e56ba8035246c7ecd9623209be47acfcc6ba040c684526fc65e9ed41c
+      updated.har: 376d0d5ca48b013bbc13ad45eb6d0e54e1d5a5f67816975b263f24c887d39bf0
+      volume.har: 4d21648f47c38c222beaa9ad30ae4f35b5e99266cc3a2e497bc9c6ebc92b9c4d
+  dump_tbl78:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl78
+    sha256:
+      export_console.txt: 82745d4a8ff07c53a80529f12bb2f886ac8dfc811cee50cdef0c3bec310b6829
+      sl4dump.har: 23af46f1c2fa6b368e8a91a03f67dd3c912f4cbbe8ffebf71b0e6e64b4d96d2d
+      sl4levels.har: 1aef67235ad96cc23520b5f026fceb624c7a186975a114a1b2f3241889534cb2
+      sltoht_console.txt: ad296f82e2620147b836a77147c019af1404eb6c81e0af038e59698d6cc72532
+  run_tbl78:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl78
+    sha256:
+      decomp.har: 3be3fa537b8754bd7dff56cb75c02381065aefe07814baeff67b6de8e742f9bc
+      gemsim_console.txt: 6ea4098949413136fd8c8ab199744cce5e12898749b1e50293b1ec4e7f3d875f
+      run.cmf: 7412f3e63fa600025988f0961adcfbb3d65ca348423fcc7723f6bdb6168e26df
+      solution.sl4: 22b961ff92f786459118e6423b7dc12c4f06be805e72897b95a9b1a5a3b7e9ff
+      summary.har: 1008cb33c2225b279c21d4929b46427ef6a55215732e09c5a7764a8fd8636368
+      updated.har: c64c8ba5c02234cee8fe6c18f059934e389dfe9e4fcde4f00071620b10a4cfc0
+      volume.har: 3d2e3cb207bdea37bf920eb3dcc0d330171509cae88c852cb346dd6d13e13f90
+  dump_tbl79:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl79
+    sha256:
+      export_console.txt: 62e932b654e1fcb9d8ce4c04f4e61ebe168997e3ae8c8b0f63651591056a3f60
+      sl4dump.har: fe32b3544e450488201a286ec4034322d7c2b5ae06a8925ca487b4e4f09fbe57
+      sl4levels.har: dcff59e3ea23c15643df4b7905d437c762b267b86184345dafbbec098bcd9ac9
+      sltoht_console.txt: 630d73f8c9a97b643478606ef9093740e6c61998f8b3445f6438d546a2ac34b4
+  run_tbl79:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl79
+    sha256:
+      decomp.har: 9078bfd04ea2025ceb71007b6eded0fdc7b3d1af6c2e8cf80cba3c10b608fc2f
+      gemsim_console.txt: 23eb75bbd2da915cec9c44d128c0c3aa55b873ebafa4ceec09e5f6cce793c743
+      run.cmf: a0a35a05aea5f6141069c7b188bd4598b6bef34517e72731d149de61e318d055
+      solution.sl4: afa79a2ef27b03a8c977c6cffb0f09702b39bd60fc2a5ea81f9d813316258683
+      summary.har: 9cf516c40546b6aa5e7eecb5640352cee40a2cce0f87b2c7b5b627dfb3c1145d
+      updated.har: 652385da64c3e6c1ee67320fd60fe2c38c925234348a9b6c3f4133a8eadbac77
+      volume.har: 47fd6c55ae7daeae8d1309670f02f6e93781999cc0290d0bf2646fc36b4e6afc
+  dump_tbl813:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl813
+    sha256:
+      export_console.txt: 8efa7a4527a077cc6660dd2b6ef12d61b729d4f71b3da0c84ad4e9e226026226
+      sl4dump.har: 30c2e90aafc33ee9e18f6f1211667dce122ec46ad888be863af3b035d04a63af
+      sl4levels.har: b7ba434e73bff7a8cfb4c451378d87372a4a4a4f3dfd7f39a09bd4ca70bdf47f
+      sltoht_console.txt: 3860056c501245168f8c0ba65c681ff3c89e29cde22e21638388f615b5aaef74
+  run_tbl813:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl813
+    sha256:
+      decomp.har: 3d6aeaf76277da8ba36148102f9cf043fd4f7f55b0fa6acc788c881a04e9fefb
+      gemsim_console.txt: 5b1fd2f9f9d16157da90a09a6cca3e6d768503523aa86bd55e268029baeb514c
+      run.cmf: aa0dff9bf760e2c8921c171c296824950dcf3ce1d12edb9ab7244690d630e762
+      solution.sl4: d1f16798c0e2d9b36302a432aa45ef92cde6ae1aa54c00844f1ab36afa2fbfab
+      summary.har: f76350cf0155cf4e7b4083cea202afd1535d1046f32539bd244878d823e25ef9
+      updated.har: c418dfd13b61b0a6fe7e5706330cdf7eb95a3c320b31914738621b214129fe1a
+      volume.har: f99bb7a519bb82c67090e32c8f7c485f1b54efe8dc1ef0f6a41ad8af7edb23af
+  dump_tbl93:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl93
+    sha256:
+      export_console.txt: 9ef5688719c08a88720d9ff91dcb83b763314fdc6e9075f498a39435fe7b91e7
+      sl4dump.har: af41efb8b3f236226ff4c18b131915ae12cf743072447e59bf6840dcec043831
+      sl4levels.har: fa4d9f4d123122cbaa46a2ba9e52fd146875ae77cba454c8a139aaee6a70e86b
+      sltoht_console.txt: 0c77b904197d3f52a1c1094a4706fe31eec3889049b29693ae83154fa25e161e
+  run_tbl93:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl93
+    sha256:
+      decomp.har: d292846e51c375b15181dda8d725bc53d1a46deb9b187777f98f48c85a7ba7c0
+      gemsim_console.txt: 0d21c4bb4bdcb36c4a85d732fcb808613a014016ed8c90cfa1b99f7e1e583444
+      run.cmf: 4edacb16bfcfc43587f6df0aaa2bb65090aa0b594b815a88fef687bbc09d43c4
+      solution.sl4: 46eef87300f12c1f3391f0e9eff6899fa77167afa6dd4e9ae2876f211e8614e6
+      summary.har: f50ad6f94689a7bf1fb829bbc73b605a792fd51e63d8e6308cc0c8f131938530
+      updated.har: 9f88d9535b47dec7abe8f035be4c249f7ca64236e0587750cb14953c36525ef4
+      volume.har: e47f492256bc9d882453465baa0d2b6f4391f9d3cd9d16b2bb3e21b7a25701eb
+  dump_tbl94:
+    path: gtap7/nus333/sltoht_burfisher_gragg/tbl94
+    sha256:
+      export_console.txt: ac0daad75af6fb2495006bbd256ee72199dfc27d521030adc679a4de9cfd7a2a
+      sl4dump.har: d341234427fa15570b22441431ccc7e1d883e717a96277a93ab824ff3bec4e9b
+      sl4levels.har: 6d85e19a5ea5dedd02fc0cbccc9aea103bdf0753067d30c2f9264e4ca5c36f54
+      sltoht_console.txt: 1978363e44f58c911af67cfd227ccecd6f118b6cb0b92e44451b770351007cde
+  run_tbl94:
+    path: gtap7/nus333/gemsim_burfisher_gragg/tbl94
+    sha256:
+      decomp.har: 470ba3967fdcb7377ecddffb7ca4ee65240f70fd22954f6f3b04cdfb7e64a7c1
+      gemsim_console.txt: 2cfccdca8459ddba320264ea836e389a673f38471f2a1491376d6ae1c47dd625
+      run.cmf: b41970dcd7657669508d629535dee929e27bb72e8cf719a508d2d7cb55389342
+      solution.sl4: 4abe8ce00ac361536e0dda3564b8870c47160520d99496af72535d71c9cafc2f
+      summary.har: 38918940f57525dc57e2a51aeda462ba96be432842ed4e6bf5c69c1e5dddb45d
+      updated.har: ed2bcb11fb2d404d54816dff890244ba646b1e6d18a7eb3fe6785a10a7d7d0de
+      volume.har: 5dc1ae78ebcfd34eaed34fa39d0110a8cf912c6353668398ae8f0037ac4de56c
+command: uv run python welfare_gempack_fixture.py --out welfare.json.gz
+equilibria_commit: 7f613f6c
+exit:
+  code: 0
+outputs:
+  welfare.json.gz: b6f7b89445aa4a01a48659ded9698bd3c6c028e635419a89e41e0ad8ba041654
+  welfare_gempack_fixture.py: ab56e2f5489774f12d8d5a9978d9ee6f6478c21e41abcda18f5fc9095f80752e
+run:
+  date: '2026-11-05T14:03:04-06:00'
+  duration_s: 1.665
+  machine:
+    os: macOS 26.2 (Darwin 25.2.0)
+    cpu: Apple M3 Pro
+    cores: 11
+    ram_gb: 18.0
+status: verified
+notes: ''

@@ -1,0 +1,11 @@
+kind: data
+model: gtap7
+dataset: nus333_gemsim_burfisher_gragg
+source: readme.md describing the Gragg reruns of Burfisher's exercises (the gemsim_burfisher_gragg/<exp>/
+  records). Moved from tests/fixtures/gtap7_gempack/burfisher_gragg/readme.md at 40a2abc6
+  and rewritten for the record layout (phase 3b)
+license: equilibria documentation (MIT, as the package)
+outputs:
+  readme.md: 72da1f6d17ef9702c8deebaa7a4ded25746cbd77ee2c7ce45194b0872f43bcbf
+status: verified
+notes: ''

@@ -187,7 +187,7 @@ REQ_V1 = "### Requirement: Solver converges\nSource: issue 1\n\nIt converges.\n"
 REQ_V2 = "### Requirement: Solver converges\nSource: issue 1\n\nIt converges fast.\n"
 TOY_AREAS = (
     '[areas]\nsolver = ["src/equilibria/solver/"]\n'
-    '[docs]\nsolver = ["docs/site/guide/path_capi.md", "docs/guides/solver_*.md"]\n'
+    '[docs]\nsolver = ["docs/site/guide/path_capi.md", "docs/notes/solver_*.md"]\n'
 )
 
 
@@ -353,7 +353,7 @@ def test_load_areas_reads_docs_table(tmp_path: Path) -> None:
     f.write_text(TOY_AREAS, encoding="utf-8")
     a = m.load_areas(f)
     assert a.docs == {
-        "solver": ("docs/site/guide/path_capi.md", "docs/guides/solver_*.md")
+        "solver": ("docs/site/guide/path_capi.md", "docs/notes/solver_*.md")
     }
     f.write_text('[areas]\nsolver = ["src/"]\n', encoding="utf-8")
     assert m.load_areas(f).docs == {}
@@ -364,12 +364,12 @@ def test_stale_docs_warns_when_baseline_changes_without_docs() -> None:
     a = m.Areas(
         areas={"solver": ("src/equilibria/solver/",)},
         unowned=(),
-        docs={"solver": ("docs/site/guide/path_capi.md", "docs/guides/solver_*.md")},
+        docs={"solver": ("docs/site/guide/path_capi.md", "docs/notes/solver_*.md")},
     )
     spec = "specs/solver/specs/specs.md"
     assert m.stale_docs([spec], a) == ["solver"]
     assert m.stale_docs([spec, "docs/site/guide/path_capi.md"], a) == []
-    assert m.stale_docs([spec, "docs/guides/solver_notes.md"], a) == []
+    assert m.stale_docs([spec, "docs/notes/solver_notes.md"], a) == []
     # a change proposal is not the baseline
     assert m.stale_docs(["specs/solver/changes/c/specs/specs.md"], a) == []
     # area without a [docs] entry is not flagged

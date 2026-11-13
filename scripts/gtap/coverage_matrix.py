@@ -181,6 +181,15 @@ _NLP_ROWS: list[Row] = [
         "out_10x7_ifsub0_nlp.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     Row("gtap7_10x7", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_10x7_nlp.gdx", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    # 15x10: GAMS NLP refs generated 2026-11-06 (regenerate_gams.py, IPOPT local).
+    Row("gtap7_15x10", "nlp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "gams nlp gtap ifsub=0 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    Row("gtap7_15x10", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "gams nlp gtap ifsub=1 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    Row("gtap7_3x4", "nlp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "gams nlp gtap ifsub=0 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    Row("gtap7_3x4", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "gams nlp gtap ifsub=1 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     # ALTERTAX (CD) — the old 86-94 check/shock ceiling ("mis-converged NLP ref")
     # DISSOLVED with the 2026-07-19 fixes (orphaned xaa-shares fix recovered +
     # unfaithful 1e-8 quantity floors removed): measured check 100% on ALL datasets,
@@ -202,6 +211,13 @@ _NLP_ROWS: list[Row] = [
         "out_altertax_nlp_ifsub0.gdx", stage_floors=_F(99.0, 99.0, 98.0), mode="altertax"),
     Row("gtap7_10x7", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "out_altertax_nlp_ifsub1.gdx", stage_floors=_F(99.0, 99.0, 98.0), mode="altertax"),
+    # 15x10 ifSUB=0 converges since the CDE household share recal uses GAMS's
+    # denominator sum(xcshr/bh); before, the check row started 37 off and IPOPT
+    # hit its iteration limit (check 53%, shock 45%).
+    Row("gtap7_15x10", "nlp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "gams nlp altertax ifsub=0 fbep=header", stage_floors=_F(99.0, 99.0, 98.0), mode="altertax"),
+    Row("gtap7_15x10", "nlp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "gams nlp altertax ifsub=1 fbep=header", stage_floors=_F(99.0, 99.0, 98.0), mode="altertax"),
 ]
 ROWS.extend(_NLP_ROWS)
 
@@ -246,6 +262,10 @@ _MCP_ROWS: list[Row] = [
         "gams mcp gtap ifsub=0 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     Row("gtap7_15x10", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "gams mcp gtap ifsub=1 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    Row("gtap7_3x4", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "gams mcp gtap ifsub=0 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
+    Row("gtap7_3x4", "mcp", 1, ("base", "check", "shock"), None, "measured @ runtime", "local",
+        "gams mcp gtap ifsub=1 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="pure"),
     # --- altertax CD (ref gams_mcp_altertax_ifsub{N}_fbep-header) ---
     Row("gtap7_3x3", "mcp", 0, ("base", "check", "shock"), None, "measured @ runtime", "local",
         "gams mcp altertax ifsub=0 fbep=header", stage_floors=_F(99.0, 99.0, 99.0), mode="altertax"),
@@ -280,7 +300,7 @@ _MCP_ROWS: list[Row] = [
     # ONE tariff shock and is ifSUB-agnostic — ifSUB 0 and 1 measure identically (the
     # quantities don't depend on the subsidy convention), so both are listed with the
     # same floor. Welfare (u/EV) is NOT here — it is sign-flipping/second-order and
-    # lives in the separate EV track (see docs/findings/gempack_welfare_not_cellwise).
+    # lives in the separate EV track (see docs/archive/findings/gempack_welfare_not_cellwise).
     # SUBSIDY BASIS: the gate runs va_subsidy_basis="gempack" (the data's factor wedge,
     # EVFP = EVFB + FTRV + FBEP — the gtap7_gempack basis). Measured within 1pp vs the
     # capFix fixtures, shock/CHECK denominator (2026-10-05, ifsub 0 = ifsub 1; median pp):

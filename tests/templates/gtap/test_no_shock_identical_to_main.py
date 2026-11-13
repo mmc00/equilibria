@@ -47,8 +47,10 @@ import zlib
 from equilibria.sources import dataset_dir
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-GOLDEN = ROOT / "tests/fixtures/gtap7_3x3_residuos_sin_shock_3f3fe5f.json.gz"
-PUNTO = ROOT / "tests/fixtures/gtap7_3x3_punto_sin_shock_3f3fe5f.json.gz"
+GOLDEN = (
+    dataset_dir("gtap7_3x3_equilibria_no_shock") / "no_shock_residuals_3f3fe5f.json.gz"
+)
+PUNTO = dataset_dir("gtap7_3x3_equilibria_no_shock") / "no_shock_point_3f3fe5f.json.gz"
 REL_TOL = 1e-9
 _PINNED = ("dintx", "mintx")
 

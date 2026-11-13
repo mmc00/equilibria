@@ -3,6 +3,11 @@ description: >-
   Entorno de la suite: uv, Python 3.11 y dependencias, IPOPT/PyNumero ASL, la
   libreria PATH y path-capi-python. Deja exportadas (GITHUB_ENV) las variables
   que los tests necesitan para encontrar PATH.
+inputs:
+  python-version:
+    description: Python for the suite (coverage.yml uses 3.13 for sys.monitoring).
+    required: false
+    default: "3.11"
 runs:
   using: composite
   steps:
@@ -12,11 +17,11 @@ runs:
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: "3.11"
+        python-version: ${{ inputs.python-version }}
 
     - name: Install dependencies
       shell: bash
-      run: uv sync --dev
+      run: uv sync --dev --python ${{ inputs.python-version }}
 
     # --- solvers: sin esto, 64 de 1151 tests se SALTABAN en silencio -------
     # Los guards de solver (tests/conftest.py) saltan needs_path/needs_ipopt
@@ -44,13 +49,16 @@ runs:
         # Verificado en contenedor ubuntu:24.04 (la imagen de este runner):
         #   ipopt -> Ipopt 3.13.2, SolverFactory("ipopt").available() True
         #   ASL   -> AmplInterface.available() True
+        # Sin coinor-libipopt-dev ni pkg-config: solo sirven para compilar
+        # cyipopt, que falla igual (ver abajo), y arrastran OpenMPI/ScaLAPACK
+        # (~50 MB). Con el espejo de Azure lento (109 kB/s) eso costo 8 min
+        # en un job del run 42749051119.
         # Las dependencias van ANTES: el binario de IDAES enlaza contra
         # lapack/blas/gfortran del sistema y sin ellas aborta con
         # "error while loading shared libraries: liblapack.so.3".
         sudo apt-get update -qq
         sudo apt-get install -y --no-install-recommends \
-          coinor-libipopt-dev coinor-libipopt1v5 pkg-config \
-          liblapack3 libblas3 libgfortran5 libgomp1
+          coinor-libipopt1v5 liblapack3 libblas3 libgfortran5 libgomp1
         pip install --quiet idaes-pse
         idaes get-extensions --distro ubuntu2204
         echo "$HOME/.idaes/bin" >> "$GITHUB_PATH"

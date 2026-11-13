@@ -66,7 +66,7 @@ Python is faithful to GAMS to ~6 digits; van der Mensbrugghe (*The Standard GTAP
 - **model scope** — factor quantities (`qe`) match GEMPACK to 0.00pp at every factor-supply elasticity; sweeping `omegas` never improves the match;
 - **a closure mismatch** — the gate's `capFix` solve is compared only against `_capfix` fixtures (crossing capFix/capFlex would be a measurement error, not a model defect).
 
-What it **is**: on **subsidized agriculture**, GAMS and GEMPACK disagree on the factor-subsidy sign convention (HAR `FBEP`, native-negative). GAMS/Python value value-added as `evfb + ftrv − fbep`; GEMPACK's EVFP as `evfb + ftrv + fbep`. That shifts the VA-vs-intermediate weight on subsidized crops, moving the domestic price and — through the import nest — `qxs`. The `gtap7_gempack` closure adopts GEMPACK's convention, which is why its column above is higher on the small agricultural flows. Details: `docs/findings/gempack_residual_is_linearization_2026-07-24`.
+What it **is**: on **subsidized agriculture**, GAMS and GEMPACK disagree on the factor-subsidy sign convention (HAR `FBEP`, native-negative). GAMS/Python value value-added as `evfb + ftrv − fbep`; GEMPACK's EVFP as `evfb + ftrv + fbep`. That shifts the VA-vs-intermediate weight on subsidized crops, moving the domestic price and — through the import nest — `qxs`. The `gtap7_gempack` closure adopts GEMPACK's convention, which is why its column above is higher on the small agricultural flows. Details: `docs/archive/findings/gempack_residual_is_linearization_2026-07-24`.
 
 ## Variables compared (15)
 
@@ -79,12 +79,12 @@ What it **is**: on **subsidized agriculture**, GAMS and GEMPACK disagree on the 
 - **Prices** (the ~45 `p*` variables: `pms`, `pfe`, `pva`, …) — GEMPACK and GAMS can anchor the numéraire differently, so a cell-by-cell price compare is not apples-to-apples without normalising first. Out of scope here.
 - **Per-agent final demands** (`QPD`/`QPM` household, `QGD`/`QGM` government domestic-vs-imported splits) — the gate compares the *aggregate* (`qms`→`xmt`) instead of the per-agent breakdown, which is redundant for this check.
 - **`QO` (activity output)** — dropped: under joint production it has no clean 1:1 Python Var (it best-matched total supply `xs`, which `qc` already owns).
-- **Welfare** (`u` / `EV`) and the **tariff shock** itself (`tm` = +10% uniform, the identical input to both engines) — welfare is second-order and sign-flipping; it lives in the separate EV track (`docs/findings/gempack_welfare_not_cellwise`).
+- **Welfare** (`u` / `EV`) and the **tariff shock** itself (`tm` = +10% uniform, the identical input to both engines) — welfare is second-order and sign-flipping; it lives in the separate EV track (`docs/archive/findings/gempack_welfare_not_cellwise`).
 - **Capital dynamics / macro** (`KB`, `KE`, `QSAVE`, `POP`, `TOT`) — not mapped; outside the single-shock trade-quantity scope of this page.
 
 So more variables *could* be added (per-agent demands, prices with a numéraire normalisation); the 15 are the ones with a clean, proven mapping today.
 
 ## Scope
 
-This page covers the five **gtap7_\*** datasets the multi-period gate solves. **nus333** and **9x10** are elsewhere: they use a separate single-period apparatus and already have GEMPACK/RunGTAP coverage in the welfare/macro track they were built for (`compare_nus333_rungtap.py` / `compare_9x10_rungtap.py`, ~0.01–0.3pp on `u` — see `docs/findings/rungtap_welfare_parity_2026-05-15`).
+This page covers the five **gtap7_\*** datasets the multi-period gate solves. **nus333** and **9x10** are elsewhere: they use a separate single-period apparatus and already have GEMPACK/RunGTAP coverage in the welfare/macro track they were built for (`compare_nus333_rungtap.py` / `compare_9x10_rungtap.py`, ~0.01–0.3pp on `u` — see `docs/archive/findings/rungtap_welfare_parity_2026-05-15`).
 

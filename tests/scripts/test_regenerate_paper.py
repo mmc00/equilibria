@@ -1,4 +1,4 @@
-"""regenerate_paper.py: the phase 3a-2 jobs (corridas_paper steps 1-7 and runs/).
+"""regenerate_paper.py: the phase 3a-2 jobs (the old corridas_paper steps 1-7 and runs folder).
 
 Each job is recorded by write_source.py, as in 3a-1. The groups and their
 counts are those of specs/data/changes/one-data-folder/plan-phase-3a2.md.
@@ -52,7 +52,14 @@ def _exes(tmp_path: Path) -> list[str]:
                 gp / "tablo.exe", gp / "gemsim.exe", gp / "sltoht.exe"):  # fmt: skip
         exe.parent.mkdir(parents=True, exist_ok=True)
         exe.write_bytes(b"MZ")
-    return ["--gtapdir", str(gtapdir), "--gp", str(gp), "--work", str(tmp_path / "work")]
+    return [
+        "--gtapdir",
+        str(gtapdir),
+        "--gp",
+        str(gp),
+        "--work",
+        str(tmp_path / "work"),
+    ]
 
 
 def _tree(tmp_path: Path) -> Path:
@@ -89,8 +96,12 @@ def test_tools_and_releases() -> None:
     cmd = m.job_command(job, gempack_release="12.1.003", gp_release="11.3.004")
     assert cmd[cmd.index("--tool-version") + 1] == "11.3.004"
     externals = [cmd[i + 1] for i, a in enumerate(cmd) if a == "--external"]
-    assert any(e.startswith("gtapv7.exe=") and e.endswith("@12.1.003") for e in externals)
-    assert any(e.startswith("sltoht.exe=") and e.endswith("@11.3.004") for e in externals)
+    assert any(
+        e.startswith("gtapv7.exe=") and e.endswith("@12.1.003") for e in externals
+    )
+    assert any(
+        e.startswith("sltoht.exe=") and e.endswith("@11.3.004") for e in externals
+    )
 
 
 def test_matrix_references_stay_unique(
@@ -115,7 +126,7 @@ def test_matrix_references_stay_unique(
     monkeypatch.setattr(sources, "iter_sources", lambda root=root: iter(records))
     for r in records:
         if r.kind == "result":
-            assert reference(r.dataset, r.tool, root=root, **r.variant) == r.path
+            assert reference(r.dataset, r.tool, root=root, **r.variant) == r.path  # ty: ignore[invalid-argument-type]
 
 
 def test_no_compiled_gempack_files_in_data(tmp_path: Path) -> None:
@@ -175,7 +186,9 @@ def test_resume_skips_recorded_folders(tmp_path: Path) -> None:
     write_record(done, result_record(dataset="nus333", tool="gempack"))
     ran: list[list[str]] = []
     m.run_job = lambda cmd: ran.append(cmd) or 0
-    rc = m.main([*RELEASES, "--group", "swap", "--data-root", str(root), *_exes(tmp_path)])
+    rc = m.main(
+        [*RELEASES, "--group", "swap", "--data-root", str(root), *_exes(tmp_path)]
+    )
     assert rc == 0
     assert len(ran) == COUNTS["swap"] - 1
     assert not any(str(done) in c for cmd in ran for c in cmd)
@@ -215,7 +228,9 @@ def test_partial_folder_is_cleaned_before_run(tmp_path: Path) -> None:
     assert seen == [False]
 
 
-def test_prerequisite_group_refused(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_prerequisite_group_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """book-sltoht needs the book solution of the same experiment recorded first."""
     m = _module()
     root = _tree(tmp_path)
@@ -233,7 +248,10 @@ def test_prerequisite_group_refused(tmp_path: Path, capsys: pytest.CaptureFixtur
 
 
 def test_unknown_only_is_an_error(capsys: pytest.CaptureFixture[str]) -> None:
-    assert _module().main(["--dry-run", *RELEASES, "--group", "book", "--only", "me99"]) == 2
+    assert (
+        _module().main(["--dry-run", *RELEASES, "--group", "book", "--only", "me99"])
+        == 2
+    )
     assert "me99" in capsys.readouterr().err
 
 

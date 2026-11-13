@@ -11,7 +11,7 @@ TBL79: qxs/pcif/pfob de los 12 flujos y qst a <=0,003pp (qxw de SER difiere por
 definicion: GEMPACK suma la oferta de margenes qst, GAMS xet no).
 ME9B/ME9C/ME9D no estan aca: con ``climatechange.prm`` GAMS deja el check sin
 calibrar betaP y se aparta del dato; equilibria calibra como GTAP y se compara contra
-GEMPACK (test_nus333_me9_pasos.py). TBL64 es Johansen en GEMPACK (1 paso lineal): GAMS con el shock a
+GEMPACK (test_nus333_me9_steps.py). TBL64 es Johansen en GEMPACK (1 paso lineal): GAMS con el shock a
 0,1% x 100 lo reproduce a 0,0163pp, asi que el mapeo del shock es correcto y los
 0,89pp a 10% son la linealizacion.
 

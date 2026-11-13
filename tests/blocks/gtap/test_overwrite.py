@@ -13,11 +13,11 @@ from __future__ import annotations
 from typing import Any, cast
 
 import pytest
-from tests.templates.gtap._desempleo import register_desempleo_hooks
 from tests.templates.gtap._nus333 import (
     closure,
     nus333_params,
 )
+from tests.templates.gtap._unemployment import register_unemployment_hooks
 
 from equilibria.blocks.gtap import ClosureBlock, ShockBlock, overwrite
 
@@ -29,12 +29,12 @@ def _limpio():
 
 
 @pytest.fixture
-def mp_desempleo():
+def mp_unemployment():
     """Modelo multiperiodo nus333 con los hooks de TBL65B (sin resolver)."""
     from equilibria.templates.gtap.gtap_block_model import build_block_model
 
     p = nus333_params()
-    register_desempleo_hooks()
+    register_unemployment_hooks()
     m, _ = cast(Any, build_block_model(p, p.sets, closure(), "ROW"))
     return m
 
@@ -126,7 +126,7 @@ def test_cache_de_modelos_se_salta_con_hooks():
     from equilibria.blocks.gtap import model_cache
 
     p = nus333_params()
-    register_desempleo_hooks()
+    register_unemployment_hooks()
     assert model_cache.cache_key(p, closure(), "ROW", False) is None
 
 
@@ -136,7 +136,7 @@ def test_monolito_con_hooks_falla(monkeypatch):
     from equilibria.templates.gtap.gtap_multiperiod_driver import _build_sp_reference
 
     p = nus333_params()
-    register_desempleo_hooks()
+    register_unemployment_hooks()
     monkeypatch.setenv("EQUILIBRIA_GTAP_REF_MODEL", "monolith")
     with pytest.raises(RuntimeError, match="overwrite"):
         _build_sp_reference(p.sets, p, closure(), "ROW")
@@ -150,7 +150,7 @@ def test_sp_de_referencia_del_driver_con_hooks():
     from equilibria.templates.gtap.gtap_multiperiod_driver import _build_sp_reference
 
     p = nus333_params()
-    register_desempleo_hooks()
+    register_unemployment_hooks()
     sp = cast(Any, _build_sp_reference(p.sets, p, closure(), "ROW"))
 
     assert not sp.aft["USA", "LABOR"].fixed
@@ -161,10 +161,10 @@ def test_sp_de_referencia_del_driver_con_hooks():
     assert sp._endogenous_instrument_cells == {"aft": frozenset({("USA", "LABOR")})}
 
 
-def test_multiperiodo_con_hooks_solo_en_el_shock(mp_desempleo):
+def test_multiperiodo_con_hooks_solo_en_el_shock(mp_unemployment):
     """En base y check rige el cierre estandar: la celda fija y sin la fila nueva.
     En el shock, la celda libre y la fila."""
-    m = mp_desempleo
+    m = mp_unemployment
     for t in ("base", "check"):
         assert m.aft["USA", "LABOR", t].fixed, t
         assert ("USA", "LABOR", t) not in m.eq_wreal, t
@@ -187,17 +187,17 @@ def test_sin_hooks_no_cambia_nada():
     assert sp._endogenous_instrument_cells == {}
 
 
-def test_fix_instrument_shock_sobre_celda_endogena_falla(mp_desempleo):
+def test_fix_instrument_shock_sobre_celda_endogena_falla(mp_unemployment):
     from equilibria.templates.gtap.instruments import fix_instrument_shock
 
     with pytest.raises(ValueError, match="endogenous"):
-        fix_instrument_shock(mp_desempleo, "aft", ("USA", "LABOR"), factor=1.1)
+        fix_instrument_shock(mp_unemployment, "aft", ("USA", "LABOR"), factor=1.1)
 
 
-def test_is_exogenous_por_celda(mp_desempleo):
+def test_is_exogenous_por_celda(mp_unemployment):
     from equilibria.templates.gtap.instruments import is_exogenous
 
-    m = mp_desempleo
+    m = mp_unemployment
     assert not is_exogenous(m, "aft", ("USA", "LABOR", "shock"))
     assert is_exogenous(m, "aft", ("USA", "LABOR", "check"))
     assert is_exogenous(m, "aft", ("USA", "LABOR", "base"))
@@ -209,14 +209,14 @@ def test_is_exogenous_por_celda(mp_desempleo):
 # ------------------------------------------------------------------------ driver
 
 
-def test_freeze_inactive_periods_libera_la_celda_endogena(mp_desempleo):
+def test_freeze_inactive_periods_libera_la_celda_endogena(mp_unemployment):
     """Periodo activo: la celda endogena se libera como cualquier variable; en los
     inactivos se fija. Las celdas exogenas de aft quedan fijas en los 3."""
     from equilibria.templates.gtap.gtap_multiperiod_driver import (
         freeze_inactive_periods,
     )
 
-    m = mp_desempleo
+    m = mp_unemployment
     m.aft["USA", "LABOR", "shock"].fix()
     freeze_inactive_periods(m, "shock")
     assert not m.aft["USA", "LABOR", "shock"].fixed
@@ -228,12 +228,12 @@ def test_freeze_inactive_periods_libera_la_celda_endogena(mp_desempleo):
     assert m.aft["USA", "LABOR", "check"].fixed
 
 
-def test_seed_desde_el_periodo_previo_incluye_la_celda_endogena(mp_desempleo):
+def test_seed_desde_el_periodo_previo_incluye_la_celda_endogena(mp_unemployment):
     from equilibria.templates.gtap.gtap_multiperiod_driver import (
         _seed_period_from_prior,
     )
 
-    m = mp_desempleo
+    m = mp_unemployment
     m.aft["USA", "LABOR", "check"].set_value(7.0)
     m.aft["ROW", "LABOR", "check"].set_value(7.0)
     row_shock = m.aft["ROW", "LABOR", "shock"].value
@@ -242,12 +242,12 @@ def test_seed_desde_el_periodo_previo_incluye_la_celda_endogena(mp_desempleo):
     assert m.aft["ROW", "LABOR", "shock"].value == row_shock
 
 
-def test_cotas_de_gams_sueltan_la_celda_endogena(mp_desempleo):
+def test_cotas_de_gams_sueltan_la_celda_endogena(mp_unemployment):
     """_apply_gams_bounds deja libre (Reals, sin cotas) a la celda endogena; a las
     exogenas no las toca."""
     from equilibria.templates.gtap.gtap_multiperiod_driver import _apply_gams_bounds
 
-    m = mp_desempleo
+    m = mp_unemployment
     m.aft["USA", "LABOR", "shock"].setlb(0.0)
     m.aft["ROW", "LABOR", "shock"].setlb(0.0)
     _apply_gams_bounds(m, "shock")
@@ -392,3 +392,119 @@ def test_vista_de_periodo_traduce_vars_y_rechaza_lo_demas():
     assert view.k is m.k
     with pytest.raises(ValueError, match="p"):
         _ = view.p
+
+
+# ------------------------------------------------- stale hooks between builds (#214)
+
+
+def _register(name: str) -> None:
+    def hook(b):
+        pass
+
+    hook.__name__ = name
+    overwrite(ShockBlock, period="shock")(hook)
+
+
+@pytest.fixture
+def no_stale_warning():
+    """Fail the test if any StaleOverwriteWarning is raised inside it."""
+    import warnings
+
+    from equilibria.blocks.gtap import StaleOverwriteWarning
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", StaleOverwriteWarning)
+        yield
+
+
+def test_fresh_hooks_do_not_warn(no_stale_warning):
+    _register("one")
+    with overwrite.building():
+        pass
+
+
+def test_hooks_from_previous_build_warn():
+    from equilibria.blocks.gtap import StaleOverwriteWarning
+
+    _register("one")
+    with overwrite.building():
+        pass
+    with pytest.warns(
+        StaleOverwriteWarning, match=r"ShockBlock\.one.*overwrite\.clear\(\)"
+    ):
+        with overwrite.building():
+            pass
+
+
+def test_reregistering_refreshes_the_hook(no_stale_warning):
+    """Re-running a notebook cell re-registers the hook: it is not stale."""
+    _register("one")
+    with overwrite.building():
+        pass
+    _register("one")
+    with overwrite.building():
+        pass
+
+
+def test_clear_then_new_hooks_do_not_warn(no_stale_warning):
+    _register("one")
+    with overwrite.building():
+        pass
+    overwrite.clear()
+    _register("two")
+    with overwrite.building():
+        pass
+
+
+def test_nested_builds_count_as_one():
+    """The settle and capFlex-risk builds run inside build_block_model: one build."""
+    import warnings
+
+    from equilibria.blocks.gtap import StaleOverwriteWarning
+
+    _register("one")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", StaleOverwriteWarning)
+        with overwrite.building():
+            with overwrite.building():
+                pass
+    with pytest.warns(StaleOverwriteWarning) as record:
+        with overwrite.building():
+            pass
+    assert len([w for w in record if w.category is StaleOverwriteWarning]) == 1
+
+
+def test_failed_build_does_not_stick():
+    """A build that raises leaves the depth at 0: the next build still checks."""
+    from equilibria.blocks.gtap import StaleOverwriteWarning
+
+    _register("one")
+    with pytest.raises(RuntimeError):
+        with overwrite.building():
+            raise RuntimeError("build failed")
+    with pytest.warns(StaleOverwriteWarning, match=r"ShockBlock\.one"):
+        with overwrite.building():
+            pass
+
+
+def test_no_hooks_never_warn(no_stale_warning):
+    with overwrite.building():
+        pass
+    with overwrite.building():
+        pass
+
+
+def test_build_block_model_warns_on_stale_hooks():
+    """The first build (with its nested settle build) is clean; the second warns."""
+    import warnings
+
+    from equilibria.blocks.gtap import StaleOverwriteWarning
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+
+    p = nus333_params()
+    register_unemployment_hooks()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", StaleOverwriteWarning)
+        build_block_model(p, p.sets, closure(), "ROW", base_calibrated=True)
+    with pytest.warns(StaleOverwriteWarning, match="unemployment"):
+        build_block_model(p, p.sets, closure(), "ROW")

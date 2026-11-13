@@ -175,6 +175,12 @@ def main() -> int:
             print(f"\nDoc regeneration failed: {' '.join(cmd)} — no stamp written.")
             return rc
 
+    if not (repo / ".git").exists():
+        # An unpacked release (the replication zip) has no .git/: there is no
+        # push to guard, and no git status to compare the docs against.
+        print("\nGates GREEN — not a git checkout, so no stamp to write.")
+        return 0
+
     sp = stamp_path(repo)
     sp.write_text(input_hash(repo, "HEAD") + "\n")
     print(f"\nGates GREEN — stamp written to {sp}")

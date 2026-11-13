@@ -5,12 +5,16 @@ Mirrors `compare_nus333_rungtap.py` for the 9x10 dataset. Runs:
   1. equilibria baseline + 10% uniform `tm_pct` shock with capFix closure
      (residual_region = "NAmerica").
   2. Reads RunGTAP's solved values (u, EV, dpsave) from
-     `runs/9x10_compare/rungtap/sl4dump.xls`.
+     `notes/tmp/rungtap_compare/9x10/rungtap/sl4dump.xls` (git-ignored).
   3. Side-by-side per-region comparison of macros (u, gdpmp, regy) and
      EV (via welfare_shadow with RunGTAP-supplied dpsave).
 
-Writes JSON output to `runs/9x10_compare/equilibria/equilibria_9x10_tm10.json`.
+Writes JSON output to
+`notes/tmp/rungtap_compare/9x10/equilibria/equilibria_9x10_tm10.json`, read by
+`rungtap_compare/compare_9x10_report.py`; the 2026 run is archived in
+`docs/archive/findings/rungtap_compare/9x10/`.
 """
+
 from __future__ import annotations
 
 import json
@@ -42,25 +46,26 @@ if PATH_DLL.exists():
 if not os.environ.get("PATH_LICENSE_STRING"):
     raise SystemExit("PATH_LICENSE_STRING is not set.")
 
-OUT_DIR = ROOT / "runs" / "9x10_compare" / "equilibria"
+OUT_DIR = ROOT / "notes" / "tmp" / "rungtap_compare" / "9x10" / "equilibria"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 GDX = ROOT / "data" / "gtap7" / "9x10" / "basedata-9x10.gdx"
 RESIDUAL_REGION = "NAmerica"
 
-from equilibria.templates.gtap import GTAPParameters
-from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
-from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-
 from run_gtap import (
     _build_gtap_contract_with_calibration,
-    _run_path_capi_nonlinear_full,
     _collect_key_quantities,
+    _run_path_capi_nonlinear_full,
 )
+
+from equilibria.templates.gtap import GTAPParameters
+from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+from equilibria.templates.gtap.gtap_model_equations import GTAPModelEquations
 
 
 def _augment_snapshot(model, snap: dict) -> None:
     from pyomo.environ import value
+
     for vname in ("uh", "ug", "us", "u", "cv", "ev", "pop"):
         comp = getattr(model, vname, None)
         if comp is None:
@@ -68,7 +73,11 @@ def _augment_snapshot(model, snap: dict) -> None:
         data = {}
         try:
             for idx in comp:
-                key = "|".join(str(v) for v in idx) if isinstance(idx, tuple) else str(idx)
+                key = (
+                    "|".join(str(v) for v in idx)
+                    if isinstance(idx, tuple)
+                    else str(idx)
+                )
                 try:
                     data[key] = float(value(comp[idx]))
                 except (ValueError, TypeError):
@@ -92,6 +101,7 @@ def main() -> int:
     payload["closure"]["savf_flag"] = "capFix"
     payload["closure"]["if_sub"] = False
     from equilibria.templates.gtap.gtap_contract import build_gtap_contract
+
     contract = build_gtap_contract(payload)
 
     # ---- BASELINE ----
@@ -100,19 +110,25 @@ def main() -> int:
     base_params.load_from_gdx(GDX)
 
     builder_b = GTAPModelEquations(
-        base_params.sets, base_params,
+        base_params.sets,
+        base_params,
         residual_region=RESIDUAL_REGION,
         closure=contract.closure,
     )
     model_b = builder_b.build_model()
     t0 = time.perf_counter()
     r_b = _run_path_capi_nonlinear_full(
-        model_b, base_params,
-        enforce_post_checks=False, strict_path_capi=False,
-        closure_config=contract.closure, equation_scaling=True,
+        model_b,
+        base_params,
+        enforce_post_checks=False,
+        strict_path_capi=False,
+        closure_config=contract.closure,
+        equation_scaling=True,
     )
     sec_b = time.perf_counter() - t0
-    print(f"  residual={r_b.get('residual'):.3e}  code={r_b.get('termination_code')}  solve={sec_b:.2f}s")
+    print(
+        f"  residual={r_b.get('residual'):.3e}  code={r_b.get('termination_code')}  solve={sec_b:.2f}s"
+    )
     base_snap = _collect_key_quantities(model_b, base_params, scale_for_gams=True)
     _augment_snapshot(model_b, base_snap)
 
@@ -129,7 +145,8 @@ def main() -> int:
             rtms[k] = shock_params.taxes.imptx[k]
 
     builder_s = GTAPModelEquations(
-        shock_params.sets, shock_params,
+        shock_params.sets,
+        shock_params,
         residual_region=RESIDUAL_REGION,
         closure=contract.closure,
         is_counterfactual=True,
@@ -138,6 +155,7 @@ def main() -> int:
     model_s = builder_s.build_model()
     # Warm-start from baseline.
     from pyomo.environ import Var, value
+
     src_vars = {v.local_name: v for v in model_b.component_objects(Var, active=True)}
     for dv in model_s.component_objects(Var, active=True):
         sv = src_vars.get(dv.local_name)
@@ -154,12 +172,17 @@ def main() -> int:
 
     t0 = time.perf_counter()
     r_s = _run_path_capi_nonlinear_full(
-        model_s, shock_params,
-        enforce_post_checks=False, strict_path_capi=False,
-        closure_config=contract.closure, equation_scaling=True,
+        model_s,
+        shock_params,
+        enforce_post_checks=False,
+        strict_path_capi=False,
+        closure_config=contract.closure,
+        equation_scaling=True,
     )
     sec_s = time.perf_counter() - t0
-    print(f"  residual={r_s.get('residual'):.3e}  code={r_s.get('termination_code')}  solve={sec_s:.2f}s")
+    print(
+        f"  residual={r_s.get('residual'):.3e}  code={r_s.get('termination_code')}  solve={sec_s:.2f}s"
+    )
     shock_snap = _collect_key_quantities(model_s, shock_params, scale_for_gams=True)
     _augment_snapshot(model_s, shock_snap)
 
@@ -174,25 +197,36 @@ def main() -> int:
         regy_b = float(value(model_b.regy[r])) if hasattr(model_b, "regy") else 0.0
         regy_s = float(value(model_s.regy[r])) if hasattr(model_s, "regy") else 0.0
         macros[r] = {
-            "u_base": u_b, "u_shock": u_s, "u_pct": (u_s - u_b) * 100.0,
-            "gdpmp_base": gdpmp_b, "gdpmp_shock": gdpmp_s,
+            "u_base": u_b,
+            "u_shock": u_s,
+            "u_pct": (u_s - u_b) * 100.0,
+            "gdpmp_base": gdpmp_b,
+            "gdpmp_shock": gdpmp_s,
             "gdpmp_pct": (gdpmp_s / gdpmp_b - 1.0) * 100.0 if gdpmp_b else float("nan"),
-            "regy_base": regy_b, "regy_shock": regy_s,
+            "regy_base": regy_b,
+            "regy_shock": regy_s,
             "regy_pct": (regy_s / regy_b - 1.0) * 100.0 if regy_b else float("nan"),
         }
 
     out_path = OUT_DIR / "equilibria_9x10_tm10.json"
-    out_path.write_text(json.dumps({
-        "scenario": "9x10 uniform 10% tm_pct shock, capFix closure, NAmerica residual",
-        "regions": regions,
-        "macros": macros,
-    }, indent=2))
+    out_path.write_text(
+        json.dumps(
+            {
+                "scenario": "9x10 uniform 10% tm_pct shock, capFix closure, NAmerica residual",
+                "regions": regions,
+                "macros": macros,
+            },
+            indent=2,
+        )
+    )
     print(f"\nWrote {out_path}")
 
     print(f"\n{'region':<12}{'u % eq':>10}{'gdpmp % eq':>14}{'regy % eq':>12}")
     for r in regions:
         m = macros[r]
-        print(f"{r:<12}{m['u_pct']:>+9.4f}%{m['gdpmp_pct']:>+13.4f}%{m['regy_pct']:>+11.4f}%")
+        print(
+            f"{r:<12}{m['u_pct']:>+9.4f}%{m['gdpmp_pct']:>+13.4f}%{m['regy_pct']:>+11.4f}%"
+        )
 
     return 0
 

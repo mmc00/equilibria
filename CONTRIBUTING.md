@@ -74,6 +74,24 @@ uv run pytest -m "not gams"          # unit + integration (no GAMS)
 uv run pytest -m gams                # GAMS parity (needs a local GAMS install)
 ```
 
+### CI test groups
+
+CI splits the suite into groups that run in parallel (about 10 min per PR
+instead of ~1 h serial); `tests-verdict` fails if any collected test did not
+run exactly once. The plan lives in `scripts/dev/plan_test_groups.py`, from
+`.github/test_files_{python,gdxdump}.txt` (test files) and
+`.github/test_durations.json` (seconds per test).
+
+- **New test file:** it is placed automatically (an unknown duration is
+  assumed); refresh the file list with
+  `python scripts/dev/plan_test_groups.py --suite python --refresh-files`
+  (and `--suite gdxdump`) and commit the result.
+- **Groups drifted** (one is much slower than the rest): run the
+  `Test durations` workflow once on `main` (Actions tab, *Run workflow*),
+  download its `durations-*` artifact and replace `.github/test_durations.json`.
+- Python groups run with `pytest-xdist -n 4`; a test that cannot share a
+  machine with its siblings must be fixed or marked, not skipped.
+
 ## Specs and changes
 
 Behavior of each architecture area is specified under `specs/`, and larger

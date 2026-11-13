@@ -288,7 +288,6 @@ scripts/gtap/*
 !scripts/gtap/verify_ifsub_equivalence.py
 !scripts/gtap/gen_burfisher_gams.py
 !scripts/gtap/gams_welfare_fixture.py
-!scripts/gtap/welfare_gempack_fixture.py
 !scripts/gtap/gams/
 !scripts/gtap/gen_linearization_study.py
 !scripts/gtap/mk_exp_directos.py
@@ -360,7 +359,6 @@ runs/gempack_matrix/job_*/
 
 examples/gtap/
 docs/GTAP_*.md
-docs/findings/gams_formulation_analysis.md
 
 # Local agent state and in-progress plans
 .claude/

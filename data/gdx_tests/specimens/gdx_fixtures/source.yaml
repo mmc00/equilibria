@@ -1,0 +1,28 @@
+kind: result
+model: gtap7
+dataset: gdx_tests
+tool: gams
+tool_version: 53.5.0
+variant: {}
+generated_from: {}
+command: gams generate_gdx_fixtures.gms lo=0 o=/dev/null
+equilibria_commit: 73e11605
+exit:
+  code: 0
+outputs:
+  generate_gdx_fixtures.gms: 184a801fec733a1d22609f32fbad40881d40bfd1589c4b20aba023b8faf0aaad
+  multidim_test.gdx: e11b46c5cbbd0fab61a1f76196a34c3fc846f2b93a64081c6f17bde3e1a59c5f
+  sparse_test.gdx: 6e87f6f24e0cb961babab1516ac61af0e7a8fe180c39a5e8a4d15c433bc31440
+  variables_equations_test.gdx: ddd17c4f68c65cdbd5dd9339635e18185a2c6415986b6547550f50e8024539b7
+run:
+  date: '2026-11-03T21:48:52-06:00'
+  duration_s: 0.68
+  machine:
+    os: macOS 26.2 (Darwin 25.2.0)
+    cpu: Apple M3 Pro
+    cores: 11
+    ram_gb: 18.0
+status: verified
+notes: Regenerated with GAMS 53.5; gdxdump identical to the file committed in tests/fixtures
+  at 4e91d12a (sparse_test, variables_equations_test). It also writes a multidim_test.gdx
+  that differs from multidim_test/ and is not read by any test

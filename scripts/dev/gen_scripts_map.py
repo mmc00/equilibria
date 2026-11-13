@@ -68,7 +68,6 @@ def _nombrado_por(rel: str) -> list[str]:
         "docs",
         "README.md",
         "CONTRIBUTING.md",
-        "ROADMAP.md",
     ).strip():
         quien.append("docs")
     otros = _git("grep", "-l", "-w", "-F", stem, "--", "scripts", "src", f":!{rel}")

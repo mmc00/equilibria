@@ -5,7 +5,7 @@ name: 20x41 phase-times diagnostic (manual, windows|linux)
 #
 # Por que existe: en la laptop Windows del autor (i7-1365U, McAfee corporativo)
 # phase_times.py del 20x41 dio 2096,6 s (~35 min) contra 434 s en una Mac M3 Pro
-# (runs/phase_times_windows/ en la rama bench/phase-times-windows). Esta corrida
+# (carpeta phase_times_windows de la rama bench/phase-times-windows). Esta corrida
 # separa las dos hipotesis: si un runner Windows limpio de GitHub tambien tarda
 # ~4x, el problema es equilibria en Windows (p. ej. MUMPS sin un BLAS rapido);
 # si tarda cerca de la Mac, era la laptop (antivirus, CPU de bajo consumo).

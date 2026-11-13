@@ -3,7 +3,8 @@ model: horridge_simple
 source: 'Horridge and Pearson''s SIMPLE (tpmh0103 archive): simple.tab, simdata.har,
   fixcap.cmf, mobcap.cmf, input.gdx, simpleNLP.gms, simpleMCP.gms, mpsgevh.gms, readme.txt,
   gempack.bat, dogams.bat unchanged; tariff10.cmf, simpleNLP_tariff.gms, simpleMCP_tariff.gms
-  written in this repo. Copied from runs/horridge_simple (phase 3a-2).'
+  written in this repo. Copied from runs/horridge_simple (phase 3a-2). tools/gams_job.py
+  (this repo) runs the GAMS side.'
 outputs:
   dogams.bat: 7f5c2a3fa16b8f25caf7092e001dd2f3b03315a4ac4b2b0e53d5c6052dfa66f7
   fixcap.cmf: 955c425dc18b8fa0155fa28e56c7b8fc948465575dea84ebf8885a1a2637ad01
@@ -19,5 +20,6 @@ outputs:
   simpleNLP.gms: 2f350ba3503043bf70dcce777a9f3b5b237efc0ee77abf87f71a8367e08d9cc5
   simpleNLP_tariff.gms: 9bf1a82ea785824d81cada9c22664885fb11c65ce6c77f0112b8f92b5027e7a7
   tariff10.cmf: 2812572a281fa6bb3223676c6f4bcbe9f947ae691e3b498830f6eb1ec1aafd61
+  tools/gams_job.py: 4cb5e20cda6122d681eda4b8842d2a948b69732041b0a3d36cf948f85b097088
 status: verified
 notes: 'licence: not stated by the source; to confirm'

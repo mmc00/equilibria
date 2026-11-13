@@ -23,22 +23,22 @@ de la corrida (post).
 Uso (desde la raiz). Con niveles de equilibria ya guardados::
 
     uv run python scripts/gtap/compare_gempack_levels.py \\
-        --eq tests/compare/fixtures/eq_gtap7_3x3_levels.json.gz \\
-        --har tests/fixtures/gtap7_gempack/sl4levels6_gtap7_3x3_tm10.har \\
+        --eq data/gtap7/gtap7_3x3/equilibria_levels/eq_gtap7_3x3_levels.json.gz \\
+        --har data/gtap7/gtap7_3x3/gemsim_levels6_tm10_s8-16-32_capflex/sl4levels.har \\
         --basedata data/gtap7/gtap7_3x3/basedata.har \\
-        --updated tests/fixtures/gtap7_gempack/updated_gtap7_3x3_tm10.har
+        --updated data/gtap7/gtap7_3x3/gempack_tm10_s8-16-32_capflex/updated.har
 
 o resolviendo equilibria en el momento (necesita PATH; ``--solver newton`` es el
 Newton-TR + MUMPS del 20x41, que necesita pymumps)::
 
     PYTHONPATH=. uv run python scripts/gtap/compare_gempack_levels.py \\
         --dataset gtap7_20x41 --closure capFix --solver newton --save-eq eq.json.gz \\
-        --har tests/fixtures/gtap7_gempack/sl4levels6_gtap7_20x41_tm10_s8-16-32_capfix.har \\
+        --har data/gtap7/gtap7_20x41/gemsim_levels6_tm10_s8-16-32_capfix/sl4levels.har \\
         --basedata data/gtap7/gtap7_20x41/basedata.har \\
-        --updated tests/fixtures/gtap7_gempack/updated_gtap7_20x41_tm10_s8-16-32_capfix.har \\
+        --updated data/gtap7/gtap7_20x41/gempack_tm10_s8-16-32_capfix/updated.har \\
         --out reporte.json
 
-``--eq``/``--save-eq`` tienen la forma de ``tests/compare/fixtures/make_eq_gtap7_levels.py``.
+``--eq``/``--save-eq`` tienen la forma de ``data/gtap7/gtap7_3x3/equilibria_levels/make_eq_gtap7_levels.py``.
 """
 
 from __future__ import annotations
@@ -64,10 +64,17 @@ FINAL_AGENTS = ("hhd", "gov", "inv", "tmg")
 BASE = "check"  # el periodo base del modelo de equilibria (el pre de GEMPACK)
 
 
-def equilibria_side(levels: Levels, xscale: AbcMapping[Any, float]) -> Solution:
+def equilibria_side(
+    levels: Levels, xscale: AbcMapping[Any, float], *, linear: bool = False
+) -> Solution:
     """``levels[var][(indices..., periodo)] = nivel`` del modelo de equilibria, mas
     las variables armadas (ver el docstring del modulo). ``xscale[(r, a)]`` va como
-    parametro de la fuente."""
+    parametro de la fuente.
+
+    ``linear``: the levels are a Johansen solution (``shock_method="johansen"``).
+    There a product or a ratio moves by the first-order change of its factors, as
+    GEMPACK reports it, not by the product of the new levels; the other derived
+    variables are already linear in the levels."""
     xds, xda, xma, pd = levels["xds"], levels["xda"], levels["xma"], levels["pd"]
     acts = {a for (_, a, _) in levels["xp"]}
     regs = {r for (r, _) in levels["rore"]}
@@ -106,10 +113,21 @@ def equilibria_side(levels: Levels, xscale: AbcMapping[Any, float]) -> Solution:
     data["tpd"] = {
         (r, c, t): 1.0 + x for (r, c, a, t), x in levels["dintx"].items() if a == "hhd"
     }
-    data["pd_pmt"] = {k: x / levels["pmt"][k] for k, x in pd.items()}
+    pmt = levels["pmt"]
+    data["pd_pmt"] = {k: x / pmt[k] for k, x in pd.items()}
     data["vdfb"] = {
         (r, c, a, t): pd[(r, c, t)] * q for (r, c, a, t), q in xda.items() if a in acts
     }
+    if linear:
+        # d(p/m) = dp/m0 - p0·dm/m0²  and  d(p·q) = q0·dp + p0·dq, from check.
+        for (r, c, t), x in pd.items():
+            p0, m0 = pd[(r, c, BASE)], pmt[(r, c, BASE)]
+            dp, dm = x - p0, pmt[(r, c, t)] - m0
+            data["pd_pmt"][(r, c, t)] = p0 / m0 + dp / m0 - p0 * dm / m0**2
+        for r, c, a, t in data["vdfb"]:
+            p0, q0 = pd[(r, c, BASE)], xda[(r, c, a, BASE)]
+            dp, dq = pd[(r, c, t)] - p0, xda[(r, c, a, t)] - q0
+            data["vdfb"][(r, c, a, t)] = p0 * q0 + q0 * dp + p0 * dq
     return from_dict(
         data, period_dim=-1, origin="equilibria", params={"xscale": dict(xscale)}
     )
@@ -230,9 +248,17 @@ def load_eq_json(path: Path) -> tuple[dict, dict]:
     return levels, xscale
 
 
-def run(levels: dict, xscale: dict, har: Path, basedata: Path, updated: Path) -> Report:
+def run(
+    levels: dict,
+    xscale: dict,
+    har: Path,
+    basedata: Path,
+    updated: Path,
+    *,
+    linear: bool = False,
+) -> Report:
     return compare(
-        equilibria_side(levels, xscale),
+        equilibria_side(levels, xscale, linear=linear),
         gempack_side(har, basedata, updated),
         Mapping.builtin("gtap7"),
     )

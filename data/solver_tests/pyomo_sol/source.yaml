@@ -1,0 +1,11 @@
+kind: data
+model: solvers
+dataset: pyomo_sol
+source: Real .sol files of the model x**3 == 8 from x=10, written by pathampl 4.7.03
+  and ipopt 3.14.19 on 2026-10-02 (3c1bf35f)
+license: test specimens written for equilibria
+outputs:
+  ipopt_3.14.19.sol: a6c16361e3d9407d1ae32c14048c503aa8b52099155810a3b579e727f1455390
+  path_4.7.03.sol: a86245b76859bc6c27d67454cb40d010f728ae89b1a67b5cb6078f7aa977a929
+status: verified
+notes: ''

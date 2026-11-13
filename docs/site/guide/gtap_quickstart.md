@@ -101,6 +101,25 @@ for t in ("check", "shock"):
 `check` that moves means the model does not reproduce its own data. `shock`
 is the counterfactual.
 
+A termination code of 1 says the solver stopped normally. To see how well the
+equations hold, `summary` prints a panel for the period: the code, Walras, the
+largest, mean and median residual, and the equations with the largest
+residuals. It also warns when a variable rests on its floor: prices carry a
+small lower bound only to keep the solver away from zero, so a code 1 with a
+price there is a corner the model does not mean (`s.on_floor` lists them). It
+returns the same numbers.
+
+```python
+from equilibria.report import summary
+
+s = summary(m, results, period="shock")
+print(s.max_residual < 1e-6, s.worst[0].equation)
+```
+
+`summary` works on the period that was solved last: once the driver moves on
+to the next period it deactivates the previous one's equations, and `summary`
+refuses an inactive period rather than report another one under its name.
+
 `apply_shock(m, {instrument: {cell: pct}})` takes each number as the GEMPACK
 percentage change and converts it to levels according to the instrument
 (`shocks.GEMPACK_KIND`), starting from the `check` value:
@@ -127,7 +146,9 @@ the equations are not rebuilt.
 
 An exercise that needs a different closure (a real-wage target, a quantity
 target) changes one block in the shock period with `@overwrite`; see
-{doc}`architecture`.
+{doc}`architecture`. Hooks last for the whole Python process: call
+`overwrite.clear()` before registering the hooks of a new exercise (equilibria
+warns when it builds a model with hooks left from a previous build).
 
 ## Step 3 — Read the welfare effect
 
@@ -185,7 +206,7 @@ report = compare(
         period_dim=-1,
     ),
     from_pyomo(m3, period_dim=-1),
-    Mapping.from_yaml("tests/compare/fixtures/gtap3x3_minimo.yaml"),
+    Mapping.from_yaml("tests/compare/gtap3x3_minimal.yaml"),
 )
 for t in ("check", "shock"):
     cells = [c for c in report.cells if c.period == t]

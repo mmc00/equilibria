@@ -20,7 +20,7 @@ package loads it lazily, and the `mcp`, `nlp` and `gempack` gates build blocks.
 The monolith survives only as what the `nl` gate checks against GAMS's `.nl`
 (`test_gtap7_nl_parity.py` through `scripts/gtap/nl_compare.py`). That check is
 weak today: the gate currently compares 0 constraints, because the GAMS fixtures
-lack their `.row`/`.col` sidecars (#23, `ROADMAP.md` "Bloqueantes conocidos").
+lack their `.row`/`.col` sidecars (#23, `docs/roadmap.md` "Known blockers").
 PEP is earlier on the same road: it still has both the monolith
 `templates/pep_model_equations.py` and the Pyomo rebuild `templates/pep_pyomo/`.
 
@@ -37,14 +37,14 @@ PEP is earlier on the same road: it still has both the monolith
 ## Consequences
 
 A template that still has a monolith carries an open change to retire it. For
-GTAP that is the `gtap_model_equations.py no es retirable` row of `ROADMAP.md`
-"Bloqueantes conocidos", whose first step is to migrate the `nl` gate to measure
-blocks; "Sacar el monolito del test de forma" in "Plan de arquitectura" is only
+GTAP that is the `gtap_model_equations.py` cannot be retired row of `docs/roadmap.md`
+"Known blockers", whose first step is to migrate the `nl` gate to measure
+blocks; "Take the monolith out of the form test" in "Architecture plan" is only
 a partial step on the way. PEP has no such entry yet and needs one. The monolith
 refuses `@overwrite` hooks (`require_blocks`) instead of ignoring them silently,
 so an exercise cannot run on the wrong model by accident.
 
 ## Sources
 
-- `docs/architecture/monolito_vs_bloques.md`
-- `ROADMAP.md`, "Bloqueantes conocidos" (`gtap_model_equations.py` no es retirable)
+- `docs/notes/architecture/monolith_vs_blocks.md`
+- `docs/roadmap.md`, "Known blockers" (`gtap_model_equations.py` cannot be retired)

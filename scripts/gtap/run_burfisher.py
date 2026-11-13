@@ -61,8 +61,8 @@ def me9(land, ao_agr, afe):
 EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, float]]]] = {
     # avaall -> lambdava
     "TBL45A": ("default.prm", [("lambdava", ("USA", "SER"), 10.0)]),
-    "TBL45B": ("3x3CES.prm", [("lambdava", ("USA", "SER"), 10.0)]),
-    "TBL45C": ("3x3CobbDouglas.prm", [("lambdava", ("USA", "SER"), 10.0)]),
+    "TBL45B": ("3x3ces.prm", [("lambdava", ("USA", "SER"), 10.0)]),
+    "TBL45C": ("3x3cobbdouglas.prm", [("lambdava", ("USA", "SER"), 10.0)]),
     # qe -> aft
     "TBL55": ("default.prm", [("aft", ("USA", "CAPITAL"), 10.0)]),
     "TBL63A": ("default.prm", [("aft", ("USA", "LABOR"), 10.0)]),
@@ -99,7 +99,7 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, float]]]] = {
     ),
     # tfe -> fcttx (region, factor, actividad)
     "TBL54A": (
-        "ESUBVAmfg1.2.prm",
+        "esubvamfg1.2.prm",
         [("fcttx", ("USA", "LABOR", "MFG"), 4.2969)],
     ),
     "TBL54B": (
@@ -112,11 +112,11 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, float]]]] = {
         [("dintx_tgt", ("USA", "MFG", "hhd"), -13.7359)],
     ),
     "TBL62B": (
-        "SectorspecificK.prm",
+        "sectorspecifick.prm",
         [("dintx_tgt", ("USA", "MFG", "hhd"), -13.7359)],
     ),
     "TBL62C": (
-        "SluggishK.prm",
+        "sluggishk.prm",
         [("dintx_tgt", ("USA", "MFG", "hhd"), -13.7359)],
     ),
     # afeall -> lambdaf (region, factor, actividad)
@@ -125,7 +125,7 @@ EXERCISES: dict[str, tuple[str, list[tuple[str, tuple, float]]]] = {
         [("lambdaf", ("USA", "LABOR", a), 10.0) for a in ACTS],
     ),
     "ME4A": ("default.prm", [("lambdaf", ("ROW", "LAND", "AGR"), -81.0)]),
-    "ME4B": ("3x3CobbDouglas.prm", [("lambdaf", ("ROW", "LAND", "AGR"), -81.0)]),
+    "ME4B": ("3x3cobbdouglas.prm", [("lambdaf", ("ROW", "LAND", "AGR"), -81.0)]),
     # aoall -> axp (region, actividad)
     "TBL78": ("default.prm", [("axp", ("ROW", "MFG"), -6.0)]),
     # ams -> lambdam (origen, bien, destino)
@@ -273,8 +273,18 @@ def as_shock(rows: list[tuple[str, tuple, float]]) -> dict[str, dict[tuple, floa
     return out
 
 
-def solve_exercise(exp: str, har: Path):
-    """Construye, aplica los shocks del ejercicio y resuelve base/check/shock."""
+def solve_exercise(
+    exp: str,
+    har: Path,
+    *,
+    shock_method: str = "nonlinear",
+    rows: list[tuple[str, tuple, float]] | None = None,
+):
+    """Builds the exercise, applies its shocks and solves base/check/shock.
+
+    ``shock_method="johansen"``: the shock as one linear step from check, as the
+    book's Johansen exercises (no SHOCK_STEPS). ``rows`` replaces the exercise's
+    shocks (same form as EXERCISES)."""
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
@@ -282,6 +292,8 @@ def solve_exercise(exp: str, har: Path):
     from equilibria.templates.gtap.shocks import apply_shock
 
     prm, shocks = EXERCISES[exp]
+    if rows is not None:
+        shocks = rows
     p = GTAPParameters()
     p.load_from_har(
         basedata_path=har / "basedata.har",
@@ -314,7 +326,8 @@ def solve_exercise(exp: str, har: Path):
         seed_from_prior=False,
         mode="gtap",
         solve_check=True,
-        shock_steps=SHOCK_STEPS,
+        shock_steps=SHOCK_STEPS if shock_method == "nonlinear" else None,
+        shock_method=shock_method,
     )
     return m, p, {k: int(res[k]["code"]) for k in res}
 
@@ -322,7 +335,7 @@ def solve_exercise(exp: str, har: Path):
 GAMS_PREFIXES = ["a_", "c_", "f_", "r_"]
 WHY_SKIP = (
     "bienestar/Walras: fuera de la Tabla 3; el bienestar se compara aparte "
-    "(test_nus333_bienestar.py) y walras debe ser 0 en los dos"
+    "(test_nus333_welfare.py) y walras debe ser 0 en los dos"
 )
 # psave/chiSave siguen a GTAP v7 (gtapv7.tab), no a GAMS: GAMS aplica chiSave**2 en
 # psave, la mitad (en log) del ajuste de GTAP. Distintos de GAMS a proposito; el
@@ -333,7 +346,8 @@ WHY_GTAPV7 = (
     "en test_nus333_psave_gtap.py"
 )
 WHY_RF = (
-    "fijada a su macro con ifSUB (RF de measure_gtap_pure_tols): reporte, no resultado"
+    "adjustment price, margin or tax through which the model clears its markets: "
+    "two implementations differ in it by small numerical amounts (paper, Section 5.4)"
 )
 
 

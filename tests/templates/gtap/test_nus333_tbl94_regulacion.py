@@ -21,7 +21,7 @@ y los flujos bilaterales a <=0,004pp; la oferta de margenes ``qst`` a <=0,036pp 
 exogenas: CUMS guarda solo las celdas endogenas); ``to`` se leyo de su unica celda.
 
 Todas las celdas: los niveles GAMS de check y shock estan en
-``tests/fixtures/nus333_tbl94_gams_levels.json.gz`` (``_diff_core.gams_levels``) y se
+``data/gtap7/nus333/gams_burfisher_levels/tbl94.json.gz`` (``_diff_core.gams_levels``) y se
 comparan con ``run_burfisher.compare``.
 
 LOCAL-only: SKIP si falta nus333.
@@ -29,12 +29,10 @@ LOCAL-only: SKIP si falta nus333.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, cast
 
 import pytest
 from tests.templates.gtap._nus333 import (
-    ROOT,
     closure,
     gams_levels,
     nus333_params,
@@ -42,9 +40,11 @@ from tests.templates.gtap._nus333 import (
     run_burfisher,
 )
 
+from equilibria.sources import dataset_dir
+
 pytestmark = pytest.mark.integration
 
-LEVELS = ROOT / "tests" / "fixtures" / "nus333_tbl94_gams_levels.json.gz"
+LEVELS = dataset_dir("nus333_gams_burfisher_levels") / "tbl94.json.gz"
 TOL_PP = 0.002
 CELL = ("USA", "MFG", "MFG")
 
@@ -68,7 +68,7 @@ SHADOW_TAX_POWER = 2.249523
 
 
 def register_tbl94_hooks() -> None:
-    """Los hooks del notebook ``burfisher_exec_tbl94.ipynb``."""
+    """Los hooks del notebook ``examples/notebooks/gtap7/burfisher/tbl94.ipynb``."""
     from equilibria.blocks.gtap import ShockBlock, overwrite
 
     @overwrite(ShockBlock, period="shock")

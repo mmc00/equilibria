@@ -220,7 +220,9 @@ def test_windows_cpu_reads_the_registry_name() -> None:
     ]
 
 
-def test_windows_cpu_falls_back_without_the_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_windows_cpu_falls_back_without_the_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Without the registry key: the architecture in the environment, not
     platform.processor(), which queries WMI (timed out in the 3a-2 run)."""
     monkeypatch.setenv("PROCESSOR_ARCHITECTURE", "AMD64")
@@ -546,7 +548,12 @@ def test_notes_from_file_is_appended_not_an_output(tmp_path: Path) -> None:
     cmd = [sys.executable, "-c",
            "open('out.txt','w').write('x'); open('note.txt','w').write('retried once')"]  # fmt: skip
     argv = _argv(tmp_path, folder, cmd)
-    argv[argv.index("--") : argv.index("--")] = ["--notes", "base", "--notes-from", "note.txt"]
+    argv[argv.index("--") : argv.index("--")] = [
+        "--notes",
+        "base",
+        "--notes-from",
+        "note.txt",
+    ]
     assert _module().main(argv) == 0
     raw = load_source(folder).raw
     assert raw["notes"] == "base; retried once"
@@ -556,7 +563,9 @@ def test_notes_from_file_is_appended_not_an_output(tmp_path: Path) -> None:
 
 def test_notes_from_absent_file_keeps_notes(tmp_path: Path) -> None:
     folder = tmp_path / "gtap7" / "gtap7_3x3" / "gemsim_x"
-    argv = _argv(tmp_path, folder, [sys.executable, "-c", "open('out.txt','w').write('x')"])
+    argv = _argv(
+        tmp_path, folder, [sys.executable, "-c", "open('out.txt','w').write('x')"]
+    )
     argv[argv.index("--") : argv.index("--")] = ["--notes-from", "note.txt"]
     assert _module().main(argv) == 0
     assert load_source(folder).raw["notes"] == ""
@@ -605,7 +614,9 @@ def test_a_second_failed_start_writes_nothing(
     assert len(calls) == 2 and not (folder / "source.yaml").exists()
 
 
-def test_windows_machine_info_does_not_touch_wmi(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_windows_machine_info_does_not_touch_wmi(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """platform's processor/release/version query WMI on Windows (Python 3.12), and
     WMI timed out mid-run (WinError 258, KeyError 'Architecture'): a solved job lost
     its record. machine_info builds the same strings without it."""
@@ -619,9 +630,15 @@ def test_windows_machine_info_does_not_touch_wmi(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(m.platform, "system", lambda: "Windows")
     for name in ("processor", "machine", "release", "version", "uname"):
         monkeypatch.setattr(m.platform, name, wmi)
-    monkeypatch.setattr(m.sys, "getwindowsversion",
-                        lambda: SimpleNamespace(major=10, minor=0, build=26200), raising=False)
-    monkeypatch.setattr(m, "_windows_cpu", lambda: "13th Gen Intel(R) Core(TM) i7-1365U")
+    monkeypatch.setattr(
+        m.sys,
+        "getwindowsversion",
+        lambda: SimpleNamespace(major=10, minor=0, build=26200),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        m, "_windows_cpu", lambda: "13th Gen Intel(R) Core(TM) i7-1365U"
+    )
     monkeypatch.setattr(m, "_windows_ram", lambda: 31.4)
     info = m.machine_info()
     assert info["os"] == "Windows 11 (10.0.26200)"

@@ -226,7 +226,7 @@ def render() -> str:
         "subsidized crops, moving the domestic price and — through the import nest — "
         "`qxs`. The `gtap7_gempack` closure adopts GEMPACK's convention, which is why "
         "its column above is higher on the small agricultural flows. Details: "
-        "`docs/findings/gempack_residual_is_linearization_2026-07-24`.",
+        "`docs/archive/findings/gempack_residual_is_linearization_2026-07-24`.",
         "",
         # --- 6. The variable map --------------------------------------------
         "## Variables compared (15)",
@@ -255,7 +255,7 @@ def render() -> str:
         "- **Welfare** (`u` / `EV`) and the **tariff shock** itself (`tm` = +10% "
         "uniform, the identical input to both engines) — welfare is second-order and "
         "sign-flipping; it lives in the separate EV track "
-        "(`docs/findings/gempack_welfare_not_cellwise`).",
+        "(`docs/archive/findings/gempack_welfare_not_cellwise`).",
         "- **Capital dynamics / macro** (`KB`, `KE`, `QSAVE`, `POP`, `TOT`) — not "
         "mapped; outside the single-shock trade-quantity scope of this page.",
         "",
@@ -271,7 +271,7 @@ def render() -> str:
         "single-period apparatus and already have GEMPACK/RunGTAP coverage in the "
         "welfare/macro track they were built for (`compare_nus333_rungtap.py` / "
         "`compare_9x10_rungtap.py`, ~0.01–0.3pp on `u` — see "
-        "`docs/findings/rungtap_welfare_parity_2026-05-15`).",
+        "`docs/archive/findings/rungtap_welfare_parity_2026-05-15`).",
         "",
     ]
     return "\n".join(parts) + "\n"

@@ -1,0 +1,13 @@
+kind: data
+model: gtap7
+dataset: gtap7_3x3_equilibria_table1_v061
+source: 'Levels of gtap7_3x3 (Table 1 of the paper) from equilibria v0.6.1 (c096894),
+  run from the replication zip on the Mac on 2026-10-26: compare_gempack_levels.py
+  --dataset gtap7_3x3 --closure capFlex --solver path (the JSON''s own source field
+  gives the versions). Oracle of test_table1_3x3_keeps_its_solution. Moved byte for
+  byte from tests/fixtures/gtap7_gempack at 40a2abc6 (phase 3b)'
+license: equilibria output (MIT, as the package)
+outputs:
+  table1_levels_v061_gtap7_3x3.json.gz: 2ea65209d5fdd4bb97553ca433e1fa748bde8e284fa3d02413a057b03fe81f15
+status: verified
+notes: ''

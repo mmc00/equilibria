@@ -56,7 +56,7 @@ for key, value in prices.items():
 
 ## 📖 Documentación
 
-- [Guía completa del Reader](../../../../docs/reference/gdx/gdx_reader_guide.md)
+- [Guía completa del Reader](../../../../docs/notes/gdx/reader_guide.md)
 - [Ejemplos de uso](../../../../examples/readme.md)
 
 ## 🧪 Tests
@@ -200,7 +200,7 @@ GDX usa varios esquemas de compresión:
 
 ## 🤝 Contribuir
 
-Ver [guía de contribución](../../CONTRIBUTING.md)
+Ver [guía de contribución](../../../../CONTRIBUTING.md)
 
 ## 📝 Licencia y origen
 

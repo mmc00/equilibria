@@ -46,53 +46,11 @@ Auto-generated reference for the public modules.
 
 ```{toctree}
 :hidden:
-:caption: Start here
 
-guide/installation
-guide/architecture
-```
-
-```{toctree}
-:hidden:
-:caption: Templates
-
-guide/templates
-guide/gtap_quickstart
-guide/pep_quickstart
-guide/welfare_decomposition
-```
-
-```{toctree}
-:hidden:
-:caption: Data & solvers
-
-guide/mip_to_sam
-guide/har_io
-guide/path_capi
-```
-
-```{toctree}
-:hidden:
-:caption: Validation & parity
-
-guide/benchmarks
-guide/gtap7_coverage_matrix
-guide/gtap7_coverage_matrix_gempack
-guide/gtap7_gempack_linearization_study
-guide/pep_coverage_matrix
-```
-
-```{toctree}
-:hidden:
-:caption: Examples
-
+sections/getting_started
+sections/templates
+sections/data_solvers
+sections/validation
 gallery/index
-```
-
-```{toctree}
-:hidden:
-:caption: Reference
-
-api/index
-changelog
+sections/reference
 ```

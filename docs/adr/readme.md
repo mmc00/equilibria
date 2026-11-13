@@ -17,4 +17,4 @@ ADR supersedes the old one. Create one with
 | [0008](0008-reference-models-are-the-source-of-truth.md) | GAMS and GEMPACK are the source of truth; fidelity outranks match % |
 | [0009](0009-one-name-dictionary-per-model.md) | One name dictionary per model, checked for completeness against both sides |
 
-Vocabulary: [`GLOSSARY.md`](../../GLOSSARY.md).
+Vocabulary: [`docs/glossary.md`](../glossary.md).

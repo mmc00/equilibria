@@ -15,7 +15,7 @@ que en el notebook del ejercicio:
 El objetivo se ancla al check, como en GAMS. Con la calibracion de betaP de GTAP
 (``phiP = Σ xcshr·eh``, test_nus333_cde_betacal.py) el check es el dato.
 
-Oraculo: GEMPACK ME9A (``tests/fixtures/gtap7_gempack/burfisher/me9a.sl4.gz``,
+Oraculo: GEMPACK ME9A (``data/gtap7/nus333/gempack_burfisher/me9a/solution.sl4``,
 ``tools/gempack-oracle``), todas las celdas en niveles con
 ``compare_burfisher_gempack``, y ``aoreg`` USA/ROW +31,9376 / +42,3080.
 
@@ -53,7 +53,7 @@ AOREG_GEMPACK = {"USA": 31.9376, "ROW": 42.3080}
 
 
 def register_me9a_hooks() -> None:
-    """Los hooks del notebook ``burfisher_exec_me9a.ipynb``."""
+    """Los hooks del notebook ``examples/notebooks/gtap7/burfisher/me9a.ipynb``."""
     from pyomo.environ import value
 
     from equilibria.blocks.gtap import ClosureBlock, ShockBlock, overwrite

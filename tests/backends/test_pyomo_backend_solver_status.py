@@ -14,6 +14,7 @@ from pathlib import Path
 from pyomo.opt import SolverResults, SolverStatus, TerminationCondition
 
 from equilibria.backends import PyomoBackend
+from equilibria.sources import dataset_dir
 
 
 def _backend_con(results: SolverResults) -> PyomoBackend:
@@ -60,7 +61,7 @@ def test_sin_campos_no_hay_undefined():
 
 # .sol reales (modelo x**3 == 8 desde x=10, escritos por pathampl 4.7.03 e ipopt
 # 3.14.19 el 2026-10-02) leidos con el lector .sol de Pyomo: el caso que fallaba.
-SOL_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "pyomo_sol"
+SOL_DIR = dataset_dir("pyomo_sol")
 
 
 def _leer_sol(nombre: str) -> SolverResults:

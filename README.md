@@ -10,6 +10,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Documentation](https://img.shields.io/badge/docs-sphinx-blue.svg)](https://equilibria.readthedocs.io/)
 [![DOI](https://zenodo.org/badge/1143895755.svg)](https://doi.org/10.5281/zenodo.23675339)
+[![Coverage](https://codecov.io/gh/mmc00/equilibria/branch/main/graph/badge.svg)](https://codecov.io/gh/mmc00/equilibria)
+[![Sponsor](https://img.shields.io/github/sponsors/mmc00?label=Sponsor&logo=GitHub)](https://github.com/sponsors/mmc00)
 
 *Build CGE models from modular blocks — like LEGO for economists — and check them against GAMS and GEMPACK.*
 
@@ -18,7 +20,7 @@
 [Installation](#installation) •
 [Quick Start](#quick-start) •
 [Documentation](https://equilibria.readthedocs.io/) •
-[Roadmap](ROADMAP.md) •
+[Roadmap](docs/roadmap.md) •
 [Contributing](#contributing)
 
 </div>
@@ -45,20 +47,53 @@ Templates today: **GTAP Standard 7** (multi-period, both `ifSUB` modes),
 
 ## Installation
 
-equilibria is not on PyPI yet; install it from source:
+```bash
+pip install "equilibria[path]"
+```
+
+The release on PyPI is `0.6.2`, an alpha: the API can still change before 1.0.
+
+The `path` extra installs [`path-capi-python`](https://pypi.org/project/path-capi-python/),
+which MCP solves use. The PATH solver itself is not on PyPI; get it from its authors:
+
+1. Download the PATH libraries for your platform from
+   <https://pages.cs.wisc.edu/~ferris/path/julia/> (macOS arm64:
+   `libpath50.silicon.dylib` and `liblusol.silicon.dylib`; Linux: `.so`;
+   Windows: `.dll`) and point to them:
+   ```bash
+   export PATH_CAPI_LIBPATH=/absolute/path/to/libpath50.silicon.dylib
+   export PATH_CAPI_LIBLUSOL=/absolute/path/to/liblusol.silicon.dylib
+   ```
+2. Without a license PATH stops at 300 variables, which is smaller than the
+   quickstart model. The PATH authors publish a free evaluation license in
+   <https://pages.cs.wisc.edu/~ferris/path/julia/LICENSE>; set it as
+   `PATH_LICENSE_STRING`.
+
+NLP solves use IPOPT through the `ipopt` extra (`cyipopt`), which needs an Ipopt
+installation on the system.
+
+To check what is installed and what is missing, run:
+
+```bash
+equilibria doctor
+```
+
+It lists PATH, its license and the solver packages, each with how to get it,
+and exits with 1 when something an MCP solve needs is missing.
+
+Other extras: `excel`, `viz` (matplotlib, plotly), `poi` (PyOptInterface),
+`modelcache` (cloudpickle), `docs`, `all`.
+
+To work on equilibria itself, install from source:
 
 ```bash
 git clone https://github.com/mmc00/equilibria.git
 cd equilibria
-pip install -e ".[pyomo,ipopt,excel]"
+pip install -e ".[pyomo,path,ipopt,excel]"
 ```
 
-Optional extras: `viz` (matplotlib, plotly), `poi` (PyOptInterface),
-`modelcache` (cloudpickle), `docs`, `all`.
-
-MCP solves use PATH through [`path-capi-python`](https://github.com/mmc00/path-capi-python);
-see [Solving with PATH](https://equilibria.readthedocs.io/en/latest/guide/path_capi.html)
-for where equilibria looks for it and for the PATH libraries.
+See [Solving with PATH](https://equilibria.readthedocs.io/en/latest/guide/path_capi.html)
+for where equilibria looks for the PATH libraries.
 
 ---
 
@@ -159,7 +194,7 @@ What matches what, measured: the
 [GTAP coverage matrix against GAMS](https://equilibria.readthedocs.io/en/latest/guide/gtap7_coverage_matrix.html),
 the [one against GEMPACK](https://equilibria.readthedocs.io/en/latest/guide/gtap7_coverage_matrix_gempack.html),
 and the [PEP coverage matrix](https://equilibria.readthedocs.io/en/latest/guide/pep_coverage_matrix.html).
-What comes next: [ROADMAP.md](ROADMAP.md).
+What comes next: [docs/roadmap.md](docs/roadmap.md).
 
 ## Examples
 
@@ -205,6 +240,23 @@ prek run --all-files
 Hooks are fast hygiene only (format / lint / type, no solver). Use `prek`, not
 `pre-commit` — same config, faster runner. See [CONTRIBUTING.md](CONTRIBUTING.md)
 for the `ty` ratchet and the separate parity gates.
+
+---
+
+## Support equilibria
+
+equilibria is free, open-source software maintained by one person. If it is
+useful to you or your team, you can support its development through
+[GitHub Sponsors](https://github.com/sponsors/mmc00). Sponsorship helps keep it
+maintained, documented and easy to install, add new models, publish the
+validation against GAMS and GEMPACK openly, and pay for the computing time that
+large models need.
+
+The software is free; the data are not always: GTAP models need a GTAP Data Base
+license from the [Center for Global Trade Analysis](https://www.gtap.agecon.purdue.edu/).
+
+If your team needs a CGE model built, adapted or validated, consulting is also
+available: write through the [Sponsors profile](https://github.com/sponsors/mmc00).
 
 ---
 
