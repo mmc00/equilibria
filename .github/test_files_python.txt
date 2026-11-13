@@ -70,6 +70,7 @@ tests/compare/test_sources.py
 tests/contracts/test_base_contract.py
 tests/core/test_core.py
 tests/core/test_driver.py
+tests/core/test_exercise.py
 tests/core/test_layering.py
 tests/core/test_model.py
 tests/core/test_recipe.py

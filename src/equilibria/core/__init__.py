@@ -21,10 +21,17 @@ from equilibria.core.calibration_phase import (
 )
 from equilibria.core.equations import Equation
 from equilibria.core.parameters import Parameter
+from equilibria.core.recipe import PERIOD_KINDS, KindPlan, Period, Recipe
 from equilibria.core.sets import Set, SetManager
 from equilibria.core.variables import Variable
 
 __all__ = [
+    # Runs: recipe, driver, exercise (ADR-0011)
+    "Exercise",
+    "KindPlan",
+    "PERIOD_KINDS",
+    "Period",
+    "Recipe",
     # Core data structures
     "Set",
     "SetManager",
@@ -43,3 +50,13 @@ __all__ = [
     "list_calibration_phases",
     "register_calibration_phase",
 ]
+
+
+def __getattr__(name: str):
+    # Exercise pulls in the driver and Pyomo; load it on first use so that
+    # importing the core primitives stays light.
+    if name == "Exercise":
+        from equilibria.core.exercise import Exercise
+
+        return Exercise
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
