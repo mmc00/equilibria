@@ -171,7 +171,16 @@ def _solve(gate_name: str, gate: Any, ds: str, ifsub: int, gdx: Path) -> dict:
     }
 
 
-def measure(out: Path, only: str | None = None) -> None:
+def initial_results(out: Path, resume: bool) -> dict[str, dict]:
+    """The rows to start from: none, unless ``resume`` and ``out`` exists.
+
+    Starting from an earlier run would keep its rows for any row this run skips,
+    and ``verdict`` would take them as measured.
+    """
+    return json.loads(out.read_text()) if resume and out.exists() else {}
+
+
+def measure(out: Path, only: str | None = None, resume: bool = False) -> None:
     """Measure every altertax row (or those whose id contains ``only``) into ``out``."""
     for p in (ROOT / "scripts/gtap", ROOT / "src", ROOT):
         if str(p) not in sys.path:
@@ -188,7 +197,7 @@ def measure(out: Path, only: str | None = None) -> None:
         return solve(m, *args, **kwargs)
 
     drv.solve_multiperiod = capture  # the helpers import it at call time
-    results: dict[str, dict] = json.loads(out.read_text()) if out.exists() else {}
+    results = initial_results(out, resume)
     try:
         for gate_name, ds, ifsub, gdx in _rows(gates):
             row = f"{gate_name}:{ds}:ifsub{ifsub}"
@@ -227,12 +236,15 @@ def main() -> int:
     m = sub.add_parser("measure", help="solve the altertax rows and record every cell")
     m.add_argument("--out", type=Path, required=True)
     m.add_argument("--only", help="only rows whose id contains this")
+    m.add_argument(
+        "--resume", action="store_true", help="keep the rows already in --out"
+    )
     c = sub.add_parser("compare", help="apply the acceptance rule")
     c.add_argument("base", type=Path)
     c.add_argument("new", type=Path)
     a = ap.parse_args()
     if a.cmd == "measure":
-        measure(a.out, a.only)
+        measure(a.out, a.only, a.resume)
         return 0
     reasons = verdict(json.loads(a.base.read_text()), json.loads(a.new.read_text()))
     for r in reasons:

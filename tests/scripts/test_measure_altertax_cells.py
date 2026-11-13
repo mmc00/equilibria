@@ -100,3 +100,12 @@ def test_edge_of_tolerance_is_a_crossing():
     new = _new()
     new[ROW]["cells"][CELL] = [1.0101, 1.0, mac.within(1.0101, 1.0, tol=1e-2)]
     assert any("crossed" in r for r in mac.verdict(BASE, new))
+
+
+def test_a_new_measurement_does_not_keep_old_rows(tmp_path):
+    """Rows of an earlier run left in --out would pass as measured (a skip hidden)."""
+    out = tmp_path / "run.json"
+    out.write_text('{"mcp:gtap7_3x3:ifsub0": {"codes": {}, "match": {}, "cells": {}}}')
+    assert mac.initial_results(out, resume=False) == {}
+    assert ROW in mac.initial_results(out, resume=True)
+    assert mac.initial_results(tmp_path / "absent.json", resume=True) == {}
