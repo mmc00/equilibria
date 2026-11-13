@@ -230,6 +230,10 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["equilibria"]
 
+[tool.ty.analysis]
+# jax is the optional `family` extra: CI type-checks without it (`uv sync --dev`)
+allowed-unresolved-imports = ["jax", "jax.**", "jaxlib", "jaxlib.**"]
+
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = true

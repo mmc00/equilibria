@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import pickle
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -158,7 +159,7 @@ def _post(case, mp, period, *, sq=None, x=None, code=1):
     )
 
 
-def _flags(n: int) -> dict[str, bool]:
+def _flags(n: int) -> dict[str, Any]:
     """The driver flags of call ``n``: the settle (calls 1-2) runs without
     ``base_calibrated`` / ``solve_check``, the main run with both."""
     main = n > 2
