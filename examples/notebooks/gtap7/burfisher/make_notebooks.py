@@ -271,11 +271,13 @@ _WALL_MD = (
 
 
 def _setup(hooked: bool) -> str:
+    # Every notebook imports overwrite: even without hooks of its own, it clears
+    # those an earlier exercise left in the same kernel (#214).
     hooks = (
         "from equilibria.blocks.gtap import ClosureBlock, ShockBlock, overwrite, "
         "ppriv_tornqvist\n"
         if hooked
-        else ""
+        else "from equilibria.blocks.gtap import overwrite\n"
     )
     return (
         "import sys\n"
@@ -294,6 +296,8 @@ def _setup(hooked: bool) -> str:
         "from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod\n"
         "from equilibria.templates.gtap.shocks import apply_shock\n\n"
         "sys.path.insert(0, str(path_capi_src()))  # the PATH solver's Python bindings\n"
+        "# hooks from an earlier exercise in this kernel would leak into this one (#214)\n"
+        "overwrite.clear()\n"
     )
 
 

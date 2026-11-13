@@ -79,6 +79,7 @@ tests/data/test_gempack_tools.py
 tests/data/test_no_test_fixtures.py
 tests/data/test_reference_keys.py
 tests/data/test_release_check.py
+tests/data/test_sources_cache.py
 tests/data/test_sources_checks.py
 tests/data/test_sources_dataset_dir.py
 tests/data/test_sources_derived.py
@@ -121,6 +122,7 @@ tests/sam_tools/test_parsers.py
 tests/sam_tools/test_ras_balancer.py
 tests/sam_tools/test_sam_class.py
 tests/sam_tools/test_transforms.py
+tests/scripts/test_altertax_job.py
 tests/scripts/test_build_pure_bundle_model.py
 tests/scripts/test_burfisher_job.py
 tests/scripts/test_check_commit_msg.py

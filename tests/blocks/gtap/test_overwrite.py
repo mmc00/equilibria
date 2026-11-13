@@ -392,3 +392,119 @@ def test_vista_de_periodo_traduce_vars_y_rechaza_lo_demas():
     assert view.k is m.k
     with pytest.raises(ValueError, match="p"):
         _ = view.p
+
+
+# ------------------------------------------------- stale hooks between builds (#214)
+
+
+def _register(name: str) -> None:
+    def hook(b):
+        pass
+
+    hook.__name__ = name
+    overwrite(ShockBlock, period="shock")(hook)
+
+
+@pytest.fixture
+def no_stale_warning():
+    """Fail the test if any StaleOverwriteWarning is raised inside it."""
+    import warnings
+
+    from equilibria.blocks.gtap import StaleOverwriteWarning
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", StaleOverwriteWarning)
+        yield
+
+
+def test_fresh_hooks_do_not_warn(no_stale_warning):
+    _register("one")
+    with overwrite.building():
+        pass
+
+
+def test_hooks_from_previous_build_warn():
+    from equilibria.blocks.gtap import StaleOverwriteWarning
+
+    _register("one")
+    with overwrite.building():
+        pass
+    with pytest.warns(
+        StaleOverwriteWarning, match=r"ShockBlock\.one.*overwrite\.clear\(\)"
+    ):
+        with overwrite.building():
+            pass
+
+
+def test_reregistering_refreshes_the_hook(no_stale_warning):
+    """Re-running a notebook cell re-registers the hook: it is not stale."""
+    _register("one")
+    with overwrite.building():
+        pass
+    _register("one")
+    with overwrite.building():
+        pass
+
+
+def test_clear_then_new_hooks_do_not_warn(no_stale_warning):
+    _register("one")
+    with overwrite.building():
+        pass
+    overwrite.clear()
+    _register("two")
+    with overwrite.building():
+        pass
+
+
+def test_nested_builds_count_as_one():
+    """The settle and capFlex-risk builds run inside build_block_model: one build."""
+    import warnings
+
+    from equilibria.blocks.gtap import StaleOverwriteWarning
+
+    _register("one")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", StaleOverwriteWarning)
+        with overwrite.building():
+            with overwrite.building():
+                pass
+    with pytest.warns(StaleOverwriteWarning) as record:
+        with overwrite.building():
+            pass
+    assert len([w for w in record if w.category is StaleOverwriteWarning]) == 1
+
+
+def test_failed_build_does_not_stick():
+    """A build that raises leaves the depth at 0: the next build still checks."""
+    from equilibria.blocks.gtap import StaleOverwriteWarning
+
+    _register("one")
+    with pytest.raises(RuntimeError):
+        with overwrite.building():
+            raise RuntimeError("build failed")
+    with pytest.warns(StaleOverwriteWarning, match=r"ShockBlock\.one"):
+        with overwrite.building():
+            pass
+
+
+def test_no_hooks_never_warn(no_stale_warning):
+    with overwrite.building():
+        pass
+    with overwrite.building():
+        pass
+
+
+def test_build_block_model_warns_on_stale_hooks():
+    """The first build (with its nested settle build) is clean; the second warns."""
+    import warnings
+
+    from equilibria.blocks.gtap import StaleOverwriteWarning
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+
+    p = nus333_params()
+    register_unemployment_hooks()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", StaleOverwriteWarning)
+        build_block_model(p, p.sets, closure(), "ROW", base_calibrated=True)
+    with pytest.warns(StaleOverwriteWarning, match="unemployment"):
+        build_block_model(p, p.sets, closure(), "ROW")

@@ -146,7 +146,9 @@ the equations are not rebuilt.
 
 An exercise that needs a different closure (a real-wage target, a quantity
 target) changes one block in the shock period with `@overwrite`; see
-{doc}`architecture`.
+{doc}`architecture`. Hooks last for the whole Python process: call
+`overwrite.clear()` before registering the hooks of a new exercise (equilibria
+warns when it builds a model with hooks left from a previous build).
 
 ## Step 3 — Read the welfare effect
 

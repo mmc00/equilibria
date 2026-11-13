@@ -128,12 +128,34 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+_YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+# Parsed records by file, valid while the file's mtime and size are unchanged:
+# reference() and dataset_dir() walk every source.yaml under data/ on each call.
+_RECORDS: dict[Path, tuple[tuple[int, int], SourceRecord]] = {}
+
+
+def _read_yaml(file: Path) -> Any:
+    return yaml.load(file.read_text(encoding="utf-8"), Loader=_YAML_LOADER)
+
+
 def load_source(folder: Path) -> SourceRecord:
     """Read and validate ``<folder>/source.yaml``."""
     file = folder / SOURCE_FILE
-    if not file.exists():
-        raise SourceError(f"{file}: missing")
-    data = yaml.safe_load(file.read_text(encoding="utf-8"))
+    try:
+        st = file.stat()
+    except FileNotFoundError:
+        raise SourceError(f"{file}: missing") from None
+    stamp = (st.st_mtime_ns, st.st_size)
+    hit = _RECORDS.get(file)
+    if hit is not None and hit[0] == stamp:
+        return hit[1]
+    record = _parse_source(folder, file)
+    _RECORDS[file] = (stamp, record)
+    return record
+
+
+def _parse_source(folder: Path, file: Path) -> SourceRecord:
+    data = _read_yaml(file)
     if not isinstance(data, Mapping):
         raise SourceError(f"{file}: not a mapping")
 

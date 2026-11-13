@@ -1,6 +1,6 @@
 """nus333 / Burfisher Tabla 4.5C: el shock de TBL45A con utilidad Cobb-Douglas.
 
-``TBL45C.EXP``: ``avaall("SER","USA") = 10`` con ``3x3CobbDouglas.prm`` (SUBPAR=0,
+``TBL45C.EXP``: ``avaall("SER","USA") = 10`` con ``3x3cobbdouglas.prm`` (SUBPAR=0,
 INCPAR=1), cierre estandar GTAPv7 -> ``savf_flag="capFlex"``.
 
 Oraculo: GAMS en modo ``--utility=CD`` (``comp_nus333.gms`` con
@@ -10,7 +10,7 @@ otra rama de model.gms:761-795, no la CDE con bh=0. En TBL45A el mismo GAMS
 reproduce GEMPACK Gragg a <=0.0002pp; aca no hay Gragg (requiere Windows), asi que
 la tolerancia es la misma que en TBL45A: 0.002pp.
 
-LOCAL-only: SKIP si falta nus333 o su ``3x3CobbDouglas.prm``.
+SKIP si falta nus333; FALLA si falta su ``3x3cobbdouglas.prm``.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ def solved(request):
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
     from equilibria.templates.gtap.shocks import apply_shock
 
-    p = nus333_params("3x3CobbDouglas.prm")
+    p = nus333_params("3x3cobbdouglas.prm")
     assert dp.cd_regions(p, p.sets) == frozenset(p.sets.r)
     ac = closure()
     m, _mp = build_block_model(
