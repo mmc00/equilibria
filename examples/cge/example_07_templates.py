@@ -30,7 +30,7 @@ def main():
 
     ex = Exercise(template, shock={"tau_m": 0.0})
     results = ex.run()
-    m = ex.model  # one model, every variable indexed by period
+    m = ex.model.pyomo  # the Pyomo model: every variable indexed by period
     for period, r in results.items():
         print(f"  {period:<6} {r['code']:<11} residual {r['residual']:.1e}")
 
@@ -42,7 +42,7 @@ def main():
         dxp = 100 * (pyo.value(m.XP[good, "shock"]) / pyo.value(m.XP[good, "base"]) - 1)
         print(f"  {good:<6} {dm:9.3f} {de:9.3f} {dxp:12.3f}")
 
-    ev = equivalent_variation(template.calibration(), m)
+    ev = equivalent_variation(template.calibration(), ex.model)
     print(f"\nEquivalent variation: {ev:.6f}")
     print(f"Walras slack at the shock: {pyo.value(m.WALRAS['shock']):.1e}")
 

@@ -12,15 +12,15 @@ import math
 from collections.abc import Mapping
 from typing import Any
 
-from equilibria.core.recipe import Recipe, StepContext
-from equilibria.core.reflection import period_residual
+from equilibria.core.period_model import PeriodModel
+from equilibria.core.recipe import KindPlan, Recipe, StepContext
 
 NOT_SOLVED = "not solved"
 
 _log = logging.getLogger(__name__)
 
 
-def _solve(model: Any, plan: Any, period: str) -> str:
+def _solve(model: PeriodModel, plan: KindPlan, period: str) -> str:
     """The period's status; an exception from the solver becomes an
     ``"error: <Type>: <message>"`` status, logged, so later periods still run."""
     if not plan.solver:
@@ -32,24 +32,24 @@ def _solve(model: Any, plan: Any, period: str) -> str:
         return f"error: {type(exc).__name__}: {exc}"
 
 
-def _residual(model: Any, period: str) -> float:
+def _residual(model: PeriodModel, period: str) -> float:
     """The period's residual; ``nan`` when the rows cannot be evaluated
     (e.g. a division by zero at the point the solve left)."""
     try:
-        return period_residual(model, period)
+        return model.residual(period)
     except (ArithmeticError, ValueError) as exc:
         _log.warning("period %s: residual not evaluable: %r", period, exc)
         return math.nan
 
 
 def fly(
-    model: Any,
+    model: PeriodModel,
     recipe: Recipe,
     *,
     template: Any = None,
     shock: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Run every period of ``recipe`` on ``model``.
+    """Run every period of ``recipe`` on ``model`` (a ``PeriodModel``).
 
     Returns ``{period: {"code": status, "residual": largest row residual}}``.
     A period whose solve fails, or raises, is reported and the next one still

@@ -7,7 +7,6 @@ from collections import defaultdict
 from typing import Any
 
 import numpy as np
-import pyomo.environ as pyo
 import pytest
 from tests.templates.simple_open._helpers import run_tariff_abolition
 from tests.templates.simple_open.conftest import gams_points
@@ -29,11 +28,8 @@ def model() -> Any:
 def _period(model: Any, period: str) -> dict[str, dict[tuple, float]]:
     """One period's cells, keyed as in a single-period model."""
     cells: dict[str, dict[tuple, float]] = defaultdict(dict)
-    for v in model.component_objects(pyo.Var, active=True):
-        for k in v:
-            key = k if isinstance(k, tuple) else (k,)
-            if key[-1] == period and v[k].value is not None:
-                cells[v.name][key[:-1]] = pyo.value(v[k])
+    for name, index in model.cells(period):
+        cells[name][index] = model.value(name, index, period)
     return cells
 
 
@@ -59,7 +55,7 @@ def test_ev_matches_gams(model: Any) -> None:
 
 def test_walras_is_zero_after_solving(model: Any) -> None:
     for point in ("check", "shock"):
-        assert abs(pyo.value(model.WALRAS[point])) <= 1e-8, point
+        assert abs(model.value("WALRAS", (), point)) <= 1e-8, point
 
 
 def test_shock_does_not_leak_into_next_run() -> None:
@@ -69,5 +65,6 @@ def test_shock_does_not_leak_into_next_run() -> None:
     again.run()
     tau_m = template.calibration().values["tau_m"]
     for t in POINTS:
-        got = [pyo.value(again.model.tau_m[i, t]) for i in template.calibration().goods]
+        goods = template.calibration().goods
+        got = [again.model.value("tau_m", (i,), t) for i in goods]
         np.testing.assert_allclose(got, tau_m, rtol=0, atol=0)

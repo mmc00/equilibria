@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from equilibria.core.recipe import StepContext
-from equilibria.core.reflection import exogenous
 
 
 def apply_shock(ctx: StepContext) -> None:
@@ -16,7 +15,7 @@ def apply_shock(ctx: StepContext) -> None:
     one-set variable, a tuple otherwise).
     """
     m, period = ctx.model, ctx.period.name
-    exo = exogenous(m)
+    exo = m.exogenous()
     instruments = {name for name, _ in exo}
     for name, levels in ctx.shock.items():
         if name not in instruments:
@@ -35,6 +34,5 @@ def apply_shock(ctx: StepContext) -> None:
                 raise ValueError(f"shock on {name!r}: no index {', '.join(missing)}")
         else:
             targets = dict.fromkeys(cells, float(levels))
-        var = m.component(name)
         for key, level in targets.items():
-            var[(*key, period)].fix(level)
+            m.fix(name, key, period, level)

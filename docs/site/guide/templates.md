@@ -54,7 +54,7 @@ from equilibria.templates import SimpleOpenEconomy
 
 ex = Exercise(SimpleOpenEconomy(), shock={"tau_m": 0.0})  # abolish every tariff
 results = ex.run()  # {period: {"code", "residual"}}
-ex.model.M["BRD", "shock"]  # every variable is indexed by period
+ex.model.value("M", ("BRD",), "shock")  # one cell of one period
 ```
 
 The shock gives new levels of instruments: the tax rates `tau_d`, `tau_z` and

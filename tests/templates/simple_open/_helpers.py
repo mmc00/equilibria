@@ -100,13 +100,10 @@ def run_tariff_abolition(template: Any) -> Any:
 
 
 def period_levels(model: Any, period: str) -> dict[tuple[str, Any], float]:
-    """``{(variable, index without the period): level}`` of one period."""
+    """``{(variable, index without the period): level}`` of one period of a
+    ``PeriodModel`` (a one-set index as its element, as in the calibration)."""
     out = {}
-    for v in model.component_objects(pyo.Var, active=True):
-        for k in v:
-            key: tuple[Any, ...] = k if isinstance(k, tuple) else (k,)
-            if key[-1] == period:
-                body = key[:-1]
-                cell = next(iter(body)) if len(body) == 1 else body
-                out[(v.name, cell)] = pyo.value(v[k])
+    for name, index in model.cells(period):
+        cell = next(iter(index)) if len(index) == 1 else index
+        out[(name, cell)] = model.value(name, index, period)
     return out

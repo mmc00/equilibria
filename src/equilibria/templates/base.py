@@ -16,6 +16,7 @@ from equilibria.model import Model
 
 if TYPE_CHECKING:
     from equilibria.blocks.base import Block
+    from equilibria.core.period_model import PeriodModel
     from equilibria.core.recipe import Recipe
 
 
@@ -67,8 +68,11 @@ class ModelTemplate(BaseModel, ABC):
         """The recipe an ``Exercise`` uses when it is given none."""
         raise NotImplementedError(f"{type(self).__name__} has no default recipe")
 
-    def build(self, periods: Sequence[str], overwrite: Sequence[Block] = ()) -> Any:
-        """A fresh model with ``periods``, never shared with another call.
+    def build(
+        self, periods: Sequence[str], overwrite: Sequence[Block] = ()
+    ) -> PeriodModel:
+        """A fresh model with ``periods`` (a ``PyomoPeriodModel``, Pyomo being
+        the backend of ``period_model``), never shared with another call.
 
         Without ``overwrite`` the reflected model is built once per period list
         and per value of the template's fields, and every call returns a copy
@@ -76,13 +80,13 @@ class ModelTemplate(BaseModel, ABC):
         is the fields, not the files they point to: a data file edited on disk
         needs a new template.
         """
-        from equilibria.core.reflection import reflect
+        from equilibria.backends.pyomo_periods import PyomoPeriodModel, reflect
 
         if overwrite:
-            return reflect(self.period_model(overwrite), periods)
+            return PyomoPeriodModel(reflect(self.period_model(overwrite), periods))
         key = (tuple(periods), self.model_dump_json())
         if key not in self._built:
-            self._built[key] = reflect(self.period_model(), periods)
+            self._built[key] = PyomoPeriodModel(reflect(self.period_model(), periods))
         return self._built[key].clone()
 
     def get_default_sector_names(self) -> list[str]:

@@ -1,4 +1,5 @@
-"""reflect: a single-period Pyomo model becomes one indexed by a trailing period."""
+"""reflect: a single-period Pyomo model becomes one indexed by a trailing period;
+PyomoPeriodModel gives the run machinery its operations over it."""
 
 from __future__ import annotations
 
@@ -7,7 +8,12 @@ from typing import Any, cast
 import pyomo.environ as pyo
 import pytest
 
-from equilibria.core.reflection import exogenous, period_residual, reflect
+from equilibria.backends.pyomo_periods import (
+    PyomoPeriodModel,
+    exogenous,
+    period_residual,
+    reflect,
+)
 
 PERIODS = ("base", "check", "shock")
 
@@ -92,3 +98,43 @@ def test_mutable_params_in_bounds_are_folded_too() -> None:
     sp.p.set_value(99.0)
     assert m.e["check"].lb == m.e["check"].ub == 2.0
     assert (m.r["check"].lb, m.r["check"].ub) == (0.0, 10.0)
+
+
+def test_period_model_lists_periods_cells_and_exogenous() -> None:
+    pm = PyomoPeriodModel(reflect(single_period(), PERIODS))
+    assert pm.periods == PERIODS
+    assert set(pm.cells("check")) == {
+        ("x", ("a",)), ("x", ("b",)), ("y", ()), ("tau", ("a",)), ("tau", ("b",))
+    }  # fmt: skip
+    assert pm.exogenous() == {("tau", ("a",)), ("tau", ("b",))}
+
+
+def test_period_model_reads_writes_fixes_one_cell() -> None:
+    pm = PyomoPeriodModel(reflect(single_period(), PERIODS))
+    pm.set_value("x", ("a",), "shock", 7.0)
+    assert pm.value("x", ("a",), "shock") == 7.0
+    assert pm.value("x", ("a",), "check") == pytest.approx(6.1)
+    pm.fix("y", (), "base")
+    assert pm.is_fixed("y", (), "base") and pm.value("y", (), "base") == 2.0
+    pm.fix("tau", ("b",), "shock", 0.0)
+    assert pm.value("tau", ("b",), "shock") == 0.0
+    pm.unfix("y", (), "base")
+    assert not pm.is_fixed("y", (), "base")
+
+
+def test_period_model_activates_one_period_and_measures_it() -> None:
+    pm = PyomoPeriodModel(reflect(single_period(), PERIODS))
+    pm.set_value("x", ("a",), "shock", 7.0)
+    pm.activate_rows("check")
+    assert pm.pyomo.c["a", "check"].active and not pm.pyomo.c["a", "shock"].active
+    assert pm.residual("shock") == pytest.approx(0.0, abs=1e-12)  # inactive rows
+    pm.activate_rows("shock")
+    assert pm.residual("shock") == pytest.approx(0.9)
+
+
+def test_period_model_clone_is_independent() -> None:
+    pm = PyomoPeriodModel(reflect(single_period(), PERIODS))
+    copy = pm.clone()
+    copy.set_value("x", ("a",), "check", 9.0)
+    assert pm.value("x", ("a",), "check") == pytest.approx(6.1)
+    assert copy.exogenous() == pm.exogenous()

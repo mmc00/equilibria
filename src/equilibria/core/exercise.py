@@ -11,11 +11,14 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
 from equilibria.core.driver import fly
+from equilibria.core.period_model import PeriodModel
 from equilibria.core.recipe import Recipe
 
 
 class Template(Protocol):
-    def build(self, periods: Sequence[str], overwrite: Sequence[Any] = ()) -> Any:
+    def build(
+        self, periods: Sequence[str], overwrite: Sequence[Any] = ()
+    ) -> PeriodModel:
         """A fresh model with ``periods``, never shared with another call."""
         ...
 
@@ -41,10 +44,11 @@ class Exercise:
                 f"a shock was given but the recipe has no shock period "
                 f"(periods: {', '.join(self.recipe.names)})"
             )
-        self.model: Any = None
+        self.model: PeriodModel | None = None
 
     def run(self) -> dict[str, dict[str, Any]]:
         """Build a fresh model and fly the recipe on it; returns
         ``{period: {"code", "residual"}}``. The model stays on ``self.model``."""
-        self.model = self.template.build(self.recipe.names, self.overwrite)
-        return fly(self.model, self.recipe, template=self.template, shock=self.shock)
+        model = self.template.build(self.recipe.names, self.overwrite)
+        self.model = model
+        return fly(model, self.recipe, template=self.template, shock=self.shock)

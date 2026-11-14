@@ -15,6 +15,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from equilibria.core.period_model import PeriodModel
+
 PERIOD_KINDS: tuple[str, ...] = ("calibrate", "replicate", "shock", "step")
 
 
@@ -29,7 +31,7 @@ class StepContext:
     """What a step sees: the model, the template (and its data), the recipe, the
     current period and the prior one, and the exercise's shock."""
 
-    model: Any
+    model: PeriodModel
     template: Any
     recipe: Recipe
     period: Period
@@ -39,14 +41,15 @@ class StepContext:
 
 # A step mutates the model in place and returns nothing; to report, it logs.
 Step = Callable[[StepContext], None]
-# A solver solves the model as it stands and returns a status ("optimal" when
-# it converged).
-Solver = Callable[[Any], str]
+# A solver solves the model as it stands (the period the steps left free) and
+# returns a status ("optimal" when it converged). It knows its backend: a Pyomo
+# solver reads ``model.pyomo``.
+Solver = Callable[[PeriodModel], str]
 # A solve strategy wraps the solve (in one go, in steps, Johansen...).
-Strategy = Callable[[Any, Solver], str]
+Strategy = Callable[[PeriodModel, Solver], str]
 
 
-def solve_once(model: Any, solver: Solver) -> str:
+def solve_once(model: PeriodModel, solver: Solver) -> str:
     """The default strategy: one call to the solver."""
     return solver(model)
 

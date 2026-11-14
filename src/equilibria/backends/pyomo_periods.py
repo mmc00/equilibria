@@ -1,4 +1,4 @@
-"""Reflect a single-period model into periods (ADR-0006).
+"""Pyomo models with periods: the reflection, and the PeriodModel over it.
 
 Blocks write their equations for one period, with no time index. ``reflect``
 copies that single-period (SP) Pyomo model into a new one where every variable
@@ -10,12 +10,16 @@ fixed variable (an instrument, ADR-0003).
 A general version of ``GTAPMultiPeriodModel.build_vars`` and
 ``build_equations_all_periods`` (``templates/gtap/gtap_model_multiperiod.py``),
 without the GTAP-only pieces.
+
+``PyomoPeriodModel`` gives the run machinery (steps, driver) the operations of
+``equilibria.core.period_model.PeriodModel`` over a reflected model, so they
+never touch Pyomo themselves.
 """
 
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from typing import Any, cast
 
 import pyomo.environ as pyo
@@ -160,3 +164,63 @@ def period_residual(m: Any, period: str) -> float:
                 gap = abs(body - lb)
             worst = max(worst, gap)
     return worst
+
+
+class PyomoPeriodModel:
+    """``PeriodModel`` over a reflected Pyomo model (``self.pyomo``)."""
+
+    def __init__(self, pyomo: Any) -> None:
+        self.pyomo = pyomo
+
+    @property
+    def periods(self) -> tuple[str, ...]:
+        return tuple(self.pyomo.t)
+
+    def exogenous(self) -> frozenset[tuple[str, tuple]]:
+        return exogenous(self.pyomo)
+
+    def _cell(self, name: str, index: tuple, period: str) -> Any:
+        return cast("Any", self.pyomo.component(name))[(*index, period)]
+
+    def cells(self, period: str) -> Iterator[tuple[str, tuple]]:
+        for v in self.pyomo.component_objects(pyo.Var, active=True):
+            for k in v:
+                key = _astuple(k)
+                if key[-1] == period:
+                    yield v.name, key[:-1]
+
+    def value(self, name: str, index: tuple, period: str) -> float:
+        return pyo.value(self._cell(name, index, period))
+
+    def set_value(self, name: str, index: tuple, period: str, value: float) -> None:
+        self._cell(name, index, period).set_value(value, skip_validation=True)
+
+    def fix(
+        self, name: str, index: tuple, period: str, value: float | None = None
+    ) -> None:
+        cell = self._cell(name, index, period)
+        if value is None:
+            cell.fix()
+        else:
+            cell.fix(value)
+
+    def unfix(self, name: str, index: tuple, period: str) -> None:
+        self._cell(name, index, period).unfix()
+
+    def is_fixed(self, name: str, index: tuple, period: str) -> bool:
+        return bool(self._cell(name, index, period).fixed)
+
+    def activate_rows(self, period: str) -> None:
+        for con in self.pyomo.component_objects(pyo.Constraint):
+            for k in con:
+                row = cast("Any", con[k])
+                if period_of(k) == period:
+                    row.activate()
+                else:
+                    row.deactivate()
+
+    def residual(self, period: str) -> float:
+        return period_residual(self.pyomo, period)
+
+    def clone(self) -> PyomoPeriodModel:
+        return PyomoPeriodModel(self.pyomo.clone())

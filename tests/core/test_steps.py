@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from tests.core.test_reflection import single_period
+from tests.backends.test_pyomo_periods import single_period
 
+from equilibria.backends.pyomo_periods import PyomoPeriodModel, reflect
 from equilibria.core.recipe import KindPlan, Period, Recipe, StepContext
-from equilibria.core.reflection import reflect
 from equilibria.core.steps import freeze_other_periods, seed_from_prior
 
 PERIODS = (Period("base", "calibrate"), Period("check", "replicate"))
@@ -18,7 +18,7 @@ RECIPE = Recipe(
 
 def ctx_for(m: Any, i: int) -> StepContext:
     return StepContext(
-        model=m,
+        model=PyomoPeriodModel(m),
         template=None,
         recipe=RECIPE,
         period=PERIODS[i],

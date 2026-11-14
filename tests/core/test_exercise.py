@@ -6,11 +6,11 @@ from collections.abc import Sequence
 from typing import Any
 
 import pytest
-from tests.core.test_reflection import single_period
+from tests.backends.test_pyomo_periods import single_period
 
+from equilibria.backends.pyomo_periods import PyomoPeriodModel, reflect
 from equilibria.core import Exercise
 from equilibria.core.recipe import KindPlan, Period, Recipe
-from equilibria.core.reflection import reflect
 
 STATIC = Recipe(
     (
@@ -32,7 +32,7 @@ class FakeTemplate:
 
     def build(self, periods: Sequence[str], overwrite: Sequence[Any] = ()) -> Any:
         self.builds.append((tuple(periods), tuple(overwrite)))
-        return reflect(single_period(), periods)
+        return PyomoPeriodModel(reflect(single_period(), periods))
 
     def default_recipe(self) -> Recipe:
         return STATIC

@@ -6,12 +6,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.core.test_reflection import single_period
+from tests.backends.test_pyomo_periods import single_period
 
+from equilibria.backends.pyomo_periods import PyomoPeriodModel, reflect
 from equilibria.core import driver
 from equilibria.core.driver import fly
 from equilibria.core.recipe import KindPlan, Period, Recipe, StepContext
-from equilibria.core.reflection import reflect
 
 PERIODS = (
     Period("base", "calibrate"),
@@ -36,7 +36,7 @@ def logging_plan(log: list[str], code: str | None) -> KindPlan:
 
 
 def model() -> Any:
-    return reflect(single_period(), [p.name for p in PERIODS])
+    return PyomoPeriodModel(reflect(single_period(), [p.name for p in PERIODS]))
 
 
 def test_runs_before_solve_after_in_order_for_each_period() -> None:
@@ -84,7 +84,7 @@ def test_a_failed_period_is_reported_and_the_next_still_runs() -> None:
 
 def test_residual_is_measured_on_the_period_rows() -> None:
     m = model()
-    m.x["a", "shock"].set_value(7.0)
+    m.set_value("x", ("a",), "shock", 7.0)
     plan = KindPlan()
     results = fly(
         m, Recipe(PERIODS, dict.fromkeys(("calibrate", "replicate", "shock"), plan))

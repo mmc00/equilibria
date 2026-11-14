@@ -94,3 +94,19 @@ def test_las_etiquetas_de_agente_viven_en_la_capa_baja():
         assert getattr(agents, nombre) == getattr(gtap_parameters, nombre)
 
     assert agents.GTAP_FINAL_DEMAND_AGENTS == ("hhd", "gov", "inv", "tmg")
+
+
+# The run machinery (ADR-0011) talks to the model only through PeriodModel, so a
+# backend other than Pyomo (JAX, family) can fly the same recipes.
+RUN_MODULES = ("period_model.py", "recipe.py", "steps.py", "driver.py", "exercise.py")
+
+
+@pytest.mark.parametrize("modulo", RUN_MODULES)
+def test_la_maquinaria_de_corridas_no_conoce_pyomo(modulo):
+    f = SRC / "core" / modulo
+    assert f.exists(), f
+    prohibidos = ("pyomo", "equilibria.backends", "equilibria.solver")
+    malos = sorted(
+        m for m in _imports_de(f) if m == "pyomo" or m.startswith(prohibidos)
+    )
+    assert malos == [], f"core/{modulo}: {', '.join(malos)}"

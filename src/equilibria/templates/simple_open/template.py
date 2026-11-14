@@ -28,6 +28,7 @@ from equilibria.blocks.production import (
 )
 from equilibria.blocks.trade import ArmingtonComposite
 from equilibria.core import Set
+from equilibria.core.period_model import PeriodModel
 from equilibria.core.recipe import Recipe
 from equilibria.model import Model
 from equilibria.templates.base import ModelTemplate
@@ -162,7 +163,7 @@ class SimpleOpenEconomy(ModelTemplate):
 
 
 def equivalent_variation(
-    calibration: Calibration, model: pyo.ConcreteModel, period: str = "shock"
+    calibration: Calibration, model: PeriodModel, period: str = "shock"
 ) -> float:
     """Hicksian equivalent variation at base prices (stdcge lines 351-360).
 
@@ -171,5 +172,4 @@ def equivalent_variation(
     """
     alpha = np.asarray(calibration.values["alpha_H"], dtype=float)
     scale = float(np.prod(alpha**alpha))
-    uu = cast("Any", model).UU
-    return (pyo.value(uu[period]) - calibration.base["UU"]) / scale
+    return (model.value("UU", (), period) - calibration.base["UU"]) / scale

@@ -29,6 +29,7 @@ tests/backends/test_pyomo_backend_domain.py
 tests/backends/test_pyomo_backend_ndim.py
 tests/backends/test_pyomo_backend_solver_status.py
 tests/backends/test_pyomo_backend_strict.py
+tests/backends/test_pyomo_periods.py
 tests/blocks/gtap/test_block_uses.py
 tests/blocks/gtap/test_cache_fingerprint.py
 tests/blocks/gtap/test_calibrate_no_double_solve.py
@@ -74,7 +75,6 @@ tests/core/test_exercise.py
 tests/core/test_layering.py
 tests/core/test_model.py
 tests/core/test_recipe.py
-tests/core/test_reflection.py
 tests/core/test_steps.py
 tests/data/test_data_tree.py
 tests/data/test_datasets_present.py
