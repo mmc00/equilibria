@@ -70,6 +70,7 @@ def fly(
             step(ctx)
         code = _solve(model, plan, period.name)
         residual = _residual(model, period.name)
+        ctx.status = code
         for step in plan.after:
             step(ctx)
         results[period.name] = {"code": code, "residual": residual}

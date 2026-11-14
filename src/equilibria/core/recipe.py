@@ -29,7 +29,8 @@ class Period:
 @dataclass
 class StepContext:
     """What a step sees: the model, the template (and its data), the recipe, the
-    current period and the prior one, and the exercise's shock."""
+    current period and the prior one, and the exercise's shock. ``status`` is
+    ``None`` in the steps before the solve and the period's status after it."""
 
     model: PeriodModel
     template: Any
@@ -37,6 +38,7 @@ class StepContext:
     period: Period
     prior: Period | None
     shock: Mapping[str, Any] = field(default_factory=dict)
+    status: str | None = None
 
 
 # A step mutates the model in place and returns nothing; to report, it logs.
