@@ -27,7 +27,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from pyomo.environ import Constraint, Expression, Objective, Param, Var
 
@@ -154,9 +154,14 @@ def _load_params():
     return p
 
 
-def take(case: str, monkeypatch) -> list[dict]:
-    """Corre el driver del caso con un solver falso; devuelve las fotos en orden:
-    una por llamada al solver (con el nombre del cierre) y una final."""
+def take(case: str, monkeypatch, route: str = "driver") -> list[dict]:
+    """Corre el caso con un solver falso; devuelve las fotos en orden: una por
+    llamada al solver (con el nombre del cierre) y una final.
+
+    ``route="driver"``: ``build_block_model`` + ``solve_multiperiod``.
+    ``route="exercise"``: ``Exercise(GTAP(...), gtap_static(...))`` on the core
+    driver, with the case's driver options mapped to the recipe's arguments."""
+    from equilibria.solver import path_gtap
     from equilibria.templates.gtap import gtap_multiperiod_driver as drv
     from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
@@ -176,6 +181,7 @@ def take(case: str, monkeypatch) -> list[dict]:
             return {"termination_code": 1, "residual": 0.0}
 
     monkeypatch.setattr(drv, "_load_run_gtap", lambda: _FakeSolver)
+    monkeypatch.setattr(path_gtap, "_load_path_capi", lambda: _FakeSolver)
     monkeypatch.setenv("EQUILIBRIA_SEED_CACHE_DISABLE", "1")
     monkeypatch.delenv("EQUILIBRIA_GTAP_MODEL_CACHE", raising=False)
     monkeypatch.delenv("EQUILIBRIA_GTAP_SHOCK_CONTINUATION", raising=False)
@@ -191,9 +197,35 @@ def take(case: str, monkeypatch) -> list[dict]:
         if_sub=if_sub,
         numeraire="pnum",
     )
-    m, _ = build_block_model(p, p.sets, closure, list(p.sets.r)[-1], **build_kw)
     drive_kw = dict(drive_kw)
     shock = drive_kw.pop("shock", None)
+    if route == "exercise":
+        from equilibria.core.exercise import Exercise
+        from equilibria.templates.gtap.recipe import gtap_static
+        from equilibria.templates.gtap.template import GTAP
+
+        bc = bool(build_kw.get("base_calibrated", False))
+        kw = {k: v for k, v in drive_kw.items() if k != "skip_base_solve"}
+        ex = Exercise(
+            template=GTAP(p, closure, base_calibrated=bc),
+            recipe=gtap_static(
+                mode,
+                base_calibrated=bc,
+                solve_base=not drive_kw.get("skip_base_solve", False),
+                **kw,
+            ),
+            shock=shock,
+        )
+        ex.run()
+        assert ex.model is not None
+        shots.append(
+            {
+                "call": "final",
+                "components": _component_hashes(cast("Any", ex.model).pyomo),
+            }
+        )
+        return shots
+    m, _ = build_block_model(p, p.sets, closure, list(p.sets.r)[-1], **build_kw)
     if shock is not None:
         apply_shock(m, shock)
     drv.solve_multiperiod(m, p, closure, mode=mode, **drive_kw)
