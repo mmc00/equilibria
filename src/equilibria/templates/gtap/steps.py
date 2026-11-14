@@ -303,7 +303,7 @@ def replicate_reference(*, fresh: bool) -> Step:
     def step(ctx: StepContext) -> None:
         m, period = _gm(ctx), ctx.period.name
         staged = _staged(m)
-        ref = m.reference(staged.closure, staged.params, period, fresh=fresh)
+        ref = m.sp_reference(staged.closure, staged.params, period, fresh=fresh)
         for name, cells in ref.fixed.items():
             if not m.has_var(name):
                 continue

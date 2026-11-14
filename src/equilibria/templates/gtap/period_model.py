@@ -84,7 +84,7 @@ class GTAPPeriodModel(PeriodModel, Protocol):
         solver's residual)."""
         ...
 
-    def reference(
+    def sp_reference(
         self, closure: Any, params: Any, period: str, *, fresh: bool
     ) -> Reference:
         """The single-period reference with ``closure``. ``fresh=False`` reuses

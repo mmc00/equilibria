@@ -87,7 +87,7 @@ def test_reference_matches_sp_snapshot(built) -> None:
 
     gm, m, p = built
     base, _ = period_closures(_closure())
-    ref = gm.reference(base, p, "base", fresh=True)
+    ref = gm.sp_reference(base, p, "base", fresh=True)
     snap = drv._sp_snapshot(
         drv._build_sp_reference(p.sets, p, base, m._residual_region, model=m)
     )

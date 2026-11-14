@@ -99,7 +99,7 @@ class GTAPPyomoPeriodModel(PyomoPeriodModel):
         r = self.last_solve.get("residual")
         return math.inf if r is None else float(r)
 
-    def reference(
+    def sp_reference(
         self, closure: Any, params: Any, period: str, *, fresh: bool
     ) -> Reference:
         prep = self._reference_cache()
