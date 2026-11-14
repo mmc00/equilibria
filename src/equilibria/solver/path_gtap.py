@@ -58,7 +58,7 @@ def path(
     """A recipe solver for ``GTAPPyomoPeriodModel``.
 
     Returns ``"optimal"`` when PATH converged (code 1), else ``"code <n>"``. The
-    whole result dict stays on ``model.last_solve``. The GC is tuned for the
+    whole result dict goes to ``model.record_solve``. The GC is tuned for the
     call (``solver/gc_tuning.py``); no environment variable outlives it.
     """
 
@@ -85,7 +85,7 @@ def path(
                 solution_hint=None,
                 path_options=_options(options, staged.gtap_mode),
             )
-        model.last_solve = r
+        model.record_solve(r)
         code = int(r.get("termination_code") or 0)
         return "optimal" if code == 1 else f"code {code}"
 

@@ -7,6 +7,7 @@ until the old one is deleted.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from typing import Any
 
@@ -42,6 +43,7 @@ class GTAPPyomoPeriodModel(PyomoPeriodModel):
         self._staged: Staged | None = None
         self._preparer: Any = None
         self.last_solve: dict[str, Any] | None = None
+        self._solved_period: str | None = None
 
     # ── exogeneity ─────────────────────────────────────────────────────────
 
@@ -80,12 +82,22 @@ class GTAPPyomoPeriodModel(PyomoPeriodModel):
     def staged(self) -> Staged | None:
         return self._staged
 
-    def stage(self, closure: Any, params: Any, *, gtap_mode: bool) -> None:
+    def stage(self, closure: Any, params: Any, *, gtap_mode: bool, period: str) -> None:
         m = self.pyomo
         if getattr(m, "_residual_region", None) is None:
             m._residual_region = list(params.sets.r)[-1]
         m._gtap_mode = bool(gtap_mode)
-        self._staged = Staged(closure, params, bool(gtap_mode))
+        self._staged = Staged(closure, params, bool(gtap_mode), period)
+
+    def record_solve(self, result: Mapping[str, Any]) -> None:
+        self.last_solve = dict(result)
+        self._solved_period = self._staged.period if self._staged else None
+
+    def residual(self, period: str) -> float:
+        if self.last_solve is None or self._solved_period != period:
+            return math.nan
+        r = self.last_solve.get("residual")
+        return math.inf if r is None else float(r)
 
     def reference(
         self, closure: Any, params: Any, period: str, *, fresh: bool

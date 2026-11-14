@@ -108,7 +108,7 @@ def test_stage_sets_driver_attributes(built) -> None:
 
     gm, m, p = built
     base, _ = period_closures(_closure())
-    gm.stage(base, p, gtap_mode=True)
+    gm.stage(base, p, gtap_mode=True, period="base")
     assert m._gtap_mode is True
     assert m._residual_region == list(p.sets.r)[-1]
     assert gm.staged.closure is base and gm.staged.params is p
@@ -137,3 +137,19 @@ def test_path_options_none_reads_env() -> None:
     assert "major_iteration_limit 7" in got
     assert "cumulative_iteration_limit 1000000" in got
     assert "convergence_tolerance 1e-08" in got
+
+
+def test_residual_is_the_solvers_for_the_solved_period(built) -> None:
+    """GTAP reports the residual the solver measured, as the old driver did;
+    a period the last solve was not for is not measured (NaN)."""
+    import math
+
+    from equilibria.templates.gtap.period_rules import period_closures
+
+    gm, _, p = built
+    base, _ = period_closures(_closure())
+    gm.stage(base, p, gtap_mode=True, period="check")
+    gm.record_solve({"termination_code": 1, "residual": 3e-11})
+    assert gm.residual("check") == 3e-11
+    assert math.isnan(gm.residual("shock"))
+    assert math.isnan(gm.residual("base"))

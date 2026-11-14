@@ -31,11 +31,13 @@ class Reference:
 
 @dataclass(frozen=True)
 class Staged:
-    """The closure and parameters the next solve uses (``GTAPPeriodModel.stage``)."""
+    """The closure and parameters the next solve of ``period`` uses
+    (``GTAPPeriodModel.stage``)."""
 
     closure: Any
     params: Any
     gtap_mode: bool
+    period: str
 
 
 class GTAPPeriodModel(PeriodModel, Protocol):
@@ -66,8 +68,20 @@ class GTAPPeriodModel(PeriodModel, Protocol):
     @property
     def staged(self) -> Staged | None: ...
 
-    def stage(self, closure: Any, params: Any, *, gtap_mode: bool) -> None:
-        """Record the closure and parameters the next solve uses."""
+    def stage(self, closure: Any, params: Any, *, gtap_mode: bool, period: str) -> None:
+        """Record the closure and parameters the next solve (of ``period``) uses."""
+        ...
+
+    def record_solve(self, result: Mapping[str, Any]) -> None:
+        """The solver's result for the staged period; ``residual`` reports its
+        ``"residual"``."""
+        ...
+
+    def residual(self, period: str) -> float:
+        """The residual the last solve measured, when it solved ``period``;
+        NaN when the period was not solved (GTAP does not re-evaluate its rows:
+        on 20x41 that costs ~10 s a period, and the old driver reported the
+        solver's residual)."""
         ...
 
     def reference(

@@ -25,8 +25,10 @@ class _Fake:
 
 def _model(gtap_mode: bool = True, staged: bool = True) -> Any:
     closure = SimpleNamespace(name="base")
-    st = Staged(closure, "params", gtap_mode) if staged else None
-    return SimpleNamespace(pyomo="pyomo-model", staged=st, last_solve=None)
+    st = Staged(closure, "params", gtap_mode, "check") if staged else None
+    m = SimpleNamespace(pyomo="pyomo-model", staged=st, last_solve=None)
+    m.record_solve = lambda r: setattr(m, "last_solve", r)
+    return m
 
 
 @pytest.fixture

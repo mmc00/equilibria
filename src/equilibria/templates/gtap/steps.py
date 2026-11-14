@@ -91,7 +91,12 @@ def stage_closure(which: str, mode: str) -> Step:
             from equilibria.templates.gtap.altertax import apply_altertax_elasticities
 
             params = apply_altertax_elasticities(ctx.template.params, in_place=False)
-        m.stage(base if which == "base" else alt, params, gtap_mode=gtap_mode)
+        m.stage(
+            base if which == "base" else alt,
+            params,
+            gtap_mode=gtap_mode,
+            period=ctx.period.name,
+        )
 
     return step
 
