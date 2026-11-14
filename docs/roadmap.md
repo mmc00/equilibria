@@ -4,7 +4,7 @@ The real, measured state of the project — not an aspiration. Every figure here
 run recorded in `docs/archive/findings/`, from a gate of `scripts/gtap/run_parity_gates.py` or from
 `scripts/paper/run_tables.py`.
 
-Last updated: 2026-10-27.
+Last updated: 2026-11-09.
 
 Each topic carries an ID (`R-…`) that the author's internal roadmap uses too, so the two
 documents do not drift apart.
@@ -15,17 +15,21 @@ documents do not drift apart.
 
 | Priority | ID | What | Status |
 |---|---|---|---|
-| P1 | `R-PYPI` | Publish on PyPI | Pending: the package **is not on PyPI yet**; today it installs from the repository |
-| P1 | `R-BOUND-WARN` | Warn when a solve ends with `code=1` and a price resting on its 1e-3 floor | Pending (see Technical debt) |
-| P1 | `R-DIAG` | Solve diagnostics: a report that says why it did not solve (MCP count/pairing, domain error, price at a bound, stalling, seed, closure) and an `equilibria doctor` for missing solvers | Pending. Today there are parity tools against GAMS (`scripts/parity/triage.py`), not a diagnostic for the user |
-| P1 | `R-NL-GATE` | Make the `.nl` gate actually compare (#23) | Pending (see Known blockers) |
+| P1 | `R-PYPI` | Publish on PyPI | In progress: **published** (`pip install equilibria`, 0.6.3); pushing a `v*` tag publishes through Trusted Publishing. Left for a stable 1.0: the public module names and one SAM class (`R-ARCH`) |
+| P1 | `R-BOUND-WARN` | Warn when a solve ends with `code=1` and a price resting on its 1e-3 floor | Done (#217): the end-of-solve summary lists every variable resting on its positive lower bound and warns |
+| P1 | `R-DIAG` | Solve diagnostics: a report that says why it did not solve (MCP count/pairing, domain error, price at a bound, stalling, seed, closure) and an `equilibria doctor` for missing solvers | In progress: `equilibria doctor` checks the solvers and libraries a solve needs (#218), and the end-of-solve summary reports Walras, residuals and the worst equations (#217). The report of why a solve failed is pending |
+| P1 | `R-NL-GATE` | Make the `.nl` gate actually compare (#23) | In progress: the name dictionary (ADR-0009, #176) and the GAMS references regenerated in `data/` (#189, #194) are in; the gate still has to use the dictionary and measure its coverage (see Known blockers) |
+| P1 | `R-PROGRESS` | Show what the driver and the solve are doing: progress, time left, checks and, at the end, a GEMPACK-style fidelity report | In progress: the end-of-solve summary is in (#217); progress while solving is pending |
+| P1 | `R-PRM-CASE` | Tests that ask for a `.prm` in capitals are skipped silently on Linux (the files in `data/gtap7/nus333` are lower case) | Pending |
 | P2 | `R-MONOLITH` | Retire the monolith `gtap_model_equations.py` | Pending (see Known blockers) |
 | P2 | `R-DRIVER` | A driver that only orchestrates periods, with one recipe per model, usable by PEP too | Pending |
 | P2 | `R-DYN` | Periods as a list → recursive dynamic GTAP | Pending (Next 1) |
 | P2 | `R-CALIB` | Each block calibrates its own part from a common data interface, as in MPSGE: the block declares which SAM rows and columns its indices map to | Pending (Next 2) |
 | P2 | `R-PMUV` | Port `eq_pmuv` to blocks | Pending (see Known blockers) |
 | P2 | `R-BOOK` | Compare against the printed figures of Burfisher's book | Pending (see Validation) |
-| P3 | `R-PERF` | Alternative evaluation backend (`PERF-EVAL-1`) | Design, no code |
+| P2 | `R-PERF` | Alternative evaluation backend (`PERF-EVAL-1`) | In progress: measure the existing JAX evaluator on the 20x41 first |
+| P2 | `R-ME9A` | ME9A is up to 0.77% from GEMPACK; the whole ME9 family is further from GEMPACK than the other book exercises | Pending: compare equation by equation in ME9B |
+| P2 | `R-QGD` | Government demand (`qgd`, `qgm`), the largest difference with GEMPACK (1.4% in ME4A) | Pending |
 | P3 | `R-HAR-VIEW` | A HAR/`.sl4` viewer for any operating system | Pending |
 | P4 | `R-ENV` | An environmental block as a modularity test | Pending (Next 3) |
 
@@ -177,7 +181,7 @@ The `nus333` debt for gtap7 (`gdpmp[USA]` −97.93 % against +4.58 %) is resolve
 |---|---|---|
 | `R-NL-GATE`: the `.nl` gate passes vacuously ([#23](https://github.com/mmc00/equilibria/issues/23)) | Pairing is by name and the GAMS fixtures do not carry their `.row`/`.col` sidecars, so their rows parse anonymous. **Measured 2026-09-24: the 5 datasets of the gate compare 0 constraints**, not only `gtap7_3x3` as the issue said. No `.row`/`.col` ever existed in the repo | Regenerate the fixtures with sidecars: the `.gms` must be in NLP form (CONVERT does not write `.nl` from an MCP) and the option is `AmplNL <file>`. Tried locally with GAMS v53, without NEOS |
 | `R-MONOLITH`: `gtap_model_equations.py` cannot be retired | Since #174 `solve_multiperiod` rejects a model without a `ShockBlock`, so seven scripts of `scripts/gtap/` that solved it were left unused until migrated: `measure_gate_tols`, `measure_gtap_pure_tols`, `measure_nlp_vs_nlp`, `measure_nlp_vs_nlp_altertax`, `diag_mp_3x3`, `bench_nlp_timing`, `gen_linearization_study`. Beyond that it can only not be retired because of its role as the **GAMS oracle in the `nl` gate** — measured 2026-09-24: the other four (`mcp`, `nlp`, `gempack`, `coverage_matrix`) do not read it, and `docs/notes/architecture/monolith_vs_blocks.md:95` already said so. It is NO longer a runtime dependency of the blocks path: scaling was extracted to `gtap_benchmark_scaling.py` and the multiperiod reflection asks for its SP per method, so `gtap_block_model.py` does not import it (2026-09-16). Since 2026-09-24 it also has to be **asked for**: a model without `_sp_source` goes to blocks, and an unrecognized value raises | Migrate the `nl` gate to measure blocks, checking that the numbers do not move |
-| `R-BOUND-WARN`: `code=1` with a price at its floor | A solve can end with `code=1` and a price resting on its lower bound of 1e-3 (e.g. `pft[USA,LAND]` in ME4A; also seen in 15x10 ifSUB=1). It is a complementarity point at the bound, not an economic equilibrium, and today it is reported as converged | Have the driver or the solver warn (or return another code) when prices sit at their bound at the end |
+| `R-BOUND-WARN`: `code=1` with a price at its floor | A solve can end with `code=1` and a price resting on its lower bound of 1e-3 (e.g. `pft[USA,LAND]` in ME4A; also seen in 15x10 ifSUB=1). It is a complementarity point at the bound, not an economic equilibrium, and today it is reported as converged | Done in #217: `equilibria.report.summary` lists the variables on their floor and warns |
 | `R-PMUV`: `eq_pmuv` not ported to blocks | Declared in `blocks/gtap/__init__.py:47-53`, not implemented in the composer. It only bites with non-empty `rmuv`/`imuv`, which no gate dataset uses | Flip `pmuv` from Param to Var when the closure asks for it |
 
 ### Tests that were broken on main
