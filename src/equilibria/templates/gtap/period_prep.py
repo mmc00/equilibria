@@ -31,39 +31,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from equilibria.templates.gtap.instruments import exogenous_test
+from equilibria.templates.gtap.period_rules import F35_DERIVED_DEMAND
+from equilibria.templates.gtap.period_rules import RECALIBRATE_FROM as _RECALIBRATE_FROM
+from equilibria.templates.gtap.period_rules import SHOCK_PNUM as _SHOCK_PNUM
 
 _log = logging.getLogger(__name__)
-
-# F3.5: vars de demanda DERIVADA que no se siembran desde el settled seed. Se
-# calculan de precios+ingresos; sembrarlas en el valor del check crea una pequena
-# inconsistencia. Dejarlas re-derivar sube el match contra GEMPACK en xg/xc de 78%
-# a 100% (global 94%->96%). El nucleo (precios, cantidades de factores, produccion
-# y comercio) si se siembra.
-F35_DERIVED_DEMAND = frozenset(
-    {
-        "xg",
-        "xc",
-        "xg_agg",
-        "xi",
-        "xiagg",
-        "yg",
-        "yc",
-        "zcons",
-        "ug",
-        "uh",
-        "us",
-        "u",
-        "ev",
-        "cv",
-    }
-)
-
-# Periodo del que se recalibran las participaciones (altertax).  El shock
-# recalibra siempre desde el check, aun cuando se siembre desde el base (F3.5).
-_RECALIBRATE_FROM = {"check": "base", "shock": "check"}
-
-# Ancla del numerario en el shock (GAMS fija pnum en el periodo del shock).
-_SHOCK_PNUM = 1.5
 
 
 def _drv():
