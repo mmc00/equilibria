@@ -31,6 +31,7 @@ from equilibria.blocks.institutions import (
     Household,
     RestOfWorld,
     TaxGovernment,
+    TaxRates,
 )
 from equilibria.blocks.production import (
     CESValueAdded,
@@ -62,6 +63,7 @@ __all__ = [
     "LeontiefComposite",
     "Numeraire",
     "TaxGovernment",
+    "TaxRates",
     "Block",
     "ParameterSpec",
     "VariableSpec",

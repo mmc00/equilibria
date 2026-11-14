@@ -29,9 +29,9 @@ class TestSimpleOpenEconomy:
         assert tuple(model.set_manager.get("J")) == ("BRD", "MLK")
         assert tuple(model.set_manager.get("F")) == ("CAP", "LAB")
 
-    def test_model_has_the_eleven_blocks(self):
+    def test_model_has_the_twelve_blocks(self):
         model = SimpleOpenEconomy().create_model()
-        assert len(model.blocks) == 11
+        assert len(model.blocks) == 12
 
     def test_value_added_spans_every_factor(self):
         """Issue #15: value added is built on the real factors."""
@@ -46,7 +46,7 @@ class TestSimpleOpenEconomy:
         assert info["goods"] == ["BRD", "MLK"]
         assert info["factors"] == ["CAP", "LAB"]
         assert info["sigma"] == 2.0 and info["psi"] == 2.0
-        assert len(info["blocks"]) == 11
+        assert len(info["blocks"]) == 12
 
     def test_template_repr(self):
         assert repr(SimpleOpenEconomy()) == "SimpleOpenEconomy(2 goods, 2 factors)"

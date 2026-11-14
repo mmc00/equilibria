@@ -8,17 +8,19 @@ same equilibrium.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pyomo.environ as pyo
 from pydantic import Field
 
 from equilibria.backends.pyomo_backend import PyomoBackend
+from equilibria.blocks.base import Block
 from equilibria.blocks.demand import CobbDouglasHousehold
 from equilibria.blocks.equilibrium import FactorMarket, GoodsMarket, Numeraire
-from equilibria.blocks.institutions import ExternalSector, TaxGovernment
+from equilibria.blocks.institutions import ExternalSector, TaxGovernment, TaxRates
 from equilibria.blocks.production import (
     CETOutput,
     CobbDouglasValueAdded,
@@ -26,17 +28,35 @@ from equilibria.blocks.production import (
 )
 from equilibria.blocks.trade import ArmingtonComposite
 from equilibria.core import Set
+from equilibria.core.period_model import PeriodModel
+from equilibria.core.recipe import Recipe
 from equilibria.model import Model
 from equilibria.templates.base import ModelTemplate
 from equilibria.templates.simple_open.blocks import StdcgeInvestment
 from equilibria.templates.simple_open.calibration import Calibration, calibrate
+from equilibria.templates.simple_open.recipe import stdcge_static
 from equilibria.templates.simple_open.sam import load_sam
+
+# the tax rates are instruments: fixed variables a shock changes (ADR-0003)
+INSTRUMENTS: tuple[str, ...] = ("tau_d", "tau_z", "tau_m")
 
 
 def _default_sam() -> Path:
     from equilibria.sources import dataset_dir
 
     return dataset_dir("hosoe_2x2") / "sam.csv"
+
+
+def _overwritten(blocks: Sequence[Block], overwrite: Sequence[Block]) -> list[Block]:
+    """``blocks`` with each overwrite block in place of the one with its name."""
+    by_name = {b.name: b for b in overwrite}
+    stray = sorted(set(by_name) - {b.name for b in blocks})
+    if stray:
+        raise ValueError(
+            f"@overwrite block(s) {', '.join(stray)} match no block of the template "
+            f"({', '.join(b.name for b in blocks)})"
+        )
+    return [by_name.get(b.name, b) for b in blocks]
 
 
 class SimpleOpenEconomy(ModelTemplate):
@@ -95,7 +115,9 @@ class SimpleOpenEconomy(ModelTemplate):
             f"{len(sam.goods)} goods, {len(sam.factors)} factors)"
         )
 
-    def create_model(self, calibration: Calibration | None = None) -> Model:
+    def create_model(
+        self, calibration: Calibration | None = None, overwrite: Sequence[Block] = ()
+    ) -> Model:
         cal = calibration or self.calibration()
         model = Model(name=self.name, description=self.description)
         model.add_sets(
@@ -107,7 +129,8 @@ class SimpleOpenEconomy(ModelTemplate):
         )
         kw: dict[str, Any] = {"values": cal.values, "start": cal.base}
         numeraire = self.numeraire_factor()
-        for block in (
+        blocks = (
+            TaxRates(**kw),
             CobbDouglasValueAdded(**kw),
             LeontiefComposite(**kw),
             CETOutput(**kw),
@@ -119,50 +142,34 @@ class SimpleOpenEconomy(ModelTemplate):
             GoodsMarket(**kw),
             FactorMarket(numeraire=numeraire, **kw),
             Numeraire(numeraire=numeraire, **kw),
-        ):
+        )
+        for block in _overwritten(blocks, overwrite):
             model.add_block(block)
         return model
 
-    def build(self, calibration: Calibration | None = None) -> pyo.ConcreteModel:
-        """The Pyomo model at the calibrated base, with a zero objective."""
+    def period_model(self, overwrite: Sequence[Block] = ()) -> pyo.ConcreteModel:
+        """The single-period Pyomo model at the calibrated base, its tax rates
+        fixed (they are the instruments a shock changes)."""
         backend = PyomoBackend()
-        backend.build(self.create_model(calibration))
+        backend.build(self.create_model(overwrite=overwrite))
         pm = backend.pyomo_model
         assert pm is not None  # PyomoBackend.build populates pyomo_model
-        pm.add_component("_obj", pyo.Objective(expr=0.0))
+        for rate in INSTRUMENTS:
+            cast("Any", pm.find_component(rate)).fix()
         return pm
 
-    def solve(self, pm: pyo.ConcreteModel) -> str:
-        """Solve the square system with IPOPT; raise unless it converged."""
-        opt = pyo.SolverFactory("ipopt")
-        opt.options["tol"] = 1e-10
-        opt.options["constr_viol_tol"] = 1e-10
-        res = opt.solve(pm, load_solutions=True)
-        status = str(res.solver.termination_condition)
-        if status not in ("optimal", "locallyOptimal"):
-            raise RuntimeError(f"{self.name}: IPOPT ended {status}")
-        return "optimal"
-
-    def run(self) -> dict[str, pyo.ConcreteModel]:
-        """Base (built, not solved), check (solved, no shock) and shock (every
-        import tariff set to zero, solved), each on a fresh build."""
-        cal = self.calibration()
-        out = {"base": self.build(cal)}
-        out["check"] = self.build(cal)
-        self.solve(out["check"])
-        out["shock"] = shock = self.build(cal)
-        tau_m: Any = shock.find_component("tau_m")
-        for i in tau_m:
-            tau_m[i] = 0.0
-        self.solve(shock)
-        return out
+    def default_recipe(self) -> Recipe:
+        return stdcge_static()
 
 
-def equivalent_variation(calibration: Calibration, shock: pyo.ConcreteModel) -> float:
+def equivalent_variation(
+    calibration: Calibration, model: PeriodModel, period: str = "shock"
+) -> float:
     """Hicksian equivalent variation at base prices (stdcge lines 351-360).
 
-    ``ep = UU / prod_i alpha_H**alpha_H``; ``EV = ep(shock) - ep(base)``.
+    ``ep = UU / prod_i alpha_H**alpha_H``; ``EV = ep(period) - ep(base)``, read
+    from a model run through an ``Exercise``.
     """
     alpha = np.asarray(calibration.values["alpha_H"], dtype=float)
     scale = float(np.prod(alpha**alpha))
-    return (pyo.value(shock.UU) - calibration.base["UU"]) / scale
+    return (model.value("UU", (), period) - calibration.base["UU"]) / scale

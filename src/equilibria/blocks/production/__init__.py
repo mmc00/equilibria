@@ -826,13 +826,12 @@ class CETOutput(LevelBlock):
 
     def model_post_init(self, __context: Any) -> None:
         self.required_sets = ["I", "J"]
-        self.uses = ["Z", "PZ", "PE"]
+        self.uses = ["Z", "PZ", "PE", "tau_z"]
 
     def setup(self, set_manager, parameters, variables) -> list[SymbolicEquation]:
         ni = len(set_manager.get("I"))
         for name in ("theta_T", "xi_E", "xi_D", "psi_T"):
             self.param(parameters, name, ("I",))
-        self.param(parameters, "tau_z", ("J",))
         self.var(variables, "E", ("I",), (ni,))
         self.var(variables, "D", ("I",), (ni,))
         self.var(variables, "PD", ("I",), (ni,))

@@ -7,11 +7,17 @@ for common CGE model types.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from equilibria.model import Model
+
+if TYPE_CHECKING:
+    from equilibria.blocks.base import Block
+    from equilibria.core.period_model import PeriodModel
+    from equilibria.core.recipe import Recipe
 
 
 class ModelTemplate(BaseModel, ABC):
@@ -39,6 +45,10 @@ class ModelTemplate(BaseModel, ABC):
 
     model_config = {"arbitrary_types_allowed": True}
 
+    # reflected models, keyed by the period list and the template's fields: a
+    # template changed in place (e.g. an elasticity sweep) gets a new model
+    _built: dict[tuple[tuple[str, ...], str], Any] = PrivateAttr(default_factory=dict)
+
     @abstractmethod
     def create_model(self) -> Model:
         """Create a model from this template.
@@ -47,6 +57,37 @@ class ModelTemplate(BaseModel, ABC):
             Configured Model instance
         """
         ...
+
+    def period_model(self, overwrite: Sequence[Block] = ()) -> Any:
+        """The single-period Pyomo model, each ``overwrite`` block replacing the
+        template's block of the same name (ADR-0004). Templates that run under
+        a recipe implement it."""
+        raise NotImplementedError(f"{type(self).__name__} has no period model")
+
+    def default_recipe(self) -> Recipe:
+        """The recipe an ``Exercise`` uses when it is given none."""
+        raise NotImplementedError(f"{type(self).__name__} has no default recipe")
+
+    def build(
+        self, periods: Sequence[str], overwrite: Sequence[Block] = ()
+    ) -> PeriodModel:
+        """A fresh model with ``periods`` (a ``PyomoPeriodModel``, Pyomo being
+        the backend of ``period_model``), never shared with another call.
+
+        Without ``overwrite`` the reflected model is built once per period list
+        and per value of the template's fields, and every call returns a copy
+        of it; with ``overwrite`` it is built fresh and kept nowhere. The key
+        is the fields, not the files they point to: a data file edited on disk
+        needs a new template.
+        """
+        from equilibria.backends.pyomo_periods import PyomoPeriodModel, reflect
+
+        if overwrite:
+            return PyomoPeriodModel(reflect(self.period_model(overwrite), periods))
+        key = (tuple(periods), self.model_dump_json())
+        if key not in self._built:
+            self._built[key] = PyomoPeriodModel(reflect(self.period_model(), periods))
+        return self._built[key].clone()
 
     def get_default_sector_names(self) -> list[str]:
         """Get default sector names.

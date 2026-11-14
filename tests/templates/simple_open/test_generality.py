@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, cast
 
-import pyomo.environ as pyo
 import pytest
+from tests.templates.simple_open._helpers import period_levels, run_tariff_abolition
 
 from equilibria.sources import dataset_dir
 from equilibria.templates.simple_open import SimpleOpenEconomy
@@ -29,26 +28,16 @@ def three_goods() -> SimpleOpenEconomy:
     return SimpleOpenEconomy(sam_path=dataset_dir("invented_3x2") / "sam.csv")
 
 
-def _levels(pm: Any) -> dict[tuple[str, Any], float]:
-    return {
-        (v.name, k): pyo.value(v[k])
-        for v in pm.component_objects(pyo.Var, active=True)
-        for k in v
-    }
-
-
 def test_three_goods_build_and_return_base(three_goods: SimpleOpenEconomy) -> None:
     cal = three_goods.calibration()
     assert len(cal.goods) == 3
-    run = three_goods.run()
-    base, check = _levels(run["base"]), _levels(run["check"])
+    m = run_tariff_abolition(three_goods).model
+    base, check = period_levels(m, "base"), period_levels(m, "check")
     for key, b in base.items():
         assert check[key] == pytest.approx(b, rel=1e-8, abs=1e-8), key
-    shock = cast("Any", run["shock"])
-    assert abs(pyo.value(shock.WALRAS)) <= 1e-8
-    assert any(
-        abs(pyo.value(shock.M[i]) / base[("M", i)] - 1) > 0.01 for i in cal.goods
-    )
+    shock = period_levels(m, "shock")
+    assert abs(shock[("WALRAS", ())]) <= 1e-8
+    assert any(abs(shock[("M", i)] / base[("M", i)] - 1) > 0.01 for i in cal.goods)
 
 
 def _new_level_blocks(text: str) -> str:
@@ -106,11 +95,11 @@ def test_zero_cells_outside_trade_solve(tmp_path: Path) -> None:
     cal = template.calibration()
     assert cal.base["XI"][cal.goods.index("MLK"), cal.goods.index("BRD")] == 0
     assert cal.base["XG"][cal.goods.index("MLK")] == 0
-    run = template.run()
-    base, check = _levels(run["base"]), _levels(run["check"])
+    m = run_tariff_abolition(template).model
+    base, check = period_levels(m, "base"), period_levels(m, "check")
     for key, b in base.items():
         assert check[key] == pytest.approx(b, rel=1e-8, abs=1e-8), key
-    assert abs(pyo.value(cast("Any", run["shock"]).WALRAS)) <= 1e-8
+    assert abs(period_levels(m, "shock")[("WALRAS", ())]) <= 1e-8
 
 
 def test_numeraire_comes_from_the_data() -> None:
@@ -125,6 +114,6 @@ def test_missing_closure_file_is_rejected(tmp_path: Path) -> None:
     sam = tmp_path / "sam.csv"
     sam.write_text((dataset_dir("hosoe_2x2") / "sam.csv").read_text())
     with pytest.raises(ValueError, match="closure.yaml"):
-        SimpleOpenEconomy(sam_path=sam).build()
+        SimpleOpenEconomy(sam_path=sam).period_model()
     # an explicit numeraire needs no file
     assert SimpleOpenEconomy(sam_path=sam, numeraire="CAP").numeraire_factor() == "CAP"

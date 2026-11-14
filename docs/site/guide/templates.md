@@ -45,7 +45,19 @@ a government and investment. It is built from the generic level-form blocks
 reads its goods and factors from the SAM, so any SAM with the same accounts
 works; the book's SAM (bread and milk) is the default.
 
-`SimpleOpenEconomy().run()` returns the base, the check and the shock (every
-import tariff set to zero); it matches GAMS in every cell of the three
-(`equilibria.compare` with the `stdcge` map, reference in `data/stdcge/`).
-Example: `examples/cge/example_07_templates.py`.
+It is the first template that runs on the core driver (ADR-0011): one model
+with the periods `base`, `check` and `shock`, flown by its default recipe.
+
+```python
+from equilibria.core import Exercise
+from equilibria.templates import SimpleOpenEconomy
+
+ex = Exercise(SimpleOpenEconomy(), shock={"tau_m": 0.0})  # abolish every tariff
+results = ex.run()  # {period: {"code", "residual"}}
+ex.model.value("M", ("BRD",), "shock")  # one cell of one period
+```
+
+The shock gives new levels of instruments: the tax rates `tau_d`, `tau_z` and
+`tau_m` are fixed variables, changed only in the shock period. The three periods
+match GAMS in every cell (`equilibria.compare` with the `stdcge` map, reference
+in `data/stdcge/`). Example: `examples/cge/example_07_templates.py`.

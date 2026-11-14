@@ -29,6 +29,7 @@ tests/backends/test_pyomo_backend_domain.py
 tests/backends/test_pyomo_backend_ndim.py
 tests/backends/test_pyomo_backend_solver_status.py
 tests/backends/test_pyomo_backend_strict.py
+tests/backends/test_pyomo_periods.py
 tests/blocks/gtap/test_block_uses.py
 tests/blocks/gtap/test_cache_fingerprint.py
 tests/blocks/gtap/test_calibrate_no_double_solve.py
@@ -69,8 +70,12 @@ tests/compare/test_sl4.py
 tests/compare/test_sources.py
 tests/contracts/test_base_contract.py
 tests/core/test_core.py
+tests/core/test_driver.py
+tests/core/test_exercise.py
 tests/core/test_layering.py
 tests/core/test_model.py
+tests/core/test_recipe.py
+tests/core/test_steps.py
 tests/data/test_data_tree.py
 tests/data/test_datasets_present.py
 tests/data/test_gams_model_present.py
@@ -233,6 +238,7 @@ tests/simulations/test_simulator.py
 tests/simulations/test_types.py
 tests/solver/test_constraint_jacobian_base.py
 tests/solver/test_gtap_mode_explicito.py
+tests/solver/test_ipopt.py
 tests/solver/test_jacobian_reporting.py
 tests/solver/test_matching.py
 tests/solver/test_newton_tr_extract.py
@@ -334,6 +340,7 @@ tests/templates/pep_pyomo/test_pep_pyomo_sets_params.py
 tests/templates/pep_pyomo/test_pep_pyomo_solve.py
 tests/templates/simple_open/test_blocks_at_base.py
 tests/templates/simple_open/test_calibration.py
+tests/templates/simple_open/test_driver_run.py
 tests/templates/simple_open/test_gams_parity.py
 tests/templates/simple_open/test_generality.py
 tests/templates/simple_open/test_template.py
