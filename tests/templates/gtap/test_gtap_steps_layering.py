@@ -10,7 +10,7 @@ import pathlib
 import pytest
 
 GTAP = pathlib.Path(__file__).resolve().parents[3] / "src/equilibria/templates/gtap"
-RUN_MODULES = ("period_model.py", "period_rules.py", "steps.py")
+RUN_MODULES = ("period_model.py", "period_rules.py", "steps.py", "strategies.py")
 BANNED = ("pyomo", "equilibria.backends", "equilibria.solver")
 OLD = ("gtap_multiperiod_driver", "period_prep", "pyomo_periods", "gtap_block_model")
 
