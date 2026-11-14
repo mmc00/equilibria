@@ -665,3 +665,81 @@ def normalize_pep_accounts_on_sam(sam: Sam) -> dict[str, int]:
         "pep_accounts": len(pep_keys),
         "commodities": len([k for k in pep_keys if k[0] == "I"]),
     }
+
+
+def _account_key(df: pd.DataFrame, raw: Any, name: str) -> tuple[str, ...]:
+    key = tuple(raw)
+    if key not in df.index or key not in df.columns:
+        raise ValueError(f"{name}: account {key} is not in the SAM")
+    return key
+
+
+def reroute_cell_via_on_sam(
+    sam: Sam, op: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Route the payment in cell (row, col) through the account ``via``.
+
+    The column account ``col`` pays ``value`` to the row account ``row``; the model has
+    no such flow. The payment goes col -> via -> row instead:
+
+        (row, col) -= value;  (via, col) += value;  (row, via) += value
+
+    Row ``row`` and column ``col`` keep their totals, and ``via`` gains ``value`` in
+    both its row and its column, so a balanced SAM stays balanced. ``value``
+    defaults to the whole cell.
+    """
+    cfg = op or {}
+    df = sam.to_dataframe()
+    row = _account_key(df, cfg["row"], "row")
+    col = _account_key(df, cfg["col"], "col")
+    via = _account_key(df, cfg["via"], "via")
+    if via in (row, col):
+        raise ValueError("via must differ from row and col")
+    before = sam.balance_status()
+    cell = float(df.loc[row, col])
+    value = float(cfg.get("value", cell))
+    df.loc[row, col] -= value
+    df.loc[via, col] += value
+    df.loc[row, via] += value
+    sam.replace_dataframe(df)
+    return {
+        "row": row,
+        "col": col,
+        "via": via,
+        "moved": value,
+        "cell_after": cell - value,
+        "balanced_before": before["is_balanced"],
+        "balanced_after": sam.balance_status()["is_balanced"],
+    }
+
+
+def net_reciprocal_cells_on_sam(
+    sam: Sam, op: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Net the two-way payments between accounts ``a`` and ``b``.
+
+    Subtracts ``min((a, b), (b, a))`` from both cells, so only the net flow remains.
+    Both accounts lose the same amount in their row and their column, so a balanced
+    SAM stays balanced.
+    """
+    cfg = op or {}
+    df = sam.to_dataframe()
+    a = _account_key(df, cfg["a"], "a")
+    b = _account_key(df, cfg["b"], "b")
+    if a == b:
+        raise ValueError("a and b must be different accounts")
+    before = sam.balance_status()
+    ab, ba = float(df.loc[a, b]), float(df.loc[b, a])
+    netted = min(ab, ba)
+    df.loc[a, b] -= netted
+    df.loc[b, a] -= netted
+    sam.replace_dataframe(df)
+    return {
+        "a": a,
+        "b": b,
+        "netted": netted,
+        "a_to_b_after": ab - netted,
+        "b_to_a_after": ba - netted,
+        "balanced_before": before["is_balanced"],
+        "balanced_after": sam.balance_status()["is_balanced"],
+    }
