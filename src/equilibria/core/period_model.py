@@ -11,7 +11,7 @@ The Pyomo implementation is ``equilibria.backends.pyomo_periods.PyomoPeriodModel
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from typing import Protocol
 
 Index = tuple
@@ -55,3 +55,67 @@ class PeriodModel(Protocol):
     def residual(self, period: str) -> float:
         """Largest ``|body - bound|`` over the active equations of ``period``."""
         ...
+
+    # Per-variable and per-row operations. A model with many cells (GTAP 20x41:
+    # ~395k per period) is edited a variable or a row family at a time, so an
+    # array backend can do each call as one masked write. An index never carries
+    # the period; a row not indexed by period never appears.
+
+    def var_names(self) -> tuple[str, ...]: ...
+
+    def row_names(self) -> tuple[str, ...]: ...
+
+    def has_var(self, name: str) -> bool: ...
+
+    def has_row(self, name: str) -> bool: ...
+
+    def var_cells(self, name: str, period: str) -> tuple[Index, ...]:
+        """The cells of variable ``name`` in ``period``, in index order."""
+        ...
+
+    def row_cells(self, name: str, period: str) -> tuple[Index, ...]:
+        """The cells of row family ``name`` in ``period``, in index order."""
+        ...
+
+    def values(self, name: str, period: str) -> dict[Index, float]:
+        """Every cell's level (NaN where the cell has none)."""
+        ...
+
+    def set_values(self, name: str, period: str, levels: Mapping[Index, float]) -> None:
+        """Set levels as given (NaN allowed; no domain validation)."""
+        ...
+
+    def fix_cells(
+        self, name: str, period: str, levels: Mapping[Index, float | None]
+    ) -> None:
+        """Fix each cell at its level, or at its current level for ``None``."""
+        ...
+
+    def unfix_cells(self, name: str, period: str, cells: Iterable[Index]) -> None: ...
+
+    def fixed_cells(self, name: str, period: str) -> frozenset[Index]: ...
+
+    def bounds(
+        self, name: str, period: str
+    ) -> dict[Index, tuple[float | None, float | None]]:
+        """Every cell's ``(lower, upper)``; ``None`` for no bound."""
+        ...
+
+    def set_bounds(
+        self,
+        name: str,
+        period: str,
+        bounds: Mapping[Index, tuple[float | None, float | None]],
+    ) -> None:
+        """Set the given sides; a ``None`` side is left as it is."""
+        ...
+
+    def free_cells(self, name: str, period: str, cells: Iterable[Index]) -> None:
+        """No bounds and a real domain (a non-negative cell loses its floor)."""
+        ...
+
+    def active_rows(self, name: str, period: str) -> frozenset[Index]: ...
+
+    def set_rows_active(
+        self, name: str, period: str, cells: Iterable[Index], active: bool
+    ) -> None: ...
