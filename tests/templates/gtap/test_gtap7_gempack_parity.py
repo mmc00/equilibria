@@ -63,6 +63,7 @@ def _solve_shock(
     residual_region: str | None = None,
     backend: str | None = None,
     unit_sigma: str = "gams",
+    route: str = "driver",
 ):
     """Build + seed + solve base→check→shock (gtap pure MCP) and return the model.
 
@@ -84,6 +85,10 @@ def _solve_shock(
     driver (equilibria.family.driver) and returns ``(FamilyResult, code)`` instead of
     ``(m, code)``. ``EQUILIBRIA_GTAP_BACKEND=family`` sets the default; an unsupported
     configuration raises before any work.
+
+    ``route`` "driver" (the default) solves with ``solve_multiperiod``; "exercise"
+    with ``Exercise(GTAP, gtap_static)`` on the core driver (Pyomo backend only),
+    and returns ``(model.pyomo, 1 or 0)``.
 
     ``unit_sigma`` "gams" (the default) keeps the 1.01 stand-in for a unit elasticity,
     as the recorded oracles (paper Table 1, the example-15 gaps) were solved; "gempack"
@@ -166,6 +171,20 @@ def _solve_shock(
         if backend == "family":
             fres = solve_gtap_family(p, ac, rr, ref_gdx=gdx)
             return fres, int(fres.results["shock"]["code"])
+        if route == "exercise":
+            from equilibria.core.exercise import Exercise
+            from equilibria.templates.gtap.recipe import gtap_static
+            from equilibria.templates.gtap.template import GTAP
+
+            ex = Exercise(
+                template=GTAP(
+                    p, ac, residual_region=rr, base_calibrated=True, ref_gdx=gdx
+                ),
+                recipe=gtap_static(base_calibrated=True, solve_check=True),
+            )
+            out = ex.run()
+            assert ex.model is not None
+            return ex.model.pyomo, int(out["shock"]["code"] == "optimal")
         m, mp = build_block_model(p, p.sets, ac, rr, base_calibrated=True, ref_gdx=gdx)
         res = solve_multiperiod(
             m,
