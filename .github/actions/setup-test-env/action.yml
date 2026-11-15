@@ -39,8 +39,8 @@ runs:
         sudo apt-get update -qq
         sudo apt-get install -y --no-install-recommends libmumps-seq-dev
         py="$(uv run python -c 'import sys; print(sys.executable)')"
-        # PyMUMPS 0.3.2 builds from source with Cython and the venv's numpy
-        uv pip install --python "$py" cython
+        # PyMUMPS 0.3.2 builds from source with Cython, setuptools and the venv's numpy
+        uv pip install --python "$py" cython setuptools
         uv pip install --python "$py" --no-build-isolation PyMUMPS==0.3.2
         uv run python -c "import mumps; print('pymumps OK')"
 
