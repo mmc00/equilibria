@@ -1,0 +1,46 @@
+kind: result
+model: gtap7
+dataset: gtap7_15x10
+tool: equilibria-pyomo
+variant:
+  mode: gtap
+  ifsub: 1
+  savf: capFix
+  keep: gate
+  residual_region: ROW
+phases:
+- base
+- check
+- shock
+generated_from:
+  data:
+    path: gtap7/gtap7_15x10
+    sha256:
+      basedata.har: 979b94b12ecffbb62d0bc4b818a6d08a94d9bc827e62731738f0e95eb745c135
+      sets.har: 98c17a64decbf2ee6c8fab761a914798b94943984e5017f7d3be32d4b293d703
+      default.prm: 1b1461e68e558b5b37033a6e3c9c69d27ac7bed66c5c2254f031e301fb732431
+      baserate.har: 853efaa312b4dee0c6f8f62c5cb57a1919d1c757c68aadabd35f4b16979697d7
+solver:
+  name: newton_tr
+  linsolve: mumps
+command: scripts/family/regen_photos.py --dataset gtap7_15x10
+equilibria_commit: c49be540
+exit:
+  code: 0
+outputs:
+  002_s_check.json: f1e37b1793e933863cf6bb2c0309b8898e7d589a579f722e3b21cfb8056147ff
+  004_s_check.json: 5b44939726a61fe32392456e3dcbd944a349922b1c667e7399737c4c05cd31a5
+  005_s_shock.json: 2781683abfae6ce0a140e104e4ec6af964503b506627cf5eb3bf80b904fe2a54
+  final.pkl.gz: 4bbd014da02f023b5687b867e2a073268a391822105ca773a0f9972863a119f0
+  model_print.json: 7817387c49c46db0fa90237f8f5125f4f0be7d14edffba017cdbe6aa4214fe69
+  settled.pkl.gz: de7cbdad30bb9072c30bcb0c63e54b3c1208a653dd1873712c77b3ac73c80008
+run:
+  date: '2026-11-14T23:04:15-06:00'
+  duration_s: 39.036
+  machine:
+    os: macOS 26.2 (Darwin 25.2.0)
+    cpu: Apple M3 Pro
+    cores: 11
+    ram_gb: 18.0
+status: verified
+notes: ''

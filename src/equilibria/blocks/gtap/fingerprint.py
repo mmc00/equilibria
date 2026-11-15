@@ -29,6 +29,8 @@ from __future__ import annotations
 import hashlib
 import importlib.metadata
 import sys
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 
@@ -215,16 +217,121 @@ def _runtime_digest() -> str:
     return hashlib.sha256(_SEP.join(parts).encode()).hexdigest()[:24]
 
 
-def _code_digest() -> str:
+def code_digest(files: Iterable[Path]) -> str:
+    """Digest of the relative path and bytes of ``files``, in sorted order."""
     root = _package_root()
     h = hashlib.sha256()
-    for f in _code_files(root):
+    for f in sorted(set(files)):
         h.update(f.relative_to(root).as_posix().encode())
         try:
             h.update(f.read_bytes())
         except OSError:
             h.update(b"missing")
     return h.hexdigest()[:24]
+
+
+def _code_digest() -> str:
+    return code_digest(_code_files(_package_root()))
+
+
+# --- the model print of the saved Pyomo photos --------------------------------
+#
+# A photo is Pyomo's solution, made once on the Mac and compared against the family
+# (JAX) route in every PR.  Its print splits the code in two: a change in a file only
+# the Pyomo route runs makes the photo stale (regenerate it); a change in code both
+# routes run does not, because the family run must still match the old photo.
+# Per file, not per folder: templates/gtap and solver hold both kinds.  When unsure,
+# a file belongs here: a Pyomo-only change filed as shared would let Pyomo drift from
+# the photo with nothing re-checking it against GAMS/GEMPACK.
+PYOMO_ONLY_FILES = (
+    "backends/pyomo_backend.py",
+    "backends/pyomo_equations.py",
+    "solver/path_capi.py",
+    "solver/pyomo_results.py",
+    "solver/jacobians",
+    "templates/gtap/gtap_model_multiperiod.py",
+    "templates/gtap/gtap_model_equations.py",
+    "templates/gtap/gtap_solver.py",
+    "templates/gtap/gtap_equilibrium.py",
+    "templates/gtap/gtap_parity_pipeline.py",
+    "templates/gtap/period_debug.py",
+    "templates/gtap/altertax",
+)
+FAMILY_FOLDER = "family"  # the JAX route itself: shared by definition
+
+
+def _expand(root: Path, rels: Iterable[str]) -> set[Path]:
+    out: set[Path] = set()
+    for rel in rels:
+        p = root / rel
+        out |= set(p.rglob("*.py")) if p.is_dir() else {p}
+    return out
+
+
+def pyomo_only_files() -> list[Path]:
+    return sorted(_expand(_package_root(), PYOMO_ONLY_FILES))
+
+
+def shared_files() -> list[Path]:
+    root = _package_root()
+    code = set(_code_files(root)) | _expand(root, [FAMILY_FOLDER])
+    return sorted(code - set(pyomo_only_files()))
+
+
+@dataclass(frozen=True)
+class ModelPrint:
+    """What a photo was made from.  ``env`` is recorded, not compared: the photos
+    come from the Mac and are read on Linux CI with other versions."""
+
+    data: str
+    closure: str
+    pyomo_code: str
+    shared_code: str
+    env: dict[str, str] = field(default_factory=dict, compare=False)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> ModelPrint:
+        return cls(**d)
+
+
+def _env(linsolve: str) -> dict[str, str]:
+    env = {"python": sys.version.split()[0], "linsolve": linsolve}
+    for name in (*NUMERIC_DISTS, "jax"):
+        try:
+            env[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            env[name] = "absent"
+    return env
+
+
+def model_print(
+    *, data_files: Iterable[Path], closure, residual_region: str, linsolve: str
+) -> ModelPrint | None:
+    """The print of a photo, or ``None`` when data or closure cannot be covered.
+
+    ``data_files`` are the dataset's input files (basedata.har, sets.har...): their
+    content, not the loaded params, so checking a photo never loads the data."""
+    h = hashlib.sha256()
+    for f in sorted(Path(f) for f in data_files):
+        digest = file_digest(f)
+        if digest is None:
+            return None
+        h.update(f.name.encode() + b"=" + digest.encode())
+    pd = h.hexdigest()[:24]
+    cd = _closure_digest(closure)
+    if cd is None:
+        return None
+    closure_key = hashlib.sha256(_SEP.join([cd, str(residual_region)]).encode())
+    return ModelPrint(
+        data=pd,
+        closure=closure_key.hexdigest()[:24],
+        pyomo_code=code_digest(pyomo_only_files()),
+        shared_code=code_digest(shared_files()),
+        env=_env(linsolve),
+    )
 
 
 def fingerprint(

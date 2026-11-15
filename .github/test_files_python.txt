@@ -35,6 +35,7 @@ tests/blocks/gtap/test_cache_fingerprint.py
 tests/blocks/gtap/test_calibrate_no_double_solve.py
 tests/blocks/gtap/test_cd_mode_blocks.py
 tests/blocks/gtap/test_factor_wedge_basis.py
+tests/blocks/gtap/test_fingerprint_split.py
 tests/blocks/gtap/test_floors.py
 tests/blocks/gtap/test_model_cache.py
 tests/blocks/gtap/test_overwrite.py
@@ -123,6 +124,7 @@ tests/family/test_build_arrays.py
 tests/family/test_calibrate_arrays.py
 tests/family/test_capflex_risk.py
 tests/family/test_capture_reference.py
+tests/family/test_ci_env.py
 tests/family/test_cli_fast_exit.py
 tests/family/test_conftest_slow_hook.py
 tests/family/test_core.py
@@ -149,6 +151,8 @@ tests/family/test_newton_checkpoint.py
 tests/family/test_pairing_cache.py
 tests/family/test_parity_ladder_script.py
 tests/family/test_phases.py
+tests/family/test_photo_freshness.py
+tests/family/test_photos.py
 tests/family/test_post_solve.py
 tests/family/test_prep_capture.py
 tests/family/test_prep_recipe.py
@@ -160,6 +164,7 @@ tests/family/test_square_cell_ids.py
 tests/family/test_squared_system.py
 tests/family/test_state_model.py
 tests/family/test_structure_reuse.py
+tests/family/test_timing_script.py
 tests/family/test_unit_sigma.py
 tests/paper/test_run_tables.py
 tests/parity/test_cascade_classify.py

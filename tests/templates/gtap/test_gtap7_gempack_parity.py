@@ -133,9 +133,9 @@ def _solve_shock(
             if savf_flag == "capFlex":
                 # capFlex reads rore/rorg from the GDX: refuse before any work
                 require_ref_gdx(gdx)
+        from equilibria.family.photos import photo_closure
         from equilibria.templates.gtap import GTAPParameters
         from equilibria.templates.gtap.gtap_block_model import build_block_model
-        from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
         from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
         d = dataset_dir(dataset)
@@ -148,21 +148,7 @@ def _solve_shock(
         )
         # None = the last region, the residual the GEMPACK fixtures declare.
         rr = residual_region or list(p.sets.r)[-1]
-        ac = GTAPClosureConfig(
-            name="base",
-            closure_type="MCP",
-            capital_mobility="sluggish",
-            fix_endowments=False,
-            fix_taxes=False,
-            fix_technology=False,
-            if_sub=bool(ifsub),
-            savf_flag=savf_flag,
-            numeraire="pnum",
-            # GEMPACK is the reference: use the data's factor wedge (EVFP = EVFB +
-            # FTRV + FBEP), the gtap7_gempack basis. The GAMS sign drops 15x10 to 93.9%.
-            va_subsidy_basis="gempack",
-            unit_sigma=unit_sigma,
-        )
+        ac = photo_closure(ifsub, savf_flag, unit_sigma)
         if backend == "family":
             fres = solve_gtap_family(p, ac, rr, ref_gdx=gdx)
             return fres, int(fres.results["shock"]["code"])
