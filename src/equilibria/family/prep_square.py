@@ -692,6 +692,11 @@ def _paired(
         hit = index.cache.get(key)
         if hit is not None and hit[0] is incidence and hit[1] == sig:
             return list(hit[2])
+        path = _pairing_path(getattr(incidence, "store", None), incidence.period, sig)
+        paired = _load_pairing(path, rnames, cnames, pairs)
+        if paired is not None:
+            index.cache[key] = (incidence, sig, list(paired))
+            return paired
         adjacency = incidence.adjacency(mp, index, rid, col_pos)
     else:
         adjacency = _adjacency(rnames, cnames, incidence)
@@ -699,7 +704,60 @@ def _paired(
     _check_permutation(paired, rnames, cnames, pairs)
     if keep:
         index.cache[key] = (incidence, sig, list(paired))
+        _save_pairing(path, paired)
     return paired
+
+
+def _pairing_path(store: Any, period: str, sig: tuple[bytes, ...]) -> Any:
+    """``store/pairing-<period>-<digest>.npy``, or ``None`` without a store.
+
+    The store is the records folder, whose key covers the params, the closure, the
+    residual region and ``equilibria/family``; the digest adds the rows, the columns,
+    the forced pairs and the matcher's own code (``solver/_matching.py``)."""
+    if store is None:
+        return None
+    import hashlib
+    from pathlib import Path
+
+    from equilibria.solver import _matching
+
+    h = hashlib.sha256(Path(_matching.__file__).read_bytes())
+    for part in sig:
+        h.update(len(part).to_bytes(8, "little"))
+        h.update(part)
+    return Path(store) / f"pairing-{period}-{h.hexdigest()[:24]}.npy"
+
+
+def _load_pairing(
+    path: Any, rnames: list[str], cnames: list[str], pairs: list
+) -> list[int] | None:
+    """The saved pairing, or ``None`` when absent, unreadable or not a permutation of
+    these rows (then it is recomputed and rewritten)."""
+    if path is None or not path.exists():
+        return None
+    try:
+        paired = np.load(path, allow_pickle=False).tolist()
+    except (OSError, ValueError):
+        return None
+    if len(paired) != len(rnames):
+        return None
+    try:
+        _check_permutation(paired, rnames, cnames, pairs)
+    except ValueError:
+        return None
+    return paired
+
+
+def _save_pairing(path: Any, paired: list[int]) -> None:
+    """Write through a temporary file, so a reader never sees half a file."""
+    if path is None:
+        return
+    import os
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.stem}.{os.getpid()}.tmp.npy")
+    np.save(tmp, np.asarray(paired, dtype=np.int64))
+    os.replace(tmp, path)
 
 
 @overload
