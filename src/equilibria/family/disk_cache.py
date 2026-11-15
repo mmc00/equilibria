@@ -2,7 +2,9 @@
 
 The records depend on the params, the closure, the residual region and the code
 that writes the equations; the key (``blocks/gtap/fingerprint``) hashes all four.
-The state (this run's levels, fixed cells, Parameters) is always composed fresh.
+The composed state (levels, fixed cells, Parameters) is kept next to them under the
+same key: it is a function of the same inputs, and composing it does not touch the
+params.
 """
 
 from __future__ import annotations
@@ -53,32 +55,82 @@ def load_or_build(
     *,
     key: Any = ...,
 ) -> tuple[Any, Any]:
-    """``(backend, state)``: records from ``root/<key>/records.pkl`` when present.
+    """``(backend, state)``: records from ``root/<key>/records.pkl`` and the composed
+    state from ``root/<key>/state.pkl`` when present.
 
-    Without a key (see ``cache_key``) the records are built and not saved. ``key``:
-    the caller's ``cache_key`` of these inputs (``None`` included), so it is not
-    computed twice."""
+    Without a key (see ``cache_key``) both are built and not saved. ``key``: the
+    caller's ``cache_key`` of these inputs (``None`` included), so it is not computed
+    twice. The Model of the blocks is only composed when something is missing."""
     from equilibria.backends.family_backend import FamilyBackend
     from equilibria.family.phases import phase
     from equilibria.templates.gtap.gtap_block_model import compose_block_state
 
-    with phase("compose_state"):
-        model, state = compose_block_state(
-            params, params.sets, closure, residual_region
-        )
     if key is ...:
         with phase("sp_cache_key"):
             key = cache_key(params, closure, residual_region)
-    path = None if key is None else Path(root) / key / "records.pkl"
+    folder = None if key is None else Path(root) / key
+    path = None if folder is None else folder / "records.pkl"
+    state_path = None if folder is None else folder / "state.pkl"
+    state = None
+    if state_path is not None and state_path.exists():
+        with phase("state_load"):
+            state = _load_pickle(state_path)
+    model = None
+    if state is None:
+        with phase("compose_state"):
+            model, state = compose_block_state(
+                params, params.sets, closure, residual_region
+            )
+        if state_path is not None:
+            _save_pickle(state, state_path)
     if path is not None and path.exists():
         with phase("sp_records_load"):
             return FamilyBackend.load(path), state
+    if model is None:  # records gone, state kept: the recording needs the Model
+        with phase("compose_state"):
+            model, state = compose_block_state(
+                params, params.sets, closure, residual_region
+            )
     with phase("sp_records_build"):
         backend = FamilyBackend()
         backend.build(model, skip=state.ifsub_skipped)
         if path is not None:
             backend.save(path)
     return backend, state
+
+
+def _save_pickle(obj: Any, path: Path) -> None:
+    """Pickle ``obj`` to ``path`` through a temp file of our own (atomic replace)."""
+    import os
+    import pickle
+    import tempfile
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            pickle.dump(obj, fh, protocol=5)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def _load_pickle(path: Path) -> Any:
+    """The pickled object, or ``None`` when the file cannot be read (then rebuilt)."""
+    import pickle
+
+    from equilibria.solver.gc_tuning import _gc_freeze_in_scope, _gc_paused
+
+    try:
+        with open(path, "rb") as fh, _gc_paused():
+            obj = pickle.load(fh)
+            _gc_freeze_in_scope()
+    except (OSError, EOFError, pickle.UnpicklingError, AttributeError, ImportError):
+        return None
+    return obj
 
 
 def enable_jax_cache(root: Path) -> None:

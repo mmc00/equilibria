@@ -139,3 +139,62 @@ def test_load_or_build_writes_then_reads(tmp_path, monkeypatch):
     b2, s2 = load_or_build(p, closure, rr, tmp_path)
     assert set(b2.records) == set(b1.records)
     assert s2 is not s1
+
+
+def _same_state(a, b):
+    for name in ("values", "fixed", "lower", "upper"):
+        da, db = getattr(a, name), getattr(b, name)
+        assert set(da) == set(db), name
+        for k in da:
+            assert np.array_equal(da[k], db[k], equal_nan=True), (name, k)
+    assert a.sets == b.sets and a.var_domains == b.var_domains
+    assert a.nonneg_vars == b.nonneg_vars and a.ifsub_skipped == b.ifsub_skipped
+    assert a.fisher == b.fisher
+    pa, pb = a.__dict__["_components"], b.__dict__["_components"]
+    assert set(pa) == set(pb)
+    for n, c in pa.items():
+        if hasattr(c, "data"):
+            assert np.array_equal(c.data, pb[n].data, equal_nan=True), n
+
+
+@pytest.mark.parametrize("if_sub", [False, True])
+def test_state_is_read_from_disk_on_a_hit(tmp_path, monkeypatch, if_sub):
+    from equilibria.family.disk_cache import load_or_build
+    from equilibria.templates.gtap import gtap_block_model
+
+    p = load_params(DATASET)
+    closure = comp_stat_closure(if_sub)
+    rr = list(p.sets.r)[-1]
+    _, fresh = load_or_build(p, closure, rr, tmp_path)
+    assert list(tmp_path.glob("*/state.pkl"))
+
+    def boom(*a, **k):
+        raise AssertionError("compose_block_state called on a cache hit")
+
+    monkeypatch.setattr(gtap_block_model, "compose_block_state", boom)
+    _, loaded = load_or_build(p, closure, rr, tmp_path)
+    _same_state(fresh, loaded)
+    # the loaded state is a working StateModel: cells read the same arrays
+    name = next(iter(loaded.values))
+    assert getattr(loaded, name)._vals is loaded.values[name]
+
+
+def test_records_without_a_state_compose_it_and_keep_it(tmp_path, monkeypatch):
+    """A cache written before the state was kept: compose once, records not rebuilt."""
+    from equilibria.backends.family_backend import FamilyBackend
+    from equilibria.family.disk_cache import load_or_build
+
+    p = load_params(DATASET)
+    closure = comp_stat_closure()
+    rr = list(p.sets.r)[-1]
+    _, fresh = load_or_build(p, closure, rr, tmp_path)
+    (state_pkl,) = tmp_path.glob("*/state.pkl")
+    state_pkl.unlink()
+
+    def boom(self, *a, **k):
+        raise AssertionError("build called although the records are on disk")
+
+    monkeypatch.setattr(FamilyBackend, "build", boom)
+    _, again = load_or_build(p, closure, rr, tmp_path)
+    _same_state(fresh, again)
+    assert state_pkl.exists()

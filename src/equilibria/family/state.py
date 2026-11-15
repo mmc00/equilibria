@@ -365,6 +365,10 @@ class StateModel:
         # Steps may tag the model (pm._something = ...); keep those as plain attributes.
         self.__dict__[name] = val
 
+    def __setstate__(self, state: dict) -> None:
+        # pickle (``disk_cache``): fill __dict__ directly, before __getattr__ can run
+        self.__dict__.update(state)
+
     def find_component(self, name: str):
         try:
             return getattr(self, name)
