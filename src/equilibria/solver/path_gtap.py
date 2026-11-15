@@ -12,7 +12,7 @@ import os
 from collections.abc import Callable
 from typing import Any
 
-from equilibria.solver.gc_tuning import _gc_family_scope
+from equilibria.solver.gc_tuning import _gc_family_scope, _gc_freeze_in_scope
 
 # The options the altertax reference bundles were solved with (the path.opt
 # inlined in the regenerated NEOS bundles). Pure gtap bundles carry no path.opt:
@@ -68,6 +68,11 @@ def path(
         # Reentrant: inside GTAP.run_scope (one freeze for the whole run) this
         # changes nothing; a solve called on its own still gets the GC setup.
         with _gc_family_scope():
+            # Inside the run scope: freeze what the steps built since (the
+            # per-period index caches, the reference model), so the full passes
+            # from here on skip it. Measured on 20x41: the gen-2 pass after the
+            # base walked them, +3.5 s. Outside a scope this does nothing.
+            _gc_freeze_in_scope()
             r = _load_path_capi()._run_path_capi_nonlinear_full(
                 model.pyomo,
                 staged.params,

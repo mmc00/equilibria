@@ -131,3 +131,21 @@ def test_outside_a_run_scope_the_solve_freezes_for_itself(fake: _Fake) -> None:
     fake._run_path_capi_nonlinear_full = spy  # type: ignore[method-assign]
     path_gtap.path()(_model())
     assert seen[0] > 0 and gc.get_freeze_count() == 0
+
+
+def test_inside_a_run_scope_the_solve_freezes_what_the_steps_built(fake: _Fake) -> None:
+    """The steps build long-lived objects after the run's freeze (the per-period
+    index caches, the reference model); the solve freezes them too, so the
+    full passes after it do not walk them (measured on 20x41: +3.5 s a gap)."""
+    import gc
+
+    from equilibria.solver.gc_tuning import _gc_family_scope
+
+    with _gc_family_scope():
+        before = gc.get_freeze_count()
+        built_by_a_step = [
+            [i] for i in range(1000)
+        ]  # tracked, created after the freeze
+        path_gtap.path()(_model())
+        assert gc.get_freeze_count() >= before + len(built_by_a_step)
+    assert gc.get_freeze_count() == 0
