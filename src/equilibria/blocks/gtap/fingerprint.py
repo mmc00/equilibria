@@ -308,12 +308,21 @@ def _env(linsolve: str) -> dict[str, str]:
 
 
 def model_print(
-    *, params, closure, residual_region: str, linsolve: str
+    *, data_files: Iterable[Path], closure, residual_region: str, linsolve: str
 ) -> ModelPrint | None:
-    """The print of a photo, or ``None`` when data or closure cannot be covered."""
-    pd = _params_digest(params)
+    """The print of a photo, or ``None`` when data or closure cannot be covered.
+
+    ``data_files`` are the dataset's input files (basedata.har, sets.har...): their
+    content, not the loaded params, so checking a photo never loads the data."""
+    h = hashlib.sha256()
+    for f in sorted(Path(f) for f in data_files):
+        digest = file_digest(f)
+        if digest is None:
+            return None
+        h.update(f.name.encode() + b"=" + digest.encode())
+    pd = h.hexdigest()[:24]
     cd = _closure_digest(closure)
-    if pd is None or cd is None:
+    if cd is None:
         return None
     closure_key = hashlib.sha256(_SEP.join([cd, str(residual_region)]).encode())
     return ModelPrint(

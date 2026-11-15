@@ -11,8 +11,10 @@ from equilibria.blocks.gtap import fingerprint as fp
 ROOT = fp._package_root()
 
 
-def _params():
-    return SimpleNamespace(benchmark=SimpleNamespace(vom={("USA", "agr"): 1.0}))
+def _data(tmp_path, text="vom"):
+    f = tmp_path / "basedata.har"
+    f.write_text(text)
+    return [f]
 
 
 def _closure(**extra):
@@ -38,12 +40,18 @@ def test_code_digest_matches_the_cache_key_digest():
     assert fp.code_digest(fp._code_files(ROOT)) == fp._code_digest()
 
 
-def test_model_print_ignores_env_in_equality():
+def test_model_print_ignores_env_in_equality(tmp_path):
     a = fp.model_print(
-        params=_params(), closure=_closure(), residual_region="ROW", linsolve="mumps"
+        data_files=_data(tmp_path),
+        closure=_closure(),
+        residual_region="ROW",
+        linsolve="mumps",
     )
     b = fp.model_print(
-        params=_params(), closure=_closure(), residual_region="ROW", linsolve="direct"
+        data_files=_data(tmp_path),
+        closure=_closure(),
+        residual_region="ROW",
+        linsolve="direct",
     )
     assert a is not None and b is not None
     assert a.env["linsolve"] == "mumps" and b.env["linsolve"] == "direct"
@@ -51,22 +59,36 @@ def test_model_print_ignores_env_in_equality():
     assert fp.ModelPrint.from_dict(a.to_dict()) == a
 
 
-def test_model_print_sees_data_and_closure():
+def test_model_print_sees_data_and_closure(tmp_path):
     a = fp.model_print(
-        params=_params(), closure=_closure(), residual_region="ROW", linsolve="mumps"
+        data_files=_data(tmp_path),
+        closure=_closure(),
+        residual_region="ROW",
+        linsolve="mumps",
     )
     other_closure = fp.model_print(
-        params=_params(),
+        data_files=_data(tmp_path),
         closure=_closure(savf="capFlex"),
         residual_region="ROW",
         linsolve="mumps",
     )
     other_region = fp.model_print(
-        params=_params(), closure=_closure(), residual_region="USA", linsolve="mumps"
+        data_files=_data(tmp_path),
+        closure=_closure(),
+        residual_region="USA",
+        linsolve="mumps",
     )
     assert a.closure != other_closure.closure
     assert a.closure != other_region.closure
     assert a.data == other_closure.data
+    (tmp_path / "other").mkdir()
+    other_data = fp.model_print(
+        data_files=_data(tmp_path / "other", "vom2"),
+        closure=_closure(),
+        residual_region="ROW",
+        linsolve="mumps",
+    )
+    assert other_data.data != a.data
 
 
 def test_no_family_module_imports_pyomo_only_files():
