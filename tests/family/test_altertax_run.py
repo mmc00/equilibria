@@ -173,7 +173,8 @@ def test_nominal_balance_drops_the_row(altax_run):
     assert not bool(eq.active[eq.keys.index(("USA", "shock"))])
 
 
-def test_nominal_balance_needs_capfix():
+def test_nominal_balance_needs_capfix(env):
+    # env: check_supported reads the solver settings before the capFix guard
     from equilibria.family.altertax.closure import altertax_closure
     from equilibria.family.driver import solve_gtap_family
 
