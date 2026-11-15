@@ -67,7 +67,7 @@ runs:
         #   * libpynumero_ASL.so, la interfaz ASL de PyNumero, que NO esta en
         #     `pyomo download-extensions`, falla en `pyomo build-extensions`
         #     (faltan las fuentes de ampl/asl) y no existe en PyPI.
-        # Verificado en contenedor ubuntu:24.04 (la imagen de este runner):
+        # Verificado en contenedores ubuntu:24.04 y ubuntu:26.04:
         #   ipopt -> Ipopt 3.13.2, SolverFactory("ipopt").available() True
         #   ASL   -> AmplInterface.available() True
         # Sin coinor-libipopt-dev ni pkg-config: solo sirven para compilar
@@ -77,9 +77,15 @@ runs:
         # Las dependencias van ANTES: el binario de IDAES enlaza contra
         # lapack/blas/gfortran del sistema y sin ellas aborta con
         # "error while loading shared libraries: liblapack.so.3".
+        # El paquete de la libreria C cambia de nombre con la version de Ubuntu:
+        # coinor-libipopt1v5 (24.04, libipopt.so.1) y coinor-libipopt3 (26.04,
+        # libipopt.so.3). ubuntu-latest paso a 26.04 en noviembre de 2026 y el
+        # cambio llega de a poco, asi que se instala el que exista.
         sudo apt-get update -qq
+        ipopt_pkg=coinor-libipopt3
+        apt-cache show "$ipopt_pkg" >/dev/null 2>&1 || ipopt_pkg=coinor-libipopt1v5
         sudo apt-get install -y --no-install-recommends \
-          coinor-libipopt1v5 liblapack3 libblas3 libgfortran5 libgomp1
+          "$ipopt_pkg" liblapack3 libblas3 libgfortran5 libgomp1
         pip install --quiet idaes-pse
         idaes get-extensions --distro ubuntu2204
         echo "$HOME/.idaes/bin" >> "$GITHUB_PATH"
@@ -89,6 +95,7 @@ runs:
         python -c "import ctypes, os; ctypes.CDLL(os.path.expanduser('~/.idaes/bin/libpynumero_ASL.so'))"
         # Smoke test: que el .so este no prueba que se pueda cargar.
         python -c "import ctypes; ctypes.CDLL('libipopt.so')" || \
+          python -c "import ctypes; ctypes.CDLL('libipopt.so.3')" || \
           python -c "import ctypes; ctypes.CDLL('libipopt.so.1')"
         # cyipopt es el binding de Python (la libreria C sola no alcanza: hay
         # tests que hacen `import cyipopt`). Se compila desde fuente y depende
