@@ -7,6 +7,7 @@ asks the template for a fresh model, never a shared one.
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
@@ -48,7 +49,13 @@ class Exercise:
 
     def run(self) -> dict[str, dict[str, Any]]:
         """Build a fresh model and fly the recipe on it; returns
-        ``{period: {"code", "residual"}}``. The model stays on ``self.model``."""
+        ``{period: {"code", "residual"}}``. The model stays on ``self.model``.
+
+        A template may define ``run_scope()``, a context manager entered after
+        the build and held over every period (GTAP freezes its built model for
+        the garbage collector there, once per run)."""
         model = self.template.build(self.recipe.names, self.overwrite)
         self.model = model
-        return fly(model, self.recipe, template=self.template, shock=self.shock)
+        scope = getattr(self.template, "run_scope", None)
+        with scope() if scope is not None else contextlib.nullcontext():
+            return fly(model, self.recipe, template=self.template, shock=self.shock)

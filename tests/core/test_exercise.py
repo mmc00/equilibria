@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import contextlib
+from collections.abc import Iterator, Sequence
 from typing import Any
 
 import pytest
@@ -63,6 +64,52 @@ def test_each_run_gets_its_own_model() -> None:
     first = ex.model
     ex.run()
     assert ex.model is not first
+
+
+class ScopedTemplate(FakeTemplate):
+    """A template with a run scope: records when it is entered and left."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.log: list[str] = []
+
+    @contextlib.contextmanager
+    def run_scope(self) -> Iterator[None]:
+        self.log.append(f"enter after {len(self.builds)} build")
+        try:
+            yield
+        finally:
+            self.log.append("exit")
+
+    def default_recipe(self) -> Recipe:
+        def step(ctx: Any) -> None:
+            self.log.append(ctx.period.name)
+
+        plan = KindPlan(before=(step,))
+        return Recipe(
+            STATIC.periods, dict.fromkeys(("calibrate", "replicate", "shock"), plan)
+        )
+
+
+def test_run_flies_every_period_inside_the_template_run_scope() -> None:
+    template = ScopedTemplate()
+    Exercise(template).run()
+    assert template.log == ["enter after 1 build", "base", "check", "shock", "exit"]
+
+
+def test_the_run_scope_is_left_when_a_step_raises() -> None:
+    template = ScopedTemplate()
+
+    def boom(ctx: Any) -> None:
+        raise RuntimeError("bug")
+
+    recipe = Recipe(
+        STATIC.periods,
+        {k: KindPlan(before=(boom,)) for k in ("calibrate", "replicate", "shock")},
+    )
+    with pytest.raises(RuntimeError, match="bug"):
+        Exercise(template, recipe=recipe).run()
+    assert template.log == ["enter after 1 build", "exit"]
 
 
 def test_overwrite_reaches_the_template_build() -> None:

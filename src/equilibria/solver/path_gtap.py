@@ -12,12 +12,7 @@ import os
 from collections.abc import Callable
 from typing import Any
 
-from equilibria.solver.gc_tuning import (
-    _gc_freeze_from_env,
-    _gc_frozen_permanent_graph,
-    _gc_relaxed_threshold,
-    _gc_threshold_from_env,
-)
+from equilibria.solver.gc_tuning import _gc_family_scope
 
 # The options the altertax reference bundles were solved with (the path.opt
 # inlined in the regenerated NEOS bundles). Pure gtap bundles carry no path.opt:
@@ -59,7 +54,8 @@ def path(
 
     Returns ``"optimal"`` when PATH converged (code 1), else ``"code <n>"``. The
     whole result dict goes to ``model.record_solve``. The GC is tuned for the
-    call (``solver/gc_tuning.py``); no environment variable outlives it.
+    call unless a run scope already holds it (``solver/gc_tuning.py``); no
+    environment variable outlives it.
     """
 
     def solve(model: Any) -> str:
@@ -69,10 +65,9 @@ def path(
                 "no closure staged: a GTAP step (stage_closure) must run before "
                 "the solve"
             )
-        with (
-            _gc_frozen_permanent_graph(_gc_freeze_from_env()),
-            _gc_relaxed_threshold(_gc_threshold_from_env()),
-        ):
+        # Reentrant: inside GTAP.run_scope (one freeze for the whole run) this
+        # changes nothing; a solve called on its own still gets the GC setup.
+        with _gc_family_scope():
             r = _load_path_capi()._run_path_capi_nonlinear_full(
                 model.pyomo,
                 staged.params,

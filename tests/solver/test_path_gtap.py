@@ -90,3 +90,44 @@ def test_env_untouched(fake: _Fake) -> None:
 
     path_gtap.path()(_model(gtap_mode=False))
     assert "PATH_CAPI_OPTIONS" not in os.environ
+
+
+def test_inside_a_run_scope_the_solve_keeps_the_run_freeze(fake: _Fake) -> None:
+    """GTAP.run_scope freezes the model once for the whole run; a solve inside it
+    must neither collect nor unfreeze (``gc.unfreeze`` is global), or every gap
+    between solves walks the whole graph again."""
+    import gc
+
+    from equilibria.solver.gc_tuning import _gc_family_scope
+
+    seen: list[int] = []
+    run = fake._run_path_capi_nonlinear_full
+
+    def spy(m: Any, params: Any, **kw: Any) -> dict:
+        seen.append(gc.get_freeze_count())
+        return run(m, params, **kw)
+
+    fake._run_path_capi_nonlinear_full = spy  # type: ignore[method-assign]
+    with _gc_family_scope():
+        frozen = gc.get_freeze_count()
+        assert frozen > 0
+        path_gtap.path()(_model())
+        path_gtap.path()(_model())
+        assert gc.get_freeze_count() >= frozen  # nothing was unfrozen in between
+    assert gc.get_freeze_count() == 0
+    assert all(n >= frozen for n in seen)
+
+
+def test_outside_a_run_scope_the_solve_freezes_for_itself(fake: _Fake) -> None:
+    import gc
+
+    seen: list[int] = []
+    run = fake._run_path_capi_nonlinear_full
+
+    def spy(m: Any, params: Any, **kw: Any) -> dict:
+        seen.append(gc.get_freeze_count())
+        return run(m, params, **kw)
+
+    fake._run_path_capi_nonlinear_full = spy  # type: ignore[method-assign]
+    path_gtap.path()(_model())
+    assert seen[0] > 0 and gc.get_freeze_count() == 0

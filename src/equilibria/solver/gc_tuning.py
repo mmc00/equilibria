@@ -187,7 +187,8 @@ def _gc_family_scope():
     the outputs. MEASURED on warm 20x41: when `solve_gtap_family` lifted the freeze,
     the next full collection (in `report_levels`) walked the ~10M records for 8.7 s.
 
-    The Pyomo route does not use it; it keeps its own two contexts."""
+    The GTAP core route holds it too (``GTAP.run_scope`` over the run, the PATH
+    solver per solve); the old Pyomo driver keeps its own two contexts."""
     global _FAMILY_SCOPE_DEPTH, _FAMILY_SCOPE_FROZEN
     if _FAMILY_SCOPE_DEPTH:
         _FAMILY_SCOPE_DEPTH += 1

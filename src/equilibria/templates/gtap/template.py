@@ -73,6 +73,16 @@ class GTAP:
         )
         return GTAPPyomoPeriodModel(m)
 
+    def run_scope(self) -> Any:
+        """The GC setup of the whole run, as ``solve_multiperiod`` held it: the
+        built model frozen once over base, check and shock. A solve inside it
+        leaves it alone (``_gc_family_scope`` is reentrant); freezing per solve
+        instead walked the whole model twice in every gap between solves
+        (measured on 15x10: +2.3 s of 23.5, nearly all of it GC)."""
+        from equilibria.solver.gc_tuning import _gc_family_scope
+
+        return _gc_family_scope()
+
     def default_recipe(self) -> Recipe:
         from equilibria.templates.gtap.recipe import gtap_static
 

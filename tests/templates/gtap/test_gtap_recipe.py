@@ -143,3 +143,17 @@ def test_recipe_refuses_mismatched_base_calibrated() -> None:
     with pytest.raises(ValueError, match="base_calibrated"):
         ex.run()
     assert calls == []
+
+
+def test_gtap_run_scope_freezes_once_for_the_run() -> None:
+    """The old driver froze the built model once over base, check and shock
+    (``solve_multiperiod``); the core route does the same through the template."""
+    import gc
+
+    from equilibria.templates.gtap.template import GTAP
+
+    t = GTAP(params=None, closure=None)
+    gc.unfreeze()  # an earlier test in the process may have left objects frozen
+    with t.run_scope():
+        assert gc.get_freeze_count() > 0
+    assert gc.get_freeze_count() == 0
