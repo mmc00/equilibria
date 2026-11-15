@@ -28,6 +28,19 @@ runs:
       shell: bash
       run: uv sync --dev --extra family --python ${{ inputs.python-version }}
 
+    # MUMPS: the family tests compare against Pyomo photos made with MUMPS on the
+    # Mac, and a run matches a photo at 1e-9 only with the same linear solver
+    # (specs/2026-11-14-jax-tests-fotos-pyomo-design.md). Fails hard: without it
+    # the photo comparisons would fail anyway (test_ci_env.py says why).
+    - name: Install MUMPS (pymumps)
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends libmumps-seq-dev
+        uv pip install --python "$(uv run python -c 'import sys; print(sys.executable)')" PyMUMPS==0.3.2
+        uv run python -c "import mumps; print('pymumps OK')"
+
     # --- solvers: sin esto, 64 de 1151 tests se SALTABAN en silencio -------
     # Los guards de solver (tests/conftest.py) saltan needs_path/needs_ipopt
     # cuando la herramienta falta, asi que CI salia VERDE con esos tests
