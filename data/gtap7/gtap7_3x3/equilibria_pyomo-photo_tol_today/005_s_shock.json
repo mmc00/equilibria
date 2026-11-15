@@ -1,0 +1,59 @@
+{
+ "n": 5,
+ "period": "shock",
+ "code": 1,
+ "converged": true,
+ "nit": 6,
+ "nfact": 5,
+ "residual": 1.0873449252102318e-08,
+ "method": "newton_tr",
+ "linsolve": "mumps",
+ "trace_f_inf": [
+  2.857862146234279,
+  0.5849299044430021,
+  0.05253429978726787,
+  0.01219340143143266,
+  0.00015560354382926356,
+  1.0873449252102318e-08
+ ],
+ "trace_f_scaled_inf": [
+  0.4806163771107266,
+  0.22844761221231918,
+  0.05253429978726787,
+  0.00416867086266045,
+  3.364864588024031e-05,
+  2.3513400426291973e-09
+ ],
+ "tr_env": {
+  "EQUILIBRIA_GTAP_TR_DELTA0": "10.0",
+  "EQUILIBRIA_GTAP_TR_FTOL": "1e-7",
+  "EQUILIBRIA_GTAP_TR_GATE": "1",
+  "EQUILIBRIA_GTAP_TR_LINSOLVE": "mumps",
+  "EQUILIBRIA_GTAP_TR_RELTOL": "1e-6"
+ },
+ "mumps_env": {
+  "EQUILIBRIA_GTAP_GMIN": "1e-9"
+ },
+ "gmin": 1e-09,
+ "icntl": {
+  "6": 0,
+  "7": 0,
+  "8": 8,
+  "14": 100,
+  "24": 1
+ },
+ "null_pivots": [
+  0,
+  0,
+  0,
+  0,
+  0
+ ],
+ "wall_s": 0.039466792019084096,
+ "closure": {
+  "ifsub": 1,
+  "savf": "capFix",
+  "mode": "gtap",
+  "linsolve": "mumps"
+ }
+}

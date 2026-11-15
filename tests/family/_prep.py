@@ -41,46 +41,31 @@ def reference_dir(
 @cache
 def capture_dir(
     dataset: str = "gtap7_3x3",
-    linsolve: str = "direct",
+    linsolve: str | None = None,
     ifsub: int = 1,
     savf: str = "capFix",
 ) -> Path:
-    """Photos of ``dataset``: the saved Pyomo reference when there is one (larger
-    datasets), else captured once per session into a temp dir (in-process solve with
-    Pyomo's ``linsolve``: a reference only matches a family run that uses the same one,
-    since the stopping point of the Newton loop depends on its trajectory)."""
-    import atexit
-    import os
-    import shutil
-    import tempfile
+    """Photos of ``dataset``: the committed Pyomo photo (``equilibria.family.photos``,
+    unpacked once into the family cache), else the saved reference of the slow
+    datasets in ``~/.cache``. Never solves Pyomo: a missing photo is a
+    ``PhotoError`` naming the command that regenerates it.
 
-    from equilibria.family import prep_capture
-    from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
+    ``linsolve`` (default: the photos', MUMPS) is the run's linear solver: a family
+    run matches a photo only with the same one, so another raises ``PhotoError``."""
+    from equilibria.family import photos
 
+    linsolve = linsolve or photos.LINSOLVE
+    committed = {(v[0], v[1], v[2]) for v in photos.VARIANTS}
+    if (dataset, ifsub, savf) in committed:
+        return photos.unpacked(dataset, ifsub, savf, linsolve=linsolve)
     ref = reference_dir(dataset, ifsub, savf)
-    if dataset != "gtap7_3x3" and ref.is_dir() and any(ref.glob("001_A_*.pkl")):
+    if ref.is_dir() and any(ref.glob("001_A_*.pkl")):
         return ref
-    out = Path(tempfile.mkdtemp(prefix=f"prep_{dataset}_"))
-    # Photos run to hundreds of MB on 15x10: never leave them behind.
-    atexit.register(shutil.rmtree, out, True)
-    env = {
-        **_newton_mumps(),
-        "EQUILIBRIA_GTAP_TR_LINSOLVE": linsolve,
-        prep_capture.ENV: str(out),
-    }
-    old = {k: os.environ.get(k) for k in env}
-    os.environ.update(env)
-    prep_capture.reset()
-    try:
-        _, code = _solve_shock(dataset, ifsub, savf, solve_nlp=True)
-    finally:
-        for k, v in old.items():
-            if v is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
-    assert code == 1
-    return out
+    raise photos.PhotoError(
+        f"{dataset} ifsub={ifsub} {savf}: no committed photo and no saved reference "
+        f"at {ref}; add the variant to photos.VARIANTS and run {photos.REGEN} "
+        f"--dataset {dataset}"
+    )
 
 
 @cache

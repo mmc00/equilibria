@@ -1,0 +1,16 @@
+{
+ "data": "f18e567e676907ec030fc209",
+ "closure": "087adef28f0be05acb904b28",
+ "pyomo_code": "cf657eb9316c0a09efb9434e",
+ "shared_code": "d489420d65c69f424cc7d011",
+ "env": {
+  "python": "3.12.16",
+  "linsolve": "mumps",
+  "pyomo": "6.10.1",
+  "numpy": "2.5.1",
+  "scipy": "1.18.0",
+  "pandas": "3.1.1",
+  "pymumps": "0.3.2",
+  "jax": "0.12.0.1"
+ }
+}

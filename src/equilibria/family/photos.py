@@ -12,8 +12,10 @@ This module is the read side; writing needs Pyomo and lives in the script.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from equilibria.sources import DATA_ROOT
 
@@ -77,3 +79,137 @@ def photo_closure(
         va_subsidy_basis="gempack",
         unit_sigma=unit_sigma,
     )
+
+
+class PhotoError(RuntimeError):
+    """A photo that is missing, damaged or made for another run."""
+
+
+# the per-step capture names carry an upper-case kind (001_A_base.pkl, 002_A2_check.pkl);
+# the repo keeps file names lowercase, so a photo stores them lowered
+_STEP = re.compile(r"(\d{3})_([a-z]\d?)_(.+)")
+
+
+def stored_name(name: str) -> str:
+    """The name a capture file has inside the committed photo."""
+    return name.lower()
+
+
+def plain_name(stored: str) -> str:
+    """The capture name back from ``stored_name`` (``.gz`` kept, if any)."""
+    m = _STEP.fullmatch(stored)
+    return f"{m[1]}_{m[2].upper()}_{m[3]}" if m else stored
+
+
+def _regen_hint(dataset: str) -> str:
+    return f"run {REGEN} --dataset {dataset} (with MUMPS)"
+
+
+def _record(folder: Path, dataset: str) -> Mapping[str, Any]:
+    from equilibria.sources import SourceError, load_source
+
+    try:
+        return load_source(folder).raw
+    except SourceError as err:
+        raise PhotoError(
+            f"{folder}: no photo ({err}); {_regen_hint(dataset)}"
+        ) from None
+
+
+def _check_hashes(folder: Path, rec: Mapping[str, Any], dataset: str) -> None:
+    from equilibria.sources import sha256_file
+
+    for name, sha in rec["outputs"].items():
+        f = folder / name
+        if not f.is_file() or sha256_file(f) != sha:
+            raise PhotoError(
+                f"{folder}: {name} is missing or does not match its sha256; "
+                f"{_regen_hint(dataset)}"
+            )
+
+
+def _cache_root() -> Path:
+    import os
+
+    base = (
+        os.environ.get("EQUILIBRIA_FAMILY_CACHE")
+        or Path.home() / ".cache/equilibria/family"
+    )
+    return Path(base) / "photos"
+
+
+def unpacked(
+    dataset: str,
+    ifsub: int = 1,
+    savf: str = "capFix",
+    mode: str = "gtap",
+    *,
+    linsolve: str = LINSOLVE,
+    root: Path = DATA_ROOT,
+    cache_root: Path | None = None,
+) -> Path:
+    """The photo as plain files (the ``.gz`` outputs decompressed once into a cache
+    keyed by the record's hash), after checking it is there, intact and made with
+    ``linsolve``: a family run matches a photo at 1e-9 only with the same solver."""
+    import gzip
+    import hashlib
+    import shutil
+
+    folder = photo_dir(dataset, ifsub, savf, mode, root=root)
+    rec = _record(folder, dataset)
+    made_with = rec.get("solver", {}).get("linsolve")
+    if made_with != linsolve:
+        raise PhotoError(
+            f"{folder}: made with linsolve={made_with!r}, this run uses {linsolve!r}; "
+            "a family run matches a photo only with the same linear solver"
+        )
+    _check_hashes(folder, rec, dataset)
+    key = hashlib.sha256((folder / "source.yaml").read_bytes()).hexdigest()[:12]
+    out = (cache_root or _cache_root()) / f"{dataset}_{folder.name}_{key}"
+    if out.is_dir():
+        return out
+    tmp = out.with_name(out.name + ".tmp")
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True)
+    for name in rec["outputs"]:
+        src, dst = folder / name, tmp / plain_name(name)
+        if name.endswith(".gz"):
+            dst.with_suffix("").write_bytes(gzip.decompress(src.read_bytes()))
+        else:
+            shutil.copyfile(src, dst)
+    tmp.rename(out)
+    return out
+
+
+def freshness(
+    dataset: str,
+    ifsub: int = 1,
+    savf: str = "capFix",
+    mode: str = "gtap",
+    *,
+    root: Path = DATA_ROOT,
+) -> Literal["fresh", "shared_changed", "stale"]:
+    """``stale`` when the data, the closure or the Pyomo-only code changed since the
+    photo (regenerate it); ``shared_changed`` when only code both routes run changed
+    (the family run must still match it at 1e-9)."""
+    import json
+
+    from equilibria.blocks.gtap.fingerprint import ModelPrint, model_print
+    from equilibria.sources import dataset_dir
+
+    folder = photo_dir(dataset, ifsub, savf, mode, root=root)
+    rec = _record(folder, dataset)
+    saved = ModelPrint.from_dict(json.loads((folder / "model_print.json").read_text()))
+    now = model_print(
+        data_files=[dataset_dir(dataset) / f for f in DATA_FILES],
+        closure=photo_closure(ifsub, savf),  # type: ignore[arg-type]
+        residual_region=rec["variant"]["residual_region"],
+        linsolve=LINSOLVE,
+    )
+    if now is None or (now.data, now.closure, now.pyomo_code) != (
+        saved.data,
+        saved.closure,
+        saved.pyomo_code,
+    ):
+        return "stale"
+    return "fresh" if now.shared_code == saved.shared_code else "shared_changed"

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import gzip
 import json
 import os
 import shutil
@@ -61,6 +62,20 @@ def _residual_region(dataset: str) -> str:
     return list(p.sets.r)[-1]  # _solve_shock's default
 
 
+def pack(folder: Path) -> None:
+    """gzip every pickle in ``folder`` (GitHub refuses files over 100 MB: the 20x41
+    final.pkl is ~294 MB, ~25 MB packed) and lower every name (the repo's layout
+    rule); ``photos.unpacked`` restores both."""
+    for f in sorted(folder.iterdir()):
+        name = photos.stored_name(f.name)
+        if f.suffix == ".pkl":
+            data = gzip.compress(f.read_bytes(), 6, mtime=0)
+            f.with_name(name + ".gz").write_bytes(data)
+            f.unlink()
+        elif name != f.name:
+            f.rename(f.with_name(name))
+
+
 def write_photo(
     dataset: str, ifsub: int, savf: str, mode: str, keep: str, *, root: Path = DATA_ROOT
 ) -> Path:
@@ -86,6 +101,7 @@ def write_photo(
     if mp is None:
         raise RuntimeError(f"{dataset}: the model print cannot cover data or closure")
     (tmp / "model_print.json").write_text(json.dumps(mp.to_dict(), indent=1) + "\n")
+    pack(tmp)
     import yaml
 
     record = {

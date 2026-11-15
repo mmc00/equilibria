@@ -1,0 +1,47 @@
+{
+ "n": 4,
+ "period": "check",
+ "code": 1,
+ "converged": true,
+ "nit": 2,
+ "nfact": 1,
+ "residual": 7.815970093361102e-14,
+ "method": "newton_tr",
+ "linsolve": "mumps",
+ "trace_f_inf": [
+  1.9398205726162132e-06,
+  7.815970093361102e-14
+ ],
+ "trace_f_scaled_inf": [
+  1.040612445836722e-06,
+  6.206146707654625e-14
+ ],
+ "tr_env": {
+  "EQUILIBRIA_GTAP_TR_DELTA0": "10.0",
+  "EQUILIBRIA_GTAP_TR_FTOL": "1e-7",
+  "EQUILIBRIA_GTAP_TR_GATE": "1",
+  "EQUILIBRIA_GTAP_TR_LINSOLVE": "mumps",
+  "EQUILIBRIA_GTAP_TR_RELTOL": "1e-6"
+ },
+ "mumps_env": {
+  "EQUILIBRIA_GTAP_GMIN": "1e-9"
+ },
+ "gmin": 1e-09,
+ "icntl": {
+  "6": 0,
+  "7": 0,
+  "8": 8,
+  "14": 100,
+  "24": 1
+ },
+ "null_pivots": [
+  0
+ ],
+ "wall_s": 0.1740341249969788,
+ "closure": {
+  "ifsub": 1,
+  "savf": "capFix",
+  "mode": "gtap",
+  "linsolve": "mumps"
+ }
+}
