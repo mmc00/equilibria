@@ -15,10 +15,11 @@ never hardcoded — that is what makes this a regression gate rather than a snap
 comparison. If a code change slides any stage below its floor (or breaks
 convergence), this fails.
 
-LOCAL-ONLY: intentionally NOT marked `gams`, so CI never collects it. SKIPS (not
-fails) when the fixture GDX is missing or the local PATH/NLP toolchain is absent,
-so it is safe to run anywhere; it only does real work on a machine with the NLP
-solve path + the dataset HAR. Run by hand to validate the NLP pipeline.
+CI: the cases the family (JAX) route also covers are marked `pyomo_solve` and leave
+PR CI (test_family_gams_parity covers them; scripts/family/regen_photos.py runs them);
+the rest run in the gdxdump suite. SKIPS (not fails) when the fixture GDX is missing
+or the local PATH/NLP toolchain is absent; it only does real work on a machine with
+the NLP solve path + the dataset HAR.
 
 Run:
     uv run pytest tests/templates/gtap/test_gtap7_nlp_parity.py -v
@@ -46,6 +47,7 @@ sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
 
 from coverage_matrix import nlp_rows  # noqa: E402
+from tests.family._twins import pyomo_solve  # noqa: E402
 
 from equilibria._local_refs import path_capi_src
 
@@ -86,7 +88,15 @@ TOL = 1e-2  # match @ tol1%
 
 # (dataset, ifsub, mode, stage_floors_dict, ci_status) per nlp matrix row.
 _NLP_CASES = [
-    (r.dataset, r.ifsub, r.mode, dict(r.stage_floors), r.ci_status) for r in nlp_rows()
+    pytest.param(
+        r.dataset,
+        r.ifsub,
+        r.mode,
+        dict(r.stage_floors),
+        r.ci_status,
+        marks=pyomo_solve(r.dataset, r.mode, r.ifsub, r.reference),
+    )
+    for r in nlp_rows()
 ]
 
 

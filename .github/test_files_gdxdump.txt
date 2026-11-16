@@ -14,6 +14,5 @@ tests/templates/gtap/test_gtap7_mcp_parity.py
 tests/templates/gtap/test_gtap7_nlp_parity.py
 tests/templates/gtap/test_gtap_blocks_solve.py
 tests/templates/gtap/test_gtap_multiperiod_parity.py
-tests/templates/gtap/test_ifsub_equivalence.py
 tests/templates/gtap/test_multiperiod_build_once.py
 tests/templates/gtap/test_multiperiod_fisher.py

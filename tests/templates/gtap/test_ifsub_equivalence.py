@@ -6,7 +6,9 @@ explicitly-solved vars the study compares) must stay consistent across modes: if
 changes representation, not the real quantities. This gate asserts that consistency;
 per-mode GAMS fidelity is the coverage matrix's job.
 
-LOCAL-only, gated on the GAMS MCP references (fbep=header) being recorded.
+Gated on the GAMS MCP references (fbep=header) being recorded. A dataset whose
+family (JAX) route matches GAMS at ifSUB 0 and 1 (test_family_gams_parity, floor >= 99)
+is marked `pyomo_solve` and leaves PR CI; scripts/family/regen_photos.py runs it.
 """
 
 from __future__ import annotations
@@ -25,6 +27,8 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
 
+from tests.family._twins import pyomo_solve_ifsub_pair  # noqa: E402
+
 DATASETS = ["gtap7_3x3", "gtap7_3x4", "gtap7_5x5", "gtap7_10x7", "gtap7_15x10"]
 # Primary-block agreement floor across modes. Measured ~99.3% on gtap7_3x3 (the
 # residual is the margin-driven bilateral-trade cells that legitimately move +
@@ -33,7 +37,9 @@ FLOOR = 0.90
 
 
 @pytest.mark.needs_path
-@pytest.mark.parametrize("dataset", DATASETS)
+@pytest.mark.parametrize(
+    "dataset", [pytest.param(d, marks=pyomo_solve_ifsub_pair(d)) for d in DATASETS]
+)
 def test_ifsub_primary_block_consistent(dataset):
     from verify_ifsub_equivalence import compare_primary_across_modes, ref_gdx
 

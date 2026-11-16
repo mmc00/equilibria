@@ -141,3 +141,60 @@ def test_no_floor_below_95():
             (r.dataset, r.kind, r.ifsub, k, f) for k, f in floors.items() if f < 95.0
         ]
     assert low == []
+
+
+def _param_cases(fn):
+    """``[(values, marks)]`` of ``fn``'s parametrize mark, plain tuples or params."""
+    (mark,) = [m for m in fn.pytestmark if m.name == "parametrize"]
+    out = []
+    for v in mark.args[1]:
+        if hasattr(v, "values"):
+            out.append((tuple(v.values), [m.name for m in v.marks]))
+        else:
+            out.append((tuple(v) if isinstance(v, tuple) else (v,), []))
+    return out
+
+
+def test_every_pyomo_solve_case_has_a_family_twin():
+    """A Pyomo solve case is marked ``pyomo_solve`` (it leaves PR CI) exactly when a
+    non-xfail family case covers its variant and reference (Marlon, 2026-11-14: one
+    the family does not cover yet keeps running in PR CI)."""
+    from tests.family import _twins
+    from tests.family._parity import gams_cases, gempack_cases
+    from tests.templates.gtap import test_gtap7_gempack_parity as gem
+    from tests.templates.gtap import test_gtap7_mcp_parity as mcp
+    from tests.templates.gtap import test_gtap7_nlp_parity as nlp
+    from tests.templates.gtap import test_ifsub_equivalence as eqv
+
+    family = {
+        (c.dataset, c.mode, c.ifsub, "gams") for c in gams_cases() if c.mode == "pure"
+    } | {(c.dataset, c.mode, c.ifsub, "gempack") for c in gempack_cases()}
+    assert _twins.twins() == family
+
+    def key_mcp(v):
+        return (v[0], v[2], v[1], "gams")
+
+    def key_gem(v):
+        return (v[0].dataset, v[0].mode, v[0].ifsub, "gempack")
+
+    wrong = []
+    for fn, key in (
+        (mcp.test_gtap7_mcp_parity, key_mcp),
+        (nlp.test_gtap7_nlp_parity, key_mcp),
+        (gem.test_gtap7_gempack_parity, key_gem),
+    ):
+        for values, marks in _param_cases(fn):
+            k = key(values)
+            if ("pyomo_solve" in marks) != (k in family):
+                wrong.append((fn.__name__, k, "pyomo_solve" in marks))
+    for values, marks in _param_cases(eqv.test_ifsub_primary_block_consistent):
+        d = values[0]
+        pair = all((d, "pure", i, "gams") in family for i in (0, 1))
+        if ("pyomo_solve" in marks) != pair:
+            wrong.append(("test_ifsub_primary_block_consistent", d, not pair))
+    for values, marks in _param_cases(mcp.test_basis_reproduces_its_gams_variant):
+        if "pyomo_solve" in marks:  # other bases: the family runs the default one
+            wrong.append(("test_basis_reproduces_its_gams_variant", values, True))
+    assert wrong == [], (
+        f"(test, case, marked) whose mark disagrees with the twins: {wrong}"
+    )
