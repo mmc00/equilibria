@@ -58,7 +58,7 @@ def gams_reference(dataset: str, ifsub: int, mode: str) -> Path:
     return gdx
 
 
-def _solve(dataset: str, ifsub: int, mode: str):
+def _solve(dataset: str, ifsub: int, mode: str, unit_sigma: str = "gams"):
     """``(FamilyResult, code)`` of the family route on the photos' closure."""
     import pytest
 
@@ -89,7 +89,14 @@ def _solve(dataset: str, ifsub: int, mode: str):
             "EQUILIBRIA_GTAP_TR_LINSOLVE": linsolve,
         }.items():
             mp.setenv(k, v)
-        return _solve_shock(dataset, ifsub, "capFix", solve_nlp=True, backend="family")
+        return _solve_shock(
+            dataset,
+            ifsub,
+            "capFix",
+            solve_nlp=True,
+            backend="family",
+            unit_sigma=unit_sigma,
+        )
 
 
 def family_match(dataset: str, ifsub: int, mode: str, gdx: Path) -> dict[str, dict]:
@@ -145,3 +152,71 @@ def family_match(dataset: str, ifsub: int, mode: str, gdx: Path) -> dict[str, di
         }
         for s in stages
     }
+
+
+def gempack_cases() -> list[Case]:
+    """One case per mcp row with ``reference == "gempack"`` (capFix, mode gtap)."""
+    return [
+        Case(r.dataset, r.mode, r.ifsub, dict(r.stage_floors))
+        for r in coverage_matrix.rows_for("gtap7", "gempack", kind="mcp")
+    ]
+
+
+def gempack_reference(dataset: str) -> Path:
+    """The capFix GEMPACK ``sl4dump.har`` the case compares against; a missing one is
+    an error, not a skip."""
+    from tests.templates.gtap.test_gtap7_gempack_parity import _capfix_fixture_for
+
+    sl4 = _capfix_fixture_for(Case(dataset, "pure", 0, {}))
+    if sl4 is None or not sl4.exists():
+        raise FileNotFoundError(f"no capFix GEMPACK sl4dump for {dataset}")
+    return sl4
+
+
+def family_gempack_within(dataset: str, ifsub: int):
+    """``(within_1pp, median_pp, cells, code)`` of the family run against GEMPACK: the
+    rule of ``test_gtap7_gempack_parity._measure_pp`` (shock/check %-change of the
+    ``Q_TO_VAR`` quantities, check falling back to base) on the family's arrays."""
+    import statistics
+
+    from gempack_reference import Q_TO_VAR, gempack_qty_pct  # type: ignore
+
+    from tests.templates.gtap.test_gtap7_gempack_parity import PP_WITHIN
+
+    sl4 = gempack_reference(dataset)
+    res, code = _solve(dataset, ifsub, "pure", unit_sigma="gempack")
+    mp = res.mp
+
+    def level(v, key, period):
+        try:
+            x = float(v.value[v.pos((*key, period))])
+        except (KeyError, IndexError):
+            return None
+        return x if math.isfinite(x) else None
+
+    diffs = []
+    for gvar, spec in Q_TO_VAR.items():
+        try:
+            gem = gempack_qty_pct(str(sl4), gvar)
+        except KeyError:
+            continue
+        v = mp.vars.get(spec["var"])
+        if v is None:
+            continue
+        for key, gfrac in gem.items():
+            s = level(v, key, "shock")
+            if s is None:
+                continue
+            den = None
+            for period in ("check", "base"):
+                d = level(v, key, period)
+                if d is not None and abs(d) > 1e-12:
+                    den = d
+                    break
+            if den is None:
+                continue
+            diffs.append(abs(s / den - 1.0 - gfrac))
+    if not diffs:
+        return 0.0, math.inf, 0, code
+    within = sum(1 for x in diffs if x <= PP_WITHIN) / len(diffs)
+    return within, statistics.median(diffs), len(diffs), code
