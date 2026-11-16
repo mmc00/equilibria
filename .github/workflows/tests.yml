@@ -123,8 +123,10 @@ jobs:
   # `-ra` because pytest's default (-rfE) does not report skips.
   #
   # `not needs_gdxdump` is half of a partition: gdxdump-tests runs
-  # `needs_gdxdump and not gams and not slow`. Changing one requires the other
-  # (and the marker table in scripts/dev/plan_test_groups.py).
+  # `needs_gdxdump and not gams and not slow and not pyomo_solve`. Changing
+  # one requires the other (and the marker table in
+  # scripts/dev/plan_test_groups.py). `pyomo_solve` cases have a family (JAX)
+  # twin and leave both suites; scripts/family/regen_photos.py runs them.
   python-tests:
     name: python-tests (${{ matrix.group }})
     needs: [changes, plan-groups]
@@ -159,7 +161,7 @@ jobs:
           # shellcheck disable=SC2086
           # -n 4: public-repo runners have 4 cores. Measured locally on the
           # heaviest group: 1745 s serial -> 858 s (2.0x).
-          uv run pytest -ra -m "not gams and not slow and not needs_gdxdump" $PATHS \
+          uv run pytest -ra -m "not gams and not slow and not needs_gdxdump and not pyomo_solve" $PATHS \
             "${extra[@]}" -n 4 \
             -o junit_family=xunit1 --junitxml="junit-python-$safe.xml"
 
@@ -185,7 +187,7 @@ jobs:
 
       - name: Run docs tests (documentation-only PR)
         run: |
-          uv run pytest -ra -m "not gams and not slow and not needs_gdxdump" tests/docs
+          uv run pytest -ra -m "not gams and not slow and not needs_gdxdump and not pyomo_solve" tests/docs
 
   # Expected test ids per suite, collected once and compared by tests-verdict
   # against what the groups actually ran. Collection does not need gdxdump:
@@ -214,9 +216,9 @@ jobs:
             uv run pytest --collect-only -o addopts="" -q -m "$1" tests \
               | grep '::' > "$2"
           }
-          collect "not gams and not slow and not needs_gdxdump" collected-python.txt &
+          collect "not gams and not slow and not needs_gdxdump and not pyomo_solve" collected-python.txt &
           pid_py=$!
-          collect "needs_gdxdump and not gams and not slow" collected-gdxdump.txt &
+          collect "needs_gdxdump and not gams and not slow and not pyomo_solve" collected-gdxdump.txt &
           pid_gd=$!
           wait "$pid_py"
           wait "$pid_gd"
@@ -294,7 +296,7 @@ jobs:
           fi
           # PATHS is intentionally unquoted: space-separated test files.
           # shellcheck disable=SC2086
-          uv run pytest -ra -m "needs_gdxdump and not gams and not slow" $PATHS \
+          uv run pytest -ra -m "needs_gdxdump and not gams and not slow and not pyomo_solve" $PATHS \
             "${extra[@]}" \
             -o junit_family=xunit1 --junitxml="junit-gdxdump-$safe.xml"
 

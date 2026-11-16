@@ -6,7 +6,8 @@
 Runs the Pyomo reference of every selected variant (``photos.VARIANTS``) into
 ``data/gtap7/<ds>/equilibria_pyomo-photo_<tag>/``, writes its ``model_print.json``
 and ``source.yaml`` (ADR-0010), then the Pyomo parity tests of those datasets
-against GAMS, so a regenerated photo is checked before it is committed.
+against GAMS and GEMPACK (the ``pyomo_solve`` cases, out of PR CI), so a
+regenerated photo is checked before it is committed.
 MUMPS only: the family runs match a photo at 1e-9 only with the same linear
 solver, and 20x41 needs MUMPS.
 """
@@ -33,9 +34,13 @@ from equilibria.blocks.gtap.fingerprint import model_print  # noqa: E402
 from equilibria.family import photos  # noqa: E402
 from equilibria.sources import DATA_ROOT, dataset_dir, sha256_file  # noqa: E402
 
+# The files holding the ``pyomo_solve`` cases: the Pyomo solves that left PR CI
+# because the family has a twin, run here against GAMS and GEMPACK instead.
 GATE_TESTS = (
     "tests/templates/gtap/test_gtap7_mcp_parity.py",
     "tests/templates/gtap/test_gtap7_nlp_parity.py",
+    "tests/templates/gtap/test_gtap7_gempack_parity.py",
+    "tests/templates/gtap/test_ifsub_equivalence.py",
 )
 
 
@@ -142,6 +147,27 @@ def write_photo(
     return out
 
 
+def gate_command(datasets: list[str]) -> list[str]:
+    """The pytest command of the ``pyomo_solve`` cases of ``datasets``. Without
+    gdxdump on PATH every GAMS case would skip and the gates would pass: refuse."""
+    if shutil.which("gdxdump") is None:
+        sys.exit(
+            "regen_photos: gdxdump is not on PATH, the GAMS gates would all skip; "
+            "put it there (GAMS, or the gamspy_base wheel) or pass --no-gates"
+        )
+    return [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-q",
+        "-m",
+        "pyomo_solve",
+        *GATE_TESTS,
+        "-k",
+        " or ".join(datasets),
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", action="append", default=[])
@@ -160,8 +186,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{ds} ifsub={ifsub} {savf}: {(time.time() - t) / 60:.2f} min, {mb:.1f} MB -> {out}")
     if a.no_gates:
         return 0
-    datasets = sorted({v[0] for v in chosen})
-    gate = [sys.executable, "-m", "pytest", "-q", *GATE_TESTS, "-k", " or ".join(datasets)]
+    gate = gate_command(sorted({v[0] for v in chosen}))
     print("gates:", " ".join(gate), flush=True)
     return subprocess.run(gate, cwd=ROOT).returncode
 

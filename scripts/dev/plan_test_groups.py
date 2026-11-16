@@ -41,8 +41,8 @@ NEW_FILE_SECONDS = 30.0
 
 # Marker expressions per suite; they must match the ones in tests.yml.
 SUITE_MARKERS = {
-    "python": "not gams and not slow and not needs_gdxdump",
-    "gdxdump": "needs_gdxdump and not gams and not slow",
+    "python": "not gams and not slow and not needs_gdxdump and not pyomo_solve",
+    "gdxdump": "needs_gdxdump and not gams and not slow and not pyomo_solve",
 }
 
 

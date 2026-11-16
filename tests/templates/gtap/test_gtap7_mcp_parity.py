@@ -11,9 +11,10 @@ With clean refs the match is 99%+ everywhere (base/check exact, shock ≥99.3 ex
 15x10's known eq_paa Armington micro-cell ~95%) — proving the NLP gate's 89–97
 ceiling was the mis-converged NLP reference, not the model.
 
-LOCAL-ONLY: not marked `gams`, so CI never collects it. SKIPS when the fixture GDX
-is missing or the local PATH solver is absent. Run by hand to validate the MCP
-pipeline.
+CI: the cases the family (JAX) route also covers are marked `pyomo_solve` and leave
+PR CI (test_family_gams_parity covers them; scripts/family/regen_photos.py runs them);
+the rest run in the gdxdump suite. SKIPS when the fixture GDX is missing or the
+local PATH solver is absent.
 
 Run:
     uv run pytest tests/templates/gtap/test_gtap7_mcp_parity.py -v
@@ -40,6 +41,7 @@ sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
 
 from coverage_matrix import mcp_rows  # noqa: E402
+from family_twins import pyomo_solve  # noqa: E402
 
 from equilibria._local_refs import path_capi_src
 
@@ -79,7 +81,15 @@ TOL = 1e-2
 # test_gtap7_gempack_parity.py (quantity-vs-quantity, different fixtures + metric).
 _GAMS_MCP_ROWS = [r for r in mcp_rows() if r.reference == "gams"]
 _MCP_CASES = [
-    (r.dataset, r.ifsub, r.mode, dict(r.stage_floors), r.ci_status, r.code2_ok)
+    pytest.param(
+        r.dataset,
+        r.ifsub,
+        r.mode,
+        dict(r.stage_floors),
+        r.ci_status,
+        r.code2_ok,
+        marks=pyomo_solve(r.dataset, r.mode, r.ifsub, r.reference),
+    )
     for r in _GAMS_MCP_ROWS
 ]
 
