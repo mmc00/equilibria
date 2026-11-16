@@ -13,12 +13,14 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping
 from itertools import compress
+from operator import itemgetter
 
 import numpy as np
 
 from equilibria.family.mp_arrays import MPArrays, RowArr, VarArr
 
 PERIODS = ("base", "check", "shock")
+_BODY = itemgetter(slice(None, -1))  # a cell's key without its period
 
 
 def positions(obj: VarArr | RowArr, period: str) -> dict[tuple, int]:
@@ -26,8 +28,9 @@ def positions(obj: VarArr | RowArr, period: str) -> dict[tuple, int]:
     on ``obj`` under the name ``prep_recipe._table`` uses, so both share it."""
     cache = obj.__dict__.setdefault("_table", {})
     if period not in cache:
-        sel = np.flatnonzero(obj.period == period)
-        cache[period] = {obj.keys[i][:-1]: int(i) for i in sel}
+        mask = obj.period == period
+        bodies = map(_BODY, compress(obj.keys, mask.tolist()))
+        cache[period] = dict(zip(bodies, np.flatnonzero(mask).tolist(), strict=True))
     return cache[period]
 
 

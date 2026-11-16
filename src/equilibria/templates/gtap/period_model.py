@@ -92,6 +92,14 @@ class GTAPPeriodModel(PeriodModel, Protocol):
         runs on the same ``params``); ``fresh=True`` builds it anew."""
         ...
 
+    def replicate_reference(
+        self, closure: Any, params: Any, period: str, *, fresh: bool
+    ) -> None:
+        """Fix what ``sp_reference`` fixes in ``period`` (cells already fixed keep
+        their level) and copy its bounds: ``apply_reference``, which a backend may
+        do in bulk."""
+        ...
+
     def recalibrate_and_ava(self, period: str, prior: str, params: Any) -> int:
         """altertax: rebuild ``eq_nd``/``eq_va`` of ``period`` with and/ava from
         ``prior``'s levels. Returns the rows rebuilt."""
@@ -124,3 +132,23 @@ class GTAPPeriodModel(PeriodModel, Protocol):
         ...
 
     def debug_before_solve(self, period: str) -> None: ...
+
+
+def apply_reference(m: GTAPPeriodModel, ref: Reference, period: str) -> None:
+    """``replicate_reference`` cell by cell: fix ``ref.fixed`` where this period
+    has the cell and it is not fixed yet, then set ``ref.bounds`` where it has it."""
+    for name, cells in ref.fixed.items():
+        if not m.has_var(name):
+            continue
+        here = set(m.var_cells(name, period))
+        fixed = m.fixed_cells(name, period)
+        m.fix_cells(
+            name,
+            period,
+            {k: v for k, v in cells.items() if k in here and k not in fixed},
+        )
+    for name, cells in ref.bounds.items():
+        if not m.has_var(name):
+            continue
+        here = set(m.var_cells(name, period))
+        m.set_bounds(name, period, {k: b for k, b in cells.items() if k in here})

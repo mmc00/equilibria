@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from itertools import repeat
 from typing import Any
 
 import numpy as np
@@ -111,6 +112,37 @@ class GTAPFamilyPeriodModel(FamilyPeriodModel):
                 }
         self.run.sp_reference = Reference(fixed, bounds)
         return self.run.sp_reference
+
+    def replicate_reference(
+        self, closure: Any, params: Any, period: str, *, fresh: bool
+    ) -> None:
+        """``apply_reference`` on the arrays: ``run.ref`` and the period's cells are
+        matched once per variable and period (``run.ref_positions``), then fixed
+        and bounded by masks."""
+        for name, sp in self.run.ref.vars.items():
+            v = self.mp.vars.get(name)
+            if v is None:
+                continue
+            src, dst = self._ref_positions(name, sp, v, period)
+            new = sp.fixed[src] & ~v.fixed[dst]
+            v.value[dst[new]] = sp.value[src[new]]
+            v.fixed[dst[new]] = True
+            lo, hi = np.isfinite(sp.lb[src]), np.isfinite(sp.ub[src])
+            v.lb[dst[lo]] = sp.lb[src[lo]]
+            v.ub[dst[hi]] = sp.ub[src[hi]]
+
+    def _ref_positions(
+        self, name: str, sp: Any, v: Any, period: str
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Reference cells this period has (``src``) and their positions (``dst``)."""
+        cache = self.run.ref_positions
+        if (name, period) not in cache:
+            table = positions(v, period)
+            n = len(sp.keys)
+            at = np.fromiter(map(table.get, sp.keys, repeat(-1, n)), np.intp, count=n)
+            src = np.flatnonzero(at >= 0)
+            cache[name, period] = (src, at[src])
+        return cache[name, period]
 
     # ── GTAP operations that are not cell edits ────────────────────────────
 

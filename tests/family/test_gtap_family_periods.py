@@ -118,3 +118,23 @@ def test_exogenous_is_the_instruments_shock_cells(prepared) -> None:
 def test_altertax_refused(prepared) -> None:
     with pytest.raises(NotImplementedError, match="altertax"):
         _model(prepared).recalibrate_and_ava("check", "base", None)
+
+
+@pytest.mark.parametrize("period", ["base", "check", "shock"])
+def test_replicate_reference_same_arrays_as_cell_by_cell(prepared, period) -> None:
+    from equilibria.templates.gtap.period_model import apply_reference
+
+    run, _ = prepared
+    m, old = _model(prepared), _model(prepared)
+    # cells already fixed keep their level: pre-fix, at another level, cells the
+    # reference fixes, on both sides
+    name, sp = next((n, s) for n, s in run.ref.vars.items() if s.fixed.sum() >= 3)
+    body = {sp.keys[i] for i in np.flatnonzero(sp.fixed)[:3]}
+    for x in (m, old):
+        v = x.mp.vars[name]
+        at = [i for i, k in enumerate(v.keys) if k[-1] == period and k[:-1] in body]
+        assert at, name
+        v.value[at], v.fixed[at] = 7.0, True
+    m.replicate_reference(None, None, period, fresh=False)
+    apply_reference(old, old.sp_reference(None, None, period, fresh=False), period)
+    _same_arrays(m.mp, old.mp)

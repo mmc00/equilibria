@@ -109,6 +109,15 @@ class GTAPPyomoPeriodModel(PyomoPeriodModel):
             snap = prep._reference_model(self.pyomo, params, closure, period)
         return _as_reference(snap, period)
 
+    def replicate_reference(
+        self, closure: Any, params: Any, period: str, *, fresh: bool
+    ) -> None:
+        from equilibria.templates.gtap.period_model import apply_reference
+
+        apply_reference(
+            self, self.sp_reference(closure, params, period, fresh=fresh), period
+        )
+
     def _reference_cache(self) -> Any:
         """The reference models of this run, cached as ``PeriodPreparer`` caches
         them (and shared with other runs on the same ``params``)."""

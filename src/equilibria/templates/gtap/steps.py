@@ -185,7 +185,9 @@ def seed_from_settled(ctx: StepContext) -> None:
         levels = {}
         for body, val in cells.items():
             key = tuple(body) if isinstance(body, tuple) else (body,)
-            if key in here and key not in exo and isinstance(val, numbers.Real):
+            # float/int first: the abstract numbers.Real check alone is ~1 us a cell
+            real = isinstance(val, (float, int, numbers.Real))
+            if key in here and key not in exo and real:
                 levels[key] = float(val)
         m.set_values(name, period, levels)
 
@@ -342,22 +344,7 @@ def replicate_reference(*, fresh: bool) -> Step:
     def step(ctx: StepContext) -> None:
         m, period = _gm(ctx), ctx.period.name
         staged = _staged(m)
-        ref = m.sp_reference(staged.closure, staged.params, period, fresh=fresh)
-        for name, cells in ref.fixed.items():
-            if not m.has_var(name):
-                continue
-            here = set(m.var_cells(name, period))
-            fixed = m.fixed_cells(name, period)
-            m.fix_cells(
-                name,
-                period,
-                {k: v for k, v in cells.items() if k in here and k not in fixed},
-            )
-        for name, cells in ref.bounds.items():
-            if not m.has_var(name):
-                continue
-            here = set(m.var_cells(name, period))
-            m.set_bounds(name, period, {k: b for k, b in cells.items() if k in here})
+        m.replicate_reference(staged.closure, staged.params, period, fresh=fresh)
 
     return step
 
