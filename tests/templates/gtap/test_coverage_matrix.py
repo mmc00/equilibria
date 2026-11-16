@@ -125,3 +125,19 @@ def test_rows_for_filters_by_model_and_reference():
     assert gempack_mcp and all(r.reference == "gempack" for r in gempack_mcp)
     # no gtap6 rows yet → empty
     assert rows_for("gtap6", "gams") == []
+
+
+def test_no_floor_below_95():
+    """No row may ask for less than 95% match (Marlon, 2026-11-14): every stage floor
+    and every gap_min. Lowering one below needs his OK and this test changed with it."""
+    from coverage_matrix import ROWS
+
+    low = []
+    for r in ROWS:
+        floors = dict(r.stage_floors or ())
+        if r.gap_min is not None:
+            floors["gap_min"] = r.gap_min
+        low += [
+            (r.dataset, r.kind, r.ifsub, k, f) for k, f in floors.items() if f < 95.0
+        ]
+    assert low == []
