@@ -435,8 +435,7 @@ def _default_tariff(c: _Ctx) -> None:
     """The driver writes the +10 % default tariff into imptx[.., shock] when no
     instrument differs from its check value (``shocks.apply_default_tariff``): every
     ``imptx`` cell that ``can_take_shock`` accepts gets +10 % on its power 1 + t."""
-    from equilibria.family.shock import apply_shock, can_take_shock
-    from equilibria.templates.gtap.shocks import DEFAULT_TARIFF_PCT
+    from equilibria.family.shock import apply_default_tariff
 
     mp, sp = c.mp, c.sp
     for name in sorted(sp.exogenous):  # shock_of: any shocked cell -> nothing to do
@@ -448,15 +447,7 @@ def _default_tariff(c: _Ctx) -> None:
         raise ValueError(
             "the default tariff needs the single-period recording (backend=)"
         )
-    imptx = mp.var("imptx")
-    cells = {
-        cell: DEFAULT_TARIFF_PCT
-        for cell in _table(imptx, "shock")
-        if can_take_shock(mp, c.backend, "imptx", cell)
-    }
-    if not cells:
-        raise ValueError("no imptx cell can take the default tariff")
-    apply_shock(mp, c.backend, {"imptx": cells})
+    apply_default_tariff(mp, c.backend)
 
 
 def _nominal_trade_balance(c: _Ctx) -> None:
