@@ -37,7 +37,7 @@
  "null_pivots": [
   0
  ],
- "wall_s": 0.29978216701420024,
+ "wall_s": 0.1901457089697942,
  "closure": {
   "ifsub": 1,
   "savf": "capFix",
