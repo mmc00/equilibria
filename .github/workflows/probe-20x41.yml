@@ -27,8 +27,8 @@ jobs:
           free -g
           for pass in cold warm; do
             echo "=== $pass"
-            /usr/bin/time -v uv run pytest -ra -q -o addopts="" \
-              -m "slow and not gams and not pyomo_solve" tests/family -k 20x41 \
+            /usr/bin/time -v uv run pytest -ra -q -s -o addopts="" \
+              tests/family/test_family_e2e_gate.py \
               2> "time-$pass.txt" | tail -25
             echo "exit ${PIPESTATUS[0]}"
             grep -E "Elapsed|Maximum resident" "time-$pass.txt"
