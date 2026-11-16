@@ -49,7 +49,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list) -> None:
     if not HAS_JAX:
         no_jax = pytest.mark.skip(reason="needs the family extra (jax)")
         for item in items:
-            if item.path.is_relative_to(HERE):
+            # test_ci_env.py checks the CI image: it must run, and fail, without jax
+            if item.path.is_relative_to(HERE) and item.path.name != "test_ci_env.py":
                 item.add_marker(no_jax)
         return
     if _wants_slow(config):
