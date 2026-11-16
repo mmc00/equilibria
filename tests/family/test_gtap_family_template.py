@@ -104,7 +104,7 @@ def test_family_refuses_overwrite_hook(env) -> None:
     from equilibria.blocks.gtap.overwrite import overwrite
 
     monkeypatch, tmp_path = env
-    monkeypatch.setattr(overwrite, "active", lambda: True)
+    monkeypatch.setattr(type(overwrite), "active", lambda self: True)
     with pytest.raises(NotImplementedError, match="@overwrite"):
         _gtap(tmp_path).build(("base", "check", "shock"))
 
