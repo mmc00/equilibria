@@ -108,12 +108,13 @@ jobs:
         run: |
           set -euo pipefail
           py=$(python scripts/dev/plan_test_groups.py --suite python --budget 240 --max-groups 14 --explain)
-          gd=$(python scripts/dev/plan_test_groups.py --suite gdxdump --budget 240 --max-groups 9 --explain)
+          gd=$(python scripts/dev/plan_test_groups.py --suite gdxdump --budget 200 --max-groups 12 --explain)
           echo "python=$py" >> "$GITHUB_OUTPUT"
           echo "gdxdump=$gd" >> "$GITHUB_OUTPUT"
 
-  # The suite runs as the groups of `plan-groups` in parallel (about 7 min
-  # longest group predicted against ~25 min serial). The groups are
+  # The suite runs as the groups of `plan-groups` in parallel (budget 240 s of
+  # predicted serial test time per python group, 200 per gdxdump group, aiming at
+  # a pytest step of about 2-4 min). The groups are
   # independent runners, so the PATH-library and model-cache contention that
   # forbids -n inside one runner does not apply. Do NOT add -n/--numprocesses.
   # `tests-verdict` checks that the groups together ran every collected test
