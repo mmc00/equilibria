@@ -28,6 +28,22 @@ runs:
       shell: bash
       run: uv sync --dev --extra family --python ${{ inputs.python-version }}
 
+    # MUMPS: the family tests compare against Pyomo photos made with MUMPS on the
+    # Mac, and a run matches a photo at 1e-9 only with the same linear solver
+    # (specs/2026-11-14-jax-tests-fotos-pyomo-design.md). Fails hard: without it
+    # the photo comparisons would fail anyway (test_ci_env.py says why).
+    - name: Install MUMPS (pymumps)
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends libmumps-seq-dev
+        py="$(uv run python -c 'import sys; print(sys.executable)')"
+        # PyMUMPS 0.3.2 builds from source with Cython, setuptools and the venv's numpy
+        uv pip install --python "$py" cython setuptools
+        uv pip install --python "$py" --no-build-isolation PyMUMPS==0.3.2
+        uv run python -c "import mumps; print('pymumps OK')"
+
     # --- solvers: sin esto, 64 de 1151 tests se SALTABAN en silencio -------
     # Los guards de solver (tests/conftest.py) saltan needs_path/needs_ipopt
     # cuando la herramienta falta, asi que CI salia VERDE con esos tests
@@ -51,7 +67,7 @@ runs:
         #   * libpynumero_ASL.so, la interfaz ASL de PyNumero, que NO esta en
         #     `pyomo download-extensions`, falla en `pyomo build-extensions`
         #     (faltan las fuentes de ampl/asl) y no existe en PyPI.
-        # Verificado en contenedor ubuntu:24.04 (la imagen de este runner):
+        # Verificado en contenedores ubuntu:24.04 y ubuntu:26.04:
         #   ipopt -> Ipopt 3.13.2, SolverFactory("ipopt").available() True
         #   ASL   -> AmplInterface.available() True
         # Sin coinor-libipopt-dev ni pkg-config: solo sirven para compilar
@@ -61,9 +77,15 @@ runs:
         # Las dependencias van ANTES: el binario de IDAES enlaza contra
         # lapack/blas/gfortran del sistema y sin ellas aborta con
         # "error while loading shared libraries: liblapack.so.3".
+        # El paquete de la libreria C cambia de nombre con la version de Ubuntu:
+        # coinor-libipopt1v5 (24.04, libipopt.so.1) y coinor-libipopt3 (26.04,
+        # libipopt.so.3). ubuntu-latest paso a 26.04 en noviembre de 2026 y el
+        # cambio llega de a poco, asi que se instala el que exista.
         sudo apt-get update -qq
+        ipopt_pkg=coinor-libipopt3
+        apt-cache show "$ipopt_pkg" >/dev/null 2>&1 || ipopt_pkg=coinor-libipopt1v5
         sudo apt-get install -y --no-install-recommends \
-          coinor-libipopt1v5 liblapack3 libblas3 libgfortran5 libgomp1
+          "$ipopt_pkg" liblapack3 libblas3 libgfortran5 libgomp1
         pip install --quiet idaes-pse
         idaes get-extensions --distro ubuntu2204
         echo "$HOME/.idaes/bin" >> "$GITHUB_PATH"
@@ -73,6 +95,7 @@ runs:
         python -c "import ctypes, os; ctypes.CDLL(os.path.expanduser('~/.idaes/bin/libpynumero_ASL.so'))"
         # Smoke test: que el .so este no prueba que se pueda cargar.
         python -c "import ctypes; ctypes.CDLL('libipopt.so')" || \
+          python -c "import ctypes; ctypes.CDLL('libipopt.so.3')" || \
           python -c "import ctypes; ctypes.CDLL('libipopt.so.1')"
         # cyipopt es el binding de Python (la libreria C sola no alcanza: hay
         # tests que hacen `import cyipopt`). Se compila desde fuente y depende

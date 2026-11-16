@@ -31,6 +31,8 @@ from tests.family._prep import capture_dir
 from tests.family.test_mp_build import diff_to_photo
 from tests.family.test_prep_recipe import ROUTE, _closure, _params
 
+# values and lower bounds: the photos come from the Mac, CI runs Linux, and the
+# single-period reference bounds differ there in the last bits (~7e-16 relative)
 TOL = 1e-12
 DATASETS = (
     "gtap7_3x3",
@@ -216,7 +218,7 @@ def test_base_recipe_equals_a2(case, n):
         cross=case["cross"],
     )
     a2 = _load(case["dir"], f"{n:03d}_A2_base.pkl")
-    assert diff_to_photo(got, a2, TOL) == []
+    assert diff_to_photo(got, a2, TOL, lb_rtol=TOL) == []
 
 
 def test_base_recipe_without_seed_ignores_settled(case):
@@ -236,7 +238,7 @@ def test_base_recipe_without_seed_ignores_settled(case):
         **_flags(1),
     )
     a2 = _load(case["dir"], "001_A2_base.pkl")
-    assert diff_to_photo(got, a2, TOL) == []
+    assert diff_to_photo(got, a2, TOL, lb_rtol=TOL) == []
 
 
 # ── The base post-solve ─────────────────────────────────────────────────────
@@ -248,7 +250,7 @@ def test_base_post_solve_equals_next_photo_a(case, n):
         pytest.skip("no next call")
     mp = _post(case, _mp(case, f"{n:03d}_A2_base.pkl"), "base")
     nxt = _load(case["dir"], f"{n + 1:03d}_A_{case['calls'][n + 1]}.pkl")
-    assert diff_to_photo(mp, nxt, TOL) == []
+    assert diff_to_photo(mp, nxt, TOL, lb_rtol=TOL) == []
 
 
 # ── Check and shock ─────────────────────────────────────────────────────────
@@ -268,7 +270,7 @@ def test_check_post_solve_equals_next_photo_a(case, n):
     assert case["calls"][n] == "check"
     mp, _ = _check_next(case, n)
     nxt = _load(case["dir"], f"{n + 1:03d}_A_{case['calls'][n + 1]}.pkl")
-    assert diff_to_photo(mp, nxt, TOL) == []
+    assert diff_to_photo(mp, nxt, TOL, lb_rtol=TOL) == []
 
 
 def test_settle_check_equals_settled(case):
@@ -322,14 +324,17 @@ def shock_final(case):
 
 
 def test_shock_final_state_equals_final_pkl(case, shock_final):
-    assert diff_to_photo(shock_final, case["final"], TOL) == []
+    assert diff_to_photo(shock_final, case["final"], TOL, lb_rtol=TOL) == []
 
 
 def test_ifsub_report_cells_in_shock_equal_final(case, shock_final):
     names = set(REPORT_VARS)
     assert (
         diff_to_photo(
-            _restrict_mp(shock_final, names), _restricted(case["final"], names), TOL
+            _restrict_mp(shock_final, names),
+            _restricted(case["final"], names),
+            TOL,
+            lb_rtol=TOL,
         )
         == []
     )
@@ -342,7 +347,10 @@ def test_welfare_cells_equal_pyomo(case, shock_final):
     names = set(WELFARE_VARS)
     assert (
         diff_to_photo(
-            _restrict_mp(shock_final, names), _restricted(case["final"], names), TOL
+            _restrict_mp(shock_final, names),
+            _restricted(case["final"], names),
+            TOL,
+            lb_rtol=TOL,
         )
         == []
     )

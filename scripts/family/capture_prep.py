@@ -20,6 +20,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 from perf_budget_20x41 import NEWTON_MUMPS  # noqa: E402
 
+from equilibria.family.photos import closure_tag  # noqa: E402,F401  (re-exported)
+
 _CHILD = """
 import sys
 sys.path[:0] = [{src!r}, {tests!r}, {root!r}]
@@ -27,13 +29,6 @@ from templates.gtap.test_gtap7_gempack_parity import _solve_shock
 _, code = _solve_shock({ds!r}, {ifsub}, "{savf}", solve_nlp=True)
 print("CODE", code)
 """
-
-
-def closure_tag(ifsub: int, savf: str, mode: str) -> str:
-    """Directory name of a closure's reference; today's one keeps its name."""
-    if (ifsub, savf, mode) == (1, "capFix", "gtap"):
-        return "tol_today"
-    return f"{mode}_ifsub{ifsub}_{savf}"
 
 
 GATE_FILES = ("final.pkl", "settled.pkl")
