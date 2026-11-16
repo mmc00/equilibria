@@ -1,7 +1,9 @@
 name: probe 20x41 (temporary, Task 9)
 
-# Temporary: measures whether the 20x41 family cases fit a standard runner
-# (wall and peak RSS, cold then warm cache). Removed before the PR merges.
+# Temporary: measures whether the 15x10 and 20x41 gate-photo cases fit a standard
+# runner (wall and peak RSS). Removed before the PR merges.
+# rev 3: rev 2 lost the runner after 64 min ("starves it for CPU/Memory"); one job
+# per dataset, memory sampled every 30 s, 20x41 capped at 50 min.
 on:
   push:
     branches: [ci/family-mumps-jax-cache]
@@ -10,7 +12,11 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        dataset: [gtap7_15x10, gtap7_20x41]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,18 +24,22 @@ jobs:
       - name: Setup test environment
         uses: ./.github/actions/setup-test-env
 
-      - name: 20x41 family cases, cold then warm
+      - name: ${{ matrix.dataset }} gate photo, cold then warm
+        timeout-minutes: 60
         env:
-          EQUILIBRIA_RUN_SLOW: "1"
+          DS: ${{ matrix.dataset }}
         run: |
           set -uo pipefail
           export EQUILIBRIA_FAMILY_CACHE="$RUNNER_TEMP/family-cache"
-          free -g
-          for pass in cold warm; do
+          nproc; free -m
+          ( while true; do echo "MEM $(date +%H:%M:%S) $(free -m | awk '/Mem:/{print $3" used "$7" avail"}')"; sleep 30; done ) &
+          passes="cold warm"
+          [ "$DS" = gtap7_20x41 ] && passes="cold"
+          for pass in $passes; do
             echo "=== $pass"
-            /usr/bin/time -v uv run pytest -ra -q -s -o addopts="" \
-              tests/family/test_family_e2e_gate.py \
-              2> "time-$pass.txt" | tail -25
+            /usr/bin/time -v timeout 50m uv run pytest -ra -q -s -o addopts="" \
+              tests/family/test_family_e2e_gate.py -k "$DS" \
+              2> "time-$pass.txt" | tail -15
             echo "exit ${PIPESTATUS[0]}"
             grep -E "Elapsed|Maximum resident" "time-$pass.txt"
           done
