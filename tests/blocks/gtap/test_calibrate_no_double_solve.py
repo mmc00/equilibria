@@ -75,6 +75,12 @@ BASELINE_COUNT = 20194
 # benchmark: on main all 70 pva/px/pnd cells left 1 (worst 0.167, pva EU_28 Crops
 # 0.834); now all 70 sit at 1 within 2.2e-7. The quantities follow (EU_28 Crops xf
 # x13, a rescaled sector).
+#
+# Recaptured 2026-11-16: p_rai starts at 1 (prdtx 0) where the activity does not make
+# the commodity (GAMS xFlag, cal.gms:293-294); those cells are fixed, so the settle
+# keeps their start value. Against the fixture before: same 20194 keys, 630 cells
+# move, ALL p_rai on those cells (e.g. p_rai[JPN,Energy,Crops] 0.8899 -> 1); the rest
+# within 1e-9.
 BASELINE_SIG = "0f84139e67b50cd2"
 
 

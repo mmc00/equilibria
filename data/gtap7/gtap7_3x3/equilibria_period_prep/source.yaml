@@ -9,7 +9,9 @@ source: 'equilibria snapshot of the model before each solve of the multiperiod d
   tests/templates/gtap/test_period_prep_snapshot.py'
 license: equilibria output (MIT, as the package)
 outputs:
-  period_prep_snapshot.json: d8437a8e2f2db914e33a04d8bb0ab995cfee4b97b5aa341c6b0565456908039e
+  period_prep_snapshot.json: 1056beb69e37d796864001868734482603fa6f15de200dda008a1543e283e242
   period_prep_snapshot_pre-81bca7e4.json: 978204d28b3068a7e0b00bec84ae19d603fe0606b8cd2abe3b5ddbec33113c94
 status: verified
-notes: ''
+notes: 'Regenerated 2026-11-16 after p_rai starts at 1 (prdtx 0) where the activity
+  does not make the commodity (xFlag, cal.gms:293-294): only the Var:p_rai and
+  Var:pp_rai component hashes change (40 of them, every case).'

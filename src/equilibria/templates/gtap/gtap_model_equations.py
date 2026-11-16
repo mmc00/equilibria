@@ -2710,27 +2710,28 @@ class GTAPModelEquations:
             return max(numer / denom, 1e-8)
 
         # Production (4 vars per r,a)
-        def get_p_rai_init(m, r, a, i):
+        def get_prdtx_rai(r, a, i):
             # GAMS cal.gms (lines 19391-19394): prdtx per commodity = makb/maks - 1;
-            # p.l = ps/(1+prdtx) = 1/(1+prdtx).  Use commodity-specific prdtx so that
-            # gx_param (calibrated with the same formula) is consistent with eq_po at init.
+            # 0 where a does not make i (xFlag off, makb = 0), as GAMS leaves it
+            # (cal.gms:290-291); ProductionSupplyBlock._prdtx is the same rule.
             makb_val = float(self.params.benchmark.makb.get((r, a, i), 0.0) or 0.0)
+            if makb_val <= 0:
+                return 0.0
             maks_val = float(self.params.benchmark.maks.get((r, a, i), 0.0) or 0.0)
-            if maks_val > 0 and makb_val > 0:
-                prdtx = makb_val / maks_val - 1.0
-            else:
-                prdtx = float(self.params.taxes.rto.get((r, a), 0.0) or 0.0)
+            if maks_val > 0:
+                return makb_val / maks_val - 1.0
+            return float(self.params.taxes.rto.get((r, a), 0.0) or 0.0)
+
+        def get_p_rai_init(m, r, a, i):
+            # p.l = ps/(1+prdtx) = 1/(1+prdtx), and 1 where a does not make i
+            # (cal.gms:293-294).  Commodity-specific prdtx so that gx_param (calibrated
+            # with the same formula) is consistent with eq_po at init.
+            prdtx = get_prdtx_rai(r, a, i)
             return max(1.0 / max(1.0 + prdtx, 1e-12), 1e-8)
 
         def get_pp_rai_init(m, r, a, i):
             # pp.l = (1+prdtx)*p.l = 1.0 at benchmark (ps=1).
-            # Compute prdtx consistently with get_p_rai_init.
-            makb_val = float(self.params.benchmark.makb.get((r, a, i), 0.0) or 0.0)
-            maks_val = float(self.params.benchmark.maks.get((r, a, i), 0.0) or 0.0)
-            if maks_val > 0 and makb_val > 0:
-                prdtx = makb_val / maks_val - 1.0
-            else:
-                prdtx = float(self.params.taxes.rto.get((r, a), 0.0) or 0.0)
+            prdtx = get_prdtx_rai(r, a, i)
             return max((1.0 + prdtx) * get_p_rai_init(m, r, a, i), 1e-8)
 
         model.xp = Var(
