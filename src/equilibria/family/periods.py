@@ -12,6 +12,7 @@ Bounds: an infinite side is reported as ``None`` (Pyomo's "no bound"), and
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping
+from itertools import compress
 
 import numpy as np
 
@@ -30,8 +31,18 @@ def positions(obj: VarArr | RowArr, period: str) -> dict[tuple, int]:
     return cache[period]
 
 
+def _columns(obj: VarArr | RowArr, period: str) -> tuple[list[tuple], np.ndarray]:
+    """``positions`` as two columns, its keys and their positions (cached beside
+    it), so whole-period reads are numpy masks instead of a loop per cell."""
+    cache = obj.__dict__.setdefault("_columns", {})
+    if period not in cache:
+        table = positions(obj, period)
+        cache[period] = (list(table), np.fromiter(table.values(), dtype=np.intp))
+    return cache[period]
+
+
 def _at(table: Mapping[tuple, int], cells: Iterable[tuple]) -> np.ndarray:
-    return np.fromiter((table[k] for k in cells), dtype=np.intp)
+    return np.fromiter(map(table.__getitem__, cells), dtype=np.intp)
 
 
 def _side(x: float, inf: float) -> float | None:
@@ -126,8 +137,8 @@ class FamilyPeriodModel:
         return tuple(positions(self.mp.row(name), period))
 
     def values(self, name: str, period: str) -> dict[tuple, float]:
-        v = self.mp.var(name)
-        return {k: float(v.value[i]) for k, i in positions(v, period).items()}
+        keys, at = _columns(self.mp.var(name), period)
+        return dict(zip(keys, self.mp.var(name).value[at].tolist(), strict=True))
 
     def set_values(self, name: str, period: str, levels: Mapping[tuple, float]) -> None:
         v = self.mp.var(name)
@@ -152,16 +163,19 @@ class FamilyPeriodModel:
         v.fixed[_at(positions(v, period), cells)] = False
 
     def fixed_cells(self, name: str, period: str) -> frozenset[tuple]:
-        v = self.mp.var(name)
-        return frozenset(k for k, i in positions(v, period).items() if v.fixed[i])
+        keys, at = _columns(self.mp.var(name), period)
+        return frozenset(compress(keys, self.mp.var(name).fixed[at].tolist()))
 
     def bounds(
         self, name: str, period: str
     ) -> dict[tuple, tuple[float | None, float | None]]:
         v = self.mp.var(name)
+        keys, at = _columns(v, period)
         return {
-            k: (_side(v.lb[i], -np.inf), _side(v.ub[i], np.inf))
-            for k, i in positions(v, period).items()
+            k: (_side(lo, -np.inf), _side(hi, np.inf))
+            for k, lo, hi in zip(
+                keys, v.lb[at].tolist(), v.ub[at].tolist(), strict=True
+            )
         }
 
     def set_bounds(
@@ -186,8 +200,8 @@ class FamilyPeriodModel:
         v.ub[at] = np.inf
 
     def active_rows(self, name: str, period: str) -> frozenset[tuple]:
-        r = self.mp.row(name)
-        return frozenset(k for k, i in positions(r, period).items() if r.active[i])
+        keys, at = _columns(self.mp.row(name), period)
+        return frozenset(compress(keys, self.mp.row(name).active[at].tolist()))
 
     def set_rows_active(
         self, name: str, period: str, cells: Iterable[tuple], active: bool
