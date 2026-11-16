@@ -5,16 +5,16 @@
  "converged": true,
  "nit": 2,
  "nfact": 1,
- "residual": 2.130184917348288e-12,
+ "residual": 2.1309620734655255e-12,
  "method": "newton_tr",
  "linsolve": "mumps",
  "trace_f_inf": [
   1.9938715659639783e-06,
-  2.130184917348288e-12
+  2.1309620734655255e-12
  ],
  "trace_f_scaled_inf": [
   1.9938715659639783e-06,
-  2.130184917348288e-12
+  2.1309620734655255e-12
  ],
  "tr_env": {
   "EQUILIBRIA_GTAP_TR_DELTA0": "10.0",
@@ -37,7 +37,7 @@
  "null_pivots": [
   0
  ],
- "wall_s": 14.402970249997452,
+ "wall_s": 15.117503209039569,
  "closure": {
   "ifsub": 1,
   "savf": "capFix",

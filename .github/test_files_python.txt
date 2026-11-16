@@ -39,6 +39,7 @@ tests/blocks/gtap/test_fingerprint_split.py
 tests/blocks/gtap/test_floors.py
 tests/blocks/gtap/test_model_cache.py
 tests/blocks/gtap/test_overwrite.py
+tests/blocks/gtap/test_production_supply_init.py
 tests/blocks/gtap/test_seed_cache_prune.py
 tests/blocks/gtap/test_shock_block.py
 tests/blocks/gtap/test_shock_instruments_fase2.py
