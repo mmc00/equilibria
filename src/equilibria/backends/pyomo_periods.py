@@ -302,6 +302,20 @@ class PyomoPeriodModel:
         for k in cells:
             data[k].unfix()
 
+    def fix_all(
+        self, name: str, period: str, *, keep: frozenset[tuple] = frozenset()
+    ) -> None:
+        for k, c in self._var(name, period).items():
+            if k not in keep:
+                c.fix()
+
+    def unfix_all(
+        self, name: str, period: str, *, keep: frozenset[tuple] = frozenset()
+    ) -> None:
+        for k, c in self._var(name, period).items():
+            if k not in keep:
+                c.unfix()
+
     def fixed_cells(self, name: str, period: str) -> frozenset[tuple]:
         return frozenset(k for k, c in self._var(name, period).items() if c.fixed)
 
@@ -343,3 +357,6 @@ class PyomoPeriodModel:
                 data[k].activate()
             else:
                 data[k].deactivate()
+
+    def set_all_rows_active(self, name: str, period: str, active: bool) -> None:
+        self.set_rows_active(name, period, list(self._row(name, period)), active)

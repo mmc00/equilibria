@@ -188,6 +188,9 @@ class FamilyRun:
     # the records' cache folder (``disk_cache``), where ``square`` keeps its pairings;
     # None = keep them in memory only
     records_dir: Path | None = None
+    # ``ref`` as the core route's ``Reference`` (``GTAPFamilyPeriodModel.sp_reference``),
+    # built by its first call and shared by every model of the run
+    sp_reference: Any = field(default=None, repr=False)
 
 
 @dataclass

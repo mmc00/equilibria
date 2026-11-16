@@ -124,6 +124,37 @@ def test_unfix_cells(m: Any) -> None:
     assert m.fixed_cells("x", "a") == frozenset({I1})
 
 
+def test_fix_all_keeps_levels_and_skips_keep(m: Any) -> None:
+    m.set_values("x", "a", {I1: 3.0})
+    m.fix_all("x", "a", keep=frozenset({I2}))
+    assert m.fixed_cells("x", "a") == frozenset({I1})
+    assert m.values("x", "a") == {I1: 3.0, I2: 1.0}
+    assert m.fixed_cells("x", "b") == frozenset()
+    m.fix_all("z", "a")
+    assert m.fixed_cells("z", "a") == frozenset({I1, I2})
+    assert all(math.isnan(v) for v in m.values("z", "a").values())
+
+
+def test_unfix_all_skips_keep(m: Any) -> None:
+    for t in ("a", "b"):
+        m.fix_cells("x", t, {I1: None, I2: None})
+    m.unfix_all("x", "a", keep=frozenset({I1}))
+    assert m.fixed_cells("x", "a") == frozenset({I1})
+    assert m.fixed_cells("x", "b") == frozenset({I1, I2})
+    m.unfix_all("x", "a")
+    assert m.fixed_cells("x", "a") == frozenset()
+
+
+def test_set_all_rows_active_one_period(m: Any) -> None:
+    m.set_all_rows_active("e", "a", False)
+    m.set_all_rows_active("g", "a", False)
+    assert m.active_rows("e", "a") == frozenset()
+    assert m.active_rows("g", "a") == frozenset()
+    assert m.active_rows("e", "b") == frozenset({I1, I2})
+    m.set_all_rows_active("e", "a", True)
+    assert m.active_rows("e", "a") == frozenset({I1, I2})
+
+
 def test_set_bounds_none_side_untouched(m: Any) -> None:
     m.set_bounds("x", "a", {I1: (None, 9.0)})
     m.set_bounds("x", "a", {I2: (0.7, None)})

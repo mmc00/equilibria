@@ -93,6 +93,20 @@ class PeriodModel(Protocol):
 
     def unfix_cells(self, name: str, period: str, cells: Iterable[Index]) -> None: ...
 
+    def fix_all(
+        self, name: str, period: str, *, keep: frozenset[Index] = frozenset()
+    ) -> None:
+        """Fix every cell of the period at its current level, but those in ``keep``
+        (cells of the period; one call for what ``fix_cells`` would need a mapping
+        of every cell for)."""
+        ...
+
+    def unfix_all(
+        self, name: str, period: str, *, keep: frozenset[Index] = frozenset()
+    ) -> None:
+        """Unfix every cell of the period but those in ``keep``."""
+        ...
+
     def fixed_cells(self, name: str, period: str) -> frozenset[Index]: ...
 
     def bounds(
@@ -119,3 +133,7 @@ class PeriodModel(Protocol):
     def set_rows_active(
         self, name: str, period: str, cells: Iterable[Index], active: bool
     ) -> None: ...
+
+    def set_all_rows_active(self, name: str, period: str, active: bool) -> None:
+        """``set_rows_active`` on every row of the family in the period."""
+        ...

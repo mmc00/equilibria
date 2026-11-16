@@ -160,22 +160,13 @@ def freeze_inactive(ctx: StepContext) -> None:
     for name in m.var_names():
         for t in m.periods:
             exo = m.exogenous_cells(name, t)
-            fixed = m.fixed_cells(name, t)
             if t == period:
-                m.unfix_cells(name, t, [k for k in fixed if k not in exo])
-                continue
-            m.fix_cells(
-                name,
-                t,
-                {
-                    k: None
-                    for k in m.var_cells(name, t)
-                    if k not in exo and k not in fixed
-                },
-            )
+                m.unfix_all(name, t, keep=exo)
+            else:
+                m.fix_all(name, t, keep=exo)
     for name in m.row_names():
         for t in m.periods:
-            m.set_rows_active(name, t, m.row_cells(name, t), t == period)
+            m.set_all_rows_active(name, t, t == period)
 
 
 def seed_from_settled(ctx: StepContext) -> None:
@@ -522,7 +513,7 @@ def freeze_period(ctx: StepContext) -> None:
     """Fix every cell of this period at its level (GAMS holdfixed)."""
     m, period = _gm(ctx), ctx.period.name
     for name in m.var_names():
-        m.fix_cells(name, period, m.values(name, period))
+        m.fix_all(name, period)
 
 
 def recompute_ifsub_report_vars(ctx: StepContext) -> None:

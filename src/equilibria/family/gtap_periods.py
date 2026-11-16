@@ -30,7 +30,6 @@ class GTAPFamilyPeriodModel(FamilyPeriodModel):
         self._staged: Staged | None = None
         self.last_solve: dict[str, Any] | None = None
         self._solved_period: str | None = None
-        self._reference: Reference | None = None
 
     # ── exogeneity ─────────────────────────────────────────────────────────
 
@@ -90,9 +89,10 @@ class GTAPFamilyPeriodModel(FamilyPeriodModel):
         self, closure: Any, params: Any, period: str, *, fresh: bool
     ) -> Reference:
         """``run.ref``, the reference ``prepare_run`` read once: the old family route
-        uses it for every period (``fresh`` changes nothing here), so it is built once."""
-        if self._reference is not None:
-            return self._reference
+        uses it for every period (``fresh`` changes nothing here), so it is built
+        once per run (``run.sp_reference``)."""
+        if self.run.sp_reference is not None:
+            return self.run.sp_reference
         fixed: dict[str, dict[tuple, float]] = {}
         bounds: dict[str, dict[tuple, tuple[float | None, float | None]]] = {}
         for name, sp in self.run.ref.vars.items():
@@ -109,8 +109,8 @@ class GTAPFamilyPeriodModel(FamilyPeriodModel):
                     )
                     for i in np.flatnonzero(lo | hi)
                 }
-        self._reference = Reference(fixed, bounds)
-        return self._reference
+        self.run.sp_reference = Reference(fixed, bounds)
+        return self.run.sp_reference
 
     # ── GTAP operations that are not cell edits ────────────────────────────
 

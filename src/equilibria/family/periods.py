@@ -162,6 +162,29 @@ class FamilyPeriodModel:
         v = self.mp.var(name)
         v.fixed[_at(positions(v, period), cells)] = False
 
+    def _all_but(
+        self, obj: VarArr | RowArr, period: str, keep: frozenset
+    ) -> np.ndarray:
+        """Positions of every cell of ``period`` but those in ``keep``."""
+        _, at = _columns(obj, period)
+        if not keep:
+            return at
+        if len(keep) >= len(at):
+            return at[:0]
+        out = np.ones(len(obj.keys), dtype=bool)
+        out[_at(positions(obj, period), keep)] = False
+        return at[out[at]]
+
+    def fix_all(self, name: str, period: str, *, keep: frozenset = frozenset()) -> None:
+        v = self.mp.var(name)
+        v.fixed[self._all_but(v, period, keep)] = True
+
+    def unfix_all(
+        self, name: str, period: str, *, keep: frozenset = frozenset()
+    ) -> None:
+        v = self.mp.var(name)
+        v.fixed[self._all_but(v, period, keep)] = False
+
     def fixed_cells(self, name: str, period: str) -> frozenset[tuple]:
         keys, at = _columns(self.mp.var(name), period)
         return frozenset(compress(keys, self.mp.var(name).fixed[at].tolist()))
@@ -208,3 +231,7 @@ class FamilyPeriodModel:
     ) -> None:
         r = self.mp.row(name)
         r.active[_at(positions(r, period), cells)] = active
+
+    def set_all_rows_active(self, name: str, period: str, active: bool) -> None:
+        r = self.mp.row(name)
+        r.active[_columns(r, period)[1]] = active
