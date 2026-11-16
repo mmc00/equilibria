@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
 from coverage_matrix import rows_for  # noqa: E402
-from tests.family._twins import pyomo_solve  # noqa: E402
+from family_twins import pyomo_solve  # noqa: E402
 
 GEMPACK_ROWS = rows_for("gtap7", "gempack", kind="mcp")
 

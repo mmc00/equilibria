@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
 
-from tests.family._twins import pyomo_solve_ifsub_pair  # noqa: E402
+from family_twins import pyomo_solve_ifsub_pair  # noqa: E402
 
 DATASETS = ["gtap7_3x3", "gtap7_3x4", "gtap7_5x5", "gtap7_10x7", "gtap7_15x10"]
 # Primary-block agreement floor across modes. Measured ~99.3% on gtap7_3x3 (the

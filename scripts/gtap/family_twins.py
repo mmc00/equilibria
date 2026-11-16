@@ -4,21 +4,15 @@ A Pyomo case leaves PR CI (``pyomo_solve`` marker) only when the family route ru
 same variant against the same reference and passes at least the same floors: the
 non-xfail cases of ``test_family_gams_parity`` (mode ``pure``, the larger of the mcp
 and nlp floors) and ``test_family_gempack_parity``. This module imports only the
-matrix, so the Pyomo test modules can use it at collection time;
+matrix and lives next to it, on the sys.path of every Pyomo gate module (and of the
+scripts that import those modules by bare name), so they can mark at collection time;
 ``test_coverage_matrix`` checks it against the family cases themselves.
 """
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
+import coverage_matrix  # type: ignore
 import pytest
-
-ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT / "scripts/gtap") not in sys.path:
-    sys.path.insert(0, str(ROOT / "scripts/gtap"))
-import coverage_matrix  # type: ignore  # noqa: E402
 
 FAMILY_MODES = ("pure",)  # the family route runs mode="gtap" only
 

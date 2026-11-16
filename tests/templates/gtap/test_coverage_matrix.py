@@ -159,7 +159,7 @@ def test_every_pyomo_solve_case_has_a_family_twin():
     """A Pyomo solve case is marked ``pyomo_solve`` (it leaves PR CI) exactly when a
     non-xfail family case covers its variant and reference (Marlon, 2026-11-14: one
     the family does not cover yet keeps running in PR CI)."""
-    from tests.family import _twins
+    import family_twins as _twins
     from tests.family._parity import gams_cases, gempack_cases
     from tests.templates.gtap import test_gtap7_gempack_parity as gem
     from tests.templates.gtap import test_gtap7_mcp_parity as mcp
@@ -198,3 +198,27 @@ def test_every_pyomo_solve_case_has_a_family_twin():
     assert wrong == [], (
         f"(test, case, marked) whose mark disagrees with the twins: {wrong}"
     )
+
+
+def test_pyomo_gates_import_as_scripts_do(tmp_path):
+    """gen_nlp_matrix_page.py imports the gate modules by bare name, with only
+    scripts/gtap and tests/templates/gtap on sys.path (no repo root): the twin marks
+    must not need the ``tests`` package."""
+    import subprocess
+
+    root = Path(__file__).resolve().parents[3]
+    code = (
+        "import sys;"
+        f"sys.path[:0] = [{str(root / 'tests/templates/gtap')!r}, "
+        f"{str(root / 'scripts/gtap')!r}, {str(root / 'src')!r}];"
+        "import test_gtap7_mcp_parity, test_gtap7_nlp_parity, "
+        "test_gtap7_gempack_parity, test_ifsub_equivalence"
+    )
+    p = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=tmp_path,
+        env={"PATH": "/usr/bin:/bin", "PYTHONNOUSERSITE": "1"},
+        capture_output=True,
+        text=True,
+    )
+    assert p.returncode == 0, p.stderr[-2000:]

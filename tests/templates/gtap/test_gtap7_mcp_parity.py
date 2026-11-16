@@ -41,7 +41,7 @@ sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
 
 from coverage_matrix import mcp_rows  # noqa: E402
-from tests.family._twins import pyomo_solve  # noqa: E402
+from family_twins import pyomo_solve  # noqa: E402
 
 from equilibria._local_refs import path_capi_src
 
