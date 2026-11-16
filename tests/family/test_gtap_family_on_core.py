@@ -11,7 +11,6 @@ period by period (the base is not solved by either: ``skipped_solve`` against
 from __future__ import annotations
 
 import dataclasses
-import sys
 from typing import Any
 
 import numpy as np

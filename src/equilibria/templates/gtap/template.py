@@ -133,10 +133,35 @@ class GTAP:
             )
             _gc_freeze_now(_gc_freeze_from_env())
             if self.base_calibrated:
-                settled, _ = fd.calibrate_base_cached(mp, run)
+                settled = self._settle_family(run, mp)
                 mp = dataclasses.replace(mp, settled_seed=settled, base_calibrated=True)
         self._family_run = run
         return GTAPFamilyPeriodModel(run, mp)
+
+    def _settle_family(self, run: Any, mp: Any) -> dict[str, dict]:
+        """``FactorBlock.calibrate_base`` on the family model, through the core
+        recipe: base and check of ``gtap_static(settle_only=True)`` on a copy of
+        the arrays, then the check slice without the instruments
+        (``settled_check_point``). The opt-in settle cache wraps it as
+        ``calibrate_base_cached`` does: only a converged settle is saved."""
+        from equilibria.blocks.gtap import seed_cache
+        from equilibria.core.driver import fly
+        from equilibria.family import driver as fd
+        from equilibria.family.gtap_periods import GTAPFamilyPeriodModel
+        from equilibria.templates.gtap.recipe import gtap_static
+
+        key = fd._settle_key(run)
+        if key is not None:
+            cached = seed_cache.load(key)
+            if cached is not None:
+                return cached
+        # every period of the arrays: freeze_inactive fixes the shock cells too
+        model = GTAPFamilyPeriodModel(run, mp.copy())
+        results = fly(model, gtap_static(settle_only=True), template=self)
+        settled = fd.settled_check_point(model.mp)
+        if key is not None and results["check"]["code"] == "optimal":
+            seed_cache.save(key, settled)
+        return settled
 
     @contextlib.contextmanager
     def run_scope(self) -> Iterator[None]:

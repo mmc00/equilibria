@@ -159,3 +159,48 @@ def test_two_backends_in_one_process(env) -> None:
     py = Exercise(GTAP(p, _route_closure()), gtap_static()).run()
     assert py["shock"]["code"] == "optimal"
     assert gc.get_freeze_count() == 0
+
+
+def test_settle_through_core_equals_calibrate_base_arrays(env) -> None:
+    """The settled seed comes from the core recipe (settle_only), never from the
+    old array recipe, and equals what calibrate_base_arrays gives, key by key."""
+    from equilibria.family import driver as fd
+
+    monkeypatch, tmp_path = env
+    p = _params(DS)
+    run, mp = fd.prepare_run(
+        p,
+        _route_closure(),
+        list(p.sets.r)[-1],
+        cache_root=tmp_path / "records",
+        jax_cache=False,
+    )
+    want, _ = fd.calibrate_base_arrays(mp, run)
+
+    def old_route(*a: Any, **k: Any) -> Any:
+        raise AssertionError("the build settled through the old array recipe")
+
+    monkeypatch.setattr(fd, "calibrate_base_arrays", old_route)
+    model = _gtap(tmp_path, base_calibrated=True).build(("base", "check", "shock"))
+    assert model.settled_seed == want
+
+
+def test_settle_cache_hit_skips_the_solves(env) -> None:
+    from equilibria.family import driver as fd
+
+    monkeypatch, tmp_path = env
+    monkeypatch.setenv("EQUILIBRIA_FAMILY_SETTLE_CACHE", "1")
+    monkeypatch.delenv("EQUILIBRIA_SEED_CACHE_DISABLE", raising=False)
+    monkeypatch.setenv("EQUILIBRIA_SEED_CACHE", str(tmp_path / "seeds"))
+    first = _gtap(tmp_path, base_calibrated=True).build(("base", "check", "shock"))
+    calls: list[int] = []
+    real = fd._newton
+
+    def counted(*a: Any, **k: Any) -> Any:
+        calls.append(1)
+        return real(*a, **k)
+
+    monkeypatch.setattr(fd, "_newton", counted)
+    second = _gtap(tmp_path, base_calibrated=True).build(("base", "check", "shock"))
+    assert calls == []
+    assert second.settled_seed == first.settled_seed
