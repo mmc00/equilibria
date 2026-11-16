@@ -99,11 +99,6 @@ def test_bad_backend() -> None:
         GTAP(None, None, backend="jax")
 
 
-def test_family_backend_not_yet() -> None:
-    with pytest.raises(NotImplementedError, match="family"):
-        GTAP(None, None, backend="family").build(("base", "check", "shock"))
-
-
 def test_overwrite_argument_not_yet() -> None:
     with pytest.raises(NotImplementedError, match="@overwrite"):
         GTAP(None, None).build(("base", "check", "shock"), overwrite=[object()])

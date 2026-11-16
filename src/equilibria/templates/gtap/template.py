@@ -13,7 +13,8 @@ GTAP-only cross-period rows.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import contextlib
+from collections.abc import Iterator, Sequence
 from typing import Any
 
 from equilibria.core.recipe import Recipe
@@ -32,6 +33,9 @@ class GTAP:
         base_calibrated: bool = False,
         ref_gdx: Any = None,
         backend: str = "pyomo",
+        cache_root: Any = None,
+        jax_cache: bool = True,
+        newton_tol: tuple[float, float] | None = None,
     ) -> None:
         if backend not in BACKENDS:
             raise ValueError(f"backend must be one of {BACKENDS}, got {backend!r}")
@@ -41,6 +45,12 @@ class GTAP:
         self.base_calibrated = base_calibrated
         self.ref_gdx = ref_gdx
         self.backend = backend
+        # family only: where the recorded families live, the JAX compile cache,
+        # and (reltol, ftol) of every Newton solve (None: the environment's)
+        self.cache_root = cache_root
+        self.jax_cache = jax_cache
+        self.newton_tol = newton_tol
+        self._family_run: Any = None
 
     def build(self, periods: Sequence[str], overwrite: Sequence[Any] = ()) -> Any:
         """A fresh multiperiod model (``base``, ``check``, ``shock``; a recipe
@@ -56,9 +66,7 @@ class GTAP:
                 "(PR 3 of gtap-on-core)"
             )
         if self.backend == "family":
-            raise NotImplementedError(
-                "the family backend joins the GTAP template in part B of PR 1"
-            )
+            return self._build_family()
         from equilibria.templates.gtap.gtap_block_model import build_block_model
         from equilibria.templates.gtap.pyomo_periods import GTAPPyomoPeriodModel
 
@@ -73,15 +81,83 @@ class GTAP:
         )
         return GTAPPyomoPeriodModel(m)
 
-    def run_scope(self) -> Any:
+    def _build_family(self) -> Any:
+        """``solve_gtap_family``'s setup: refuse what the route cannot run, load
+        or record the families (``prepare_run``), then with ``base_calibrated`` the
+        settled seed (``calibrate_base_cached``). No Pyomo model is built."""
+        import dataclasses
+
+        from equilibria.blocks.gtap.overwrite import overwrite
+        from equilibria.family import driver as fd
+        from equilibria.family.capflex import require_ref_gdx
+        from equilibria.family.gtap_periods import GTAPFamilyPeriodModel
+        from equilibria.solver.gc_tuning import (
+            _gc_family_scope,
+            _gc_freeze_from_env,
+            _gc_freeze_now,
+        )
+
+        if overwrite.active():
+            raise NotImplementedError(
+                "family backend: @overwrite hooks are not supported"
+            )
+        savf = str(getattr(self.closure, "savf_flag", "capFix"))
+        # the closure and environment settings; the recipe's are refused by its
+        # first step (check_backend), which sees them
+        fd.check_supported(
+            if_sub=bool(getattr(self.closure, "if_sub", False)),
+            savf_flag=savf,
+            mode="gtap",
+            skip_base_solve=True,
+            mute_welfare=True,
+            seed_from_prior=False,
+            solve_check=True,
+            shock_steps=None,
+            shock_method="nonlinear",
+        )
+        if savf == "capFlex":
+            require_ref_gdx(self.ref_gdx)
+        rr = self.residual_region or list(self.params.sets.r)[-1]
+        # as solve_gtap_family: the load and the settle under one GC setup; the
+        # loaded records frozen as soon as they are in
+        with _gc_family_scope():
+            run, mp = fd.prepare_run(
+                self.params,
+                self.closure,
+                rr,
+                cache_root=self.cache_root,
+                jax_cache=self.jax_cache,
+                freeze=_gc_freeze_from_env(),
+                ref_gdx=self.ref_gdx,
+                newton_tol=self.newton_tol,
+            )
+            _gc_freeze_now(_gc_freeze_from_env())
+            if self.base_calibrated:
+                settled, _ = fd.calibrate_base_cached(mp, run)
+                mp = dataclasses.replace(mp, settled_seed=settled, base_calibrated=True)
+        self._family_run = run
+        return GTAPFamilyPeriodModel(run, mp)
+
+    @contextlib.contextmanager
+    def run_scope(self) -> Iterator[None]:
         """The GC setup of the whole run, as ``solve_multiperiod`` held it: the
         built model frozen once over base, check and shock. A solve inside it
         leaves it alone (``_gc_family_scope`` is reentrant); freezing per solve
         instead walked the whole model twice in every gap between solves
-        (measured on 15x10: +2.3 s of 23.5, nearly all of it GC)."""
+        (measured on 15x10: +2.3 s of 23.5, nearly all of it GC).
+
+        On family the freeze skips the full collection (the build already froze
+        the records: a collection would walk them, 7.4 s on 20x41) and the run's
+        MUMPS analysis is dropped at the end, as ``solve_gtap_family`` drops it."""
         from equilibria.solver.gc_tuning import _gc_family_scope
 
-        return _gc_family_scope()
+        family = self.backend == "family"
+        try:
+            with _gc_family_scope(collect=not family):
+                yield
+        finally:
+            if family and self._family_run is not None:
+                self._family_run.mumps.clear()
 
     def default_recipe(self) -> Recipe:
         from equilibria.templates.gtap.recipe import gtap_static

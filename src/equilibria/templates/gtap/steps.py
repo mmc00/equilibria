@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import numbers
+from collections.abc import Mapping
 from typing import Any, cast
 
 from equilibria.core.recipe import Step, StepContext
@@ -66,6 +67,53 @@ def check_model_flags(base_calibrated: bool) -> Step:
                 f"the recipe was made with base_calibrated={base_calibrated} but the "
                 f"model was built with base_calibrated={built}"
             )
+
+    return step
+
+
+def check_backend(options: Mapping[str, Any]) -> Step:
+    """Refuse, before any work, what the model's backend cannot run. ``options``:
+    the recipe's (``gtap_static`` arguments, ``copied_check`` for a check copied
+    from the base). The family backend runs what ``solve_gtap_family`` runs; the
+    nominal trade balance (``trade_balance``) is family-only, capFix only."""
+
+    def step(ctx: StepContext) -> None:
+        backend = getattr(ctx.model, "backend", "pyomo")
+        tb = options.get("trade_balance")
+        if tb is not None:
+            if backend != "family":
+                raise NotImplementedError(
+                    f"trade_balance={tb!r} runs on the family backend only"
+                )
+            savf = getattr(ctx.template.closure, "savf_flag", "capFix")
+            if savf != "capFix":
+                raise NotImplementedError(
+                    f"trade_balance={tb!r} replaces the capFix eq_savf row; "
+                    f"savf_flag={savf!r} has none to replace"
+                )
+        if backend != "family":
+            return
+        refused = (
+            ("mode", options.get("mode") != "gtap", f"mode={options.get('mode')!r}"),
+            ("solve_base", options.get("solve_base"), "solve_base=True"),
+            ("seed_from_prior", options.get("seed_from_prior"), "seed_from_prior=True"),
+            ("mute_welfare", not options.get("mute_welfare"), "mute_welfare=False"),
+            (
+                "copied_check",
+                options.get("copied_check"),
+                "base_calibrated=True with solve_check=False (the check copied "
+                "from the base)",
+            ),
+            ("shock_steps", options.get("shock_steps"), "shock_steps"),
+            (
+                "shock_method",
+                options.get("shock_method") != "nonlinear",
+                f"shock_method={options.get('shock_method')!r}",
+            ),
+        )
+        for _, bad, what in refused:
+            if bad:
+                raise NotImplementedError(f"family backend: {what} is not supported")
 
     return step
 
@@ -426,6 +474,21 @@ def copy_from_base(ctx: StepContext) -> None:
                 if k not in exo and k in base
             },
         )
+
+
+def hold_nominal_savf(ctx: StepContext) -> None:
+    """GEMPACK ``del_tbal = 0``: in this period, ``savf`` of every region but the
+    residual one stays at its seeded level (the check's) and its ``eq_savf`` row
+    (``savf = pigbl * savf_bar``, a real balance) is off; one free variable and one
+    row leave together. Under ``trade_balance="ratio"`` the solver then moves the
+    held levels with world income."""
+    m, period = _gm(ctx), ctx.period.name
+    rows = set(m.row_cells("eq_savf", period))
+    held = [
+        (str(r),) for r in ctx.template.params.sets.r if str(r) != m.residual_region
+    ]
+    m.fix_cells("savf", period, dict.fromkeys(held))
+    m.set_rows_active("eq_savf", period, [c for c in held if c in rows], False)
 
 
 def write_default_tariff(*, gtap_mode: bool) -> Step:
