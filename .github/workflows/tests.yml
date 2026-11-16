@@ -142,6 +142,24 @@ jobs:
       - name: Setup test environment
         uses: ./.github/actions/setup-test-env
 
+      # The family records and compiled JAX programs, kept between runs so a PR
+      # does not pay the cold build and compile. The key changes with the family
+      # code and the jax version, so a family change is a cache miss (never a
+      # stale program); one cache per group, no partial restore.
+      - name: Family cache key
+        run: |
+          set -euo pipefail
+          jax=$(uv run python -c "import jax; print(jax.__version__)")
+          py=$(uv run python -c "import sys; print('%d.%d' % sys.version_info[:2])")
+          echo "FAMILY_CACHE_TAG=py$py-jax$jax" >> "$GITHUB_ENV"
+          echo "EQUILIBRIA_FAMILY_CACHE=${{ runner.temp }}/family-cache" >> "$GITHUB_ENV"
+
+      - name: Family cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/family-cache
+          key: family-python-${{ runner.os }}-${{ env.FAMILY_CACHE_TAG }}-${{ hashFiles('src/equilibria/family/**/*.py', 'src/equilibria/backends/family_backend.py') }}-${{ matrix.group }}
+
       - name: Run tests (excluding GAMS-marked and slow), group ${{ matrix.group }}
         env:
           PATHS: ${{ matrix.paths }}
@@ -257,6 +275,24 @@ jobs:
 
       - name: Setup test environment
         uses: ./.github/actions/setup-test-env
+
+      # The family records and compiled JAX programs, kept between runs so a PR
+      # does not pay the cold build and compile. The key changes with the family
+      # code and the jax version, so a family change is a cache miss (never a
+      # stale program); one cache per group, no partial restore.
+      - name: Family cache key
+        run: |
+          set -euo pipefail
+          jax=$(uv run python -c "import jax; print(jax.__version__)")
+          py=$(uv run python -c "import sys; print('%d.%d' % sys.version_info[:2])")
+          echo "FAMILY_CACHE_TAG=py$py-jax$jax" >> "$GITHUB_ENV"
+          echo "EQUILIBRIA_FAMILY_CACHE=${{ runner.temp }}/family-cache" >> "$GITHUB_ENV"
+
+      - name: Family cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/family-cache
+          key: family-gdxdump-${{ runner.os }}-${{ env.FAMILY_CACHE_TAG }}-${{ hashFiles('src/equilibria/family/**/*.py', 'src/equilibria/backends/family_backend.py') }}-${{ matrix.group }}
 
       # Falla duro a proposito: si gdxdump no esta, queremos rojo, no 58 skips.
       - name: Install gdxdump (gamspy_base)
