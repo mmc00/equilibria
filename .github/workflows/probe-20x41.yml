@@ -1,0 +1,35 @@
+name: probe 20x41 (temporary, Task 9)
+
+# Temporary: measures whether the 20x41 family cases fit a standard runner
+# (wall and peak RSS, cold then warm cache). Removed before the PR merges.
+on:
+  push:
+    branches: [ci/family-mumps-jax-cache]
+    paths: [.github/workflows/probe-20x41.yml]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-env
+
+      - name: 20x41 family cases, cold then warm
+        env:
+          EQUILIBRIA_RUN_SLOW: "1"
+        run: |
+          set -uo pipefail
+          export EQUILIBRIA_FAMILY_CACHE="$RUNNER_TEMP/family-cache"
+          free -g
+          for pass in cold warm; do
+            echo "=== $pass"
+            /usr/bin/time -v uv run pytest -ra -q -o addopts="" \
+              -m "slow and not gams and not pyomo_solve" tests/family -k 20x41 \
+              2> "time-$pass.txt" | tail -25
+            echo "exit ${PIPESTATUS[0]}"
+            grep -E "Elapsed|Maximum resident" "time-$pass.txt"
+          done
