@@ -87,8 +87,9 @@ def _solve_shock(
     configuration raises before any work.
 
     ``route`` "driver" (the default) solves with ``solve_multiperiod``; "exercise"
-    with ``Exercise(GTAP, gtap_static)`` on the core driver (Pyomo backend only),
-    and returns ``(model.pyomo, 1 or 0)``.
+    with ``Exercise(GTAP, gtap_static)`` on the core driver, and returns
+    ``(model.pyomo, 1 or 0)`` on Pyomo, ``(the family period model, 1 or 0)`` on
+    family.
 
     ``unit_sigma`` "gams" (the default) keeps the 1.01 stand-in for a unit elasticity,
     as the recorded oracles (paper Table 1, the example-15 gaps) were solved; "gempack"
@@ -168,6 +169,24 @@ def _solve_shock(
             va_subsidy_basis="gempack",
             unit_sigma=unit_sigma,
         )
+        if backend == "family" and route == "exercise":
+            from equilibria.core.exercise import Exercise
+            from equilibria.templates.gtap.recipe import gtap_static
+            from equilibria.templates.gtap.template import GTAP
+
+            ex = Exercise(
+                template=GTAP(
+                    p,
+                    ac,
+                    residual_region=rr,
+                    base_calibrated=True,
+                    ref_gdx=gdx,
+                    backend="family",
+                ),
+                recipe=gtap_static(base_calibrated=True, solve_check=True),
+            )
+            out = ex.run()
+            return ex.model, int(out["shock"]["code"] == "optimal")
         if backend == "family":
             fres = solve_gtap_family(p, ac, rr, ref_gdx=gdx)
             return fres, int(fres.results["shock"]["code"])

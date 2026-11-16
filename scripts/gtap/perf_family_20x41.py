@@ -6,7 +6,8 @@ line; the parent reads it, adds the peak memory and refuses a run that swapped.
 
     <python with pymumps and JAX> scripts/gtap/perf_family_20x41.py --route old
 
-``--route old`` times ``solve_gtap_family``; its ``phases`` (self seconds per fine
+``--route old`` times ``solve_gtap_family``, ``--route exercise`` the core route
+(``Exercise(GTAP(backend="family"), gtap_static)``). The old route's ``phases`` (self seconds per fine
 phase: ``recipe``, ``square``, ``system_build``, ``newton_*``, ``post_solve``) are
 the budget the core route's steps must stay within. Exit 0 = measured, 2 =
 invalid (swap, no MUMPS, or the shock did not converge).
@@ -32,19 +33,21 @@ import json, sys, time
 sys.path[:0] = [{src!r}, {scripts!r}, {tests!r}, {root!r}]
 from templates.gtap.test_gtap7_gempack_parity import _solve_shock
 t = time.perf_counter()
-res, code = _solve_shock({dataset!r}, 1, "capFix", solve_nlp=True, backend="family")
+res, code = _solve_shock({dataset!r}, 1, "capFix", solve_nlp=True, backend="family",
+                         route={route!r})
 wall = (time.perf_counter() - t) / 60
-phases = {{k: round(v, 2) for k, v in sorted(res.phases.items(), key=lambda kv: -kv[1])}}
+phases = getattr(res, "phases", None) or {{}}
+phases = {{k: round(v, 2) for k, v in sorted(phases.items(), key=lambda kv: -kv[1])}}
+timing = {{k: round(v, 2) for k, v in (getattr(res, "timing", None) or {{}}).items()}}
 print("PERF " + json.dumps({{"code": code, "wall_min": wall, "phases": phases,
-                            "timing": {{k: round(v, 2) for k, v in res.timing.items()}}}}))
+                            "timing": timing}}))
 """
 
 
 def measure(route: str, dataset: str = "gtap7_20x41") -> tuple[dict, float]:
-    if route != "old":
-        raise SystemExit(f"--route {route!r}: only 'old' for now")
     code = _CHILD.format(
         dataset=dataset,
+        route="driver" if route == "old" else route,
         src=str(ROOT / "src"),
         scripts=str(ROOT / "scripts" / "gtap"),
         tests=str(ROOT / "tests"),
