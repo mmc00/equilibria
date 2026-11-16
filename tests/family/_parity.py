@@ -137,8 +137,10 @@ def family_match(dataset: str, ifsub: int, mode: str, gdx: Path) -> dict[str, di
                     break
                 except (KeyError, IndexError):
                     pass
-            if val is None or not math.isfinite(val):
+            if val is None:
                 continue
+            # a non-finite value stays in the denominator and fails the comparison
+            # below, as in the Pyomo gate
             tot[t] += 1
             da = abs(val - gval)
             rel = da / abs(gval) if abs(gval) > 1e-12 else (0.0 if da < 1e-6 else 9e9)
@@ -189,10 +191,9 @@ def family_gempack_within(dataset: str, ifsub: int):
 
     def level(v, key, period):
         try:
-            x = float(v.value[v.pos((*key, period))])
+            return float(v.value[v.pos((*key, period))])
         except (KeyError, IndexError):
             return None
-        return x if math.isfinite(x) else None
 
     diffs = []
     for gvar, spec in Q_TO_VAR.items():
@@ -215,7 +216,9 @@ def family_gempack_within(dataset: str, ifsub: int):
                     break
             if den is None:
                 continue
-            diffs.append(abs(s / den - 1.0 - gfrac))
+            d = abs(s / den - 1.0 - gfrac)
+            # a non-finite family value is a miss, not a dropped cell
+            diffs.append(d if math.isfinite(d) else math.inf)
     if not diffs:
         return 0.0, math.inf, 0, code
     within = sum(1 for x in diffs if x <= PP_WITHIN) / len(diffs)
