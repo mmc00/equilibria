@@ -2,7 +2,7 @@
 
 15x10 and 20x41 keep only the ``gate`` photo in git (``photos.VARIANTS``: the run's
 ``final.pkl`` and the per-period summaries, not every step), so their per-step tests
-stay slow and local. This is their PR check: ``_solve_shock(..., backend="family")``
+stay slow and local. This is their check (20x41 slow, local; see the mark): ``_solve_shock(..., backend="family")``
 matches ``final.pkl`` on every Var cell of the three periods within 1e-9, with the
 fixed flags and bounds, every period at code 1, as ``test_family_e2e`` does on 3x3.
 """
@@ -20,7 +20,12 @@ from tests.family.test_mp_build import diff_to_photo
 pytest.importorskip("pyomo")
 
 
-@pytest.mark.parametrize("dataset", ["gtap7_15x10", "gtap7_20x41"])
+# 20x41 starves a standard GitHub runner (it lost the runner twice, at 51 and 64 min,
+# 2026-11-16) and a larger one is not paid for: slow, run on the Mac (6.6 min cold,
+# peak RSS 3.9 GB). 15x10 takes 1.4 min cold, 0.3 warm, 2.8 GB on the runner.
+@pytest.mark.parametrize(
+    "dataset", ["gtap7_15x10", pytest.param("gtap7_20x41", marks=pytest.mark.slow)]
+)
 def test_family_run_equals_the_gate_photo(dataset, monkeypatch):
     from equilibria.family import photos
     from equilibria.family.prep_capture import load
