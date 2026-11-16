@@ -9,6 +9,7 @@ options of ``solve_multiperiod`` are arguments here.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 from equilibria.core.recipe import KindPlan, Period, Recipe, Solver, solve_once
 from equilibria.templates.gtap import steps as s
@@ -27,6 +28,17 @@ def _validate(mode: str, shock_method: str, shock_steps: Sequence[float] | None)
         )
     if mode not in ("altertax", "gtap"):
         raise ValueError(f"mode must be 'altertax' or 'gtap', got {mode!r}")
+
+
+def _by_backend(model: Any) -> str:
+    """The default solver: PATH for the Pyomo model, Newton-TR for the family one."""
+    if getattr(model, "backend", "pyomo") == "family":
+        from equilibria.solver import newton_gtap
+
+        return newton_gtap.newton_tr()(model)
+    from equilibria.solver.path_gtap import path
+
+    return path()(model)
 
 
 def gtap_static(
@@ -49,13 +61,11 @@ def gtap_static(
     base (default: the calibrated point is the base, as GAMS). ``settle_only``
     stops after the check. ``shock_steps`` solves the shock in steps;
     ``shock_method="johansen"`` takes one linear step from check instead.
-    ``solver`` defaults to PATH.
+    ``solver`` defaults to the model's: PATH on Pyomo, Newton-TR on family.
     """
     _validate(mode, shock_method, shock_steps)
     if solver is None:
-        from equilibria.solver.path_gtap import path
-
-        solver = path()
+        solver = _by_backend
     gtap = mode == "gtap"
     closure = "base" if gtap else "altertax"
     copied_check = base_calibrated and not solve_check

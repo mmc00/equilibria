@@ -59,6 +59,9 @@ def path(
     """
 
     def solve(model: Any) -> str:
+        backend = getattr(model, "backend", "pyomo")
+        if backend != "pyomo":
+            raise TypeError(f"path solves the Pyomo model, got backend {backend!r}")
         staged = model.staged
         if staged is None:
             raise RuntimeError(

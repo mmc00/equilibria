@@ -170,6 +170,8 @@ def period_residual(m: Any, period: str) -> float:
 class PyomoPeriodModel:
     """``PeriodModel`` over a reflected Pyomo model (``self.pyomo``)."""
 
+    backend = "pyomo"
+
     def __init__(self, pyomo: Any) -> None:
         self.pyomo = pyomo
 
