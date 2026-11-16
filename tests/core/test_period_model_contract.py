@@ -36,7 +36,40 @@ def _pyomo() -> PyomoPeriodModel:
     return PyomoPeriodModel(reflect(sp, ("a", "b")))
 
 
-MAKERS: list[Callable[[], Any]] = [_pyomo]
+def _family() -> Any:
+    """The same model as ``MPArrays`` (keys with the period last)."""
+    import numpy as np
+
+    from equilibria.family.mp_arrays import MPArrays, RowArr, VarArr
+    from equilibria.family.periods import FamilyPeriodModel
+
+    def var(cells: list[tuple], level: float, lb: float) -> VarArr:
+        keys = [(*c, t) for t in ("a", "b") for c in cells]
+        n = len(keys)
+        return VarArr(
+            keys,
+            np.full(n, level),
+            np.zeros(n, dtype=bool),
+            np.full(n, lb),
+            np.full(n, np.inf),
+        )
+
+    def row(cells: list[tuple]) -> RowArr:
+        keys = [(*c, t) for t in ("a", "b") for c in cells]
+        return RowArr(keys, np.ones(len(keys), dtype=bool))
+
+    mp = MPArrays(
+        vars={
+            "x": var([I1, I2], 1.0, 0.5),
+            "y": var([()], 2.0, -np.inf),
+            "z": var([I1, I2], np.nan, -np.inf),
+        },
+        rows={"e": row([I1, I2]), "g": row([()])},
+    )
+    return FamilyPeriodModel(mp, periods=("a", "b"))
+
+
+MAKERS: list[Callable[[], Any]] = [_pyomo, _family]
 
 
 @pytest.fixture(params=MAKERS, ids=lambda f: f.__name__.strip("_"))
@@ -123,3 +156,12 @@ def test_pyomo_rows_without_period_never_listed() -> None:
     pm.pyomo.h = pyo.Constraint(["i1"], rule=lambda mm, i: mm.y["a"] == 2)
     assert pm.row_cells("h", "a") == ()
     assert pm.active_rows("h", "a") == frozenset()
+
+
+def test_family_free_cells_lb_is_minus_inf() -> None:
+    fm = _family()
+    fm.free_cells("x", "a", [I1])
+    x = fm.mp.vars["x"]
+    i = x.pos(("i1", "a"))
+    assert x.lb[i] == -math.inf and x.ub[i] == math.inf
+    assert fm.backend == "family"
