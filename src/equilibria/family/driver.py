@@ -119,7 +119,7 @@ def check_supported(
         refuse("@overwrite hooks")
 
 
-CACHE_ENV = "EQUILIBRIA_FAMILY_CACHE"
+CACHE_ENV = "EQUILIBRIA_FAMILY_CACHE"  # cache-miss probe (reverted)
 PERIODS = ("base", "check", "shock")
 ICNTL6_FAMILY = 7  # MUMPS ICNTL(6) on the family squared system (Pyomo keeps 0)
 CODE_RESIDUAL = 1e-5  # code 1 needs ||F||_inf below this, as ``_ok_sr``
