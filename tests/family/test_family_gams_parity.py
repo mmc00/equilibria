@@ -20,6 +20,7 @@ from tests.family._parity import (
     gams_cases,
     gams_reference,
 )
+from tests.templates.gtap._routes import ROUTES
 
 pytest.importorskip("jax")
 pytestmark = [pytest.mark.integration, pytest.mark.needs_gdxdump]
@@ -43,10 +44,11 @@ def _params(cases):
     return out
 
 
+@pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize("case", _params(gams_cases()))
-def test_family_matches_gams(case):
+def test_family_matches_gams(case, route):
     gdx = gams_reference(case.dataset, case.ifsub, case.mode)
-    per = family_match(case.dataset, case.ifsub, case.mode, gdx)
+    per = family_match(case.dataset, case.ifsub, case.mode, gdx, route=route)
     tag = f"{case.dataset}/{case.mode}/ifSUB={case.ifsub}"
     print(
         f"[{tag}] "

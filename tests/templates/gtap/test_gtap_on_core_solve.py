@@ -10,10 +10,11 @@ the same order give the same floats), with the same convergence per period.
 from __future__ import annotations
 
 import math
-from typing import Any, cast
+from typing import Any
 
 import pytest
 from tests.templates.gtap import _period_snapshot as snap
+from tests.templates.gtap._routes import solve
 
 from equilibria.sources import dataset_dir
 
@@ -50,50 +51,14 @@ def _same(a: float, b: float) -> bool:
     return a == b or (math.isnan(a) and math.isnan(b))
 
 
-def _compare(old_m: Any, old_res: dict, new_m: Any, new_res: dict) -> None:
-    for period, r in new_res.items():
-        old = old_res.get(period)
-        if old is None or old.get("skipped_solve"):
-            assert r["code"] == "not solved", (period, r)
-            continue
-        assert (old["code"] == 1) == (r["code"] == "optimal"), (period, old, r)
-    a, b = _levels(old_m), _levels(new_m)
+def _run_both(p: Any, closure: Any, rr: str, *, mode: str = "gtap", **kw: Any) -> None:
+    old = solve("old", p, closure, rr, mode=mode, skip_base_solve=True, **kw)
+    core = solve("core", p, closure, rr, mode=mode, skip_base_solve=True, **kw)
+    assert old.codes == core.codes
+    a, b = _levels(old.model), _levels(core.model)
     assert a.keys() == b.keys()
     bad = [(k, a[k], b[k]) for k in a if not _same(a[k], b[k])]
     assert not bad, f"{len(bad)} cells differ, first: {bad[:20]}"
-
-
-def _run_both(
-    p: Any,
-    closure: Any,
-    rr: str,
-    *,
-    mode: str = "gtap",
-    shock: dict | None = None,
-    driver_kw: dict | None = None,
-    recipe_kw: dict | None = None,
-) -> None:
-    from equilibria.core.exercise import Exercise
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from equilibria.templates.gtap.recipe import gtap_static
-    from equilibria.templates.gtap.shocks import apply_shock
-    from equilibria.templates.gtap.template import GTAP
-
-    m, _ = build_block_model(p, p.sets, closure, rr)
-    if shock:
-        apply_shock(m, shock)
-    old_res = solve_multiperiod(
-        m, p, closure, mode=mode, skip_base_solve=True, **(driver_kw or {})
-    )
-    ex = Exercise(
-        template=GTAP(p, closure, residual_region=rr),
-        recipe=gtap_static(mode, **(recipe_kw or {})),
-        shock=shock,
-    )
-    new_res = ex.run()
-    assert ex.model is not None
-    _compare(m, old_res, cast("Any", ex.model).pyomo, new_res)
 
 
 @pytest.fixture(autouse=True)
@@ -125,8 +90,7 @@ def test_shock_in_steps_3x3() -> None:
         p,
         _closure(False),
         list(p.sets.r)[-1],
-        driver_kw={"shock_steps": (0.5, 1.0)},
-        recipe_kw={"shock_steps": (0.5, 1.0)},
+        shock_steps=(0.5, 1.0),
     )
 
 
@@ -137,8 +101,7 @@ def test_johansen_3x3() -> None:
         p,
         _closure(False),
         list(p.sets.r)[-1],
-        driver_kw={"shock_method": "johansen"},
-        recipe_kw={"shock_method": "johansen"},
+        shock_method="johansen",
     )
 
 
@@ -159,8 +122,7 @@ def test_overwrite_unemployment_nus333() -> None:
             closure(),
             "ROW",
             shock={"prdtx_rai": {("USA", "MFG", "MFG"): -10.9414}},
-            driver_kw={"solve_check": True},
-            recipe_kw={"solve_check": True},
+            solve_check=True,
         )
     finally:
         overwrite.clear()

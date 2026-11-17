@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import pytest
 from tests.templates.gtap._nus333 import closure, nus333_params, pct
+from tests.templates.gtap._routes import solve
 
 pytestmark = pytest.mark.integration
 
@@ -38,36 +39,55 @@ ORACLE = {
 }
 
 
-@pytest.fixture(scope="module", params=["apply_shock", "fix_instrument_shock"])
+@pytest.fixture(
+    scope="module",
+    params=[
+        ("old", "apply_shock"),
+        ("old", "fix_instrument_shock"),
+        ("core", "apply_shock"),
+    ],
+    ids=lambda c: "-".join(c),
+)
 def solved(request):
     """Las dos vias dan lo mismo: ``apply_shock`` (el % de GEMPACK) y
     ``fix_instrument_shock`` directo antes de ``solve_multiperiod`` (sin arancel)."""
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from equilibria.templates.gtap.shocks import apply_shock
-
+    route, how = request.param
     p = nus333_params()
     ac = closure()
-    m, _mp = build_block_model(p, p.sets, ac, "ROW", base_calibrated=True, ref_gdx=None)
-    if request.param == "fix_instrument_shock":
+    if how == "fix_instrument_shock":
+        from equilibria.templates.gtap.gtap_block_model import build_block_model
+        from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
         from equilibria.templates.gtap.instruments import fix_instrument_shock
 
+        m, _mp = build_block_model(
+            p, p.sets, ac, "ROW", base_calibrated=True, ref_gdx=None
+        )
         fix_instrument_shock(m, "lambdava", ("USA", "SER"), factor=1.10)
-    else:
-        apply_shock(m, {"lambdava": {("USA", "SER"): 10.0}})
-    res = solve_multiperiod(
-        m,
+        res = solve_multiperiod(
+            m,
+            p,
+            ac,
+            ref_gdx=None,
+            skip_base_solve=True,
+            mute_welfare=True,
+            seed_from_prior=False,
+            mode="gtap",
+            solve_check=True,
+        )
+        assert int(res["shock"]["code"]) == 1, res["shock"]
+        return m
+    s = solve(
+        route,
         p,
         ac,
-        ref_gdx=None,
+        "ROW",
+        shock={"lambdava": {("USA", "SER"): 10.0}},
+        base_calibrated=True,
         skip_base_solve=True,
-        mute_welfare=True,
-        seed_from_prior=False,
-        mode="gtap",
         solve_check=True,
     )
-    assert int(res["shock"]["code"]) == 1, res["shock"]
-    return m
+    assert s.codes["shock"] == 1, s.codes
+    return s.model
 
 
 def test_el_shock_no_entra_al_check(solved):

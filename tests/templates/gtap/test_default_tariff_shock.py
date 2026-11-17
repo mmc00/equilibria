@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests.templates.gtap._routes import ROUTES, solve
 
 from equilibria._local_refs import path_capi_src
 from equilibria.sources import dataset_dir, find_reference, reference
@@ -57,7 +58,7 @@ def _gams(gdx: Path, name: str) -> dict[tuple, float]:
     return {tuple(strip(x) for x in k): v["level"] for k, v in raw.items()}
 
 
-def _solve(mode: str, ifsub: int, gdx: Path):
+def _solve(mode: str, ifsub: int, gdx: Path, route: str = "old"):
     """El armado de test_gtap7_mcp_parity, sin shock en el modelo."""
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
@@ -87,6 +88,9 @@ def _solve(mode: str, ifsub: int, gdx: Path):
             fix_technology=True,
             if_sub=bool(ifsub),
             numeraire="pnum",
+            # build_block_model sets the params' basis from the closure (the core
+            # route builds with it): the basis set on p above
+            va_subsidy_basis="gempack",
         )
     else:
         pa = p
@@ -99,8 +103,25 @@ def _solve(mode: str, ifsub: int, gdx: Path):
             fix_technology=False,
             if_sub=bool(ifsub),
             numeraire="pnum",
+            # build_block_model sets the params' basis from the closure (the core
+            # route builds with it): the basis set on p above
+            va_subsidy_basis="gempack",
         )
     rr = list(p.sets.r)[-1]
+    if route == "core":
+        s = solve(
+            "core",
+            pa,
+            ac,
+            rr,
+            ref_gdx=gdx,
+            seed_gdx=gdx,
+            skip_base_solve=True,
+            mute_welfare=True,
+            seed_from_prior=False,
+            mode=mode,
+        )
+        return s.model, {t: {"code": c} for t, c in s.codes.items()}
     mp = GTAPBlockMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
     m = mp.build_sets()
     mp.build_vars(m)
@@ -122,16 +143,20 @@ def _solve(mode: str, ifsub: int, gdx: Path):
     return m, res
 
 
-@pytest.fixture(scope="module", params=CASES, ids=[f"{m}-ifsub{s}" for m, s in CASES])
+@pytest.fixture(
+    scope="module",
+    params=[(*c, r) for c in CASES for r in ROUTES],
+    ids=[f"{m}-ifsub{s}-{r}" for m, s in CASES for r in ROUTES],
+)
 def solved(request):
-    mode, ifsub = request.param
+    mode, ifsub, route = request.param
     gdx = _fixture_gdx(mode, ifsub)
     if gdx is None:
         pytest.skip(f"sin referencia GAMS para {DATASET} {mode} ifSUB={ifsub}")
     assert gdx is not None  # pytest.skip raises; ty does not narrow through it
     if importlib.util.find_spec("path_capi_python") is None:
         pytest.skip("PATH (path_capi_python) ausente")
-    m, res = _solve(mode, ifsub, gdx)
+    m, res = _solve(mode, ifsub, gdx, route)
     assert all(r["code"] == 1 for r in res.values()), res
     return mode, gdx, m
 
@@ -200,19 +225,27 @@ TABLE1_ORACLE = (
 
 
 @pytest.mark.needs_path
-def test_table1_3x3_keeps_its_solution():
+@pytest.mark.parametrize("route", ROUTES)
+def test_table1_3x3_keeps_its_solution(route):
     import gzip
     import json
 
     if importlib.util.find_spec("path_capi_python") is None:
         pytest.skip("PATH (path_capi_python) ausente")
     sys.path.insert(0, str(ROOT / "scripts/gtap"))
-    from compare_gempack_levels import run, solve  # ty: ignore[unresolved-import]
+    from compare_gempack_levels import (  # ty: ignore[unresolved-import]
+        run,
+    )
+    from compare_gempack_levels import (  # ty: ignore[unresolved-import]
+        solve as solve_levels,
+    )
 
     with gzip.open(TABLE1_ORACLE, "rt") as fh:
         oracle = json.load(fh)
     want = {(v, t, tuple(i)): a for v, t, i, a in oracle["cells"]}
-    levels, xscale = solve(DATASET, "capFlex", "path")
+    levels, xscale = solve_levels(
+        DATASET, "capFlex", "path", route={"old": "driver", "core": "exercise"}[route]
+    )
     r = run(
         levels,
         xscale,

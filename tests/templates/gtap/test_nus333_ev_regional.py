@@ -19,6 +19,7 @@ from typing import Any
 
 import pytest
 from tests.templates.gtap._nus333 import nus333_params, run_burfisher
+from tests.templates.gtap._routes import ROUTES
 
 from equilibria.sources import reference
 
@@ -40,17 +41,21 @@ def _gempack(exp: str) -> dict:
     return json.loads(gzip.decompress(FIXTURE.read_bytes()))[exp]
 
 
-@pytest.fixture(scope="module", params=EXERCISES)
+@pytest.fixture(
+    scope="module",
+    params=[(e, r) for e in EXERCISES for r in ROUTES],
+    ids=lambda c: "-".join(c),
+)
 def solved(request) -> tuple[str, Any]:
     import sys
 
-    exp = request.param
+    exp, route = request.param
     rb = run_burfisher()
     nus333_params(rb.EXERCISES[exp][0])  # SKIP sin el dataset
     from equilibria._local_refs import nus333_dir, path_capi_src
 
     sys.path.insert(0, str(path_capi_src()))
-    m, _, codes = rb.solve_exercise(exp, nus333_dir())
+    m, _, codes = rb.solve_exercise(exp, nus333_dir(), route=route)
     assert codes == {"base": 1, "check": 1, "shock": 1}, codes
     return exp, m
 
@@ -81,7 +86,8 @@ def test_ev_regional_igual_a_gempack(solved) -> None:
     assert abs(wev - g["WEV"]) <= TOL * world, (wev, g["WEV"])
 
 
-def test_ev_regional_es_cero_con_el_numerario() -> None:
+@pytest.mark.parametrize("route", ROUTES)
+def test_ev_regional_es_cero_con_el_numerario(route: str) -> None:
     """GTAPV7: todos los precios suben 10 % y u no cambia; a precios del check el
     ingreso que da esa u es el del check, asi que el EV es 0 (sin oraculo)."""
     import sys
@@ -95,7 +101,7 @@ def test_ev_regional_es_cero_con_el_numerario() -> None:
     from equilibria._local_refs import nus333_dir, path_capi_src
 
     sys.path.insert(0, str(path_capi_src()))
-    m, _, _ = rb.solve_exercise("GTAPV7", nus333_dir())
+    m, _, _ = rb.solve_exercise("GTAPV7", nus333_dir(), route=route)
     ev = regional_ev(m)
     for r in m.r:
         assert abs(ev[r]) <= 1e-7 * value(m.regy[r, "check"]), (r, ev[r])

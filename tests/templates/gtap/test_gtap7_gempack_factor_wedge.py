@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from tests.templates.gtap._routes import ROUTES, solve
 
 from equilibria.sources import dataset_dir
 
@@ -182,14 +183,13 @@ def test_altertax_con_gempack_reparte_el_va_como_evfp():
 
 @pytest.mark.integration
 @pytest.mark.needs_path
-def test_check_gempack_reproduce_el_peso_de_los_factores():
+@pytest.mark.parametrize("route", ROUTES)
+def test_check_gempack_reproduce_el_peso_de_los_factores(route):
     """Con gempack, el check resuelto tiene el peso de cada factor en el VA de EVFP."""
     sys.path.insert(0, str(ROOT / "src"))
     from pyomo.environ import value as V
 
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     p = _params()
     ac = GTAPClosureConfig(
@@ -204,21 +204,17 @@ def test_check_gempack_reproduce_el_peso_de_los_factores():
         numeraire="pnum",
         va_subsidy_basis="gempack",
     )
-    m, _ = build_block_model(
-        p, p.sets, ac, list(p.sets.r)[-1], base_calibrated=True, ref_gdx=None
-    )
-    res = solve_multiperiod(
-        m,
+    s = solve(
+        route,
         p,
         ac,
-        ref_gdx=None,
+        list(p.sets.r)[-1],
+        base_calibrated=True,
         skip_base_solve=True,
-        mute_welfare=True,
-        seed_from_prior=False,
-        mode="gtap",
         solve_check=True,
     )
-    assert int(res["check"]["code"]) == 1
+    assert s.codes["check"] == 1
+    m = s.model
 
     evfp = _har("EVFP")
     pfa = cast(Any, m.pfa)

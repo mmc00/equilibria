@@ -47,6 +47,7 @@ from typing import Any, cast
 
 import pytest
 from tests.templates.gtap._nus333 import ROOT, closure, nus333_params, pct
+from tests.templates.gtap._routes import ROUTES, solve
 
 pytestmark = pytest.mark.integration
 
@@ -234,33 +235,26 @@ SHOCKS = {exp: EXERCISES[exp] for exp in ORACLES}
 PARAMS = sorted(SHOCKS)
 
 
-@pytest.fixture(scope="module", params=PARAMS)
+@pytest.fixture(
+    scope="module",
+    params=[(e, r) for e in PARAMS for r in ROUTES],
+    ids=lambda c: "-".join(c),
+)
 def solved(request):
-    exp = request.param
+    exp, route = request.param
     prm_name, shocks = SHOCKS[exp]
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from equilibria.templates.gtap.shocks import apply_shock
-
     p = nus333_params(prm_name)
-    ac = closure()
-    m, _mp = build_block_model(
-        p, p.sets, ac, "ROW", base_calibrated=False, ref_gdx=None
-    )
-    apply_shock(m, AS_SHOCK(shocks))
-    res = solve_multiperiod(
-        m,
+    s = solve(
+        route,
         p,
-        ac,
-        ref_gdx=None,
+        closure(),
+        "ROW",
+        shock=AS_SHOCK(shocks),
         skip_base_solve=True,
-        mute_welfare=True,
-        seed_from_prior=False,
-        mode="gtap",
         solve_check=True,
     )
-    assert int(res["shock"]["code"]) == 1, (exp, res["shock"])
-    return exp, m
+    assert s.codes["shock"] == 1, (exp, s.codes)
+    return exp, s.model
 
 
 def test_iguala_a_gams(solved):

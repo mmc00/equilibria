@@ -11,10 +11,19 @@ import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 from tests.templates.gtap import test_gtap7_mcp_parity as mcp_gate
 
 coverage_matrix = __import__("coverage_matrix")  # on sys.path via the mcp gate
+
+
+@dataclass(frozen=True)
+class _Run:
+    """A family run on either route: its arrays and the code of every stage."""
+
+    mp: Any
+    codes: dict[str, int]
 
 
 @dataclass(frozen=True)
@@ -58,8 +67,11 @@ def gams_reference(dataset: str, ifsub: int, mode: str) -> Path:
     return gdx
 
 
-def _solve(dataset: str, ifsub: int, mode: str, unit_sigma: str = "gams"):
-    """``(FamilyResult, code)`` of the family route on the photos' closure."""
+def _solve(
+    dataset: str, ifsub: int, mode: str, unit_sigma: str = "gams", route: str = "old"
+):
+    """``(result, code)`` of the family backend on the photos' closure; ``result``
+    carries the arrays as ``.mp`` on both routes (``route``: "old" or "core")."""
     import pytest
 
     from equilibria.family.driver import check_supported
@@ -89,7 +101,34 @@ def _solve(dataset: str, ifsub: int, mode: str, unit_sigma: str = "gams"):
             "EQUILIBRIA_GTAP_TR_LINSOLVE": linsolve,
         }.items():
             mp.setenv(k, v)
-        return _solve_shock(
+        if route == "core":
+            # _solve_shock's family setup, through the route helper: it keeps the
+            # code of every stage (the gate checks each one)
+            from equilibria.family.photos import photo_closure
+            from equilibria.sources import dataset_dir
+            from equilibria.templates.gtap import GTAPParameters
+            from tests.templates.gtap._routes import solve
+            from tests.templates.gtap.test_gtap7_gempack_parity import _reference_gdx
+
+            mp.setenv("EQUILIBRIA_GTAP_SOLVE_NLP", "1")
+            d = dataset_dir(dataset)
+            p = GTAPParameters()
+            p.load_from_har(
+                basedata_path=d / "basedata.har",
+                sets_path=d / "sets.har",
+                default_path=d / "default.prm",
+                baserate_path=d / "baserate.har",
+            )
+            out = solve(
+                "core",
+                p,
+                photo_closure(ifsub, "capFix", cast("Any", unit_sigma)),
+                list(p.sets.r)[-1],
+                backend="family",
+                ref_gdx=_reference_gdx(dataset, ifsub),
+            )
+            return _Run(out.model, out.codes), out.codes["shock"]
+        res, code = _solve_shock(
             dataset,
             ifsub,
             "capFix",
@@ -97,14 +136,17 @@ def _solve(dataset: str, ifsub: int, mode: str, unit_sigma: str = "gams"):
             backend="family",
             unit_sigma=unit_sigma,
         )
+        return _Run(res.mp, {k: int(r["code"]) for k, r in res.results.items()}), code
 
 
-def family_match(dataset: str, ifsub: int, mode: str, gdx: Path) -> dict[str, dict]:
+def family_match(
+    dataset: str, ifsub: int, mode: str, gdx: Path, route: str = "old"
+) -> dict[str, dict]:
     """``{stage: {"match": %, "total": cells, "code": code}}`` of the family run
     against ``gdx``."""
     from _diff_core import gams_levels, list_populated_vars, split_t  # type: ignore
 
-    res, _ = _solve(dataset, ifsub, mode)
+    res, _ = _solve(dataset, ifsub, mode, route=route)
     mp = res.mp
     stages = ("base", "check", "shock")
     tot = dict.fromkeys(stages, 0)
@@ -150,7 +192,7 @@ def family_match(dataset: str, ifsub: int, mode: str, gdx: Path) -> dict[str, di
         s: {
             "match": 100.0 * hit[s] / max(tot[s], 1),
             "total": tot[s],
-            "code": int(res.results[s]["code"]),
+            "code": res.codes[s],
         }
         for s in stages
     }
@@ -175,7 +217,7 @@ def gempack_reference(dataset: str) -> Path:
     return sl4
 
 
-def family_gempack_within(dataset: str, ifsub: int):
+def family_gempack_within(dataset: str, ifsub: int, route: str = "old"):
     """``(within_1pp, median_pp, cells, code)`` of the family run against GEMPACK: the
     rule of ``test_gtap7_gempack_parity._measure_pp`` (shock/check %-change of the
     ``Q_TO_VAR`` quantities, check falling back to base) on the family's arrays."""
@@ -186,7 +228,7 @@ def family_gempack_within(dataset: str, ifsub: int):
     from tests.templates.gtap.test_gtap7_gempack_parity import PP_WITHIN
 
     sl4 = gempack_reference(dataset)
-    res, code = _solve(dataset, ifsub, "pure", unit_sigma="gempack")
+    res, code = _solve(dataset, ifsub, "pure", unit_sigma="gempack", route=route)
     mp = res.mp
 
     def level(v, key, period):

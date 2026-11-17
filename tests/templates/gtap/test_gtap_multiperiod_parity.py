@@ -33,6 +33,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests.templates.gtap._routes import ROUTES, solve
 
 from equilibria._local_refs import path_capi_src
 from equilibria.sources import dataset_dir, find_reference, has_dataset
@@ -135,10 +136,15 @@ def _gtap_closure(if_sub: bool):
         fix_technology=False,
         if_sub=if_sub,
         numeraire="pnum",
+        # build_block_model sets the params' basis from the closure (the core
+        # route builds with it): the basis the gate sets on p
+        va_subsidy_basis="gempack",
     )
 
 
-def _solve_and_match(dataset: str, if_sub: bool, period: str = "shock"):
+def _solve_and_match(
+    dataset: str, if_sub: bool, period: str = "shock", route: str = "old"
+):
     """Build the pure-gtap MP model, seed from the GAMS GDX, solve, compare.
 
     Returns (codes_dict, match_pct, total, worst) for the requested period.
@@ -165,28 +171,42 @@ def _solve_and_match(dataset: str, if_sub: bool, period: str = "shock"):
     p.set_va_subsidy_basis("gempack")
     rr = list(p.sets.r)[-1]
     gc = _gtap_closure(if_sub)
-    mp = GTAPBlockMultiPeriodModel(p.sets, p, gc, residual_region=rr)
-    m = mp.build_sets()
-    mp.build_vars(m)
-    for per in PERIODS:
-        mp.build_equations_intra(m, per)
-    mp.build_equations_fisher(m)
-    m._residual_region = rr
-    mp.seed_all_periods(m, ref)
-
     # gtap-mode: skip_base_solve=True keeps the calibrated base anchor (pva=ps=pd=1)
     # instead of letting PATH slide the USA price level.
-    res = solve_multiperiod(
-        m,
-        p,
-        gc,
-        ref_gdx=ref,
-        skip_base_solve=True,
-        mute_welfare=True,
-        seed_from_prior=False,
-        mode="gtap",
-    )
-    codes = {k: res[k]["code"] for k in res}
+    if route == "core":
+        s = solve(
+            "core",
+            p,
+            gc,
+            rr,
+            ref_gdx=ref,
+            seed_gdx=ref,
+            skip_base_solve=True,
+            mute_welfare=True,
+            seed_from_prior=False,
+            mode="gtap",
+        )
+        m, codes = s.model, s.codes
+    else:
+        mp = GTAPBlockMultiPeriodModel(p.sets, p, gc, residual_region=rr)
+        m = mp.build_sets()
+        mp.build_vars(m)
+        for per in PERIODS:
+            mp.build_equations_intra(m, per)
+        mp.build_equations_fisher(m)
+        m._residual_region = rr
+        mp.seed_all_periods(m, ref)
+        res = solve_multiperiod(
+            m,
+            p,
+            gc,
+            ref_gdx=ref,
+            skip_base_solve=True,
+            mute_welfare=True,
+            seed_from_prior=False,
+            mode="gtap",
+        )
+        codes = {k: res[k]["code"] for k in res}
 
     tot = match = 0
     worst: list[tuple[float, str, tuple, float, float]] = []
@@ -241,7 +261,8 @@ def _solve_and_match(dataset: str, if_sub: bool, period: str = "shock"):
 
 
 @pytest.mark.skipif(not _has_path_solver(), reason="PATH solver unavailable")
-def test_gtap_mp_shock_matches_gams_3x3():
+@pytest.mark.parametrize("route", ROUTES)
+def test_gtap_mp_shock_matches_gams_3x3(route):
     """Pure-gtap MP shock vs GAMS LOCAL (ifSUB=0): 3 periods code=1 + measured
     shock match% floor."""
     dataset = "gtap7_3x3"
@@ -252,7 +273,9 @@ def test_gtap_mp_shock_matches_gams_3x3():
     if ref is None:
         pytest.skip(f"no GAMS MCP reference recorded for {dataset}")
 
-    codes, match_pct, tot, worst = _solve_and_match(dataset, if_sub, "shock")
+    codes, match_pct, tot, worst = _solve_and_match(
+        dataset, if_sub, "shock", route=route
+    )
 
     worst_str = "; ".join(
         f"{vn}{idx}: GAMS={gv:.5g} MP={mv:.5g} rel={r:.3g}"

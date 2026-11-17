@@ -144,8 +144,11 @@ def test_no_floor_below_95():
 
 
 def _param_cases(fn):
-    """``[(values, marks)]`` of ``fn``'s parametrize mark, plain tuples or params."""
-    (mark,) = [m for m in fn.pytestmark if m.name == "parametrize"]
+    """``[(values, marks)]`` of ``fn``'s parametrize mark, plain tuples or params; the
+    ``route`` mark (old/core, tests/templates/gtap/_routes.py) carries no twin mark."""
+    (mark,) = [
+        m for m in fn.pytestmark if m.name == "parametrize" and m.args[0] != "route"
+    ]
     out = []
     for v in mark.args[1]:
         if hasattr(v, "values"):

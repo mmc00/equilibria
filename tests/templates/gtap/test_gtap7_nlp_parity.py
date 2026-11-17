@@ -45,9 +45,13 @@ ROOT = Path(__file__).resolve().parents[3]
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
+# gen_nlp_matrix_page.py imports this gate by bare name, without the repo root on
+# sys.path: append it (last, so nothing else is shadowed) for the tests package
+sys.path.append(str(ROOT))
 
 from coverage_matrix import nlp_rows  # noqa: E402
 from family_twins import pyomo_solve  # noqa: E402
+from tests.templates.gtap._routes import ROUTES, solve  # noqa: E402
 
 from equilibria._local_refs import path_capi_src
 
@@ -143,7 +147,9 @@ def _strip(s):
     return s
 
 
-def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
+def _solve_and_measure(
+    dataset: str, ifsub: int, mode: str, gdx: Path, route: str = "old"
+):
     """Build + seed + solve base→check→shock as an NLP; return
     {period: {"match": float, "code": int, "total": int}}."""
     os.environ["EQUILIBRIA_GTAP_SOLVE_NLP"] = "1"
@@ -188,6 +194,9 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
             fix_technology=True,
             if_sub=bool(ifsub),
             numeraire="pnum",
+            # build_block_model sets the params' basis from the closure (the core
+            # route builds with it): the same basis as set on p above
+            va_subsidy_basis="gempack",
         )
         solve_mode = "altertax"
     else:  # pure real-CES
@@ -201,17 +210,11 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
             fix_technology=False,
             if_sub=bool(ifsub),
             numeraire="pnum",
+            # build_block_model sets the params' basis from the closure (the core
+            # route builds with it): the same basis as set on p above
+            va_subsidy_basis="gempack",
         )
         solve_mode = "gtap"
-
-    mp = GTAPBlockMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
-    m = mp.build_sets()
-    mp.build_vars(m)
-    for per in PERIODS:
-        mp.build_equations_intra(m, per)
-    mp.build_equations_fisher(m)
-    m._residual_region = rr
-    mp.seed_all_periods(m, gdx)
 
     # altertax: check and shock start from Python's own previous period and nothing
     # is held at the reference. Seeding them with the answer and holding pva/pnd
@@ -219,17 +222,40 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
     # (#192) alike, at 100 % @0.01 %: the gate could not fail. Measured this way the
     # sigma = 1 Python scored 53-77 % on the check, the sigma = 1.01 one 100 %.
     altertax = mode == "altertax"
-    res = solve_multiperiod(
-        m,
-        p,
-        ac,
-        ref_gdx=gdx,
-        skip_base_solve=True,
-        mute_welfare=True,
-        seed_from_prior=altertax,
-        mode=solve_mode,
-    )
-    codes = {k: res[k]["code"] for k in res}
+    if route == "core":
+        s = solve(
+            "core",
+            pa,
+            ac,
+            rr,
+            ref_gdx=gdx,
+            seed_gdx=gdx,
+            skip_base_solve=True,
+            mute_welfare=True,
+            seed_from_prior=altertax,
+            mode=solve_mode,
+        )
+        m, codes = s.model, s.codes
+    else:
+        mp = GTAPBlockMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
+        m = mp.build_sets()
+        mp.build_vars(m)
+        for per in PERIODS:
+            mp.build_equations_intra(m, per)
+        mp.build_equations_fisher(m)
+        m._residual_region = rr
+        mp.seed_all_periods(m, gdx)
+        res = solve_multiperiod(
+            m,
+            p,
+            ac,
+            ref_gdx=gdx,
+            skip_base_solve=True,
+            mute_welfare=True,
+            seed_from_prior=altertax,
+            mode=solve_mode,
+        )
+        codes = {k: res[k]["code"] for k in res}
 
     def measure(period: str):
         tot = match = 0
@@ -281,12 +307,13 @@ def _solve_and_measure(dataset: str, ifsub: int, mode: str, gdx: Path):
     return out
 
 
+@pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize(
     "dataset,ifsub,mode,floors,ci_status",
     _NLP_CASES,
     ids=[f"{r.dataset}-{r.mode}-ifsub{r.ifsub}" for r in nlp_rows()],
 )
-def test_gtap7_nlp_parity(dataset, ifsub, mode, floors, ci_status):
+def test_gtap7_nlp_parity(dataset, ifsub, mode, floors, ci_status, route):
     if ci_status == "blocked":
         pytest.skip(f"blocked: {dataset}")
     if not _has_solver():
@@ -299,7 +326,7 @@ def test_gtap7_nlp_parity(dataset, ifsub, mode, floors, ci_status):
     if not has_dataset(dataset):
         pytest.skip(f"dataset HAR missing: {dataset}")
 
-    per = _solve_and_measure(dataset, ifsub, mode, gdx)
+    per = _solve_and_measure(dataset, ifsub, mode, gdx, route=route)
     tag = f"{dataset}/{mode}/ifSUB={ifsub}"
 
     # 1. every stage must converge (code == 1)

@@ -7,21 +7,20 @@ import io
 import pytest
 from rich.console import Console
 
+from tests.templates.gtap._routes import ROUTES, solve
+
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture(scope="module")
-def solved():
+@pytest.fixture(scope="module", params=ROUTES)
+def solved(request):
     import sys
 
     from equilibria._local_refs import path_capi_src
 
     sys.path.insert(0, str(path_capi_src()))
     from equilibria import load_bundled
-    from equilibria.templates.gtap import apply_shock
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     params = load_bundled("gtap", "nus333")
     closure = GTAPClosureConfig(
@@ -34,13 +33,17 @@ def solved():
         if_sub=False,
         numeraire="pnum",
     )
-    m, _ = build_block_model(params, params.sets, closure, "ROW")
-    apply_shock(m, {"imptx": {("USA", "MFG", "ROW"): 10.0}})
-    results = solve_multiperiod(
-        m, params, closure, mode="gtap", skip_base_solve=True, solve_check=True
+    s = solve(
+        request.param,
+        params,
+        closure,
+        "ROW",
+        shock={"imptx": {("USA", "MFG", "ROW"): 10.0}},
+        skip_base_solve=True,
+        solve_check=True,
     )
-    assert results["shock"]["code"] == 1, results
-    return m, results
+    assert s.codes["shock"] == 1, s.codes
+    return s.model, {t: {"code": c} for t, c in s.codes.items()}
 
 
 def test_solved_shock_has_small_residuals_and_walras(solved):

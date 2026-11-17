@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import pytest
 from tests.templates.gtap._nus333 import closure, nus333_params, pct
+from tests.templates.gtap._routes import ROUTES, solve
 
 pytestmark = pytest.mark.integration
 
@@ -39,35 +40,31 @@ ORACLE = {
 }
 
 
-@pytest.fixture(scope="module", params=[True, False], ids=["mute", "sin_mute"])
+@pytest.fixture(
+    scope="module",
+    params=[(r, mute) for r in ROUTES for mute in (True, False)],
+    ids=lambda c: f"{c[0]}-{'mute' if c[1] else 'sin_mute'}",
+)
 def solved(request):
     """``mute_welfare=True`` fija ev/cv por su cuenta; ``False`` deja que las fije
     ``_fix_cd_welfare`` (eq_ev/eq_cv no existen bajo CD), que es lo que se prueba."""
     from equilibria.blocks.gtap import _derived_params as dp
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from equilibria.templates.gtap.shocks import apply_shock
 
+    route, mute = request.param
     p = nus333_params("3x3cobbdouglas.prm")
     assert dp.cd_regions(p, p.sets) == frozenset(p.sets.r)
-    ac = closure()
-    m, _mp = build_block_model(
-        p, p.sets, ac, "ROW", base_calibrated=False, ref_gdx=None
-    )
-    apply_shock(m, {"lambdava": {("USA", "SER"): 10.0}})
-    res = solve_multiperiod(
-        m,
+    s = solve(
+        route,
         p,
-        ac,
-        ref_gdx=None,
+        closure(),
+        "ROW",
+        shock={"lambdava": {("USA", "SER"): 10.0}},
         skip_base_solve=True,
-        mute_welfare=request.param,
-        seed_from_prior=False,
-        mode="gtap",
+        mute_welfare=mute,
         solve_check=True,
     )
-    assert int(res["shock"]["code"]) == 1, res["shock"]
-    return m
+    assert s.codes["shock"] == 1, s.codes
+    return s.model
 
 
 @pytest.mark.parametrize(

@@ -33,8 +33,12 @@ pytestmark = pytest.mark.integration
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
+# gen_nlp_matrix_page.py imports this gate by bare name, without the repo root on
+# sys.path: append it (last, so nothing else is shadowed) for the tests package
+sys.path.append(str(ROOT))
 from coverage_matrix import rows_for  # noqa: E402
 from family_twins import pyomo_solve  # noqa: E402
+from tests.templates.gtap._routes import ROUTES  # noqa: E402
 
 GEMPACK_ROWS = rows_for("gtap7", "gempack", kind="mcp")
 
@@ -58,6 +62,10 @@ def _reference_gdx(dataset: str, ifsub: int) -> Path | None:
         dataset, "gams", form="nlp", mode="gtap", ifsub=ifsub, fbep="header"
     )
     return None if ref is None else ref / "out.gdx"
+
+
+# the parametrized route (tests.templates.gtap._routes) -> _solve_shock's name
+_SHOCK_ROUTE = {"old": "driver", "core": "exercise"}
 
 
 def _solve_shock(
@@ -311,8 +319,9 @@ def _capfix_fixture_for(row) -> Path | None:
 
 
 @pytest.mark.needs_path
+@pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize("row", _gempack_params())
-def test_gtap7_gempack_parity(row):
+def test_gtap7_gempack_parity(row, route):
     if not has_dataset(row.dataset):
         pytest.skip(f"dataset HAR missing: {row.dataset}")
     # The GAMS ref GDX is a speedup (fast rore/rorg + warm-start), NOT a requirement: the block
@@ -357,6 +366,7 @@ def test_gtap7_gempack_parity(row):
         savf_flag=savf_flag,
         solve_nlp=solve_nlp,
         unit_sigma="gempack",
+        route=_SHOCK_ROUTE[route],
     )
     assert code == 1, (
         f"[{row.dataset}/{savf_flag}/{'NLP' if solve_nlp else 'MCP'}] shock did not "

@@ -235,6 +235,7 @@ tests/scripts/test_regen_nus333.py
 tests/scripts/test_regenerate_gams.py
 tests/scripts/test_regenerate_gempack.py
 tests/scripts/test_regenerate_paper.py
+tests/scripts/test_run_burfisher_routes.py
 tests/scripts/test_run_gempack_matrix_out.py
 tests/scripts/test_run_parity_gates_exige_solvers.py
 tests/scripts/test_run_pep_base_export_tax_parity_cli.py
@@ -340,6 +341,7 @@ tests/templates/gtap/test_period_rules.py
 tests/templates/gtap/test_prm_zeros_and_cd_mode.py
 tests/templates/gtap/test_reference_snapshot_auto.py
 tests/templates/gtap/test_residual_region_auto.py
+tests/templates/gtap/test_routes_helper.py
 tests/templates/gtap/test_shock_instruments_mp.py
 tests/templates/gtap/test_shock_rejections.py
 tests/templates/gtap/test_shocks.py
