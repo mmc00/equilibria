@@ -1,14 +1,12 @@
 /* Figures of guide/jax_backend.md (the SVGs in docs/assets/jax-backend/).
-   Every rule is scoped to svg.jxb, so nothing else on the site changes.
+   Loaded only by that page (a <link> at its top), and every rule is scoped to
+   svg.jxb, so nothing else on the site changes. The page loads its fonts too.
    Lego colours are fixed (a brick is the same brick in both themes); the page
    colours follow the pydata light/dark toggle (html[data-theme]). */
-@import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap");
-
 :root {
   --jxb-surface: #ffffff; --jxb-ink: #1b2230; --jxb-muted: #5b6475; --jxb-line: #d5d9e1;
-  --jxb-code-bg: #e7eaef; --chip: #f4f6f9; --surface: var(--jxb-surface); --line: var(--jxb-line);
-  --muted: var(--jxb-muted); --ink: var(--jxb-ink);
-  --jax: #b2561a; --jax-soft: #f7e7da; --pyo: #2f5f8a; --pyo-soft: #e1ebf4; --ok: #2e7d4f;
+  --jxb-code-bg: #e7eaef; --jxb-chip: #f4f6f9; --jxb-ok: #2e7d4f;
+  --jax: #b2561a; --jax-soft: #f7e7da; --pyo: #2f5f8a; --pyo-soft: #e1ebf4;
   --c-shock: #7c4dbd; --c-trade: #1f9c8f; --c-prod: #e2731f; --c-factor: #c2493b; --c-hh: #d23b6b;
   --c-gov: #d8a516; --c-closure: #3d5a80; --c-data: #9aa3b0; --c-gen: #7d8aa3;
   --f-ces: #e2731f; --f-cet: #1f9c8f; --f-leo: #8a6d3b; --f-cd: #d8a516; --f-les: #2f8fd8; --f-cde: #d23b6b;
@@ -19,8 +17,8 @@
 }
 html[data-theme="dark"] {
   --jxb-surface: #1b2029; --jxb-ink: #e8ecf2; --jxb-muted: #9aa3b2; --jxb-line: #2c3340;
-  --jxb-code-bg: #222833; --chip: #232934;
-  --jax: #e8915a; --jax-soft: #3b2b20; --pyo: #7fb0dc; --pyo-soft: #1f2d3b; --ok: #6cc08f;
+  --jxb-code-bg: #222833; --jxb-chip: #232934; --jxb-ok: #6cc08f;
+  --jax: #e8915a; --jax-soft: #3b2b20; --pyo: #7fb0dc; --pyo-soft: #1f2d3b;
   --c-data: #6b7482; --c-photo: #2a313d;
 }
 
@@ -50,4 +48,3 @@ svg.jxb .tp { fill: var(--pyo); }
 svg.jxb .node-op { fill: var(--jax-soft); stroke: var(--jax); stroke-width: 1.5; }
 svg.jxb .node-var { fill: var(--jxb-surface); stroke: var(--jxb-ink); stroke-width: 1.5; }
 svg.jxb .node-cst { fill: var(--jxb-code-bg); stroke: var(--jxb-muted); stroke-width: 1.2; stroke-dasharray: 3 2; }
-.jxb-quote { border-left: 3px solid var(--jax); padding-left: 14px; font-style: italic; }

@@ -97,7 +97,7 @@ html_theme = "pydata_sphinx_theme"
 html_title = f"equilibria {version}"
 # docs/assets is copied into _static, so the theme finds the logos there.
 html_static_path = ["_static", "../assets"]
-html_css_files = ["matrix.css", "jax_backend.css"]
+html_css_files = ["matrix.css"]
 html_favicon = str(ROOT / "docs" / "assets" / "equilibria-favicon.svg")
 # The navbar holds one landing page per area (sections/); the area's pages show
 # in the left sidebar. The home page has no area, so no sidebar.

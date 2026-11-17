@@ -63,3 +63,31 @@ def test_jax_backend_page_includes_every_figure() -> None:
 
 def test_jax_backend_page_has_no_em_dash() -> None:
     assert "—" not in PAGE.read_text(encoding="utf-8")
+
+
+def test_jax_backend_svg_ids_are_unique_on_the_page() -> None:
+    """All figures are inlined into one page, so an id must not repeat across them."""
+    ids: list[str] = []
+    for svg in sorted(FIGURES.glob("*.svg")):
+        ids += re.findall(r'\bid="([^"]+)"', svg.read_text(encoding="utf-8"))
+    repeated = sorted({i for i in ids if ids.count(i) > 1})
+    assert repeated == []
+
+
+def test_jax_backend_svgs_have_a_text_alternative() -> None:
+    for svg in sorted(FIGURES.glob("*.svg")):
+        text = svg.read_text(encoding="utf-8")
+        assert re.match(r'<svg [^>]*role="img"[^>]*><title>[^<]+</title>', text), (
+            svg.name
+        )
+
+
+def test_jax_backend_svg_colours_are_defined_in_the_css() -> None:
+    css = (ROOT / "docs" / "site" / "_static" / "jax_backend.css").read_text(
+        encoding="utf-8"
+    )
+    defined = set(re.findall(r"(--[\w-]+)\s*:", css))
+    used: set[str] = set()
+    for svg in FIGURES.glob("*.svg"):
+        used |= set(re.findall(r"var\((--[\w-]+)\)", svg.read_text(encoding="utf-8")))
+    assert sorted(used - defined) == []

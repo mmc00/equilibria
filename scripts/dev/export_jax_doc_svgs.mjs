@@ -41,12 +41,12 @@ function tile(x,y,z,nx,ny,c,o={}){let s=brick(x,y,z,nx,ny,o.h||14,c,{studs:false
   const [a1,a2]=P(x,y,z+2),[b1,b2]=P(x+nx*U,y,z+2);
   s+=`<line x1="${a1}" y1="${a2}" x2="${b1}" y2="${b2}" style="stroke:color-mix(in oklab, ${c} 60%, black);stroke-width:1"/>`;return s;}
 function sheet(x,y,w,h,rows){
-  let o=`<path d="M${x},${y} H${x+w-16} L${x+w},${y+16} V${y+h} H${x}Z" style="fill:var(--chip);stroke:var(--line);stroke-width:1.2"/><path d="M${x+w-16},${y} V${y+16} H${x+w}" style="fill:var(--line)"/>`;
+  let o=`<path d="M${x},${y} H${x+w-16} L${x+w},${y+16} V${y+h} H${x}Z" style="fill:var(--jxb-chip);stroke:var(--jxb-line);stroke-width:1.2"/><path d="M${x+w-16},${y} V${y+16} H${x+w}" style="fill:var(--jxb-line)"/>`;
   o+=`<text x="${x+12}" y="${y+22}" class="disp" style="font-size:13px;font-weight:600">GTAP</text>`;
-  rows.forEach((r,i)=>{const yy=y+34+i*15;o+=`<rect x="${x+12}" y="${yy}" width="16" height="9" rx="2" style="fill:${r[0]}"/><rect x="${x+34}" y="${yy+3}" width="${r[1]}" height="3" rx="1.5" style="fill:var(--muted);opacity:.55"/>`;});
+  rows.forEach((r,i)=>{const yy=y+34+i*15;o+=`<rect x="${x+12}" y="${yy}" width="16" height="9" rx="2" style="fill:${r[0]}"/><rect x="${x+34}" y="${yy+3}" width="${r[1]}" height="3" rx="1.5" style="fill:var(--jxb-muted);opacity:.55"/>`;});
   return o;}
 function flight(x,y,w){const st=[["base","not solved"],["check","solved"],["shock","solved"]];
-  let o=`<rect x="${x}" y="${y}" width="${w}" height="150" rx="10" style="fill:var(--chip);stroke:var(--line);stroke-width:1.2"/><path d="M${x+28},${y+34} V${y+124}" style="stroke:var(--pyo);stroke-width:2.5"/>`;
+  let o=`<rect x="${x}" y="${y}" width="${w}" height="150" rx="10" style="fill:var(--jxb-chip);stroke:var(--jxb-line);stroke-width:1.2"/><path d="M${x+28},${y+34} V${y+124}" style="stroke:var(--pyo);stroke-width:2.5"/>`;
   st.forEach((s,i)=>{const yy=y+34+i*45;
     o+=`<circle cx="${x+28}" cy="${yy}" r="8" style="fill:${i==2?'var(--c-shock)':'var(--pyo)'}"/>`;
     o+=`<text x="${x+44}" y="${yy+1}" class="disp" style="font-size:14px;font-weight:600">${s[0]}</text><text x="${x+44}" y="${yy+15}" class="mono sm">${s[1]}</text>`;});
@@ -96,7 +96,7 @@ function storageBox(x,y,w,h,labels){const c="var(--c-box)",d=46;let s="";
   s+=`<path d="M${x+w},${y} L${x+w+d*.9},${y-d*.45} V${y+h-d*.45} L${x+w},${y+h}Z" style="fill:${side(c)}"/>`;
   s+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" style="fill:${c}"/>`;
   s+=`<path d="M${x},${y} L${x-14},${y-20} L${x+w-14},${y-20} L${x+w},${y}Z" style="fill:${top(c)}"/>`;
-  labels.forEach((l,i)=>{const yy=y+16+i*30;s+=`<rect x="${x+14}" y="${yy}" width="${w-28}" height="22" rx="4" style="fill:var(--surface);stroke:color-mix(in oklab, ${c} 60%, black);stroke-width:1"/><text x="${x+24}" y="${yy+15}" class="mono" style="font-size:10.5px">${l}</text>`;});
+  labels.forEach((l,i)=>{const yy=y+16+i*30;s+=`<rect x="${x+14}" y="${yy}" width="${w-28}" height="22" rx="4" style="fill:var(--jxb-surface);stroke:color-mix(in oklab, ${c} 60%, black);stroke-width:1"/><text x="${x+24}" y="${yy+15}" class="mono" style="font-size:10.5px">${l}</text>`;});
   return s;}
 // box photo: the front of a set box with the finished model printed on it
 function boxPhoto(x,y,w,h){let s=`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" style="fill:var(--c-closure)"/><rect x="${x+10}" y="${y+30}" width="${w-20}" height="${h-44}" rx="4" style="fill:var(--c-photo)"/>`;
@@ -121,7 +121,7 @@ const PARTS=[
 ];
 const FIGS={
  stack:()=>{let o=plate(0,0,0,8,2,"var(--c-data)");const B=[["Production","--c-prod"],["Factors","--c-factor"],["Trade","--c-trade"],["Households","--c-hh"],["Government","--c-gov"]];B.forEach((b,i)=>{o+=brick((i%2)*U*.6,0,8+i*26,7,2,26,`var(${b[1]})`,{studs:false,label:b[0],fs:12});});o+=tile(U*.6,0,8+5*26,7,2,"var(--c-closure)",{h:16,label:"Closure",fs:11});return svg("0 0 290 230",T(14,212,o));},
- parts:()=>{let o=FLAMEDEFS;PARTS.forEach((p,k)=>{const c=k%4,r=Math.floor(k/4),x=c*240,y=r*230;const inner=p[3]().replace(/^<svg /,`<svg x="${x+20}" y="${y+10}" width="200" height="140" `);
+ parts:()=>{let o=FLAMEDEFS;PARTS.forEach((p,k)=>{const c=k%4,r=Math.floor(k/4),x=c*240,y=r*230;const inner=p[3]().replace(/<defs>.*?<\/defs>/g,"").replace(/^<svg /,`<svg x="${x+20}" y="${y+10}" width="200" height="140" `);
    o+=`<rect x="${x+4}" y="${y+2}" width="232" height="220" rx="12" class="box" ${p[4]?'style="stroke-dasharray:5 4"':''}/>`+inner+`<text x="${x+20}" y="${y+174}" class="disp" style="font-size:16px;font-weight:600">${p[0]}</text><text x="${x+20}" y="${y+194}" class="mono sm">${p[1]}</text>`;
    if(p[4])o+=`<text x="${x+222}" y="${y+24}" text-anchor="end" class="mono tj" style="font-size:10px">JAX ROUTE</text>`;});
   return svg("0 0 960 690",o,"wide");},
@@ -182,13 +182,30 @@ const FIGS={
  engine:()=>svg("0 0 380 250",ARR+FLAMEDEFS+`<rect x="8" y="20" width="120" height="40" rx="8" class="box-pyo"/><text x="68" y="45" text-anchor="middle" class="lbl">Pyomo: F, J</text><rect x="252" y="20" width="120" height="40" rx="8" class="box-jax"/><text x="312" y="45" text-anchor="middle" class="lbl">JAX: F, J</text>
   <path d="M68,60 C68,96 140,92 156,110" class="ln-pyo" marker-end="url(#ahp)"/><path d="M312,60 C312,96 240,92 222,110" class="ln-jax" marker-end="url(#ahj)"/>`+T(112,160,brick(0,0,0,5,2,34,"var(--c-engine)",{label:"Newton + MUMPS",fs:12}))+nozzle(150,160,30,14)+nozzle(210,160,30,14)+flame(150,174,52,14)+flame(210,174,52,14)),
  flight:()=>svg("0 0 300 220",flight(10,30,170)+pilot(240,200,1.5)),
- time_bar:()=>svg("0 0 960 150",`<text x="20" y="24" class="lbl" font-weight="700">One ALTERTAX run on 20x41, about 95 to 108 s after the cuts (2026-11-12)</text>
+ time_bar:()=>svg("0 0 960 150",`<text x="20" y="24" class="lbl" font-weight="700">One ALTERTAX run on 20x41, about 1.6 to 1.8 min after the cuts (2026-11-12)</text>
   <rect x="20" y="40" width="920" height="40" rx="6" class="box"/><rect x="20" y="40" width="166" height="40" rx="6" class="box-jax"/><text x="103" y="65" text-anchor="middle" class="lbl">JAX + MUMPS</text>
   <text x="560" y="65" text-anchor="middle" class="lbl">Python: prepare, pair, load, write and compare results</text>
-  <text x="20" y="104" class="sm">≈ 15 to 20 s</text><text x="940" y="104" text-anchor="end" class="sm">≈ 80 to 90 s</text>
+  <text x="20" y="104" class="sm">≈ 0.25 to 0.33 min</text><text x="940" y="104" text-anchor="end" class="sm">≈ 1.3 to 1.5 min</text>
   <text x="20" y="132" class="sm">The math is the small part. The cuts of these weeks went after the big one.</text>`,"wide"),
  storage_box:()=>svg("0 0 340 260",storageBox(30,60,230,180,["&lt;key&gt;/records.pkl","&lt;key&gt;/state.pkl","&lt;key&gt;/pairing-*.npy","jax_aot/*.aot","jax/","photos/"])+`<text x="30" y="30" class="mono sm">~/.cache/equilibria/family</text>`),
- box_photo:()=>svg("0 0 380 260",FLAMEDEFS+boxPhoto(16,14,150,230)+T(250,236,`<g transform="scale(.62)">${rocket(0,0,0,true).replace(/^<g transform="translate\(0,0\)">/,'<g>')}</g>`)+`<text x="208" y="128" text-anchor="middle" class="disp" style="font-size:26px;font-weight:600;fill:var(--ok)">=</text><text x="208" y="150" text-anchor="middle" class="mono sm">≤ 1e-9</text>`)
+ box_photo:()=>svg("0 0 380 260",FLAMEDEFS+boxPhoto(16,14,150,230)+T(250,236,`<g transform="scale(.62)">${rocket(0,0,0,true).replace(/^<g transform="translate\(0,0\)">/,'<g>')}</g>`)+`<text x="208" y="128" text-anchor="middle" class="disp" style="font-size:26px;font-weight:600;fill:var(--jxb-ok)">=</text><text x="208" y="150" text-anchor="middle" class="mono sm">≤ 1e-9</text>`)
+};
+
+const TITLES = {
+  stack: "GTAP blocks stacked as Lego bricks on the data plate, closed by the closure tile",
+  parts: "The pieces: brick, plate, smooth tile, instruction sheet, flight plan, pilot, rocket, and the JAX pieces clay, mold, storage box, box photo and engine",
+  big_picture: "The blocks feed two roads, Pyomo and JAX, that end in the same Newton engine with MUMPS",
+  same_brick: "One brick, eq_xaa_activity, can go to a Pyomo model or to a RecordingModel",
+  two_objects: "The same rule receives a Pyomo model or a RecordingModel and returns a constraint or a tree",
+  press: "A brick pressed into clay leaves a mold: one tree per cell",
+  tree: "The tree recorded for one cell of eq_xaa_activity",
+  one_mold: "One mold poured with vmap gives many equal pieces",
+  families: "Cells with the same shape become one mold plus a table, and JAX computes F and J for every row at once",
+  engine: "Pyomo and JAX both hand F and J to the same Newton plus MUMPS engine",
+  flight: "The flight plan, base, check and shock, flown by the pilot",
+  time_bar: "In one ALTERTAX run on 20x41, JAX and MUMPS take the small part of the time",
+  storage_box: "The storage box on disk and its drawers",
+  box_photo: "The built rocket compared with the photo on its box, within 1e-9",
 };
 
 const out = process.argv[2];
@@ -199,6 +216,11 @@ if (!out) {
 mkdirSync(out, { recursive: true });
 for (const [name, fig] of Object.entries(FIGS)) {
   const file = join(out, `${name.replaceAll("_", "-")}.svg`);
-  writeFileSync(file, fig() + "\n");
+  const slug = name.replaceAll("_", "-");
+  const body = fig()
+    .replace(/\bid="([^"]+)"/g, `id="${slug}-$1"`)
+    .replace(/url\(#([^)]+)\)/g, `url(#${slug}-$1)`)
+    .replace(/^(<svg [^>]*>)/, `$1<title>${TITLES[name]}</title>`);
+  writeFileSync(file, body + "\n");
   console.log(file);
 }

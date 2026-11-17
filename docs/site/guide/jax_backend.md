@@ -1,5 +1,10 @@
 # How the JAX backend works
 
+```{raw} html
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../_static/jax_backend.css">
+```
+
 GTAP is built from blocks, like a Lego set. With those same blocks the model can be
 solved down two roads: the usual one (Pyomo) and a newer, faster one (JAX, called
 "family" in the code, under `src/equilibria/family/`). This page tells how the JAX
@@ -162,7 +167,7 @@ road passes a Pyomo model; the JAX road passes a `RecordingModel` (the clay).
 
 <!-- fragmento -->
 ```python
-# src/equilibria/blocks/gtap/trade_armington_bilateral.py
+# src/equilibria/blocks/gtap/trade_armington_bilateral.py (trimmed)
 # Demand for good i by activity a (CES of inputs)
 class EqXaaActivity(SymbolicEquation):
     name: str = "eq_xaa_activity"
@@ -289,7 +294,7 @@ def _jac_part_impl(fn, x_all, cols, args):
 
 <!-- fragmento -->
 ```python
-# The same in both: solver/newton_tr.py
+# The same in both: solver/newton_tr.py (trimmed)
 res = newton_tr(F, J, x0, linsolve="mumps")
 # each step: MUMPS factors J, solves J dx = -F, keeps the step if ||F|| goes down
 ```
@@ -381,7 +386,7 @@ points. A drawer with the wrong label is never used: it is filled again.
 
 | Drawer | Where, inside the box | Made again when... |
 |---|---|---|
-| The molds (recorded equations) | `<key>/records.pkl`, `cross_records.pkl` | the data, the closure, the residual region, the code of the blocks, templates, solver or JAX road change, or the versions of Python, JAX, NumPy, SciPy, Pyomo or pymumps. With an `@overwrite` hook active, nothing is stored. |
+| The molds (recorded equations) | `<key>/records.pkl`, `cross_records.pkl` | the data, the closure, the residual region, the model code (every folder in `CODE_FOLDERS` of `src/equilibria/blocks/gtap/fingerprint.py`, plus the whole JAX road) change, or the versions of Python, JAX, Pyomo, NumPy, SciPy, pandas or pymumps. |
 | The starting state | `<key>/state.pkl` | the same as the molds (same label). |
 | The pairing | `<key>/pairing-<period>-<digest>.npy` | the molds, the rows, the columns or the matcher code change. It is checked before use. |
 | Compiled programs (ours) | `jax_aot/<kind>-<hash>.aot` | the mold's shape, JAX, the machine or its CPU, the XLA flags, or the code of `src/equilibria/family/recorder.py`, `src/equilibria/family/core.py` or `src/equilibria/family/aot_cache.py` change. A damaged file is compiled again with a warning. |
@@ -418,7 +423,7 @@ the phase 3 work and PR #257 (2026-11-16) unless they give another date.
 | Comparison | Result | Time |
 |---|---|---|
 | JAX against Pyomo, GTAP 20x41 (capFix closure) | every cell within 1e-9 | 1.35 min against 7.2 min (2026-11-06) |
-| ALTERTAX against GEMPACK/RunGTAP: 8 datasets, 6 outputs | 8 of 8 pass | 20x41: 95 to 119 s, GEMPACK 116 s (2026-11-12) |
+| ALTERTAX against GEMPACK/RunGTAP: 8 datasets, 6 outputs | 8 of 8 pass | 20x41: 1.6 to 2.0 min, GEMPACK 1.9 min (2026-11-12) |
 | The whole CI, with the JAX tests in it | green | 6.4 min, was 8.2 (PR #257) |
 
 ### What it does not do yet, in detail
@@ -446,7 +451,7 @@ program once and reads the sizes at run time. We compile one version per dataset
 could compile by "size class" instead.
 
 - *What it would gain:* only the first run with a new dataset. On 15x10 the first
-  run took 42 s and the second 8.9 s.
+  run took 0.7 min and the second 0.15 min.
 - *Obstacle 1:* what is compiled depends on the data, not only on the size, because
   terms with cells at 0 are dropped. gtap7_3x3 and nus333 share only 14 of about 330
   compiled pieces.
