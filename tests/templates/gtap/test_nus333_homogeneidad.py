@@ -20,6 +20,7 @@ from typing import Any
 
 import pytest
 from tests.templates.gtap._nus333 import ROOT, nus333_params
+from tests.templates.gtap._routes import ROUTES
 
 pytestmark = pytest.mark.integration
 
@@ -36,8 +37,8 @@ def _cb() -> Any:
     return importlib.import_module("compare_burfisher_gempack")
 
 
-@pytest.fixture(scope="module")
-def solved():
+@pytest.fixture(scope="module", params=ROUTES)
+def solved(request):
     nus333_params("default.prm")  # SKIP sin el dataset
     cb = _cb()
     from equilibria._local_refs import nus333_dir, path_capi_src
@@ -65,7 +66,7 @@ def solved():
 
     run_gtap._run_path_capi_nonlinear_full = espia
     try:
-        m, p, codes = cb.rb.solve_exercise("GTAPV7", nus333_dir())
+        m, p, codes = cb.rb.solve_exercise("GTAPV7", nus333_dir(), route=request.param)
     finally:
         run_gtap._run_path_capi_nonlinear_full = orig
     m._fijas_en_el_shock = frozenset(fijas)

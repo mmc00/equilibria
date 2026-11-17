@@ -27,6 +27,7 @@ from typing import Any
 
 import pytest
 from tests.templates.gtap._nus333 import ROOT, nus333_params
+from tests.templates.gtap._routes import ROUTES
 
 JOHANSEN_IN_THE_BOOK = ("TBL45A", "TBL45B", "TBL45C", "TBL64", "ME4A", "ME4B")
 GOVERNMENT_DEMAND = {"qgd", "qgm"}  # #201
@@ -42,13 +43,15 @@ def _modules() -> tuple[Any, Any]:
     return cb, cb.rb
 
 
-def _solve(exp: str, shock_method: str, scale: float = 1.0):
+def _solve(exp: str, shock_method: str, scale: float = 1.0, route: str = "old"):
     cb, rb = _modules()
     from equilibria._local_refs import nus333_dir
 
     prm, rows = rb.EXERCISES[exp]
     rows = [(name, idx, pct * scale) for name, idx, pct in rows]
-    return rb.solve_exercise(exp, nus333_dir(), shock_method=shock_method, rows=rows)
+    return rb.solve_exercise(
+        exp, nus333_dir(), shock_method=shock_method, rows=rows, route=route
+    )
 
 
 def _report(exp: str, m, p, *, linear: bool):
@@ -61,9 +64,10 @@ def _report(exp: str, m, p, *, linear: bool):
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize("exp", JOHANSEN_IN_THE_BOOK)
-def test_johansen_reproduces_the_books_result(exp: str) -> None:
-    m, p, codes = _solve(exp, "johansen")
+def test_johansen_reproduces_the_books_result(exp: str, route: str) -> None:
+    m, p, codes = _solve(exp, "johansen", route=route)
     assert codes == {"base": 1, "check": 1, "shock": 1}
     r = _report(exp, m, p, linear=True)
     assert r.overall["cells"] == 414
@@ -72,8 +76,9 @@ def test_johansen_reproduces_the_books_result(exp: str) -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize("exp", JOHANSEN_IN_THE_BOOK)
-def test_johansen_moves_the_global_investment_price(exp: str) -> None:
+def test_johansen_moves_the_global_investment_price(exp: str, route: str) -> None:
     """A cell indexed by the period alone gets its linear step too.
 
     ``pigbl`` is GEMPACK's ``pcgdswld`` (both the net-investment-weighted price
@@ -83,7 +88,7 @@ def test_johansen_moves_the_global_investment_price(exp: str) -> None:
     from equilibria.babel.har.sl4 import read_sl4_changes
     from equilibria.sources import reference
 
-    m, _, codes = _solve(exp, "johansen")
+    m, _, codes = _solve(exp, "johansen", route=route)
     assert codes == {"base": 1, "check": 1, "shock": 1}
     pct = 100.0 * (m.pigbl["shock"].value / m.pigbl["check"].value - 1.0)
     run = reference("nus333", "gempack", experiment=exp.lower(), method="book")
@@ -93,9 +98,10 @@ def test_johansen_moves_the_global_investment_price(exp: str) -> None:
 
 
 @pytest.mark.integration
-def test_the_nonlinear_solution_is_not_the_books_johansen() -> None:
+@pytest.mark.parametrize("route", ROUTES)
+def test_the_nonlinear_solution_is_not_the_books_johansen(route: str) -> None:
     """The check above can fail: TBL45A solved exactly misses the book's numbers."""
-    m, p, codes = _solve("TBL45A", "nonlinear")
+    m, p, codes = _solve("TBL45A", "nonlinear", route=route)
     assert codes == {"base": 1, "check": 1, "shock": 1}
     r = _report("TBL45A", m, p, linear=False)
     bad = [c for c in r.cells if not c.passed and c.variable not in GOVERNMENT_DEMAND]
@@ -103,7 +109,8 @@ def test_the_nonlinear_solution_is_not_the_books_johansen() -> None:
 
 
 @pytest.mark.integration
-def test_johansen_is_linear_in_the_shock() -> None:
+@pytest.mark.parametrize("route", ROUTES)
+def test_johansen_is_linear_in_the_shock(route: str) -> None:
     """Half the shock gives half of every % change, which no nonlinear solve does."""
     from pyomo.environ import Var, value
 
@@ -118,8 +125,8 @@ def test_johansen_is_linear_in_the_shock() -> None:
         return out
 
     full, half = (
-        pct(_solve("TBL55", "johansen")[0]),
-        pct(_solve("TBL55", "johansen", 0.5)[0]),
+        pct(_solve("TBL55", "johansen", route=route)[0]),
+        pct(_solve("TBL55", "johansen", 0.5, route=route)[0]),
     )
     moved = [k for k in full if abs(full[k]) > 1e-4]
     assert len(moved) > 100

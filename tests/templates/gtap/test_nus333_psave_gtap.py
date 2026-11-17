@@ -29,6 +29,7 @@ from typing import Any
 
 import pytest
 from tests.templates.gtap._nus333 import nus333_params, run_burfisher
+from tests.templates.gtap._routes import ROUTES
 
 from equilibria.sources import reference
 
@@ -39,7 +40,7 @@ FIXTURE = (
 )
 
 
-def _solve(exp: str) -> Any:
+def _solve(exp: str, route: str) -> Any:
     import sys
 
     rb = run_burfisher()
@@ -47,22 +48,27 @@ def _solve(exp: str) -> Any:
     from equilibria._local_refs import nus333_dir, path_capi_src
 
     sys.path.insert(0, str(path_capi_src()))
-    m, _, codes = rb.solve_exercise(exp, nus333_dir())
+    m, _, codes = rb.solve_exercise(exp, nus333_dir(), route=route)
     assert codes == {"base": 1, "check": 1, "shock": 1}, codes
     return m
 
 
+@pytest.fixture(scope="module", params=ROUTES)
+def route(request) -> str:
+    return request.param
+
+
 @pytest.fixture(scope="module")
-def solved() -> Any:
-    return _solve("TBL62A")
+def solved(route) -> Any:
+    return _solve("TBL62A", route)
 
 
 # Arancel (chico), tecnologia y el que mas mueve el reparto de NETINV.
 @pytest.fixture(scope="module", params=("TBL62A", "TBL45A", "TBL65A"))
-def solved_exp(request, solved) -> tuple[str, Any]:
+def solved_exp(request, route, solved) -> tuple[str, Any]:
     if request.param == "TBL62A":
         return "TBL62A", solved
-    return request.param, _solve(request.param)
+    return request.param, _solve(request.param, route)
 
 
 def test_ajuste_comun_igual_a_gempack(solved_exp) -> None:

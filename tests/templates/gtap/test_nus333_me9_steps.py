@@ -17,11 +17,13 @@ from typing import Any
 
 import pytest
 from tests.templates.gtap._nus333 import ROOT, nus333_params
+from tests.templates.gtap._routes import ROUTES
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize("exp", ["ME9B", "ME9C", "ME9D"])
-def test_me9_resuelve_y_coincide_con_gempack(exp: str) -> None:
+def test_me9_resuelve_y_coincide_con_gempack(exp: str, route: str) -> None:
     nus333_params("climatechange.prm")  # SKIP sin el dataset
     sys.path[:0] = [str(ROOT / "scripts" / "gtap")]
     cb: Any = importlib.import_module("compare_burfisher_gempack")
@@ -29,7 +31,7 @@ def test_me9_resuelve_y_coincide_con_gempack(exp: str) -> None:
     from equilibria.blocks.gtap._derived_params import xscale_data
 
     sys.path.insert(0, str(path_capi_src()))
-    m, p, codes = cb.rb.solve_exercise(exp, nus333_dir())
+    m, p, codes = cb.rb.solve_exercise(exp, nus333_dir(), route=route)
     assert codes == {"base": 1, "check": 1, "shock": 1}
     r = cb.run(exp, cb.cg.model_levels(m), dict(xscale_data(p, p.sets)))
     post = [c for c in r.cells if c.period == "post"]

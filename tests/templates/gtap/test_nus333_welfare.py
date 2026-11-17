@@ -22,6 +22,7 @@ from typing import Any
 
 import pytest
 from tests.templates.gtap._nus333 import gams_levels, nus333_params, run_burfisher
+from tests.templates.gtap._routes import ROUTES
 
 from equilibria.sources import dataset_dir
 
@@ -33,9 +34,13 @@ VARS = ("ev", "cv", "u", "ug", "uh")
 TOL = 1e-3
 
 
-@pytest.fixture(scope="module", params=EXERCISES)
+@pytest.fixture(
+    scope="module",
+    params=[(e, r) for e in EXERCISES for r in ROUTES],
+    ids=lambda c: "-".join(c),
+)
 def solved(request) -> tuple[str, Any]:
-    exp = request.param
+    exp, route = request.param
     rb = run_burfisher()
     nus333_params(rb.EXERCISES[exp][0])  # SKIP sin el dataset
     import sys
@@ -43,7 +48,7 @@ def solved(request) -> tuple[str, Any]:
     from equilibria._local_refs import nus333_dir, path_capi_src
 
     sys.path.insert(0, str(path_capi_src()))
-    m, _, codes = rb.solve_exercise(exp, nus333_dir())
+    m, _, codes = rb.solve_exercise(exp, nus333_dir(), route=route)
     assert codes == {"base": 1, "check": 1, "shock": 1}, codes
     return exp, m
 
