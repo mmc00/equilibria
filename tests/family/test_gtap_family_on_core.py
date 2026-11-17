@@ -103,7 +103,15 @@ def _first_differences(a, b, n: int = 20) -> list[str]:
     return out
 
 
-@pytest.mark.parametrize("case", CASES, ids=lambda c: c.name)
+@pytest.mark.parametrize(
+    "case",
+    [
+        # capFlex reads rore/rorg from the reference GDX (gdxdump)
+        pytest.param(c, marks=pytest.mark.needs_gdxdump) if c.savf == "capFlex" else c
+        for c in CASES
+    ],
+    ids=lambda c: c.name,
+)
 def test_same_arrays_as_solve_gtap_family(case: Case, monkeypatch, tmp_path) -> None:
     from equilibria.core.exercise import Exercise
     from equilibria.family.driver import solve_gtap_family
