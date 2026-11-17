@@ -124,7 +124,8 @@ What it does not do yet:
 - Other models, such as PEP: they still go through Pyomo.
 - Some GTAP options. If you ask for one it does not have, it says so before it
   starts.
-- Use the graphics card (GPU): the mode exists, but it has not been measured.
+- Use the graphics card (GPU): not on this road yet. The Newton engine has a GPU
+  linear solver (cuDSS), but the JAX road only accepts MUMPS or "direct".
 
 ## For developers
 
@@ -223,7 +224,7 @@ for name in em.list_equations():
 | The rule asks for | Pyomo gives it | The clay gives it |
 |---|---|---|
 | A set: `m.r` | a Pyomo Set | a list of names: `["USA", "CHN", ...]` |
-| A parameter: `m.p_io[r,i,a]` | a Pyomo Param | the number itself |
+| A parameter: `m.p_io[r,i,a]` | a Pyomo Param | the number itself (or a leaf, if a shock can change it) |
 | A variable: `m.nd[r,a]` | a Pyomo variable, with its value, bounds and fixed flag | a **leaf**: `Node("v", ("nd", 37, 1.42, ...))`, "I am cell 37 of `nd`" |
 | Operations: `*  /  **  log  exp` | a Pyomo expression | a tree node (`mul`, `div`, `pow`...) |
 | The result: `left == right` | an equality constraint | a `Residual(left, right)`, that is left minus right |
@@ -251,8 +252,8 @@ class Node:
 
 This is `eq_xaa_activity` for one cell. Orange: an operation. Solid box: a variable.
 Dashed box: a fixed number. The numbers are illustrative. On 20x41 the recorder
-writes about **5.9 million nodes** like these, from 89 equations (measured
-2026-11-12). It happens once and is saved to disk, about 250 MB.
+writes about **5.9 million nodes** like these (measured 2026-11-12, when it had 89
+equations; the count of 2026-11-17 above finds 91). It happens once and is saved to disk, about 250 MB.
 
 ### A thousand equal trees, one mold
 
@@ -346,8 +347,10 @@ EQUILIBRIA_FAMILY_CACHE=~/.cache/equilibria/family   # optional: where the box l
 ### Shared bricks, JAX-only tools
 
 The economy is shared. What JAX adds are the tools around it. The split is written
-in the code: `src/equilibria/blocks/gtap/fingerprint.py` lists the Pyomo-only files
-and treats all of `src/equilibria/family/` as the JAX road.
+in the code: `src/equilibria/blocks/gtap/fingerprint.py` lists the Pyomo-only files.
+Everything else counts as shared, including `src/equilibria/family/` itself, so a
+change there must still match the old photo; only a Pyomo-only change makes a photo
+stale.
 
 | Shared | Pyomo only | JAX only |
 |---|---|---|
