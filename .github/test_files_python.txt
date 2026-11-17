@@ -76,6 +76,7 @@ tests/core/test_driver.py
 tests/core/test_exercise.py
 tests/core/test_layering.py
 tests/core/test_model.py
+tests/core/test_period_model_contract.py
 tests/core/test_recipe.py
 tests/core/test_steps.py
 tests/data/test_data_tree.py
@@ -143,6 +144,9 @@ tests/family/test_fscale.py
 tests/family/test_gate1_all_families.py
 tests/family/test_gate1_fidelity.py
 tests/family/test_gate1_recorded.py
+tests/family/test_gtap_family_on_core.py
+tests/family/test_gtap_family_periods.py
+tests/family/test_gtap_family_template.py
 tests/family/test_gtap_phase0_build.py
 tests/family/test_headers_cache.py
 tests/family/test_hybrid_nlp.py
@@ -251,9 +255,11 @@ tests/solver/test_gtap_mode_explicito.py
 tests/solver/test_ipopt.py
 tests/solver/test_jacobian_reporting.py
 tests/solver/test_matching.py
+tests/solver/test_newton_gtap.py
 tests/solver/test_newton_tr_extract.py
 tests/solver/test_newton_tr_gmin.py
 tests/solver/test_newton_tr_mumps_analysis.py
+tests/solver/test_path_gtap.py
 tests/templates/gtap/test_altertax.py
 tests/templates/gtap/test_altertax_armington_shares_fixed.py
 tests/templates/gtap/test_altertax_shares_held.py
@@ -285,10 +291,16 @@ tests/templates/gtap/test_gtap7_nl_parity.py
 tests/templates/gtap/test_gtap_blocks_form.py
 tests/templates/gtap/test_gtap_blocks_rsav_seed.py
 tests/templates/gtap/test_gtap_blocks_ytax_seed.py
+tests/templates/gtap/test_gtap_on_core_snapshot.py
+tests/templates/gtap/test_gtap_on_core_solve.py
 tests/templates/gtap/test_gtap_parity_pipeline.py
+tests/templates/gtap/test_gtap_pyomo_periods.py
+tests/templates/gtap/test_gtap_recipe.py
 tests/templates/gtap/test_gtap_sam_filter.py
 tests/templates/gtap/test_gtap_sluggish_factor_pft.py
 tests/templates/gtap/test_gtap_solver_iterations.py
+tests/templates/gtap/test_gtap_steps_layering.py
+tests/templates/gtap/test_gtap_strategies.py
 tests/templates/gtap/test_gtap_structure.py
 tests/templates/gtap/test_ifsub_macros_no_silent_freeze.py
 tests/templates/gtap/test_ifsub_shared_macros.py
@@ -324,6 +336,7 @@ tests/templates/gtap/test_nus333_welfare.py
 tests/templates/gtap/test_perf_budget.py
 tests/templates/gtap/test_period_prep.py
 tests/templates/gtap/test_period_prep_snapshot.py
+tests/templates/gtap/test_period_rules.py
 tests/templates/gtap/test_prm_zeros_and_cd_mode.py
 tests/templates/gtap/test_reference_snapshot_auto.py
 tests/templates/gtap/test_residual_region_auto.py
