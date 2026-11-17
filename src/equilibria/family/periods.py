@@ -172,10 +172,11 @@ class FamilyPeriodModel:
         _, at = _columns(obj, period)
         if not keep:
             return at
-        if len(keep) >= len(at):
+        table = positions(obj, period)
+        if len(keep) >= len(at) and table.keys() <= keep:  # every cell kept
             return at[:0]
         out = np.ones(len(obj.keys), dtype=bool)
-        out[_at(positions(obj, period), keep)] = False
+        out[_at(table, keep)] = False
         return at[out[at]]
 
     def fix_all(self, name: str, period: str, *, keep: frozenset = frozenset()) -> None:

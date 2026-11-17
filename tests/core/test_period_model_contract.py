@@ -135,6 +135,11 @@ def test_fix_all_keeps_levels_and_skips_keep(m: Any) -> None:
     assert all(math.isnan(v) for v in m.values("z", "a").values())
 
 
+def test_fix_all_keep_of_every_cell_fixes_nothing(m: Any) -> None:
+    m.fix_all("x", "a", keep=frozenset({I1, I2}))
+    assert m.fixed_cells("x", "a") == frozenset()
+
+
 def test_unfix_all_skips_keep(m: Any) -> None:
     for t in ("a", "b"):
         m.fix_cells("x", t, {I1: None, I2: None})
