@@ -1,4 +1,8 @@
-"""GTAP7 vs RunGTAP (GEMPACK) quantity parity gate. LOCAL-only.
+"""GTAP7 vs RunGTAP (GEMPACK) quantity parity gate.
+
+CI: the cases the family (JAX) route also covers are marked `pyomo_solve` and leave
+PR CI (test_family_gempack_parity covers them; scripts/family/regen_photos.py runs
+them).
 
 Compares the Python model's post-shock QUANTITY %-changes against GEMPACK's SL4
 solution (qfd→xd, qxs→xw, qo→xp — the verified Q_TO_VAR map), cell-by-cell, in
@@ -30,6 +34,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
 from coverage_matrix import rows_for  # noqa: E402
+from family_twins import pyomo_solve  # noqa: E402
 
 GEMPACK_ROWS = rows_for("gtap7", "gempack", kind="mcp")
 
@@ -288,6 +293,7 @@ def _gempack_params():
     out = []
     for r in GEMPACK_ROWS:
         marks = [pytest.mark.slow] if r.dataset in _SLOW_DATASETS else []
+        marks += pyomo_solve(r.dataset, r.mode, r.ifsub, r.reference)
         out.append(pytest.param(r, marks=marks, id=f"{r.dataset}-ifsub{r.ifsub}"))
     return out
 

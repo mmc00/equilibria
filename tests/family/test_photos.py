@@ -86,3 +86,36 @@ def test_write_photo_records_print_and_hashes(tmp_path):
     mp = json.loads((out / "model_print.json").read_text())
     assert {"data", "closure", "pyomo_code", "shared_code", "env"} <= set(mp)
     assert mp["env"]["linsolve"] == "mumps"
+
+
+def _regen_module():
+    spec = importlib.util.spec_from_file_location("regen_photos", REGEN)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_regen_gates_run_the_pyomo_solve_cases_of_the_datasets(monkeypatch):
+    """The gates are the cases that left PR CI (``pyomo_solve``), on the regenerated
+    datasets, from every file that holds them."""
+    regen = _regen_module()
+    monkeypatch.setattr(regen.shutil, "which", lambda name: "/bin/" + name)
+    cmd = regen.gate_command(["gtap7_3x3", "gtap7_10x7"])
+    assert cmd[cmd.index("pytest") + 1 :][:3] == ["-q", "-m", "pyomo_solve"]
+    assert cmd[cmd.index("-k") + 1] == "gtap7_3x3 or gtap7_10x7"
+    files = {c for c in cmd if c.startswith("tests/")}
+    assert files == {
+        "tests/templates/gtap/test_gtap7_mcp_parity.py",
+        "tests/templates/gtap/test_gtap7_nlp_parity.py",
+        "tests/templates/gtap/test_gtap7_gempack_parity.py",
+        "tests/templates/gtap/test_ifsub_equivalence.py",
+    }
+
+
+def test_regen_gates_refuse_to_run_without_gdxdump(monkeypatch):
+    """Without gdxdump the GAMS gates would all skip and pass: refuse instead."""
+    regen = _regen_module()
+    monkeypatch.setattr(regen.shutil, "which", lambda name: None)
+    with pytest.raises(SystemExit, match="gdxdump"):
+        regen.gate_command(["gtap7_3x3"])

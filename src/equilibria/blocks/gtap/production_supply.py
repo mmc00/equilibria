@@ -630,17 +630,27 @@ class ProductionSupplyBlock(Block):
             total = float(bm.vom.get((r, a), 0.0) or 0.0)
         return total
 
+    def _makes(self, r: str, a: str, i: str) -> bool:
+        """GAMS ``xFlag(r,a,i)``: activity a makes commodity i (makb > 0, cal.gms:287)."""
+        return float(self.params.benchmark.makb.get((r, a, i), 0.0) or 0.0) > 0
+
     def _prdtx(self, r: str, a: str, i: str) -> float:
-        """prdtx per commodity = makb/maks - 1 (else rto) (monolith 3487-3495)."""
+        """prdtx per commodity = makb/maks - 1 (else rto) (monolith 3487-3495); 0 where
+        a does not make i, as GAMS leaves it (cal.gms:290-291)."""
+        if not self._makes(r, a, i):
+            return 0.0
         bm = self.params.benchmark
         makb_val = float(bm.makb.get((r, a, i), 0.0) or 0.0)
         maks_val = float(bm.maks.get((r, a, i), 0.0) or 0.0)
-        if maks_val > 0 and makb_val > 0:
+        if maks_val > 0:
             return makb_val / maks_val - 1.0
         return float(self.params.taxes.rto.get((r, a), 0.0) or 0.0)
 
     def _p_rai_init(self, r: str, a: str, i: str) -> float:
-        """p_rai init = 1/(1+prdtx), floored 1e-8 (monolith get_p_rai_init 3486)."""
+        """p_rai init = 1/(1+prdtx), floored 1e-8 (monolith get_p_rai_init 3486); 1 where
+        a does not make i (cal.gms:293-294; the cell is fixed there, iterloop.gms:111)."""
+        if not self._makes(r, a, i):
+            return 1.0
         prdtx = self._prdtx(r, a, i)
         return max(1.0 / max(1.0 + prdtx, 1e-12), PRICE_FLOOR_ABS)
 

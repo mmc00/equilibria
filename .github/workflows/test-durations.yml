@@ -29,7 +29,7 @@ jobs:
       # scripts/dev/check_test_shards.py needs to rebuild exact nodeids.
       - name: Run tests serially and record durations
         run: |
-          uv run pytest -ra -m "not gams and not slow and not needs_gdxdump" tests \
+          uv run pytest -ra -m "not gams and not slow and not needs_gdxdump and not pyomo_solve" tests \
             --store-durations --durations-path durations.json \
             -o junit_family=xunit1 --junitxml=junit.xml
 
@@ -80,7 +80,7 @@ jobs:
         env:
           EQUILIBRIA_REQUIRE_SOLVERS: "1"
         run: |
-          uv run pytest -ra -m "needs_gdxdump and not gams and not slow" tests \
+          uv run pytest -ra -m "needs_gdxdump and not gams and not slow and not pyomo_solve" tests \
             --store-durations --durations-path durations.json \
             -o junit_family=xunit1 --junitxml=junit.xml
 

@@ -98,8 +98,8 @@ def test_coverage_runs_on_main_with_sysmon() -> None:
     assert job["env"]["COVERAGE_CORE"] == "sysmon"
     parts = {p["name"]: p["marks"] for p in job["strategy"]["matrix"]["part"]}
     assert parts == {
-        "python-tests": "not gams and not slow and not needs_gdxdump",
-        "gdxdump-tests": "needs_gdxdump and not gams and not slow",
+        "python-tests": "not gams and not slow and not needs_gdxdump and not pyomo_solve",
+        "gdxdump-tests": "needs_gdxdump and not gams and not slow and not pyomo_solve",
     }
     steps = job["steps"]
     setup = next(

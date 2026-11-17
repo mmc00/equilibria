@@ -21,9 +21,9 @@ jobs:
       matrix:
         part:
           - name: python-tests
-            marks: "not gams and not slow and not needs_gdxdump"
+            marks: "not gams and not slow and not needs_gdxdump and not pyomo_solve"
           - name: gdxdump-tests
-            marks: "needs_gdxdump and not gams and not slow"
+            marks: "needs_gdxdump and not gams and not slow and not pyomo_solve"
     name: coverage (${{ matrix.part.name }})
     steps:
       - name: Checkout
