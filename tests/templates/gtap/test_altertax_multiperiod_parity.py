@@ -32,6 +32,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests.templates.gtap._routes import ROUTES, solve
 
 from equilibria.sources import dataset_dir, find_reference, has_dataset
 
@@ -108,7 +109,7 @@ def _reference_gdx(dataset: str, if_sub: bool) -> Path | None:
     return None if folder is None else folder / "out.gdx"
 
 
-def _solve_and_match(dataset: str, if_sub: bool):
+def _solve_and_match(dataset: str, if_sub: bool, route: str = "old"):
     """Build, seed, solve, compare. Returns (codes_dict, match_pct, total)."""
     from _diff_core import gams_levels, list_populated_vars, split_t
     from pyomo.environ import value as V
@@ -143,26 +144,43 @@ def _solve_and_match(dataset: str, if_sub: bool):
         fix_technology=True,
         if_sub=if_sub,
         numeraire="pnum",
+        # build_block_model sets the params' basis from the closure (the core
+        # route builds with it): the basis the gate sets on p
+        va_subsidy_basis="gempack",
     )
-    mp = GTAPBlockMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
-    m = mp.build_sets()
-    mp.build_vars(m)
-    for per in PERIODS:
-        mp.build_equations_intra(m, per)
-    mp.build_equations_fisher(m)
-    m._residual_region = rr
-    mp.seed_all_periods(m, ref)
-
-    res = solve_multiperiod(
-        m,
-        p,
-        ac,
-        ref_gdx=ref,
-        skip_base_solve=True,
-        mute_welfare=True,
-        seed_from_prior=False,
-    )
-    codes = {k: res[k]["code"] for k in res}
+    if route == "core":
+        s = solve(
+            "core",
+            pa,
+            ac,
+            rr,
+            ref_gdx=ref,
+            seed_gdx=ref,
+            skip_base_solve=True,
+            mute_welfare=True,
+            seed_from_prior=False,
+            mode="altertax",
+        )
+        m, codes = s.model, s.codes
+    else:
+        mp = GTAPBlockMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
+        m = mp.build_sets()
+        mp.build_vars(m)
+        for per in PERIODS:
+            mp.build_equations_intra(m, per)
+        mp.build_equations_fisher(m)
+        m._residual_region = rr
+        mp.seed_all_periods(m, ref)
+        res = solve_multiperiod(
+            m,
+            p,
+            ac,
+            ref_gdx=ref,
+            skip_base_solve=True,
+            mute_welfare=True,
+            seed_from_prior=False,
+        )
+        codes = {k: res[k]["code"] for k in res}
 
     tot = match = 0
     for vn in list_populated_vars(ref):
@@ -212,6 +230,7 @@ def _solve_and_match(dataset: str, if_sub: bool):
     return codes, match_pct, tot
 
 
+@pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize(
     "dataset,ifsub,gap_min,ci_status",
     _ALTERTAX_CASES,
@@ -219,7 +238,7 @@ def _solve_and_match(dataset: str, if_sub: bool):
         f"{r.dataset}-ifsub{r.ifsub}" for r in altertax_rows() if r.reference == "gams"
     ],
 )
-def test_altertax_multiperiod_parity(dataset, ifsub, gap_min, ci_status):
+def test_altertax_multiperiod_parity(dataset, ifsub, gap_min, ci_status, route):
     if ci_status == "blocked":
         pytest.skip(f"blocked reference: {dataset}")
     if not _has_path_solver():
@@ -231,7 +250,7 @@ def test_altertax_multiperiod_parity(dataset, ifsub, gap_min, ci_status):
     if not has_dataset(dataset):
         pytest.skip(f"dataset HAR missing for {dataset}")
 
-    codes, match_pct, tot = _solve_and_match(dataset, if_sub)
+    codes, match_pct, tot = _solve_and_match(dataset, if_sub, route=route)
 
     mode = "ifSUB=1" if if_sub else "ifSUB=0"
     assert all(c == 1 for c in codes.values()), (

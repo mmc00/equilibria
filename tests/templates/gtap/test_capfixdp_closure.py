@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 from pyomo.environ import Var
+from tests.templates.gtap._routes import ROUTES, solve
 
 from equilibria.sources import dataset_dir, reference
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
@@ -79,10 +80,8 @@ REF = (
 )
 
 
-def _solve(sf):
+def _solve(sf, route="old"):
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     p = GTAPParameters()
     p.load_from_har(
@@ -103,29 +102,35 @@ def _solve(sf):
         contextlib.redirect_stderr(io.StringIO()),
         contextlib.redirect_stdout(io.StringIO()),
     ):
-        m, mp = build_block_model(
-            p, p.sets, gc, list(p.sets.r)[-1], base_calibrated=True
+        s = solve(
+            route,
+            p,
+            gc,
+            list(p.sets.r)[-1],
+            base_calibrated=True,
+            ref_gdx=REF,
+            skip_base_solve=True,
+            mode="gtap",
         )
-        res = solve_multiperiod(
-            m, p, gc, ref_gdx=REF, skip_base_solve=True, mode="gtap"
-        )
-    return m, max(r["code"] for r in res.values())
+    return s.model, max(s.codes.values())
 
 
 @pytest.mark.needs_path
-def test_capfixdp_solves_code1():
+@pytest.mark.parametrize("route", ROUTES)
+def test_capfixdp_solves_code1(route):
     # capFixDp CONVERGES (the betaS-endogenous swap re-squares the MCP 1-for-1).
-    _m, code = _solve("capFixDp")
+    _m, code = _solve("capFixDp", route)
     assert code == 1, f"capFixDp shock must converge (code=1), got {code}"
 
 
 @pytest.mark.needs_path
-def test_capfixdp_welfare_undefined_is_nan_not_the_seed():
+@pytest.mark.parametrize("route", ROUTES)
+def test_capfixdp_welfare_undefined_is_nan_not_the_seed(route):
     # The runaway saving leaves us[EU_28,shock] < 0, so u = uh^a·ug^b·us^c has no
     # real value: the driver reports NaN, not the seed 1.0 (and does not crash).
     import math
 
-    m, _ = _solve("capFixDp")
+    m, _ = _solve("capFixDp", route)
     assert m.us["EU_28", "shock"].value < 0
     assert math.isnan(m.u["EU_28", "shock"].value)
 
@@ -138,10 +143,11 @@ def test_capfixdp_welfare_undefined_is_nan_not_the_seed():
     "savf. Anchoring betaS at base/residual did not tame it. Hypothesis refuted by measurement.",
     strict=True,
 )
-def test_capfixdp_matches_gempack_savings():
+@pytest.mark.parametrize("route", ROUTES)
+def test_capfixdp_matches_gempack_savings(route):
     from pyomo.environ import value as V
 
-    m, code = _solve("capFixDp")
+    m, code = _solve("capFixDp", route)
     assert code == 1
     # GEMPACK EU qsave -10%: capFixDp should land near it (within a few pp), NOT blow up.
     b = float(V(m.rsav[("EU_28", "base")]))

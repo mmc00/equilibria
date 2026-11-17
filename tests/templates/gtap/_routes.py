@@ -89,6 +89,7 @@ def solve(
     shock: Mapping[str, Mapping[tuple, float]] | None = None,
     base_calibrated: bool = False,
     ref_gdx: Any = None,
+    seed_gdx: Any = None,
     mode: str = "gtap",
     skip_base_solve: bool = False,
     mute_welfare: bool = True,
@@ -100,13 +101,17 @@ def solve(
     trade_balance: str | None = None,
     **template_kw: Any,
 ) -> Solved:
-    """Run one case through ``route`` on ``backend``. ``template_kw`` goes to the
-    family run on both routes (``cache_root``, ``jax_cache``...)."""
+    """Run one case through ``route`` on ``backend``. ``seed_gdx``: every period
+    starts from that GAMS solution (``seed_all_periods``), as the GAMS gates seed
+    it. ``template_kw`` goes to the family run on both routes (``cache_root``,
+    ``jax_cache``...)."""
     if route not in ROUTES:
         raise ValueError(f"route must be one of {ROUTES}, got {route!r}")
     if backend not in BACKENDS:
         raise ValueError(f"backend must be one of {BACKENDS}, got {backend!r}")
     if backend == "family":
+        if seed_gdx is not None:
+            raise ValueError("seed_gdx runs on the pyomo backend only")
         return _family(
             route,
             params,
@@ -137,7 +142,7 @@ def solve(
             )
             from equilibria.templates.gtap.shocks import apply_shock
 
-            m, _ = build_block_model(
+            m, mp = build_block_model(
                 params,
                 params.sets,
                 closure,
@@ -145,6 +150,8 @@ def solve(
                 base_calibrated=base_calibrated,
                 ref_gdx=ref_gdx,
             )
+            if seed_gdx is not None:
+                mp.seed_all_periods(m, seed_gdx)
             if shock:
                 apply_shock(m, shock)
             res = solve_multiperiod(
@@ -174,6 +181,7 @@ def solve(
                 residual_region=residual_region,
                 base_calibrated=base_calibrated,
                 ref_gdx=ref_gdx,
+                seed_gdx=seed_gdx,
             ),
             recipe=gtap_static(
                 mode,

@@ -26,6 +26,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests.templates.gtap._routes import ROUTES
 
 from equilibria.sources import dataset_dir, find_reference, has_dataset, reference
 
@@ -58,6 +59,10 @@ def _reference_gdx(dataset: str, ifsub: int) -> Path | None:
         dataset, "gams", form="nlp", mode="gtap", ifsub=ifsub, fbep="header"
     )
     return None if ref is None else ref / "out.gdx"
+
+
+# the parametrized route (tests.templates.gtap._routes) -> _solve_shock's name
+_SHOCK_ROUTE = {"old": "driver", "core": "exercise"}
 
 
 def _solve_shock(
@@ -311,8 +316,9 @@ def _capfix_fixture_for(row) -> Path | None:
 
 
 @pytest.mark.needs_path
+@pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize("row", _gempack_params())
-def test_gtap7_gempack_parity(row):
+def test_gtap7_gempack_parity(row, route):
     if not has_dataset(row.dataset):
         pytest.skip(f"dataset HAR missing: {row.dataset}")
     # The GAMS ref GDX is a speedup (fast rore/rorg + warm-start), NOT a requirement: the block
@@ -357,6 +363,7 @@ def test_gtap7_gempack_parity(row):
         savf_flag=savf_flag,
         solve_nlp=solve_nlp,
         unit_sigma="gempack",
+        route=_SHOCK_ROUTE[route],
     )
     assert code == 1, (
         f"[{row.dataset}/{savf_flag}/{'NLP' if solve_nlp else 'MCP'}] shock did not "

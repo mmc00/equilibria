@@ -209,9 +209,12 @@ def dataset_xscale(dataset: str, va_subsidy_basis: str = "gempack") -> dict:
     return dict(xscale_data(p, p.sets))
 
 
-def solve(dataset: str, closure: str, solver: str) -> tuple[dict, dict]:
+def solve(
+    dataset: str, closure: str, solver: str, route: str = "driver"
+) -> tuple[dict, dict]:
     """Resuelve equilibria (base -> check -> shock, tm uniforme 10) con el cierre del
-    fixture de GEMPACK y devuelve (levels, xscale)."""
+    fixture de GEMPACK y devuelve (levels, xscale). ``route``: "driver"
+    (``solve_multiperiod``) or "exercise" (the core driver)."""
     import os
     import sys
 
@@ -223,7 +226,9 @@ def solve(dataset: str, closure: str, solver: str) -> tuple[dict, dict]:
     sys.path.insert(0, str(ROOT))
     from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
 
-    m, code = _solve_shock(dataset, 0, closure, solve_nlp=solver in ("newton", "ipopt"))
+    m, code = _solve_shock(
+        dataset, 0, closure, solve_nlp=solver in ("newton", "ipopt"), route=route
+    )
     if code != 1:
         raise SystemExit(f"{dataset}: el solve termino con code={code}")
     return model_levels(m), dataset_xscale(dataset)

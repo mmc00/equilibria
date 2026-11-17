@@ -32,6 +32,7 @@ class GTAP:
         residual_region: str | None = None,
         base_calibrated: bool = False,
         ref_gdx: Any = None,
+        seed_gdx: Any = None,
         backend: str = "pyomo",
         cache_root: Any = None,
         jax_cache: bool = True,
@@ -44,6 +45,9 @@ class GTAP:
         self.residual_region = residual_region
         self.base_calibrated = base_calibrated
         self.ref_gdx = ref_gdx
+        # a GAMS solution every period starts from (``seed_all_periods``), as the
+        # GAMS parity gates seed it; pyomo only
+        self.seed_gdx = seed_gdx
         self.backend = backend
         # family only: where the recorded families live, the JAX compile cache,
         # and (reltol, ftol) of every Newton solve (None: the environment's)
@@ -66,12 +70,14 @@ class GTAP:
                 "(PR 3 of gtap-on-core)"
             )
         if self.backend == "family":
+            if self.seed_gdx is not None:
+                raise NotImplementedError("family backend: seed_gdx is not supported")
             return self._build_family()
         from equilibria.templates.gtap.gtap_block_model import build_block_model
         from equilibria.templates.gtap.pyomo_periods import GTAPPyomoPeriodModel
 
         rr = self.residual_region or list(self.params.sets.r)[-1]
-        m, _ = build_block_model(
+        m, mp = build_block_model(
             self.params,
             self.params.sets,
             self.closure,
@@ -79,6 +85,8 @@ class GTAP:
             base_calibrated=self.base_calibrated,
             ref_gdx=self.ref_gdx,
         )
+        if self.seed_gdx is not None:
+            mp.seed_all_periods(m, self.seed_gdx)
         return GTAPPyomoPeriodModel(m)
 
     def _build_family(self) -> Any:
