@@ -24,7 +24,7 @@ solver:
   name: newton_tr
   linsolve: mumps
 command: scripts/family/regen_photos.py --dataset gtap7_3x3
-equilibria_commit: 6bf658f1
+equilibria_commit: 8bbd2c50
 exit:
   code: 0
 outputs:
@@ -34,25 +34,25 @@ outputs:
   002_a_check.pkl.gz: 9d656d7b601ca8122b0d2e4685d96711de823e5b685ccc7fe827d30cd93cf642
   002_b_check.pkl.gz: 92c5d97edb581e071aa417131ea6659da601ab1e713373d40aab0c3186b348c3
   002_p_check.pkl.gz: 02b73f9b21fb738b198f850263e87f845bd9b438f12ddfff81f8fad7a7ff3b03
-  002_s_check.json: 37498d288a1c035b5d23736a4f5b66322422b0367ffc18874bd001ae759a8d95
+  002_s_check.json: 02692a6d1555da01702e56a40532fb6d862f856402be2c53bb945cc29c18d8e9
   003_a2_base.pkl.gz: a32c32d809e47ed982a473ff07319c93a7cf259fb8eb892df63e15fdab5d531c
   003_a_base.pkl.gz: 5e1f9b795739b89e88deff835bdde75a5da87a7ffb0064bc6f9c57197287c503
   004_a2_check.pkl.gz: a56a14f727c6014e5430a0920bf62fd36392f0f33cb7f4e1bd06fc65e9b18f86
   004_a_check.pkl.gz: 1764e495051340be47e13a3bd740543bdde4b4efacde9019818b69985cf02188
   004_b_check.pkl.gz: f5959f8f988c528f83ad1e481d0b0cacac86104ca1c83a86079f048431b1639a
   004_p_check.pkl.gz: 1451133f29492ed2387de177128fc13a8b23ac0e38f2baf7007bccbd6ea00c97
-  004_s_check.json: 7de46697231ce0568043870f9c9c7b405e396882626420b1c4cad299440c9836
+  004_s_check.json: 70e3022244988b1fa5379f0b4c6546e1caf9aa412f629061ad4dc124236450bd
   005_a2_shock.pkl.gz: 5060f2326802d07d36e1372ba31582fe5be46284ec61f9de315f273677916a45
   005_a_shock.pkl.gz: 33f99acb5a1096efae65dccdf300ec3199684aae25d5b9cfc4dd62d1aa88d2a2
   005_b_shock.pkl.gz: f5302163f0cedd4ce5f0d9f89aa2e3b48bd5bd3b5695e5eda8a95a93f3f7d081
-  005_p_shock.pkl.gz: e04940892f379cdee3c617eb5ad9ffd82cac1262cf6d4d406112c7dd6815e292
-  005_s_shock.json: 3520d401f2da274600ea3dca2b031625bb0c7529984be39a477112fc73bd1447
-  final.pkl.gz: dbd0cf573e830e6d77fd62c89fd09b9099e6f6b42d1d6b16187a12e48c016f25
-  model_print.json: b1222283a3a5d5bd6f07b0da77623b20e5b73ac261f7b61f4a38a6ede0efbfd5
+  005_p_shock.pkl.gz: 96878eacb79d50ae78ba0f805c2117fe09256c20a7588cd7f360634f649d666c
+  005_s_shock.json: 472b5cc59cbb423fc523ce186b8d30de9a936f46b01c64d7b92a3096822fc22d
+  final.pkl.gz: 2a75c60a2bc50798fcc5721a05cf78f10c72529177834ebc4eec9697a8f14b3e
+  model_print.json: 17eb7cc0830cd4752444efb951ba69c88e96f6b3fbfd3e617d34aeb1230dd3e7
   settled.pkl.gz: 4110c3aa36c4f74db7dc6d11cf12e9824b396e4863f4eff85115a4accbf968b3
 run:
-  date: '2026-11-16T10:11:58-06:00'
-  duration_s: 2.362
+  date: '2026-11-16T22:58:13-06:00'
+  duration_s: 2.26
   machine:
     os: macOS 26.2 (Darwin 25.2.0)
     cpu: Apple M3 Pro

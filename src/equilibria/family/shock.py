@@ -226,4 +226,26 @@ def apply_shock(
     return out
 
 
-__all__ = ["apply_shock", "can_take_shock", "check_shock_cell", "level"]
+def apply_default_tariff(mp: MPArrays, sys: Any) -> dict[str, dict[tuple, float]]:
+    """The +10 % default import tariff (``shocks.apply_default_tariff``): every
+    ``imptx`` shock cell that ``can_take_shock`` accepts gets +10 % on its power
+    1 + t. ``ValueError`` if no cell can take it."""
+    from equilibria.templates.gtap.shocks import DEFAULT_TARIFF_PCT
+
+    cells = {
+        cell: DEFAULT_TARIFF_PCT
+        for cell in _table(mp.var("imptx"), SHOCK)
+        if can_take_shock(mp, sys, "imptx", cell)
+    }
+    if not cells:
+        raise ValueError("no imptx cell can take the default tariff")
+    return apply_shock(mp, sys, {"imptx": cells})
+
+
+__all__ = [
+    "apply_default_tariff",
+    "apply_shock",
+    "can_take_shock",
+    "check_shock_cell",
+    "level",
+]

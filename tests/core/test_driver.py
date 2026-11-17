@@ -132,3 +132,15 @@ def test_a_solver_that_raises_is_reported_and_the_next_period_still_runs() -> No
     assert "division by zero" in results["check"]["code"]
     assert results["shock"]["code"] == "optimal"
     assert log[-1] == "shock:after"
+
+
+def test_after_steps_see_the_status() -> None:
+    seen: list[str | None] = []
+
+    def note(ctx: StepContext) -> None:
+        seen.append(ctx.status)
+
+    plan = KindPlan(before=(note,), after=(note,), solver=lambda m: "code 2")
+    recipe = Recipe((Period("base", "calibrate"),), {"calibrate": plan})
+    fly(model(), recipe)
+    assert seen == [None, "code 2"]

@@ -9,6 +9,7 @@ code 1. The iteration counts are reported, never asserted.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import os
 import sys
@@ -44,9 +45,9 @@ def reference(linsolve):
                 os.environ[k] = v
 
 
-@pytest.fixture(scope="module")
-def family_run(reference, linsolve, tmp_path_factory):
-    """``_solve_shock`` on the family route with the Pyomo entry points spied."""
+@contextlib.contextmanager
+def _spies():
+    """Count every Pyomo model, PyNumero NLP and expression walk built inside."""
     import pyomo.contrib.pynumero.interfaces.pyomo_nlp as pn
     import pyomo.core.expr.visitor as visitor
     from pyomo.environ import ConcreteModel
@@ -60,10 +61,8 @@ def family_run(reference, linsolve, tmp_path_factory):
             calls[key] += 1
             return orig(self, *a, **k)
 
-        return orig, wrapped
+        return wrapped
 
-    orig_cm, wrap_cm = spy_init(ConcreteModel, "ConcreteModel")
-    orig_nlp, wrap_nlp = spy_init(pn.PyomoNLP, "PyomoNLP")
     orig_iv = visitor.identify_variables
 
     def wrap_iv(*a, **k):
@@ -79,8 +78,18 @@ def family_run(reference, linsolve, tmp_path_factory):
     mpatch = pytest.MonkeyPatch()
     for mod in holders:
         mpatch.setattr(mod, "identify_variables", wrap_iv)
-    mpatch.setattr(ConcreteModel, "__init__", wrap_cm)
-    mpatch.setattr(pn.PyomoNLP, "__init__", wrap_nlp)
+    mpatch.setattr(ConcreteModel, "__init__", spy_init(ConcreteModel, "ConcreteModel"))
+    mpatch.setattr(pn.PyomoNLP, "__init__", spy_init(pn.PyomoNLP, "PyomoNLP"))
+    try:
+        yield calls
+    finally:
+        mpatch.undo()
+
+
+@pytest.fixture(scope="module")
+def family_run(reference, linsolve, tmp_path_factory):
+    """``_solve_shock`` on the family route with the Pyomo entry points spied."""
+    mpatch = pytest.MonkeyPatch()
     for k, v in {**_newton_mumps(), "EQUILIBRIA_GTAP_TR_LINSOLVE": linsolve}.items():
         mpatch.setenv(k, v)
     mpatch.setenv("EQUILIBRIA_FAMILY_CACHE", str(tmp_path_factory.mktemp("cache")))
@@ -88,7 +97,8 @@ def family_run(reference, linsolve, tmp_path_factory):
     try:
         from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
 
-        res, code = _solve_shock(DATASET, 1, "capFix", solve_nlp=True)
+        with _spies() as calls:
+            res, code = _solve_shock(DATASET, 1, "capFix", solve_nlp=True)
     finally:
         mpatch.undo()
     return res, code, calls

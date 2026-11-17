@@ -74,7 +74,7 @@ def _gc_threshold_from_env() -> int:
 
 
 @contextlib.contextmanager
-def _gc_frozen_permanent_graph(enabled: bool = True):
+def _gc_frozen_permanent_graph(enabled: bool = True, *, collect: bool = True):
     """Move everything alive at entry to the GC's permanent generation.
 
     By the time we solve, the Pyomo model is a huge, permanent object graph:
@@ -125,7 +125,10 @@ def _gc_frozen_permanent_graph(enabled: bool = True):
 
     # Promote what is alive NOW to gen-2 first; freeze() only moves the
     # permanent generation, so without this the young survivors stay walkable.
-    gc.collect()
+    # ``collect=False``: freeze() alone already moves every generation (see
+    # _gc_freeze_now), for a caller whose graph was just frozen once.
+    if collect:
+        gc.collect()
     gc.freeze()
     try:
         yield
@@ -176,7 +179,7 @@ def _gc_freeze_in_scope() -> None:
 
 
 @contextlib.contextmanager
-def _gc_family_scope():
+def _gc_family_scope(*, collect: bool = True):
     """The GC setup of a whole family run: `_gc_frozen_permanent_graph` and
     `_gc_relaxed_threshold`, with their env controls (EQUILIBRIA_GTAP_GC_FREEZE,
     EQUILIBRIA_GTAP_GC_THRESHOLD).
@@ -187,7 +190,8 @@ def _gc_family_scope():
     the outputs. MEASURED on warm 20x41: when `solve_gtap_family` lifted the freeze,
     the next full collection (in `report_levels`) walked the ~10M records for 8.7 s.
 
-    The Pyomo route does not use it; it keeps its own two contexts."""
+    The GTAP core route holds it too (``GTAP.run_scope`` over the run, the PATH
+    solver per solve); the old Pyomo driver keeps its own two contexts."""
     global _FAMILY_SCOPE_DEPTH, _FAMILY_SCOPE_FROZEN
     if _FAMILY_SCOPE_DEPTH:
         _FAMILY_SCOPE_DEPTH += 1
@@ -198,7 +202,7 @@ def _gc_family_scope():
         return
     freeze = _gc_freeze_from_env()
     with (
-        _gc_frozen_permanent_graph(freeze),
+        _gc_frozen_permanent_graph(freeze, collect=collect),
         _gc_relaxed_threshold(_gc_threshold_from_env()),
     ):
         _FAMILY_SCOPE_DEPTH, _FAMILY_SCOPE_FROZEN = 1, freeze

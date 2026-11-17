@@ -724,6 +724,33 @@ def _relative_floor_vars(*, gtap_mode: bool) -> tuple[tuple[str, ...], tuple[str
     )
 
 
+def _merged_path_options(
+    path_options: str | None, *, env: str | None, convergence_tol: float = 1e-8
+) -> str:
+    """The PATH options of one solve: ``path_options`` when given, else the
+    caller's ``PATH_CAPI_OPTIONS`` (``env``), plus the iteration limits and the
+    convergence tolerance when they are not set.
+
+    The iteration budget follows the GAMS runs (``iterlim = 1000``). PATH's
+    convergence threshold is synced with the caller's success threshold: with its
+    built-in default (1e-6) PATH can report code=2 (no_progress) when the residual
+    is above that default but below the caller's tolerance; with it, PATH exits
+    code=1 as soon as the residual is below ``convergence_tol``.
+    """
+    raw = path_options if path_options is not None else (env or "")
+    option_lines = [
+        line.strip() for line in raw.replace(";", "\n").splitlines() if line.strip()
+    ]
+    option_names = {line.split()[0].lower() for line in option_lines if line.split()}
+    if "major_iteration_limit" not in option_names:
+        option_lines.append("major_iteration_limit 1000")
+    if "cumulative_iteration_limit" not in option_names:
+        option_lines.append("cumulative_iteration_limit 1000000")
+    if "convergence_tolerance" not in option_names:
+        option_lines.append(f"convergence_tolerance {convergence_tol}")
+    return "\n".join(option_lines)
+
+
 def _run_path_capi_nonlinear_full(
     model,
     params: GTAPParameters,
@@ -748,6 +775,7 @@ def _run_path_capi_nonlinear_full(
     equation_scaling: bool = False,
     solution_hint=None,
     gtap_mode: bool | None = None,
+    path_options: str | None = None,
 ) -> dict[str, Any]:
     """Solve the full GTAP system through PATH C API nonlinear callbacks.
 
@@ -3028,29 +3056,14 @@ def _run_path_capi_nonlinear_full(
     nnz = data.jacobian_structure.nnz
     license_ok = loader.check_license(runtime, len(data.variable_names), nnz)
 
-    # Align PATH iteration budget with the GAMS runs (`iterlim = 1000`).
-    # Keep user-provided PATH_CAPI_OPTIONS intact and only append the
-    # major-iteration limit when it is not explicitly set.
+    # The options reach the PATH library through PATH_CAPI_OPTIONS for this call
+    # only; the caller's value is restored at the end.
     path_options_original = os.environ.get("PATH_CAPI_OPTIONS")
-    raw_path_options = path_options_original or ""
-    option_lines = [
-        line.strip()
-        for line in raw_path_options.replace(";", "\n").splitlines()
-        if line.strip()
-    ]
-    option_names = {line.split()[0].lower() for line in option_lines if line.split()}
-    if "major_iteration_limit" not in option_names:
-        option_lines.append("major_iteration_limit 1000")
-    if "cumulative_iteration_limit" not in option_names:
-        option_lines.append("cumulative_iteration_limit 1000000")
-    # Sync PATH's internal convergence threshold with the caller's success threshold.
-    # Without this, PATH uses its built-in default (1e-6) which can cause code=2
-    # (no_progress) when the residual is just above PATH's default but below the
-    # caller's tolerance.  With this, PATH exits code=1 (converged) as soon as the
-    # residual is below path_capi_convergence_tol.
-    if "convergence_tolerance" not in option_names:
-        option_lines.append(f"convergence_tolerance {path_capi_convergence_tol}")
-    merged_path_options = "\n".join(option_lines)
+    merged_path_options = _merged_path_options(
+        path_options,
+        env=path_options_original,
+        convergence_tol=path_capi_convergence_tol,
+    )
 
     if merged_path_options:
         os.environ["PATH_CAPI_OPTIONS"] = merged_path_options
