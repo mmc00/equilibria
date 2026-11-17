@@ -13,16 +13,18 @@ from __future__ import annotations
 import pytest
 
 from tests.family._parity import family_gempack_within, gempack_cases
+from tests.templates.gtap._routes import ROUTES
 
 pytest.importorskip("jax")
 pytestmark = pytest.mark.integration
 
 
+@pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize(
     "case", gempack_cases(), ids=lambda c: f"{c.dataset}-ifsub{c.ifsub}"
 )
-def test_family_matches_gempack(case):
-    within, med, n, code = family_gempack_within(case.dataset, case.ifsub)
+def test_family_matches_gempack(case, route):
+    within, med, n, code = family_gempack_within(case.dataset, case.ifsub, route)
     tag = f"{case.dataset}/gempack/ifSUB={case.ifsub}"
     print(f"[{tag}] within 1pp={within * 100:.2f}%/{n} median={med * 100:.3f}pp")
     assert code == 1, f"[{tag}] shock did not converge (code={code})"

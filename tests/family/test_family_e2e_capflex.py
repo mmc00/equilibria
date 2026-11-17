@@ -260,3 +260,49 @@ def test_max_relative_difference_per_period_reported(family_run, reference):
             worst[k[-1]] = max(worst[k[-1]], float(rel[i]))
     print("max rel diff per period", worst)
     assert max(worst.values()) <= 1e-9
+
+
+# The core route (``Exercise(GTAP(backend="family"), gtap_static)``) against the
+# same photo, as PR 2 of gtap-on-core compares every gate. The tests above that
+# read the family driver's own result (``results``, ``settle``, ``phases``) stay
+# on the old route: PR 4 deletes them with it.
+@pytest.fixture(scope="module")
+def core_run(reference, linsolve, tmp_path_factory):
+    """``_solve_shock(route="exercise")`` on the family backend, spied."""
+    from tests.family.test_family_e2e import _spies
+    from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
+
+    mpatch = pytest.MonkeyPatch()
+    for k, v in {**_newton_mumps(), "EQUILIBRIA_GTAP_TR_LINSOLVE": linsolve}.items():
+        mpatch.setenv(k, v)
+    mpatch.setenv("EQUILIBRIA_FAMILY_CACHE", str(tmp_path_factory.mktemp("cache")))
+    import equilibria.templates.gtap.gtap_block_model as bm
+
+    def no_twin_solve(*a, **k):
+        raise AssertionError("_calibrate_capflex_risk (Pyomo twin solve) was called")
+
+    mpatch.setattr(bm, "_calibrate_capflex_risk", no_twin_solve)
+    try:
+        with _spies() as calls:
+            model, code = _solve_shock(
+                DATASET, IFSUB, SAVF, solve_nlp=True, backend="family", route="exercise"
+            )
+    finally:
+        mpatch.undo()
+    return model, code, calls
+
+
+@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
+def test_core_route_builds_no_pyomo_model(core_run):
+    _, _, calls = core_run
+    assert calls == {"ConcreteModel": 0, "PyomoNLP": 0, "identify_variables": 0}
+
+
+@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
+def test_core_route_every_cell_equals_final_pkl(core_run, reference):
+    from equilibria.family.prep_capture import load
+
+    model, code, _ = core_run
+    assert code == 1
+    final = load(reference / "final.pkl")
+    assert diff_to_photo(model.mp, final, 1e-9, lb_rtol=1e-9) == []
