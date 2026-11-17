@@ -4,9 +4,10 @@
 # Solo higiene rápida (format/lint/type) — SIN solver/GAMS. Los parity gates
 # GTAP/PEP los enforcea un hook aparte (scripts/gtap/run_parity_gates.py).
 minimum_pre_commit_version: "3.0.0"
-# `prek install` also installs the commit-msg hook (English messages). Hooks
+# `prek install` also installs the commit-msg hook (English messages) and the
+# pre-push one (small family suite, scripts/dev/pre_push_family.sh). Hooks
 # without `stages` keep running only before the commit.
-default_install_hook_types: [pre-commit, commit-msg]
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 default_stages: [pre-commit]
 
 # Datos/oráculos byte-sensibles: NUNCA reformatear (goldens, .diff, GAMS refs,
@@ -45,6 +46,17 @@ repos:
   # utilidades de dev y quedan fuera del candado.
   - repo: local
     hooks:
+      # Before a push: the small datasets on the family (JAX) route against the
+      # Pyomo photos, plus photo freshness (~1-2 min on the Mac, warm cache). Not
+      # in pre-commit: it would make every commit wait minutes.
+      - id: family-small
+        name: family small datasets vs the photos
+        entry: scripts/dev/pre_push_family.sh
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
+
       - id: check-commit-msg
         name: commit message in English
         # language: python (not system/python3): works on Windows too.
