@@ -111,15 +111,9 @@ def johansen(after: Callable[[Any], None] | None = None) -> Strategy:
     def strategy(model: PeriodModel, solver: Solver) -> str:
         cells = _require(shocked_cells(model))
         shocked = {(name, idx) for name, idx, _, _ in cells}
-        # A cell indexed by the period alone (index ``()``: pigbl, walras, ...)
-        # is left out, as the old driver did (it kept only tuple indices): it is
-        # not reset between the four solves and gets no linear step, keeping the
-        # last solve's level. Kept for parity with main; see the PR notes.
         free = {
             name: [
-                k
-                for k in model.var_cells(name, "shock")
-                if k != () and (name, k) not in shocked
+                k for k in model.var_cells(name, "shock") if (name, k) not in shocked
             ]
             for name in model.var_names()
         }

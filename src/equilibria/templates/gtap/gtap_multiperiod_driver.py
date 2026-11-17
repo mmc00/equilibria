@@ -1339,11 +1339,13 @@ def _solve_shock_johansen(m, solve, *, after=None) -> dict[str, Any]:
     shocked = {id(cell) for cell, _, _ in cells}
     # Every shock-period var but the shocked cells: the solved ones and those that
     # ``after`` recomputes from them (report and welfare vars, fixed in the solve).
+    # A var indexed by the period alone (pigbl, walras...) has the bare period as
+    # its index, not a tuple.
     free = [
         v[i]
         for v in m.component_objects(Var, descend_into=True)
         for i in v
-        if isinstance(i, tuple) and i[-1] == SHOCK and id(v[i]) not in shocked
+        if _period_of(i) == SHOCK and id(v[i]) not in shocked
     ]
     start = [value(x, exception=False) for x in free]
     h = JOHANSEN_STEP
@@ -1369,7 +1371,9 @@ def _solve_shock_johansen(m, solve, *, after=None) -> dict[str, Any]:
             cell.fix(full)
     n = 0
     for j, x in enumerate(free):
-        x0 = value(x.parent_component()[(*x.index()[:-1], CHECK)], exception=False)
+        i = x.index()
+        at_check = (*i[:-1], CHECK) if isinstance(i, tuple) else CHECK
+        x0 = value(x.parent_component()[at_check], exception=False)
         pts = [at[h][j], at[-h][j], at[2 * h][j], at[-2 * h][j]]
         if x0 is None or any(y is None or math.isnan(y) for y in pts):
             continue  # never had a value (an unused cell) or undefined there
@@ -1387,6 +1391,11 @@ def _solve_shock_johansen(m, solve, *, after=None) -> dict[str, Any]:
         file=sys.stderr,
     )
     return {"termination_code": 1, "residual": worst}
+
+
+def _period_of(i: Any) -> Any:
+    """The period of a Var index: its last element, or the index itself."""
+    return i[-1] if isinstance(i, tuple) else i
 
 
 def _richardson(f: list[float], h: float) -> float:

@@ -88,12 +88,12 @@ def test_johansen_positive_uses_log_slope() -> None:
     assert m.value("y", ("a",), "shock") == pytest.approx(4.0 * (1 + 2 * pct), rel=1e-9)
 
 
-def test_johansen_leaves_period_only_cells_at_last_solve() -> None:
-    """As the old driver: a cell indexed by the period alone gets no linear
-    step and keeps the level of the last solve (λ = -2h)."""
+def test_johansen_steps_period_only_cells() -> None:
+    """A cell indexed by the period alone gets its linear step too, not the
+    level of the last solve (λ = -2h)."""
     m = _model(chk=2.0, full=2.5)
     johansen()(m, _solver(lambda x: 2 * x, []))
-    assert m.value("w", (), "shock") == pytest.approx(2.0 - 0.02 * 0.5)
+    assert m.value("w", (), "shock") == pytest.approx(2.5)
 
 
 def test_johansen_runs_after_at_each_point() -> None:
