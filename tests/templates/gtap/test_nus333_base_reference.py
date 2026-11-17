@@ -23,6 +23,7 @@ from typing import Any, cast
 
 import pytest
 from tests.templates.gtap._nus333 import closure, nus333_params
+from tests.templates.gtap._routes import ROUTES, solve
 
 pytestmark = pytest.mark.integration
 
@@ -47,30 +48,17 @@ GDPMP_BASE_GAMS = {"USA": 14.0617801139496, "ROW": 41.7695611026001}
 TOL_REL = 1e-6
 
 
-@pytest.fixture(scope="module")
-def solved():
+@pytest.fixture(scope="module", params=ROUTES)
+def solved(request):
     """Mismo armado que run_burfisher.solve_exercise, sin shock."""
     from pyomo.environ import value
 
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-
     p = nus333_params()
-    gc = closure()
-    m, _ = build_block_model(p, p.sets, gc, "ROW", base_calibrated=False, ref_gdx=None)
-    res = solve_multiperiod(
-        m,
-        p,
-        gc,
-        ref_gdx=None,
-        skip_base_solve=True,
-        mute_welfare=True,
-        seed_from_prior=False,
-        mode="gtap",
-        solve_check=True,
+    s = solve(
+        request.param, p, closure(), "ROW", skip_base_solve=True, solve_check=True
     )
-    assert int(res["check"]["code"]) == 1, res["check"]
-    return m, value
+    assert s.codes["check"] == 1, s.codes
+    return s.model, value
 
 
 def test_pefob_base_es_la_calibrada_de_gams(solved):

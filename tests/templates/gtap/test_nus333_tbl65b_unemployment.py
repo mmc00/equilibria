@@ -42,6 +42,7 @@ from tests.templates.gtap._nus333 import (
     pct,
     run_burfisher,
 )
+from tests.templates.gtap._routes import ROUTES, solve
 from tests.templates.gtap._unemployment import register_unemployment_hooks
 
 from equilibria.sources import dataset_dir
@@ -78,40 +79,31 @@ ORACLE = {
 }
 
 
-@pytest.fixture(scope="module", params=["TBL65B", "ME3C"])
+@pytest.fixture(
+    scope="module",
+    params=[(e, r) for e in ("TBL65B", "ME3C") for r in ROUTES],
+    ids=lambda c: "-".join(c),
+)
 def solved(request):
     from pyomo.environ import value
 
     from equilibria.blocks.gtap import overwrite
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from equilibria.templates.gtap.instruments import fix_instrument_shock
 
+    exp, route = request.param
     p = nus333_params()
-    ac = closure()
     register_unemployment_hooks()
     try:
-        m, _ = cast(
-            Any,
-            build_block_model(
-                p, p.sets, ac, "ROW", base_calibrated=False, ref_gdx=None
-            ),
-        )
-        idx = ("USA", "MFG", "MFG")
-        t0 = float(value(m.prdtx_rai[(*idx, "check")]))
-        fix_instrument_shock(m, "prdtx_rai", idx, value=(1 + t0) * (1 - 0.109414) - 1)
-        res = solve_multiperiod(
-            m,
+        # prdtx_rai at (1+t0)·(1-0.109414)-1: the GEMPACK power shock -10.9414 %
+        s = solve(
+            route,
             p,
-            ac,
-            ref_gdx=None,
+            closure(),
+            "ROW",
+            shock={"prdtx_rai": {("USA", "MFG", "MFG"): -10.9414}},
             skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=False,
-            mode="gtap",
             solve_check=True,
         )
-        yield request.param, m, p, res, value
+        yield exp, s.model, p, {t: {"code": c} for t, c in s.codes.items()}, value
     finally:
         overwrite.clear()
 

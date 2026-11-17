@@ -39,6 +39,7 @@ from tests.templates.gtap._nus333 import (
     pct,
     run_burfisher,
 )
+from tests.templates.gtap._routes import ROUTES, solve
 
 from equilibria.sources import dataset_dir
 
@@ -82,38 +83,26 @@ def register_tbl94_hooks() -> None:
         )
 
 
-@pytest.fixture(scope="module")
-def solved():
+@pytest.fixture(scope="module", params=ROUTES)
+def solved(request):
     from pyomo.environ import value
 
     from equilibria.blocks.gtap import overwrite
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from equilibria.templates.gtap.instruments import fix_instrument_shock
 
     p = nus333_params()
-    ac = closure()
     register_tbl94_hooks()
     try:
-        m, _ = cast(
-            Any,
-            build_block_model(
-                p, p.sets, ac, "ROW", base_calibrated=False, ref_gdx=None
-            ),
-        )
-        fix_instrument_shock(m, "qca_target", CELL, factor=0.99)
-        res = solve_multiperiod(
-            m,
+        # fix_instrument_shock(factor=0.99) as the GEMPACK % shock -1 (same level)
+        s = solve(
+            request.param,
             p,
-            ac,
-            ref_gdx=None,
+            closure(),
+            "ROW",
+            shock={"qca_target": {CELL: -1.0}},
             skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=False,
-            mode="gtap",
             solve_check=True,
         )
-        yield m, p, res, value
+        yield s.model, p, {t: {"code": c} for t, c in s.codes.items()}, value
     finally:
         overwrite.clear()
 
