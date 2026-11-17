@@ -1,0 +1,12 @@
+<svg viewBox="0 0 960 360" role="img" xmlns="http://www.w3.org/2000/svg" class="jxb wide"><g class="ln"><path d="M480,52 L230,112"/><path d="M480,52 L700,112"/><path d="M700,140 L560,200"/><path d="M700,140 L700,200"/><path d="M700,140 L860,200"/><path d="M560,228 L470,290"/><path d="M560,228 L640,290"/><path d="M470,318 L400,318"/></g>
+  <rect x="390" y="20" width="180" height="34" rx="17" class="node-op"/><text x="480" y="42" text-anchor="middle" class="lbl mono">Residual (left − right)</text>
+  <rect x="150" y="112" width="160" height="32" rx="6" class="node-var"/><text x="230" y="133" text-anchor="middle" class="lbl mono">xaa[USA,Food,agr]</text><text x="230" y="162" text-anchor="middle" class="sm">left side: one variable</text>
+  <rect x="640" y="110" width="120" height="32" rx="16" class="node-op"/><text x="700" y="131" text-anchor="middle" class="lbl mono">mul</text>
+  <rect x="480" y="200" width="160" height="32" rx="16" class="node-op"/><text x="560" y="221" text-anchor="middle" class="lbl mono">pow</text>
+  <rect x="650" y="200" width="100" height="32" rx="6" class="node-var"/><text x="700" y="221" text-anchor="middle" class="lbl mono">nd[USA,agr]</text>
+  <rect x="790" y="200" width="140" height="32" rx="6" class="node-cst"/><text x="860" y="221" text-anchor="middle" class="lbl mono">0.0312</text><text x="860" y="250" text-anchor="middle" class="sm">io · λ^(σ−1), a number</text>
+  <rect x="400" y="290" width="140" height="32" rx="16" class="node-op"/><text x="470" y="311" text-anchor="middle" class="lbl mono">div</text>
+  <rect x="590" y="290" width="100" height="32" rx="6" class="node-cst"/><text x="640" y="311" text-anchor="middle" class="lbl mono">0.5</text><text x="640" y="340" text-anchor="middle" class="sm">σ, a number</text>
+  <text x="150" y="300" class="sm">div has two leaves:</text>
+  <rect x="150" y="306" width="110" height="28" rx="6" class="node-var"/><text x="205" y="325" text-anchor="middle" class="sm mono ink">pnd[USA,agr]</text>
+  <rect x="268" y="306" width="122" height="28" rx="6" class="node-var"/><text x="329" y="325" text-anchor="middle" class="sm mono ink">pa[USA,Food,agr]</text></svg>
