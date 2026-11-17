@@ -154,6 +154,7 @@ def unpacked(
     import gzip
     import hashlib
     import shutil
+    import tempfile
 
     folder = photo_dir(dataset, ifsub, savf, mode, root=root)
     rec = _record(folder, dataset)
@@ -168,16 +169,23 @@ def unpacked(
     out = (cache_root or _cache_root()) / f"{dataset}_{folder.name}_{key}"
     if out.is_dir():
         return out
-    tmp = out.with_name(out.name + ".tmp")
-    shutil.rmtree(tmp, ignore_errors=True)
-    tmp.mkdir(parents=True)
-    for name in rec["outputs"]:
-        src, dst = folder / name, tmp / plain_name(name)
-        if name.endswith(".gz"):
-            dst.with_suffix("").write_bytes(gzip.decompress(src.read_bytes()))
-        else:
-            shutil.copyfile(src, dst)
-    tmp.rename(out)
+    # a temp folder of its own: pytest-xdist workers share the cache in CI
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(dir=out.parent, prefix=out.name + ".tmp-"))
+    try:
+        for name in rec["outputs"]:
+            src, dst = folder / name, tmp / plain_name(name)
+            if name.endswith(".gz"):
+                dst.with_suffix("").write_bytes(gzip.decompress(src.read_bytes()))
+            else:
+                shutil.copyfile(src, dst)
+        try:
+            tmp.rename(out)
+        except OSError:
+            if not out.is_dir():  # not another worker finishing first
+                raise
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
     return out
 
 

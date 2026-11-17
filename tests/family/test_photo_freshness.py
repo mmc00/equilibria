@@ -93,3 +93,37 @@ def test_shared_edit_is_shared_changed(monkeypatch):
         lambda files: "edited" if set(files) == shared else real(files),
     )
     assert photos.freshness("gtap7_3x3", 1, "capFix", "gtap") == "shared_changed"
+
+
+def test_unpack_leaves_another_workers_temp_alone(tmp_path):
+    """Two pytest-xdist workers share the family cache in CI: one unpacking must not
+    delete the other's half-written folder."""
+    cache = tmp_path / "c"
+    first = photos.unpacked("gtap7_3x3", cache_root=cache)
+    shutil.rmtree(first)
+    other = first.with_name(first.name + ".tmp")
+    other.mkdir(parents=True)
+    (other / "half_written").write_text("x")
+
+    got = photos.unpacked("gtap7_3x3", cache_root=cache)
+
+    assert got == first and (got / "final.pkl").exists()
+    assert (other / "half_written").exists()
+
+
+def test_unpack_accepts_a_folder_another_worker_finished_first(tmp_path, monkeypatch):
+    cache = tmp_path / "c"
+    out = photos.unpacked("gtap7_3x3", cache_root=cache)
+    snapshot = tmp_path / "snap"
+    shutil.move(out, snapshot)
+    real = gzip.decompress
+
+    def racing(data):  # the other worker finishes while this one unpacks
+        if not out.exists():
+            shutil.copytree(snapshot, out)
+        return real(data)
+
+    monkeypatch.setattr(gzip, "decompress", racing)
+
+    assert photos.unpacked("gtap7_3x3", cache_root=cache) == out
+    assert not [p for p in cache.iterdir() if p != out]
