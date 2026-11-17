@@ -179,6 +179,10 @@ gc = GTAPClosureConfig(
     savf_flag="capFlex",
     numeraire="pnum",
 )
+"""
+# Like GAMS compStat, the base is not solved: its levels are the reference of the
+# Fisher indices of check and shock.
+BUILD = """\
 # Like GAMS compStat, the base is not solved: its levels are the reference of the
 # Fisher indices of check and shock.
 m, _ = build_block_model(p, p.sets, gc, "ROW", base_calibrated=False, ref_gdx=None)
@@ -202,6 +206,32 @@ codes = {{k: int(res[k]["code"]) for k in res}}
 print("codes:", codes)
 assert set(codes.values()) == {{1}}, codes
 """
+
+
+def _solve_core(model: str, option: str) -> str:
+    """The solve on the core driver (``Exercise``): the same options as
+    ``solve_multiperiod`` below; the model is built inside ``run()``."""
+    return f"""\
+# Like GAMS compStat, the base is not solved: its levels are the reference of the
+# Fisher indices of check and shock.
+ex = Exercise(
+    GTAP(p, gc, residual_region="ROW", base_calibrated=False, ref_gdx=None),
+    gtap_static("gtap", solve_check=True, mute_welfare=True, {option}),
+    shock=SHOCK,
+)
+res = ex.run()
+{model} = ex.model.pyomo
+codes = {{k: r["code"] for k, r in res.items() if r["code"] != "not solved"}}
+print("codes:", codes)
+assert set(codes.values()) == {{"optimal"}}, codes
+"""
+
+
+SOLVE_CORE = _solve_core("m", f"shock_steps={rb.SHOCK_STEPS!r}")
+
+
+def _solve_johansen_core(model: str) -> str:
+    return _solve_core(model, 'shock_method="johansen"')
 
 
 def _solve_johansen(model: str) -> str:
@@ -270,7 +300,21 @@ _WALL_MD = (
 )
 
 
-def _setup(hooked: bool) -> str:
+_IMPORTS_OLD = (
+    "from equilibria.templates.gtap.gtap_block_model import build_block_model\n"
+    "from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig\n"
+    "from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod\n"
+    "from equilibria.templates.gtap.shocks import apply_shock\n\n"
+)
+_IMPORTS_CORE = (
+    "from equilibria.core.exercise import Exercise\n"
+    "from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig\n"
+    "from equilibria.templates.gtap.recipe import gtap_static\n"
+    "from equilibria.templates.gtap.template import GTAP\n\n"
+)
+
+
+def _setup(hooked: bool, route: str = "old") -> str:
     # Every notebook imports overwrite: even without hooks of its own, it clears
     # those an earlier exercise left in the same kernel (#214).
     hooks = (
@@ -291,11 +335,8 @@ def _setup(hooked: bool) -> str:
         + hooks
         + "from equilibria.blocks.gtap._derived_params import xscale_data\n"
         "from equilibria.templates.gtap import GTAPParameters\n"
-        "from equilibria.templates.gtap.gtap_block_model import build_block_model\n"
-        "from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig\n"
-        "from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod\n"
-        "from equilibria.templates.gtap.shocks import apply_shock\n\n"
-        "sys.path.insert(0, str(path_capi_src()))  # the PATH solver's Python bindings\n"
+        + (_IMPORTS_CORE if route == "core" else _IMPORTS_OLD)
+        + "sys.path.insert(0, str(path_capi_src()))  # the PATH solver's Python bindings\n"
         "# hooks from an earlier exercise in this kernel would leak into this one (#214)\n"
         "overwrite.clear()\n"
     )
@@ -314,7 +355,7 @@ def _data(prm: str) -> str:
     )
 
 
-def _shock(rows: list) -> str:
+def _shock(rows: list, route: str = "old") -> str:
     lines = ["SHOCK = {"]
     for name, cells in rb.as_shock(rows).items():
         if len(cells) == 1:
@@ -327,6 +368,8 @@ def _shock(rows: list) -> str:
         ]
         lines.append("    },")
     lines.append("}")
+    if route == "core":
+        return "\n".join(lines) + "\n"
     return "\n".join(lines) + "\napply_shock(m, SHOCK)\n"
 
 
@@ -373,8 +416,14 @@ def _py(text: str) -> dict:
     }
 
 
-def notebook(exp: str) -> dict:
-    """The notebook of ``exp``, as nbformat 4 JSON."""
+def notebook(exp: str, route: str = "old") -> dict:
+    """The notebook of ``exp``, as nbformat 4 JSON. ``route="core"`` solves with
+    ``Exercise(GTAP(...), gtap_static(...))`` instead of ``build_block_model`` +
+    ``apply_shock`` + ``solve_multiperiod`` (not written by ``main``: the tests
+    run it next to the committed notebooks)."""
+    if route not in ("old", "core"):
+        raise ValueError(f"route must be 'old' or 'core', got {route!r}")
+    core = route == "core"
     if exp in HOOKED:
         prm, rows, hook, hook_md, checked = HOOKED[exp]
     else:
@@ -393,7 +442,7 @@ def notebook(exp: str) -> dict:
             f"nus333 database (2 regions × 3 sectors), and {claim}.\n\n"
             "Run it from anywhere inside the repository."
         ),
-        _py(_setup(bool(hook))),
+        _py(_setup(bool(hook), route)),
         _md(f"## 1. Data: nus333 and the exercise's parameters (`{prm}`)"),
         _py(_data(prm)),
     ]
@@ -405,13 +454,13 @@ def notebook(exp: str) -> dict:
     n = 3 if hook else 2
     cells += [
         _md(f"## {n}. GTAP closure and model (base / check / shock)"),
-        _py(CLOSURE),
+        _py(CLOSURE if core else CLOSURE + BUILD),
         _md(
             f"## {n + 1}. The shock\n\n"
             "As in the `.EXP`, in % change; `apply_shock` converts each instrument to "
             "levels and writes it in the shock period only."
         ),
-        _py(_shock(rows)),
+        _py(_shock(rows, route)),
     ]
     if exp in JOHANSEN_ONLY:
         cells += [
@@ -420,14 +469,14 @@ def notebook(exp: str) -> dict:
                 + _JOHANSEN_MD.format(exp=exp)
                 + _WALL_MD
             ),
-            _py(_solve_johansen("m")),
+            _py(_solve_johansen_core("m") if core else _solve_johansen("m")),
             _md(f"## {n + 3}. Every level against the book's Johansen result"),
             _py(_compare_johansen(exp, "m")),
         ]
     else:
         cells += [
             _md(f"## {n + 2}. Solve check and shock"),
-            _py(SOLVE),
+            _py(SOLVE_CORE if core else SOLVE),
             _md(f"## {n + 3}. Every level against GEMPACK"),
             _py(_compare(exp, checked)),
         ]
@@ -439,8 +488,11 @@ def notebook(exp: str) -> dict:
                 + " The same exercise, on a fresh model:"
             ),
             _py(
-                'mj, _ = build_block_model(p, p.sets, gc, "ROW", base_calibrated=False, '
-                "ref_gdx=None)\napply_shock(mj, SHOCK)\n" + _solve_johansen("mj")
+                _solve_johansen_core("mj")
+                if core
+                else 'mj, _ = build_block_model(p, p.sets, gc, "ROW", '
+                "base_calibrated=False, ref_gdx=None)\napply_shock(mj, SHOCK)\n"
+                + _solve_johansen("mj")
             ),
             _py(_compare_johansen(exp, "mj")),
         ]

@@ -31,6 +31,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests.templates.gtap._routes import ROUTES
 
 ROOT = Path(__file__).resolve().parents[2]
 NB_DIR = ROOT / "examples" / "notebooks" / "gtap7" / "burfisher"
@@ -52,8 +53,28 @@ JOHANSEN_OK = "every cell within 0.5% of the book's Johansen result"
 
 
 def _code(notebook: Path) -> str:
-    cells = json.loads(notebook.read_text(encoding="utf-8"))["cells"]
-    return "\n\n".join("".join(c["source"]) for c in cells if c["cell_type"] == "code")
+    return _cells_code(json.loads(notebook.read_text(encoding="utf-8")))
+
+
+def _cells_code(nb: dict) -> str:
+    return "\n\n".join(
+        "".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code"
+    )
+
+
+def _route_code(exp: str, route: str) -> str:
+    """The notebook's code: the committed file on the old route; on the core route
+    the generator's ``notebook(exp, route="core")`` (``Exercise``), not committed
+    (PR 3 of gtap-on-core regenerates the notebooks on it)."""
+    if route == "old":
+        return _code(NB_DIR / f"{exp.lower()}.ipynb")
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("make_notebooks", GENERATOR)
+    assert spec is not None and spec.loader is not None
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    return _cells_code(gen.notebook(exp, route=route))
 
 
 def _run(code: str, where: Path) -> subprocess.CompletedProcess:
@@ -107,18 +128,22 @@ def test_every_notebook_clears_hooks_before_registering() -> None:
 
 
 @pytest.mark.needs_path
+@pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize("exp", MATCHED)
-def test_notebook_matches_gempack(exp: str, tmp_path: Path) -> None:
-    r = _run(_code(NB_DIR / f"{exp.lower()}.ipynb"), tmp_path)
+def test_notebook_matches_gempack(exp: str, route: str, tmp_path: Path) -> None:
+    r = _run(_route_code(exp, route), tmp_path)
     assert r.returncode == 0, r.stderr[-3000:]
     assert "every cell within 0.5% of GEMPACK" in r.stdout
     assert (JOHANSEN_OK in r.stdout) == (exp in JOHANSEN), exp
 
 
 @pytest.mark.needs_path
+@pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize("exp", JOHANSEN_ONLY)
-def test_johansen_notebook_matches_the_book(exp: str, tmp_path: Path) -> None:
-    r = _run(_code(NB_DIR / f"{exp.lower()}.ipynb"), tmp_path)
+def test_johansen_notebook_matches_the_book(
+    exp: str, route: str, tmp_path: Path
+) -> None:
+    r = _run(_route_code(exp, route), tmp_path)
     assert r.returncode == 0, r.stderr[-3000:]
     assert JOHANSEN_OK in r.stdout
 
