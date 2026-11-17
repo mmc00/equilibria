@@ -45,6 +45,9 @@ ROOT = Path(__file__).resolve().parents[3]
 
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
+# gen_nlp_matrix_page.py imports this gate by bare name, without the repo root on
+# sys.path: append it (last, so nothing else is shadowed) for the tests package
+sys.path.append(str(ROOT))
 
 from coverage_matrix import nlp_rows  # noqa: E402
 from family_twins import pyomo_solve  # noqa: E402

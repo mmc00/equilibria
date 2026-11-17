@@ -26,7 +26,6 @@ import sys
 from pathlib import Path
 
 import pytest
-from tests.templates.gtap._routes import ROUTES
 
 from equilibria.sources import dataset_dir, find_reference, has_dataset, reference
 
@@ -34,8 +33,12 @@ pytestmark = pytest.mark.integration
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
+# gen_nlp_matrix_page.py imports this gate by bare name, without the repo root on
+# sys.path: append it (last, so nothing else is shadowed) for the tests package
+sys.path.append(str(ROOT))
 from coverage_matrix import rows_for  # noqa: E402
 from family_twins import pyomo_solve  # noqa: E402
+from tests.templates.gtap._routes import ROUTES  # noqa: E402
 
 GEMPACK_ROWS = rows_for("gtap7", "gempack", kind="mcp")
 

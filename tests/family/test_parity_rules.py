@@ -22,8 +22,7 @@ class _Var:
 
 def _result(cells: dict):
     mp = SimpleNamespace(vars={"xp": _Var(cells)})
-    results = {s: {"code": 1} for s in ("base", "check", "shock")}
-    return SimpleNamespace(mp=mp, results=results)
+    return _parity._Run(mp, dict.fromkeys(("base", "check", "shock"), 1))
 
 
 def test_family_match_counts_a_nan_cell_as_a_miss(monkeypatch):
