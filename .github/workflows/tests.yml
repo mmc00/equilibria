@@ -107,16 +107,15 @@ jobs:
         id: plan
         run: |
           set -euo pipefail
-          py=$(python scripts/dev/plan_test_groups.py --suite python --budget 240 --max-groups 14 --explain)
-          gd=$(python scripts/dev/plan_test_groups.py --suite gdxdump --budget 200 --max-groups 12 --explain)
+          py=$(python scripts/dev/plan_test_groups.py --suite python --budget 240 --max-groups 18 --explain)
+          gd=$(python scripts/dev/plan_test_groups.py --suite gdxdump --budget 200 --max-groups 16 --explain)
           echo "python=$py" >> "$GITHUB_OUTPUT"
           echo "gdxdump=$gd" >> "$GITHUB_OUTPUT"
 
   # The suite runs as the groups of `plan-groups` in parallel (budget 240 s of
   # predicted serial test time per python group, 200 per gdxdump group, aiming at
   # a pytest step of about 2-4 min). The groups are
-  # independent runners, so the PATH-library and model-cache contention that
-  # forbids -n inside one runner does not apply. Do NOT add -n/--numprocesses.
+  # independent runners; python-tests also runs -n 4 inside each one.
   # `tests-verdict` checks that the groups together ran every collected test
   # exactly once, so a lost group, a stale durations file or a test file
   # missing from .github/test_files_python.txt cannot hide tests.
@@ -144,9 +143,12 @@ jobs:
         uses: ./.github/actions/setup-test-env
 
       # The family records and compiled JAX programs, kept between runs so a PR
-      # does not pay the cold build and compile. The key changes with the family
-      # code and the jax version, so a family change is a cache miss (never a
-      # stale program); one cache per group, no partial restore.
+      # does not pay the cold build and compile. Every entry inside is keyed by its
+      # own content (the records by the model fingerprint, family code and jax; the
+      # AOT programs by jax, CPU and code, checksummed), so restoring an older cache
+      # is safe: what no longer matches is rebuilt. The key ends in the run id so
+      # each run saves what it rebuilt; restore takes the newest of the group, else
+      # of the suite.
       - name: Family cache key
         run: |
           set -euo pipefail
@@ -159,7 +161,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/family-cache
-          key: family-python-${{ runner.os }}-${{ env.FAMILY_CACHE_TAG }}-${{ hashFiles('src/equilibria/family/**/*.py', 'src/equilibria/backends/family_backend.py') }}-${{ matrix.group }}
+          key: family-python-${{ runner.os }}-${{ env.FAMILY_CACHE_TAG }}-${{ matrix.group }}-${{ github.run_id }}
+          restore-keys: |
+            family-python-${{ runner.os }}-${{ env.FAMILY_CACHE_TAG }}-${{ matrix.group }}-
+            family-python-${{ runner.os }}-${{ env.FAMILY_CACHE_TAG }}-
+
+      # A restored cache keeps the entries of older code; past 1 GB start cold
+      # instead of letting it grow run after run.
+      - name: Family cache size cap
+        run: |
+          d="${{ runner.temp }}/family-cache"
+          if [ -d "$d" ]; then
+            mb=$(du -sm "$d" | cut -f1); echo "family cache: $mb MB"
+            if [ "$mb" -gt 1024 ]; then rm -rf "$d"; echo "over 1 GB: emptied"; fi
+          fi
 
       - name: Run tests (excluding GAMS-marked and slow), group ${{ matrix.group }}
         env:
@@ -278,9 +293,12 @@ jobs:
         uses: ./.github/actions/setup-test-env
 
       # The family records and compiled JAX programs, kept between runs so a PR
-      # does not pay the cold build and compile. The key changes with the family
-      # code and the jax version, so a family change is a cache miss (never a
-      # stale program); one cache per group, no partial restore.
+      # does not pay the cold build and compile. Every entry inside is keyed by its
+      # own content (the records by the model fingerprint, family code and jax; the
+      # AOT programs by jax, CPU and code, checksummed), so restoring an older cache
+      # is safe: what no longer matches is rebuilt. The key ends in the run id so
+      # each run saves what it rebuilt; restore takes the newest of the group, else
+      # of the suite.
       - name: Family cache key
         run: |
           set -euo pipefail
@@ -293,7 +311,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/family-cache
-          key: family-gdxdump-${{ runner.os }}-${{ env.FAMILY_CACHE_TAG }}-${{ hashFiles('src/equilibria/family/**/*.py', 'src/equilibria/backends/family_backend.py') }}-${{ matrix.group }}
+          key: family-gdxdump-${{ runner.os }}-${{ env.FAMILY_CACHE_TAG }}-${{ matrix.group }}-${{ github.run_id }}
+          restore-keys: |
+            family-gdxdump-${{ runner.os }}-${{ env.FAMILY_CACHE_TAG }}-${{ matrix.group }}-
+            family-gdxdump-${{ runner.os }}-${{ env.FAMILY_CACHE_TAG }}-
+
+      # A restored cache keeps the entries of older code; past 1 GB start cold
+      # instead of letting it grow run after run.
+      - name: Family cache size cap
+        run: |
+          d="${{ runner.temp }}/family-cache"
+          if [ -d "$d" ]; then
+            mb=$(du -sm "$d" | cut -f1); echo "family cache: $mb MB"
+            if [ "$mb" -gt 1024 ]; then rm -rf "$d"; echo "over 1 GB: emptied"; fi
+          fi
 
       # Falla duro a proposito: si gdxdump no esta, queremos rojo, no 58 skips.
       - name: Install gdxdump (gamspy_base)
