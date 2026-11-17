@@ -72,6 +72,27 @@ def test_johansen_reproduces_the_books_result(exp: str) -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("exp", JOHANSEN_IN_THE_BOOK)
+def test_johansen_moves_the_global_investment_price(exp: str) -> None:
+    """A cell indexed by the period alone gets its linear step too.
+
+    ``pigbl`` is GEMPACK's ``pcgdswld`` (both the net-investment-weighted price
+    of investment). The comparator above has no row for it, so the book's
+    ``.sl4`` is read directly; GEMPACK moves it 0.75 to 1.88 % in these runs.
+    """
+    from equilibria.babel.har.sl4 import read_sl4_changes
+    from equilibria.sources import reference
+
+    m, _, codes = _solve(exp, "johansen")
+    assert codes == {"base": 1, "check": 1, "shock": 1}
+    pct = 100.0 * (m.pigbl["shock"].value / m.pigbl["check"].value - 1.0)
+    run = reference("nus333", "gempack", experiment=exp.lower(), method="book")
+    sl4 = read_sl4_changes(run / "solution.sl4")
+    # Measured 2026-11-17: within 1e-4 pp in all six (before the fix: +0.03 %)
+    assert pct == pytest.approx(float(sl4.changes["pcgdswld"].values), abs=1e-3)
+
+
+@pytest.mark.integration
 def test_the_nonlinear_solution_is_not_the_books_johansen() -> None:
     """The check above can fail: TBL45A solved exactly misses the book's numbers."""
     m, p, codes = _solve("TBL45A", "nonlinear")
