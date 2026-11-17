@@ -19,7 +19,8 @@ never touch Pyomo themselves.
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Iterator, Sequence
+import math
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import Any, cast
 
 import pyomo.environ as pyo
@@ -169,6 +170,8 @@ def period_residual(m: Any, period: str) -> float:
 class PyomoPeriodModel:
     """``PeriodModel`` over a reflected Pyomo model (``self.pyomo``)."""
 
+    backend = "pyomo"
+
     def __init__(self, pyomo: Any) -> None:
         self.pyomo = pyomo
 
@@ -224,3 +227,136 @@ class PyomoPeriodModel:
 
     def clone(self) -> PyomoPeriodModel:
         return PyomoPeriodModel(self.pyomo.clone())
+
+    # ── per-variable and per-row operations ────────────────────────────────
+
+    def _by_period(self, comp: Any, period: str) -> dict[tuple, Any]:
+        """``{index without period: component data}`` for ``period``. The index
+        of a component never changes after the build, so it is computed once."""
+        cache = self.__dict__.setdefault("_period_index", {})
+        key = (id(comp), period)
+        if key not in cache:
+            out: dict[tuple, Any] = {}
+            for k in comp:
+                kt = _astuple(k)
+                if kt and kt[-1] == period:
+                    out[kt[:-1]] = comp[k]
+            cache[key] = out
+        return cache[key]
+
+    def _var(self, name: str, period: str) -> dict[tuple, Any]:
+        comp = self.pyomo.component(name)
+        if comp is None or comp.ctype is not pyo.Var:
+            raise KeyError(f"no variable {name!r}")
+        return self._by_period(comp, period)
+
+    def _row(self, name: str, period: str) -> dict[tuple, Any]:
+        comp = self.pyomo.component(name)
+        if comp is None or comp.ctype is not pyo.Constraint:
+            raise KeyError(f"no row {name!r}")
+        return self._by_period(comp, period)
+
+    def var_names(self) -> tuple[str, ...]:
+        return tuple(v.name for v in self.pyomo.component_objects(pyo.Var))
+
+    def row_names(self) -> tuple[str, ...]:
+        return tuple(c.name for c in self.pyomo.component_objects(pyo.Constraint))
+
+    def has_var(self, name: str) -> bool:
+        comp = self.pyomo.component(name)
+        return comp is not None and comp.ctype is pyo.Var
+
+    def has_row(self, name: str) -> bool:
+        comp = self.pyomo.component(name)
+        return comp is not None and comp.ctype is pyo.Constraint
+
+    def var_cells(self, name: str, period: str) -> tuple[tuple, ...]:
+        return tuple(self._var(name, period))
+
+    def row_cells(self, name: str, period: str) -> tuple[tuple, ...]:
+        return tuple(self._row(name, period))
+
+    def values(self, name: str, period: str) -> dict[tuple, float]:
+        return {
+            k: math.nan if c.value is None else float(c.value)
+            for k, c in self._var(name, period).items()
+        }
+
+    def set_values(self, name: str, period: str, levels: Mapping[tuple, float]) -> None:
+        cells = self._var(name, period)
+        for k, v in levels.items():
+            cells[k].set_value(v, skip_validation=True)
+
+    def fix_cells(
+        self, name: str, period: str, levels: Mapping[tuple, float | None]
+    ) -> None:
+        cells = self._var(name, period)
+        for k, v in levels.items():
+            if v is None:
+                cells[k].fix()
+            else:
+                cells[k].fix(v)
+
+    def unfix_cells(self, name: str, period: str, cells: Iterable[tuple]) -> None:
+        data = self._var(name, period)
+        for k in cells:
+            data[k].unfix()
+
+    def fix_all(
+        self, name: str, period: str, *, keep: frozenset[tuple] = frozenset()
+    ) -> None:
+        for k, c in self._var(name, period).items():
+            if k not in keep:
+                c.fix()
+
+    def unfix_all(
+        self, name: str, period: str, *, keep: frozenset[tuple] = frozenset()
+    ) -> None:
+        for k, c in self._var(name, period).items():
+            if k not in keep:
+                c.unfix()
+
+    def fixed_cells(self, name: str, period: str) -> frozenset[tuple]:
+        return frozenset(k for k, c in self._var(name, period).items() if c.fixed)
+
+    def bounds(
+        self, name: str, period: str
+    ) -> dict[tuple, tuple[float | None, float | None]]:
+        return {k: (c.lb, c.ub) for k, c in self._var(name, period).items()}
+
+    def set_bounds(
+        self,
+        name: str,
+        period: str,
+        bounds: Mapping[tuple, tuple[float | None, float | None]],
+    ) -> None:
+        cells = self._var(name, period)
+        for k, (lb, ub) in bounds.items():
+            if lb is not None:
+                cells[k].setlb(lb)
+            if ub is not None:
+                cells[k].setub(ub)
+
+    def free_cells(self, name: str, period: str, cells: Iterable[tuple]) -> None:
+        data = self._var(name, period)
+        for k in cells:
+            c = data[k]
+            c.domain = pyo.Reals
+            c.setlb(None)
+            c.setub(None)
+
+    def active_rows(self, name: str, period: str) -> frozenset[tuple]:
+        return frozenset(k for k, c in self._row(name, period).items() if c.active)
+
+    def set_rows_active(
+        self, name: str, period: str, cells: Iterable[tuple], active: bool
+    ) -> None:
+        data = self._row(name, period)
+        for k in cells:
+            if active:
+                data[k].activate()
+            else:
+                data[k].deactivate()
+
+    def set_all_rows_active(self, name: str, period: str, active: bool) -> None:
+        self.set_rows_active(name, period, list(self._row(name, period)), active)

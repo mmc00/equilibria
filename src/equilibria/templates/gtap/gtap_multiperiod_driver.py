@@ -40,6 +40,7 @@ from equilibria.solver.gc_tuning import (  # shared with the family route
     _gc_relaxed_threshold,
     _gc_threshold_from_env,
 )
+from equilibria.templates.gtap import period_rules as _rules
 from equilibria.templates.gtap.instruments import exogenous_test
 from equilibria.templates.gtap.period_debug import debug_before_solve
 from equilibria.templates.gtap.period_prep import PeriodPreparer
@@ -808,13 +809,7 @@ def _replicate_sp_bounds(m, sp_model, active_period: str) -> int:
 # GAMS declara todas las variables libres (model.gms:35 `Variables`) y en el
 # periodo resuelto solo acota estos precios/utilidades (iterloop.gms:61-88, piso
 # 0.001*nivel; pft comentada en :79). p = p_rai; pdp/pmp no existen en equilibria.
-GAMS_BOUNDED_VARS = frozenset(
-    {
-        "px", "pva", "pnd", "p_rai", "ps", "pdp", "pmp", "pa", "pmt", "pe",
-        "pefob", "pmcif", "pm", "pet", "pd", "pwmg", "pf", "pfa",
-        "uh", "ug", "us", "u", "pcons", "pg", "pi", "ptmg",
-    }
-)  # fmt: skip
+GAMS_BOUNDED_VARS = _rules.GAMS_BOUNDED_VARS
 
 
 def _apply_gams_bounds(m, period: str) -> int:
@@ -912,14 +907,7 @@ def _seed_period_from_prior(m, prior_period: str, active_period: str) -> int:
 # DECISIVE with a CORRECT base: check from base-frozen goes code=2 res 1.1e-2 →
 # code=1 res 2.9e-11 once muted.  (uh is NOT muted — it feeds eq_zcons = real CDE
 # demand, so it has genuine blast radius.)
-_WELFARE_LEAVES = (
-    ("eq_cv", "cv"),
-    ("eq_ev", "ev"),
-    ("eq_walras", "walras"),
-    ("eq_u", "u"),
-    ("eq_ug", "ug"),
-    ("eq_us", "us"),
-)
+_WELFARE_LEAVES = _rules.WELFARE_LEAVES
 
 
 def _mute_welfare_tail(m, period: str, regions, *, gtap_mode: bool = False) -> int:
@@ -968,13 +956,7 @@ def _mute_welfare_tail(m, period: str, regions, *, gtap_mode: bool = False) -> i
 
 
 # u depends on ug/us (and the live uh), so it goes last.
-_WELFARE_SOLVE_ORDER = (
-    ("eq_ug", "ug"),
-    ("eq_us", "us"),
-    ("eq_ev", "ev"),
-    ("eq_cv", "cv"),
-    ("eq_u", "u"),
-)
+_WELFARE_SOLVE_ORDER = _rules.WELFARE_SOLVE_ORDER
 
 
 def _solve_welfare_tail(m, period: str) -> int:
@@ -1319,7 +1301,7 @@ def _solve_shock_in_steps(m, steps, solve) -> dict[str, Any]:
 # (~1e-10) breaks the slope of the tiny self-trade flows (qxs ~1e-5); at 0.03 the
 # curvature of ME4A (land productivity -81%) does. 0.01 and 0.02, combined by
 # Richardson, cancel the O(h^2) term and keep both away.
-JOHANSEN_STEP = 0.01
+JOHANSEN_STEP = _rules.JOHANSEN_STEP
 
 
 def _solve_shock_johansen(m, solve, *, after=None) -> dict[str, Any]:
@@ -1482,7 +1464,6 @@ def _solve_multiperiod_inner(
     dict mapping "base" | "check" | "shock" → {"code": int, "residual": float}
     """
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
     if shock_method not in ("nonlinear", "johansen"):
         raise ValueError(
@@ -1558,32 +1539,9 @@ def _solve_multiperiod_inner(
         params if _gtap_mode else apply_altertax_elasticities(params, in_place=False)
     )
 
-    # Build closures.
+    # The closures the periods are solved with.
     _if_sub = getattr(closure, "if_sub", False) if closure is not None else False
-    _numeraire = (
-        getattr(closure, "numeraire", "pnum") if closure is not None else "pnum"
-    )
-
-    base_closure = GTAPClosureConfig(
-        name="base",
-        closure_type="MCP",
-        capital_mobility="sluggish",
-        fix_endowments=False,
-        fix_taxes=False,
-        fix_technology=False,
-        if_sub=_if_sub,
-        numeraire=_numeraire,
-    )
-    alt_closure = GTAPClosureConfig(
-        name="altertax",
-        closure_type="MCP",
-        capital_mobility="mobile",
-        fix_endowments=False,
-        fix_taxes=True,
-        fix_technology=True,
-        if_sub=_if_sub,
-        numeraire=_numeraire,
-    )
+    base_closure, alt_closure = _rules.period_closures(closure)
 
     results: dict[str, dict[str, Any]] = {}
 

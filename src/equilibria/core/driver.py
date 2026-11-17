@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import math
+import time
 from collections.abc import Mapping
 from typing import Any
 
@@ -35,11 +36,14 @@ def _solve(model: PeriodModel, plan: KindPlan, period: str) -> str:
 def _residual(model: PeriodModel, period: str) -> float:
     """The period's residual; ``nan`` when the rows cannot be evaluated
     (e.g. a division by zero at the point the solve left)."""
+    t0 = time.perf_counter()
     try:
-        return model.residual(period)
+        r = model.residual(period)
     except (ArithmeticError, ValueError) as exc:
         _log.warning("period %s: residual not evaluable: %r", period, exc)
         return math.nan
+    _log.info("period %s: residual %.3g (%.1f s)", period, r, time.perf_counter() - t0)
+    return r
 
 
 def fly(
@@ -70,6 +74,7 @@ def fly(
             step(ctx)
         code = _solve(model, plan, period.name)
         residual = _residual(model, period.name)
+        ctx.status = code
         for step in plan.after:
             step(ctx)
         results[period.name] = {"code": code, "residual": residual}

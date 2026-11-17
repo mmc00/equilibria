@@ -210,6 +210,9 @@ class MPArrays:
         """Independent arrays; the (immutable) keys and their lookup caches are shared."""
         vars_ = {}
         for n, v in self.vars.items():
+            # a table built later on either side is then seen by both (``periods``)
+            v.__dict__.setdefault("_table", {})
+            v.__dict__.setdefault("_columns", {})
             c = copy.copy(v)
             c.value, c.fixed, c.lb, c.ub = (
                 v.value.copy(),
@@ -220,6 +223,8 @@ class MPArrays:
             vars_[n] = c
         rows = {}
         for n, r in self.rows.items():
+            r.__dict__.setdefault("_table", {})
+            r.__dict__.setdefault("_columns", {})
             c = copy.copy(r)
             c.active = r.active.copy()
             rows[n] = c

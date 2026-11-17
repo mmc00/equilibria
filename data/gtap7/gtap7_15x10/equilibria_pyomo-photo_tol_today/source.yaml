@@ -24,19 +24,19 @@ solver:
   name: newton_tr
   linsolve: mumps
 command: scripts/family/regen_photos.py --dataset gtap7_15x10
-equilibria_commit: 6bf658f1
+equilibria_commit: 8bbd2c50
 exit:
   code: 0
 outputs:
-  002_s_check.json: 803c9aea71860b2e0e7bfc952adb3e9dd726ce50d300a6152b01a0d87aaa4100
-  004_s_check.json: e416f4a2e0c5162f2c172b73a0ff8e553dea4e3289da5316b00abfdc8c768d69
-  005_s_shock.json: 69ca5720cc26be79e5551c5612006397a713b77d7fd51ba7f6efa8730fbb0a2c
-  final.pkl.gz: b617068d2030e7f7950efd46abc943bc91ac3cbecce079f33ce62d387b666d5b
-  model_print.json: 42c94144fe1c642cae9bf92e9dcecdc8b60b1c70d62c7008e70bc3bc6afdd027
-  settled.pkl.gz: 763a7a7f23adc46ffc5a5e4e7cf0157d9f1eb42b531b8f3f42839350968f4ac2
+  002_s_check.json: 908314d7fb5b79cdf452bbfdf8c798c72b036a69d9f4dbb4edd0b6f64a284bbe
+  004_s_check.json: b1390f126c4ff6708f4768fae2f32b34a4fd0c55ed32c03657a3c3771bdb6cc7
+  005_s_shock.json: ed84531747c142ac788c0c82d5968b7c25a4a10a3de40e95a6d3b47c709fcd02
+  final.pkl.gz: 74bf5dcf0b57828df51cdbce2a85d779b486b2eb4fa5cd4b2e5faf7ff8833514
+  model_print.json: 3e8af58ad3ce95d53eebac8aa42ac1472b12debc540b4366303dbf356b20b382
+  settled.pkl.gz: 30a74c168e09bccac59b93b8291be3a5596440625054a37b57717cec1c1a757a
 run:
-  date: '2026-11-16T10:12:15-06:00'
-  duration_s: 35.819
+  date: '2026-11-16T22:58:29-06:00'
+  duration_s: 35.13
   machine:
     os: macOS 26.2 (Darwin 25.2.0)
     cpu: Apple M3 Pro

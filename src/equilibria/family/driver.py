@@ -188,6 +188,12 @@ class FamilyRun:
     # the records' cache folder (``disk_cache``), where ``square`` keeps its pairings;
     # None = keep them in memory only
     records_dir: Path | None = None
+    # ``ref`` as the core route's ``Reference`` (``GTAPFamilyPeriodModel.sp_reference``),
+    # built by its first call and shared by every model of the run
+    sp_reference: Any = field(default=None, repr=False)
+    # {(variable, period): (reference positions, period positions)} of ``ref``'s cells
+    # (``GTAPFamilyPeriodModel.replicate_reference``); the keys never change in a run
+    ref_positions: dict = field(default_factory=dict, repr=False)
 
 
 @dataclass
