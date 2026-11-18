@@ -61,12 +61,12 @@ def ref_gdx(dataset: str, ifsub: int) -> Path | None:
 
 
 def _solve(dataset: str, ifsub: int):
-    """Build + seed + solve base→check→shock (gtap pure MCP), return (model, code)."""
+    """Seed + solve base→check→shock (gtap pure MCP) on the core driver; returns
+    (model, codes in the old driver's form)."""
+    from _core_run import solve_on_core
+
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
-    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     d = dataset_dir(dataset)
     p = GTAPParameters()
@@ -76,9 +76,6 @@ def _solve(dataset: str, ifsub: int):
         default_path=d / "default.prm",
         baserate_path=d / "baserate.har",
     )
-    # the data's FBEP sign, as the fbep=header seed has it (the default "gams"
-    # basis keeps the old sign, #191)
-    p.set_va_subsidy_basis("gempack")
     rr = list(p.sets.r)[-1]
     ac = GTAPClosureConfig(
         name="base",
@@ -89,31 +86,13 @@ def _solve(dataset: str, ifsub: int):
         fix_technology=False,
         if_sub=bool(ifsub),
         numeraire="pnum",
+        # the data's FBEP sign, as the fbep=header seed has it (the default "gams"
+        # basis keeps the old sign, #191); the build applies the closure's basis
+        va_subsidy_basis="gempack",
     )
     gdx = ref_gdx(dataset, ifsub)
-    # Construir por BLOQUES: el driver replica el fixing desde un SP de bloques
-    # (F3, bd4d2fe). Construir el modelo con el MONOLITO y resolverlo con esa
-    # referencia desalinea modelo y fixing — medido: frac_agree 0.00% con
-    # SOLVE code=0 (el solve no arranca) en los 4 datasets.
-    mp = GTAPBlockMultiPeriodModel(p.sets, p, ac, residual_region=rr)
-    m = mp.build_sets()
-    mp.build_vars(m)
-    for per in PERIODS:
-        mp.build_equations_intra(m, per)
-    mp.build_equations_fisher(m)
-    m._residual_region = rr
-    mp.seed_all_periods(m, gdx)
-    res = solve_multiperiod(
-        m,
-        p,
-        ac,
-        ref_gdx=gdx,
-        skip_base_solve=True,
-        mute_welfare=True,
-        seed_from_prior=False,
-        mode="gtap",
-    )
-    return m, int(res["shock"]["code"])
+    m, codes, _ = solve_on_core(p, ac, rr, ref_gdx=gdx, seed_gdx=gdx)
+    return m, codes
 
 
 def _primary_shock_levels(m) -> dict[tuple[str, tuple], float]:
@@ -146,8 +125,9 @@ def compare_primary_across_modes(dataset: str, tol_rel: float = 1e-4) -> dict:
     the primary block is not corrupted by the condensation switch; per-mode GAMS
     fidelity is the coverage matrix's job.
     """
-    m1, c1 = _solve(dataset, 1)
-    m0, c0 = _solve(dataset, 0)
+    m1, codes1 = _solve(dataset, 1)
+    m0, codes0 = _solve(dataset, 0)
+    c1, c0 = codes1["shock"], codes0["shock"]
     if c1 != 1 or c0 != 1:
         return {
             "n_cells": 0,
