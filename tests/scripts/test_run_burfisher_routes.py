@@ -40,7 +40,9 @@ def test_solve_exercise_core_route_matches_old(shock_method: str) -> None:
 
     rb = _rb()
     exp = "TBL45A" if shock_method == "johansen" else "TBL46A"
-    m_old, _, c_old = rb.solve_exercise(exp, nus333_dir(), shock_method=shock_method)
+    m_old, _, c_old = rb.solve_exercise(
+        exp, nus333_dir(), shock_method=shock_method, route="old"
+    )
     m_new, _, c_new = rb.solve_exercise(
         exp, nus333_dir(), shock_method=shock_method, route="core"
     )

@@ -210,11 +210,12 @@ def dataset_xscale(dataset: str, va_subsidy_basis: str = "gempack") -> dict:
 
 
 def solve(
-    dataset: str, closure: str, solver: str, route: str = "driver"
+    dataset: str, closure: str, solver: str, route: str = "exercise"
 ) -> tuple[dict, dict]:
     """Resuelve equilibria (base -> check -> shock, tm uniforme 10) con el cierre del
-    fixture de GEMPACK y devuelve (levels, xscale). ``route``: "driver"
-    (``solve_multiperiod``) or "exercise" (the core driver)."""
+    fixture de GEMPACK y devuelve (levels, xscale). ``route``: "exercise"
+    (the core driver) or "driver" (the old ``solve_multiperiod``, until PR 4 of
+    gtap-on-core deletes it)."""
     import os
     import sys
 
