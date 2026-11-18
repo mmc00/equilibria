@@ -42,40 +42,35 @@ ORACLE = {
 @pytest.fixture(
     scope="module",
     params=[
-        ("old", "apply_shock"),
-        ("old", "fix_instrument_shock"),
         ("core", "apply_shock"),
+        ("core", "fix_instrument_shock"),
     ],
     ids=lambda c: "-".join(c),
 )
 def solved(request):
-    """Las dos vias dan lo mismo: ``apply_shock`` (el % de GEMPACK) y
-    ``fix_instrument_shock`` directo antes de ``solve_multiperiod`` (sin arancel)."""
+    """Both ways give the same: ``apply_shock`` (GEMPACK's %) and
+    ``fix_instrument_shock`` on the built model before the recipe flies (no
+    tariff)."""
     route, how = request.param
     p = nus333_params()
     ac = closure()
     if how == "fix_instrument_shock":
-        from equilibria.templates.gtap.gtap_block_model import build_block_model
-        from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
         from equilibria.templates.gtap.instruments import fix_instrument_shock
 
-        m, _mp = build_block_model(
-            p, p.sets, ac, "ROW", base_calibrated=True, ref_gdx=None
-        )
-        fix_instrument_shock(m, "lambdava", ("USA", "SER"), factor=1.10)
-        res = solve_multiperiod(
-            m,
+        s = solve(
+            route,
             p,
             ac,
-            ref_gdx=None,
+            "ROW",
+            base_calibrated=True,
             skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=False,
-            mode="gtap",
             solve_check=True,
+            edit_model=lambda m: fix_instrument_shock(
+                m, "lambdava", ("USA", "SER"), factor=1.10
+            ),
         )
-        assert int(res["shock"]["code"]) == 1, res["shock"]
-        return m
+        assert s.codes["shock"] == 1, s.codes
+        return s.model
     s = solve(
         route,
         p,

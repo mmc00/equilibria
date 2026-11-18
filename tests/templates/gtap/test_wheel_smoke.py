@@ -77,21 +77,18 @@ def test_full_multiperiod_solve_end_to_end(monkeypatch):
     from pyomo.environ import value as pyo_value
     from test_multiperiod_sets import _load_3x3_params
 
+    from equilibria.core.exercise import Exercise
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
-    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+    from equilibria.templates.gtap.recipe import gtap_static
+    from equilibria.templates.gtap.template import GTAP
 
     p_alt = apply_altertax_elasticities(_load_3x3_params(), in_place=False)
-    mp = GTAPBlockMultiPeriodModel(
-        p_alt.sets, p_alt, None, residual_region=list(p_alt.sets.r)[-1]
+    ex = Exercise(
+        GTAP(p_alt, None, residual_region=list(p_alt.sets.r)[-1]),
+        gtap_static("altertax"),
     )
-    m = mp.build_sets()
-    mp.build_vars(m)
-    for t in ("base", "check", "shock"):
-        mp.build_equations_intra(m, t)
-    mp.build_equations_fisher(m)
-
-    res = solve_multiperiod(m, p_alt, None)
+    res = ex.run()
+    m = ex.model.pyomo  # type: ignore[union-attr]
     assert set(res) == {"base", "check", "shock"}
 
     tol = 5e-2

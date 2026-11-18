@@ -9,8 +9,9 @@ names and defaults) and runs them either way:
 
 Both give a ``Solved``: the solved model (the Pyomo model, or the family
 ``MPArrays``) and the codes in the old driver's form (``{period: int}``, the
-skipped base as 1). Each parity gate is parametrized over ``ROUTES``; PR 3 of the
-gtap-on-core design drops ``"old"`` and nothing else changes in the gates.
+skipped base as 1). Each parity gate is parametrized over ``ROUTES``, the core
+only since PR 3a of the gtap-on-core design; ``"old"`` stays callable
+(``KNOWN_ROUTES``) for the old-vs-core equality tests until PR 4 deletes it.
 
 ``@overwrite`` hooks are the global registry on both routes (the core build reads
 it too); the caller registers and clears them, as before.
@@ -20,11 +21,12 @@ from __future__ import annotations
 
 import contextlib
 import os
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-ROUTES = ("old", "core")
+ROUTES = ("core",)
+KNOWN_ROUTES = ("old", "core")
 BACKENDS = ("pyomo", "family")
 _BACKEND_ENV = "EQUILIBRIA_GTAP_BACKEND"
 
@@ -99,14 +101,19 @@ def solve(
     shock_steps: tuple[float, ...] | None = None,
     shock_method: str = "nonlinear",
     trade_balance: str | None = None,
+    edit_model: Callable[[Any], None] | None = None,
     **template_kw: Any,
 ) -> Solved:
     """Run one case through ``route`` on ``backend``. ``seed_gdx``: every period
     starts from that GAMS solution (``seed_all_periods``), as the GAMS gates seed
-    it. ``template_kw`` goes to the family run on both routes (``cache_root``,
+    it. ``edit_model`` (core, pyomo): called once with the built Pyomo model before
+    the recipe flies (``Exercise.run`` in its two parts), e.g. to fix an instrument
+    by hand (``fix_instrument_shock``). ``template_kw`` goes to the family run on both routes (``cache_root``,
     ``jax_cache``...)."""
-    if route not in ROUTES:
-        raise ValueError(f"route must be one of {ROUTES}, got {route!r}")
+    if route not in KNOWN_ROUTES:
+        raise ValueError(f"route must be one of {KNOWN_ROUTES}, got {route!r}")
+    if edit_model is not None and (route, backend) != ("core", "pyomo"):
+        raise ValueError("edit_model runs on the core route, pyomo backend only")
     if backend not in BACKENDS:
         raise ValueError(f"backend must be one of {BACKENDS}, got {backend!r}")
     if backend == "family":
@@ -174,25 +181,31 @@ def solve(
         from equilibria.templates.gtap.recipe import gtap_static
         from equilibria.templates.gtap.template import GTAP
 
-        ex = Exercise(
-            template=GTAP(
-                params,
-                closure,
-                residual_region=residual_region,
-                base_calibrated=base_calibrated,
-                ref_gdx=ref_gdx,
-                seed_gdx=seed_gdx,
-            ),
-            recipe=gtap_static(
-                mode,
-                base_calibrated=base_calibrated,
-                solve_base=not skip_base_solve,
-                **opts,
-            ),
-            shock=shock,
+        gtap = GTAP(
+            params,
+            closure,
+            residual_region=residual_region,
+            base_calibrated=base_calibrated,
+            ref_gdx=ref_gdx,
+            seed_gdx=seed_gdx,
         )
-        res = ex.run()
-        model = cast("Any", ex.model)
+        recipe = gtap_static(
+            mode,
+            base_calibrated=base_calibrated,
+            solve_base=not skip_base_solve,
+            **opts,
+        )
+        if edit_model is None:
+            ex = Exercise(template=gtap, recipe=recipe, shock=shock)
+            res = ex.run()
+            model = cast("Any", ex.model)
+        else:
+            from equilibria.core.driver import fly
+
+            model = cast("Any", gtap.build(recipe.names))
+            edit_model(model.pyomo)
+            with gtap.run_scope():
+                res = fly(model, recipe, template=gtap, shock=shock)
         return Solved(
             model=model.pyomo,
             codes=core_codes(res, skip_base_solve=skip_base_solve),

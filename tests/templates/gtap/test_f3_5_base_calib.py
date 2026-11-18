@@ -159,22 +159,20 @@ def test_base_calibrated_shock_response_is_clean():
     data's 1.0 with the data's subsidy sign), shock land response ~-3.6% (near
     GEMPACK), NOT -18%, all solved code=1, no check phase."""
     from pyomo.environ import value as V
-
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+    from tests.templates.gtap._routes import solve
 
     p = _load_params()
     rr = list(p.sets.r)[-1]
     gc = _base_closure(p)
-    m, mp = build_block_model(p, p.sets, gc, rr, base_calibrated=True)
     # skip_base_solve=True: the settled point IS the given base (already an
     # equilibrium from the settle solve), like the faithful-to-GAMS base.
-    res = solve_multiperiod(
-        m, p, gc, ref_gdx=REF_GDX, skip_base_solve=True, mode="gtap"
+    s = solve(
+        "core", p, gc, rr, ref_gdx=REF_GDX, base_calibrated=True, skip_base_solve=True
     )
-    assert res["base"]["code"] == 1
-    assert res["shock"]["code"] == 1
-    assert res.get("check") is None
+    m, res = s.model, s.codes
+    assert res["base"] == 1
+    assert res["shock"] == 1
+    assert "check" not in res  # copied from the settled base, not solved
     base = float(V(m.pft["EU_28", "Land", "base"]))
     shock = float(V(m.pft["EU_28", "Land", "shock"]))
     assert base == pytest.approx(1.0, abs=1e-5), f"base not settled: {base}"
@@ -190,9 +188,7 @@ def test_calibrated_land_response_beats_default_vs_gempack():
     # GEMPACK's own number from the committed fixture
     from gempack_reference import sl4_levels
     from pyomo.environ import value as V
-
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+    from tests.templates.gtap._routes import solve
 
     sl4 = GEMPACK_CAPFIX
     gem = None
@@ -214,8 +210,9 @@ def test_calibrated_land_response_beats_default_vs_gempack():
     p = _load_params()
     rr = list(p.sets.r)[-1]
     gc = _base_closure(p)
-    m, _ = build_block_model(p, p.sets, gc, rr, base_calibrated=True)
-    solve_multiperiod(m, p, gc, ref_gdx=REF_GDX, skip_base_solve=True, mode="gtap")
+    m = solve(
+        "core", p, gc, rr, ref_gdx=REF_GDX, base_calibrated=True, skip_base_solve=True
+    ).model
     b = float(V(m.pft["EU_28", "Land", "base"]))
     s = float(V(m.pft["EU_28", "Land", "shock"]))
     cal_resp = 100.0 * (s - b) / b

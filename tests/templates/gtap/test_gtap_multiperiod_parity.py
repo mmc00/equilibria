@@ -143,12 +143,14 @@ def _gtap_closure(if_sub: bool):
 
 
 def _solve_and_match(
-    dataset: str, if_sub: bool, period: str = "shock", route: str = "old"
+    dataset: str, if_sub: bool, period: str = "shock", route: str = "core"
 ):
     """Build the pure-gtap MP model, seed from the GAMS GDX, solve, compare.
 
     Returns (codes_dict, match_pct, total, worst) for the requested period.
     """
+    if route != "core":
+        raise ValueError(f"route {route!r}: the gates run on the core only (PR 3a)")
     from _diff_core import gams_levels, list_populated_vars, split_t
     from pyomo.environ import value as V
 
@@ -173,40 +175,19 @@ def _solve_and_match(
     gc = _gtap_closure(if_sub)
     # gtap-mode: skip_base_solve=True keeps the calibrated base anchor (pva=ps=pd=1)
     # instead of letting PATH slide the USA price level.
-    if route == "core":
-        s = solve(
-            "core",
-            p,
-            gc,
-            rr,
-            ref_gdx=ref,
-            seed_gdx=ref,
-            skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=False,
-            mode="gtap",
-        )
-        m, codes = s.model, s.codes
-    else:
-        mp = GTAPBlockMultiPeriodModel(p.sets, p, gc, residual_region=rr)
-        m = mp.build_sets()
-        mp.build_vars(m)
-        for per in PERIODS:
-            mp.build_equations_intra(m, per)
-        mp.build_equations_fisher(m)
-        m._residual_region = rr
-        mp.seed_all_periods(m, ref)
-        res = solve_multiperiod(
-            m,
-            p,
-            gc,
-            ref_gdx=ref,
-            skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=False,
-            mode="gtap",
-        )
-        codes = {k: res[k]["code"] for k in res}
+    s = solve(
+        "core",
+        p,
+        gc,
+        rr,
+        ref_gdx=ref,
+        seed_gdx=ref,
+        skip_base_solve=True,
+        mute_welfare=True,
+        seed_from_prior=False,
+        mode="gtap",
+    )
+    m, codes = s.model, s.codes
 
     tot = match = 0
     worst: list[tuple[float, str, tuple, float, float]] = []

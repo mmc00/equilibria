@@ -58,8 +58,10 @@ def _gams(gdx: Path, name: str) -> dict[tuple, float]:
     return {tuple(strip(x) for x in k): v["level"] for k, v in raw.items()}
 
 
-def _solve(mode: str, ifsub: int, gdx: Path, route: str = "old"):
-    """El armado de test_gtap7_mcp_parity, sin shock en el modelo."""
+def _solve(mode: str, ifsub: int, gdx: Path, route: str = "core"):
+    """The set-up of test_gtap7_mcp_parity, with no shock in the model."""
+    if route != "core":
+        raise ValueError(f"route {route!r}: the gates run on the core only (PR 3a)")
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
@@ -108,39 +110,19 @@ def _solve(mode: str, ifsub: int, gdx: Path, route: str = "old"):
             va_subsidy_basis="gempack",
         )
     rr = list(p.sets.r)[-1]
-    if route == "core":
-        s = solve(
-            "core",
-            pa,
-            ac,
-            rr,
-            ref_gdx=gdx,
-            seed_gdx=gdx,
-            skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=False,
-            mode=mode,
-        )
-        return s.model, {t: {"code": c} for t, c in s.codes.items()}
-    mp = GTAPBlockMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
-    m = mp.build_sets()
-    mp.build_vars(m)
-    for per in PERIODS:
-        mp.build_equations_intra(m, per)
-    mp.build_equations_fisher(m)
-    m._residual_region = rr
-    mp.seed_all_periods(m, gdx)
-    res = solve_multiperiod(
-        m,
-        p,
+    s = solve(
+        "core",
+        pa,
         ac,
+        rr,
         ref_gdx=gdx,
+        seed_gdx=gdx,
         skip_base_solve=True,
         mute_welfare=True,
         seed_from_prior=False,
         mode=mode,
     )
-    return m, res
+    return s.model, {t: {"code": c} for t, c in s.codes.items()}
 
 
 @pytest.fixture(
