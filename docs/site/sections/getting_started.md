@@ -9,4 +9,5 @@ PATH or IPOPT.
 
 /guide/installation
 /guide/architecture
+/guide/jax_backend
 ```
