@@ -12,7 +12,7 @@ PRIMARY quantity vars (the same ones the study's Q_TO_VAR map uses — xw, xet, 
 xd, ...), which are solved explicitly in both modes. It deliberately does NOT read
 the substituted-out report vars (xwmg/xmgm): under condensation their solution
 lives in the macro tmarg*xw, and the raw Var keeps its seed
-(gtap_multiperiod_driver._recompute_ifsub_report_vars fills pfa/pfy/pp/pwmg/pefob/
+(the recompute_ifsub_report_vars step, templates/gtap/steps.py, fills pfa/pfy/pp/pwmg/pefob/
 pmcif/pm but not xwmg/xmgm) — reading V(m.xwmg) there reports the seed, not the
 solution, which is a report-var cosmetic gap, not a model infidelity.
 

@@ -3,7 +3,7 @@
 ``solve_on_core`` builds ``Exercise(GTAP(...), gtap_static(...), shock=...)``,
 runs it and gives back the solved Pyomo model and the codes in the old driver's
 form (``{period: int}``: ``"optimal"`` is 1, ``"code N"`` is N, the skipped base
-is 1), so a script's output reads as it did on ``solve_multiperiod``.
+is 1), so a script's output reads as it did on the old Pyomo driver.
 """
 
 from __future__ import annotations

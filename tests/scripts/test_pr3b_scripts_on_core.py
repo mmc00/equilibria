@@ -65,6 +65,10 @@ def _seed_and_solve():
 
 
 def _dump_py():
+    from pyomo.environ import SolverFactory
+
+    if not SolverFactory("ipopt").available(exception_flag=False):  # its solve is NLP
+        pytest.skip("ipopt not available")
     # as recorded: the script's own GDX path (absent here: an unseeded solve)
     return _script("dump_py_solution_gdx").solve("gtap7_3x3")
 
@@ -102,10 +106,13 @@ def _env(monkeypatch):
 
 
 def _needs_data() -> None:
+    from equilibria.babel.gdx.gdxdump import locate_gdxdump
     from equilibria.sources import has_dataset
 
     if not has_dataset("gtap7_3x3") or not (ROOT / REF.format(1)).exists():
         pytest.skip("gtap7_3x3 or its GAMS references not present")
+    if locate_gdxdump() is None:  # the seed reads the GDX through it
+        pytest.skip("gdxdump not on the PATH (comes with GAMS)")
 
 
 @pytest.mark.parametrize("case", sorted(RUN))
