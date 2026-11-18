@@ -1,5 +1,6 @@
 """``FactorBlock.calibrate_base`` settles through the core driver (PR 3a of
-gtap-on-core) and still gives main's settled seed, bit for bit.
+gtap-on-core) and still gives main's settled seed, to 1e-12 relative (another
+machine moves the golden's last bits).
 
 The oracle (``golden/calibrate_base_main.json``) was recorded on main before the
 switch by ``scripts/dev/record_calibrate_base.py``."""
@@ -69,7 +70,7 @@ def test_calibrate_base_equals_main(cid: str, dataset: str, ifsub: int) -> None:
         var: {repr(body): repr(float(v)) for body, v in cells.items()}
         for var, cells in seed.items()
     }
-    assert got == want
+    assert _recorder().mismatches(got, want) == []
 
 
 def test_calibrate_base_restores_the_given_model() -> None:
