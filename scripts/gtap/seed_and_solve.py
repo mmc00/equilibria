@@ -384,8 +384,10 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
             apply_default_tariff(m, gtap_mode=True)
         return p, gc, m
 
-    # 1) The seed (sentinel before) on the hand build; the SOLVE on the core driver.
-    p, gc, m = _build_seeded()
+    # 1) One hand build holds the SEED: the sentinel before the solve here, the
+    #    residual tail below (it is not solved). The SOLVE runs on the core driver.
+    _p2, _gc2, m2 = _build_seeded()
+    m = m2
 
     def _sentinel():
         # sentinel: the first finite price var FOR THE REQUESTED PERIOD.
@@ -416,7 +418,6 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
     #    cascade the Python-only derived aggregates for this period BEFORE reading the
     #    residual, else eq_xc/eq_xda/eq_xaa/eq_xigbl carry spurious ~1-2 seed-incomplete
     #    residuals that masquerade as differing equations.
-    _p2, _gc2, m2 = _build_seeded()
 
     def _setv(comp, key, val):
         try:

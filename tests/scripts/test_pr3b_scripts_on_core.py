@@ -135,3 +135,25 @@ def test_script_never_calls_the_old_driver(case: str, monkeypatch) -> None:
     monkeypatch.setattr(old, "solve_multiperiod", _refuse)
     monkeypatch.setattr(old, "_solve_multiperiod_inner", _refuse)
     RUN[case]()
+
+
+def test_seed_and_solve_gtap_builds_twice(monkeypatch) -> None:
+    """One hand build (the seed: sentinel before, residual tail) and the core's own
+    build for the solve; a third build is minutes on the large datasets."""
+    _needs_data()
+    from equilibria.templates.gtap import gtap_block_model as gbm
+
+    built = []
+    cls = gbm.GTAPBlockMultiPeriodModel
+
+    class Counting(cls):
+        def __init__(self, *a, **k):
+            built.append(1)
+            super().__init__(*a, **k)
+
+    monkeypatch.setattr(gbm, "GTAPBlockMultiPeriodModel", Counting)
+    out = _script("seed_and_solve").run_seed_and_solve_gtap(
+        "gtap7_3x3", ROOT / REF.format(0), "shock", 3, False
+    )
+    assert out["code"] == 1
+    assert len(built) == 2
