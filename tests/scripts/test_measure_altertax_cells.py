@@ -127,10 +127,66 @@ def test_only_the_gams_rows_of_the_multiperiod_gate_are_measured():
 
     gates = {
         "mcp": NS(_GAMS_MCP_ROWS=[]),
-        "nlp": NS(_NLP_CASES=[]),
+        "nlp": NS(nlp_rows=lambda: []),
         "mp": NS(
             altertax_rows=lambda: [row("gtap7_3x3", "gams"), row("9x10", "gempack")],
             _reference_gdx=lambda ds, if_sub: Path(f"{ds}.gdx"),
         ),
     }
     assert [r[1] for r in mac._rows(gates)] == ["gtap7_3x3"]
+
+
+def test_measure_captures_the_model_the_gate_solves_on_the_core(tmp_path, monkeypatch):
+    """The gates solve through their module-level ``solve`` (``_routes.solve``, the
+    core since PR 3a); ``measure`` records the cells of the model that call returns."""
+    import json
+    import types
+
+    gate = types.ModuleType("_gate_mcp")
+    exec(
+        "from types import SimpleNamespace\n"
+        "def solve(*a, **k):\n"
+        "    return SimpleNamespace(model='the-solved-model', codes={'shock': 1})\n"
+        "def _solve_and_measure(ds, ifsub, mode, gdx):\n"
+        "    s = solve(ds)\n"
+        "    return {'shock': {'code': s.codes['shock'], 'match': 100.0}}\n",
+        gate.__dict__,
+    )
+    gates = {"mcp": gate, "nlp": gate, "mp": gate}
+    monkeypatch.setattr(mac, "_load", lambda name, path: gates[name])
+    monkeypatch.setattr(
+        mac, "_rows", lambda g: iter([("mcp", "gtap7_3x3", 0, tmp_path / "ref.gdx")])
+    )
+    monkeypatch.setattr(mac, "_cells", lambda g, m, gdx: {CELL: [m, 1.0, True]})
+    monkeypatch.setattr("equilibria.sources.has_dataset", lambda ds: True)
+
+    original = gate.solve
+    out = tmp_path / "out.json"
+    mac.measure(out)
+    row = json.loads(out.read_text())[ROW]
+    assert "error" not in row, row.get("error")
+    assert row["cells"] == {CELL: ["the-solved-model", 1.0, True]}
+    assert gate.solve is original  # the gate's own solve is given back
+
+
+def test_rows_reads_the_nlp_gate_rows_by_name(tmp_path):
+    """The NLP gate's cases are ``pytest.param``s now; the rows come from its
+    ``nlp_rows()`` (named fields), altertax and not blocked only."""
+    from types import SimpleNamespace as NS
+
+    def row(ds, mode, status="ci"):
+        return NS(dataset=ds, ifsub=0, mode=mode, ci_status=status, reference="gams")
+
+    gates = {
+        "mcp": NS(_GAMS_MCP_ROWS=[]),
+        "nlp": NS(
+            nlp_rows=lambda: [
+                row("a", "altertax"),
+                row("b", "gtap"),
+                row("c", "altertax", "blocked"),
+            ],
+            _fixture_gdx=lambda ds, mode, ifsub: tmp_path / f"{ds}-{mode}-{ifsub}.gdx",
+        ),
+        "mp": NS(altertax_rows=lambda: []),
+    }
+    assert list(mac._rows(gates)) == [("nlp", "a", 0, tmp_path / "a-altertax-0.gdx")]
