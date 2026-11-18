@@ -64,6 +64,21 @@ def _seed_and_solve():
     return m, {k: r["code"] for k, r in res.items()}
 
 
+def _dump_py():
+    # as recorded: the script's own GDX path (absent here: an unseeded solve)
+    return _script("dump_py_solution_gdx").solve("gtap7_3x3")
+
+
+def _demo():
+    spec = importlib.util.spec_from_file_location(
+        "demo", ROOT / "examples/demo_gtap_pep.py"
+    )
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.gtap_tariff_demo()
+
+
 # case id (as recorded) -> () -> (solved Pyomo model, codes in the old form)
 RUN = {
     "gempack_blocks[gtap7_3x3-default]": lambda: _gempack_blocks(False),
@@ -71,6 +86,8 @@ RUN = {
     "ifsub_equivalence[gtap7_3x3-ifsub0]": lambda: _ifsub(0),
     "ifsub_equivalence[gtap7_3x3-ifsub1]": lambda: _ifsub(1),
     "seed_and_solve_gtap[gtap7_3x3-ifsub0-shock]": _seed_and_solve,
+    "dump_py[gtap7_3x3]": _dump_py,
+    "demo_gtap[nus333]": _demo,
 }
 
 
