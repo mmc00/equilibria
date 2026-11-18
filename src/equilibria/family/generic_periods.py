@@ -86,10 +86,10 @@ class GenericFamilyPeriodModel(FamilyPeriodModel):
         return PeriodSystem(period, system, layout, cols, active)
 
     def residual(self, period: str) -> float:
-        """Largest |row| of ``period`` at the current cell values (its rows, active
-        or not: a period's rows are its equations)."""
+        """Largest |row| over the active rows of ``period`` at the current cell
+        values (as the solver measures it; a deactivated row is not an equation)."""
         ps = self.period_system(period)
-        f = ps.system.F(ps.x0())
+        f = ps.system.F(ps.x0())[ps.active]
         return float(np.max(np.abs(f))) if f.size else 0.0
 
     def write_back(self, ps: PeriodSystem, x: np.ndarray) -> None:

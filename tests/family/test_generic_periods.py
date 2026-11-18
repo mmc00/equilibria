@@ -55,3 +55,14 @@ def test_protocol_steps_run() -> None:
     assert all(m.is_fixed(n, k, "shock") for n, k in m.cells("shock"))
     assert any(not m.is_fixed(n, k, "check") for n, k in m.cells("check"))
     assert m.residual("check") < 1e-9
+
+
+def test_residual_ignores_inactive_rows() -> None:
+    m = _model()
+    free = next(c for c in m.cells("check") if c not in m.exogenous())
+    name, index = free
+    m.set_value(name, index, "check", 2.0 * m.value(name, index, "check"))
+    assert m.residual("check") > 1e-3
+    for fam in m.row_names():
+        m.set_rows_active(fam, "check", m.row_cells(fam, "check"), False)
+    assert m.residual("check") == 0.0
