@@ -247,8 +247,8 @@ def _sparse_solution(force_full_settle):
     from pyomo.environ import Var
     from pyomo.environ import value as V
 
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from equilibria.templates.gtap_sparse.multiperiod import build_sparse_model_mp
+    from equilibria.core.exercise import Exercise
+    from equilibria.templates.gtap.template import GTAP
 
     p = _load_params()
     rr = list(p.sets.r)[-1]
@@ -268,20 +268,15 @@ def _sparse_solution(force_full_settle):
             return _static(*args, **kw)
 
         patch.enter_context(_monkey(_recipe, "gtap_static", _full))
+    gtap = GTAP(
+        p, _closure(p), residual_region=rr, base_calibrated=True, builder="sparse"
+    )
+    # the run's recipe is made before the patch: only calibrate_base's settle
+    # can reach the patched gtap_static
+    ex = Exercise(gtap, gtap.default_recipe())
     with patch:
-        m, mp, _ = build_sparse_model_mp(
-            p, p.sets, _closure(p), rr, base_calibrated=True
-        )
-        solve_multiperiod(
-            m,
-            p,
-            _closure(p),
-            ref_gdx=None,
-            skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=False,
-            mode="gtap",
-        )
+        ex.run()
+    m = ex.model.pyomo  # type: ignore[union-attr]
     # the forced full settle must have run, or both solutions are the cut one
     assert bool(calls) == force_full_settle
     out = {}

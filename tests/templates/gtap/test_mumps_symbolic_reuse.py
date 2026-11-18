@@ -80,16 +80,24 @@ def _solve_15x10(reuse, monkeypatch):
         monkeypatch.setenv(k, v)
     monkeypatch.setenv("EQUILIBRIA_GTAP_GMIN_SYM_REUSE", "1" if reuse else "0")
 
+    from equilibria.core.driver import fly
     from equilibria.solver import path_capi
-    from equilibria.templates.gtap.gtap_block_model import solve_block_model
-    from equilibria.templates.gtap_sparse.multiperiod import build_sparse_model_mp
+    from equilibria.templates.gtap.template import GTAP
 
     p = _load_params()
     rr = list(p.sets.r)[-1]
-    m, mp, _ = build_sparse_model_mp(p, p.sets, _closure(), rr, base_calibrated=True)
+    gtap = GTAP(
+        p, _closure(), residual_region=rr, base_calibrated=True, builder="sparse"
+    )
+    recipe = gtap.default_recipe()
+    # Exercise.run in two parts: the build (its settle solves too) stays out of
+    # the count, as when the model was built before solve_block_model
+    model = gtap.build(recipe.names)
     before = path_capi._SYMBOLIC_FACT_COUNT
-    res = solve_block_model(m, p, _closure(), ref_gdx=None, mode="gtap")
+    with gtap.run_scope():
+        res = fly(model, recipe, template=gtap)
     count = path_capi._SYMBOLIC_FACT_COUNT - before
+    m = model.pyomo
     sol = {}
     for vv in m.component_objects(Var, active=True):
         for idx in vv:
@@ -97,14 +105,14 @@ def _solve_15x10(reuse, monkeypatch):
                 sol[f"{vv.name}{idx}"] = float(V(vv[idx]))
             except Exception:
                 pass
-    return sol, count, res.get("shock", {}).get("code")
+    return sol, count, res["shock"]["code"]
 
 
 @pytest.mark.needs_mumps
 @pytest.mark.skipif(not DATA.exists(), reason="gtap7_15x10 dataset not present")
 def test_symbolic_counter_increments(monkeypatch):
     _, count, code = _solve_15x10(reuse=False, monkeypatch=monkeypatch)
-    assert code == 1, f"solve did not converge (code={code})"
+    assert code == "optimal", f"solve did not converge (code={code})"
     assert count > 0, "symbolic factorization counter never incremented"
     print(f"reuse-OFF symbolic count={count}")
 
@@ -115,7 +123,9 @@ def test_reuse_fewer_symbolics_same_solution(monkeypatch):
     sol_off, count_off, code_off = _solve_15x10(reuse=False, monkeypatch=monkeypatch)
     sol_on, count_on, code_on = _solve_15x10(reuse=True, monkeypatch=monkeypatch)
     print(f"symbolic count: OFF={count_off} ON={count_on}")
-    assert code_off == 1 and code_on == 1, f"codes off={code_off} on={code_on}"
+    assert code_off == "optimal" and code_on == "optimal", (
+        f"codes off={code_off} on={code_on}"
+    )
     # reuse must do STRICTLY fewer symbolic factorizations (spike: 3 patterns / 28 steps)
     assert count_on < count_off, (
         f"reuse did not reduce symbolic factorizations: on={count_on} off={count_off}"

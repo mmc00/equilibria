@@ -2,7 +2,8 @@
 
 Builds the standard block multi-period model, then fixes padding trade routes
 (base flow ~0) to their ~0 value and deactivates their constraints. All downstream
-machinery (Fisher rows, seeding, solve_multiperiod) is inherited unchanged.
+machinery (Fisher rows, seeding) is inherited unchanged. Run it on the core driver:
+``Exercise(GTAP(params, closure, builder="sparse"), gtap_static(...)).run()``.
 """
 
 from __future__ import annotations
