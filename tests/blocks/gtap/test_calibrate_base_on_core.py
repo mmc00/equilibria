@@ -132,3 +132,39 @@ def test_the_seed_cache_key_covers_the_core_settle_path() -> None:
     ):
         rel = Path(inspect.getfile(mod)).resolve().relative_to(root).as_posix()
         assert any(rel.startswith(f"{f}/") for f in CODE_FOLDERS), rel
+
+
+def test_calibrate_base_settles_inside_the_run_scope(monkeypatch) -> None:
+    """The settle flies inside ``GTAP.run_scope`` (the GC freeze of the built model
+    over every period, as ``solve_multiperiod`` held it): without it the steps
+    between solves walk the whole model again (minutes on 20x41)."""
+    if not has_dataset("gtap7_3x3"):
+        pytest.skip("gtap7_3x3 not present")
+    import contextlib
+
+    from equilibria.core import driver
+    from equilibria.templates.gtap.template import GTAP
+
+    depth = [0]
+    flown_inside: list[bool] = []
+    scope = GTAP.run_scope
+
+    @contextlib.contextmanager
+    def counting(self):
+        depth[0] += 1
+        try:
+            with scope(self):
+                yield
+        finally:
+            depth[0] -= 1
+
+    fly = driver.fly
+
+    def recording(*a, **k):
+        flown_inside.append(depth[0] > 0)
+        return fly(*a, **k)
+
+    monkeypatch.setattr(GTAP, "run_scope", counting)
+    monkeypatch.setattr(driver, "fly", recording)
+    _calibrate(*_built("gtap7_3x3", 0))
+    assert flown_inside == [True]

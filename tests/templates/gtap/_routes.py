@@ -127,6 +127,7 @@ def solve(
             shock=shock,
             ref_gdx=ref_gdx,
             trade_balance=trade_balance,
+            mode=mode,
             **template_kw,
         )
     if template_kw:
@@ -224,12 +225,18 @@ def _family(
     shock: Mapping[str, Mapping[tuple, float]] | None,
     ref_gdx: Any,
     trade_balance: str | None,
+    mode: str = "gtap",
     **template_kw: Any,
 ) -> Solved:
     """The family route runs what ``solve_gtap_family`` runs: base not solved
-    (calibrated), check solved, mode ``gtap``."""
+    (calibrated), check solved. ``mode`` reaches the recipe, which refuses
+    anything but ``"gtap"`` on family; the old driver is gtap-only."""
     with _backend_env(None):
         if route == "old":
+            if mode != "gtap":
+                raise NotImplementedError(
+                    f"family backend: mode={mode!r} is not supported (old driver)"
+                )
             from equilibria.family.driver import solve_gtap_family
 
             out = solve_gtap_family(
@@ -263,7 +270,10 @@ def _family(
                 **template_kw,
             ),
             gtap_static(
-                base_calibrated=True, solve_check=True, trade_balance=trade_balance
+                mode,
+                base_calibrated=True,
+                solve_check=True,
+                trade_balance=trade_balance,
             ),
             shock=shock,
         )

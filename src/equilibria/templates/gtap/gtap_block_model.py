@@ -38,6 +38,7 @@ scaling + the seed.
 from __future__ import annotations
 
 import contextlib
+import logging
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
@@ -61,6 +62,8 @@ from equilibria.templates.gtap.residual_region import (  # noqa: F401 — API pu
 
 if TYPE_CHECKING:
     from pyomo.environ import ConcreteModel
+
+_log = logging.getLogger(__name__)
 
 # The aggregate-agent set (activities + the four final-demand agents) and the
 # tax-stream set gy — mirror the monolith's set construction.
@@ -1034,7 +1037,13 @@ def _calibrate_capflex_risk(
             )
             ex.run()
             mt = cast("Any", ex.model).pyomo
-    except Exception:
+    except Exception as exc:
+        # falls back to risk = 1, as before, but not silently
+        _log.warning(
+            "capFlex risk: the capFix twin-solve failed (%s: %s); risk falls back to 1",
+            type(exc).__name__,
+            exc,
+        )
         return {}
 
     def _base(v, *keys):

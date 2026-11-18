@@ -250,3 +250,19 @@ def _fixed_level(name: str, cell: tuple, *, pct=None, **kw) -> float:
     else:
         apply_shock(m, {name: {cell: pct}})
     return float(getattr(m, name)[(*cell, "shock")].value)
+
+
+@needs_3x3
+def test_family_case_carries_its_mode_to_the_recipe(monkeypatch) -> None:
+    """A family case asked for altertax reaches the recipe as altertax, which
+    refuses it on family (check_backend): it is not run as mode "gtap"."""
+    pytest.importorskip("jax")
+    from tests.family._prep import _newton_mumps
+
+    for k, v in _newton_mumps().items():
+        monkeypatch.setenv(k, v)
+    p = snap._load_params()
+    with pytest.raises(NotImplementedError, match="mode='altertax'"):
+        solve(
+            "core", p, _closure(), list(p.sets.r)[-1], backend="family", mode="altertax"
+        )

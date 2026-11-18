@@ -74,26 +74,11 @@ def _solve(
     route (the only one since PR 3a); ``result`` carries the arrays as ``.mp``."""
     if route != "core":
         raise ValueError(f"route {route!r}: the gates run on the core only (PR 3a)")
+    import importlib.util
+
     import pytest
 
-    from equilibria.family.driver import check_supported
     from tests.family._prep import _newton_mumps
-
-    if mode != "pure":
-        # the route's own refusal, before any work
-        check_supported(
-            if_sub=bool(ifsub),
-            savf_flag="capFix",
-            mode=mode,
-            skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=False,
-            solve_check=True,
-            shock_steps=None,
-            shock_method="nonlinear",
-            env={**os.environ, **_newton_mumps()},
-        )
-    import importlib.util
 
     linsolve = "mumps" if importlib.util.find_spec("mumps") else "direct"
     with pytest.MonkeyPatch.context() as mp:
@@ -126,6 +111,9 @@ def _solve(
             list(p.sets.r)[-1],
             backend="family",
             ref_gdx=_reference_gdx(dataset, ifsub),
+            # "altertax" is refused by the recipe's check_backend on family: the
+            # altertax strict xfails turn red the day the core route runs it
+            mode="gtap" if mode == "pure" else mode,
         )
         return _Run(out.model, out.codes), out.codes["shock"]
 

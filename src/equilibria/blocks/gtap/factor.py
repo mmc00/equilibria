@@ -537,13 +537,17 @@ class FactorBlock(Block):
             # base and check of the core recipe on this model; the template is the
             # steps' context (params, closure, reference), never built here. As
             # before, the check point is taken whatever the settle's code.
-            fly(
-                GTAPPyomoPeriodModel(m),
-                gtap_static(settle_only=True),
-                template=GTAP(
-                    params, closure, residual_region=residual_region, ref_gdx=ref_gdx
-                ),
+            # run_scope: the GC freeze of the built model over every period, as
+            # solve_multiperiod held it (without it each gap walks the whole model)
+            gtap = GTAP(
+                params, closure, residual_region=residual_region, ref_gdx=ref_gdx
             )
+            with gtap.run_scope():
+                fly(
+                    GTAPPyomoPeriodModel(m),
+                    gtap_static(settle_only=True),
+                    template=gtap,
+                )
             settled = self._settled_check_point(m)
             from equilibria.family.prep_capture import capture_settled
 

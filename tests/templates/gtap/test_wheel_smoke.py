@@ -85,11 +85,13 @@ def test_full_multiperiod_solve_end_to_end(monkeypatch):
     p_alt = apply_altertax_elasticities(_load_3x3_params(), in_place=False)
     ex = Exercise(
         GTAP(p_alt, None, residual_region=list(p_alt.sets.r)[-1]),
-        gtap_static("altertax"),
+        gtap_static("altertax", solve_base=True),
     )
     res = ex.run()
     m = ex.model.pyomo  # type: ignore[union-attr]
     assert set(res) == {"base", "check", "shock"}
+    # the old call solved the base too (solve_multiperiod's skip_base_solve=False)
+    assert res["base"]["code"] == "optimal", res["base"]
 
     tol = 5e-2
     for r in m.r:
