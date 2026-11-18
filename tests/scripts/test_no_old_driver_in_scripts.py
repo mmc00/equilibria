@@ -1,6 +1,7 @@
 """Only the listed scripts still name the old GTAP drivers (PR 3b of gtap-on-core).
 
-Every other script and example runs on the core driver (``Exercise``). The list
+No other script, example or data generator names one (a script that reaches an old
+driver through another module, without naming it, is not caught here). The list
 shrinks with the code: PR 3c moves the notebooks' generator, PR 3d the family
 altertax runner, PR 4 deletes the old drivers with the scripts that only make sense
 for them. A new script that calls an old driver fails here; so does an entry that
@@ -68,10 +69,10 @@ def _tracked_python() -> list[str]:
         [
             "git",
             "ls-files",
+            # a pathspec ``*`` crosses ``/``: every .py under each tree
             "scripts/*.py",
-            "scripts/**/*.py",
             "examples/*.py",
-            "examples/**/*.py",
+            "data/*.py",
         ],
         cwd=ROOT,
         capture_output=True,
@@ -94,3 +95,11 @@ def test_every_listed_script_still_names_one() -> None:
         if not (ROOT / f).exists() or not _names_an_old_driver(ROOT / f)
     ]
     assert stale == []
+
+
+def test_the_data_generators_are_scanned() -> None:
+    """Result generators live with their data (``data/<model>/<tool>/``): a new one
+    calling an old driver must not slip past the scan."""
+    gen = "data/gtap7/nus333/equilibria_burfisher_levels/make_eq_burfisher_levels.py"
+    assert (ROOT / gen).exists()
+    assert gen in _tracked_python()
