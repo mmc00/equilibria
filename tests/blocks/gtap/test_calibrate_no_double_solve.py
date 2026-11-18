@@ -182,18 +182,15 @@ def test_full_settle_baseline():
 
 
 def _solve_multiperiod_result(settle_only):
-    """Build the block model + solve, return the results dict (base/check/[shock])."""
-    from equilibria.templates.gtap.gtap_block_model import (
-        build_block_model,
-        solve_block_model,
-    )
+    """Build the block model + solve on the core, return the codes per period
+    (base/check/[shock])."""
+    from tests.templates.gtap._routes import solve
 
     p = _load_params()
     rr = list(p.sets.r)[-1]
-    m, mp = build_block_model(p, p.sets, _closure(p), rr)
-    return solve_block_model(
-        m, p, _closure(p), None, mode="gtap", settle_only=settle_only
-    )
+    return solve(
+        "core", p, _closure(p), rr, skip_base_solve=True, settle_only=settle_only
+    ).codes
 
 
 @pytest.mark.skipif(not DATA.exists(), reason="gtap7_10x7 dataset not present")

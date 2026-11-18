@@ -54,11 +54,8 @@ def test_gams_contra_el_modelo_de_equilibria_resuelto():
 
     from equilibria._local_refs import path_capi_src
     from equilibria.compare import from_pyomo
-    from equilibria.templates.gtap.gtap_block_model import (
-        build_block_model,
-        solve_block_model,
-    )
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from tests.templates.gtap._routes import solve
 
     src = str(path_capi_src())
     if src not in sys.path:
@@ -87,11 +84,10 @@ def test_gams_contra_el_modelo_de_equilibria_resuelto():
         reference("gtap7_3x3", "gams", form="mcp", mode="gtap", ifsub=0, fbep="zero")
         / "out.gdx"
     )
-    m, mp = build_block_model(p, p.sets, gc, "ROW")
-    mp.seed_all_periods(m, gdx)
-    res = solve_block_model(m, p, gc, ref_gdx=gdx, mode="gtap")
+    s = solve("core", p, gc, "ROW", ref_gdx=gdx, seed_gdx=gdx, skip_base_solve=True)
+    m = s.model
     for t in ("base", "check", "shock"):
-        assert res[t]["code"] == 1, (t, res[t])
+        assert s.codes[t] == 1, (t, s.codes)
 
     r = compare(
         from_gdx(gdx, period_dim=-1, variables=["xp", "pft"]),
