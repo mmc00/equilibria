@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 from tests.templates.gtap import _period_snapshot as snap
-from tests.templates.gtap._routes import ROUTES, core_codes, solve
+from tests.templates.gtap._routes import KNOWN_ROUTES, ROUTES, core_codes, solve
 
 from equilibria.sources import dataset_dir
 
@@ -78,7 +78,29 @@ def _diff(a: dict, b: dict) -> list:
 
 
 def test_routes() -> None:
-    assert ROUTES == ("old", "core")
+    """The gates run on the core only (PR 3a); the old route stays callable for
+    the old-vs-core equality tests until PR 4 deletes the old drivers."""
+    assert ROUTES == ("core",)
+    assert KNOWN_ROUTES == ("old", "core")
+
+
+@needs_3x3
+def test_edit_model_runs_on_the_built_model_before_the_recipe() -> None:
+    seen: list[Any] = []
+
+    def edit(m: Any) -> None:
+        # nothing solved yet: the check period still holds the base levels
+        seen.append((m, m.pnum["check"].value))
+
+    s = _case("core", edit_model=edit)
+    assert len(seen) == 1
+    assert seen[0][0] is s.model
+    assert seen[0][1] == pytest.approx(1.0)
+
+
+def test_edit_model_is_core_only() -> None:
+    with pytest.raises(ValueError, match="edit_model"):
+        solve("old", None, None, "ROW", edit_model=lambda m: None)
 
 
 def test_core_codes_maps_every_status() -> None:
@@ -228,3 +250,19 @@ def _fixed_level(name: str, cell: tuple, *, pct=None, **kw) -> float:
     else:
         apply_shock(m, {name: {cell: pct}})
     return float(getattr(m, name)[(*cell, "shock")].value)
+
+
+@needs_3x3
+def test_family_case_carries_its_mode_to_the_recipe(monkeypatch) -> None:
+    """A family case asked for altertax reaches the recipe as altertax, which
+    refuses it on family (check_backend): it is not run as mode "gtap"."""
+    pytest.importorskip("jax")
+    from tests.family._prep import _newton_mumps
+
+    for k, v in _newton_mumps().items():
+        monkeypatch.setenv(k, v)
+    p = snap._load_params()
+    with pytest.raises(NotImplementedError, match="mode='altertax'"):
+        solve(
+            "core", p, _closure(), list(p.sets.r)[-1], backend="family", mode="altertax"
+        )

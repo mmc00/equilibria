@@ -115,20 +115,28 @@ def _measure(m, period):
 @pytest.mark.slow
 @pytest.mark.skipif(GDX is None, reason="gtap7_3x3 GAMS reference missing")
 def test_loglevels_3x3_nlp_matches_gams():
-    from equilibria.templates.gtap.gtap_block_model import solve_block_model
-    from equilibria.templates.gtap_loglevels.multiperiod import build_loglevels_model_mp
+    from equilibria.core.exercise import Exercise
+    from equilibria.templates.gtap.recipe import gtap_static
+    from equilibria.templates.gtap.template import GTAP
 
     os.environ["EQUILIBRIA_GTAP_SOLVE_NLP"] = "1"
     try:
-        p = _load_params()
-        gc = _closure()
-        m, mp = build_loglevels_model_mp(p, p.sets, gc, RESIDUAL_REGION)
-        mp.seed_all_periods(m, GDX)
-        res = solve_block_model(m, p, gc, ref_gdx=GDX, mode="gtap")
+        gtap = GTAP(
+            _load_params(),
+            _closure(),
+            residual_region=RESIDUAL_REGION,
+            ref_gdx=GDX,
+            seed_gdx=GDX,
+            builder="loglevels",
+        )
+        ex = Exercise(gtap, gtap_static())
+        res = ex.run()
+        m = ex.model.pyomo  # type: ignore[union-attr]
     finally:
         os.environ.pop("EQUILIBRIA_GTAP_SOLVE_NLP", None)
-    for per in PERIODS:
-        assert res[per]["code"] == 1, (
+    # the base is the calibrated point (not solved); check and shock are
+    for per in ("check", "shock"):
+        assert res[per]["code"] == "optimal", (
             f"log-levels NLP {per} did not converge: {res[per]}"
         )
     for per in PERIODS:

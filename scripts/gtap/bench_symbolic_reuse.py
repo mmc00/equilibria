@@ -32,10 +32,10 @@ DATA = dataset_dir("gtap7_15x10")
 
 
 def _run(reuse):
+    from equilibria.core.driver import fly
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_block_model import solve_block_model
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap_sparse.multiperiod import build_sparse_model_mp
+    from equilibria.templates.gtap.template import GTAP
 
     for k, v in _ENV.items():
         os.environ[k] = v
@@ -47,12 +47,15 @@ def _run(reuse):
     gc = GTAPClosureConfig(name="base", closure_type="MCP", capital_mobility="sluggish",
                            fix_endowments=False, fix_taxes=False, fix_technology=False,
                            if_sub=False, savf_flag="capFix", numeraire="pnum")
-    m, mp, _ = build_sparse_model_mp(p, p.sets, gc, rr, base_calibrated=True)
+    gtap = GTAP(p, gc, residual_region=rr, base_calibrated=True, builder="sparse")
+    recipe = gtap.default_recipe()
+    model = gtap.build(recipe.names)  # build + calibrate settle: not timed
     t0 = time.perf_counter()
-    res = solve_block_model(m, p, gc, ref_gdx=None, mode="gtap")
+    with gtap.run_scope():
+        res = fly(model, recipe, template=gtap)
     dt = time.perf_counter() - t0
     count = sys.modules["run_gtap"]._SYMBOLIC_FACT_COUNT
-    return dt, count, res.get("shock", {}).get("code")
+    return dt, count, res["shock"]["code"]
 
 
 def main():

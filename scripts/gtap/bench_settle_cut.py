@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 os.environ["EQUILIBRIA_SEED_CACHE_DISABLE"] = "1"
 
-import equilibria.templates.gtap.gtap_block_model as _bm  # noqa: E402
+import equilibria.templates.gtap.recipe as _recipe  # noqa: E402
 from equilibria.blocks.gtap.factor import FactorBlock  # noqa: E402
 from equilibria.templates.gtap import GTAPParameters  # noqa: E402
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig  # noqa: E402
@@ -52,17 +52,21 @@ def _closure(p):
 def _time_settle(p, full):
     rr = list(p.sets.r)[-1]
     fb = FactorBlock(sets=p.sets, params=p)
-    orig = _bm.solve_block_model
+    # calibrate_base picks its settle with gtap_static(settle_only=True), imported
+    # from the recipe module when it runs: the full settle is that recipe without
+    # the cut (settle_only=False, base->check->shock)
+    orig = _recipe.gtap_static
     if full:
-        def _full(m, params, closure, ref_gdx, *, mode="gtap", settle_only=False):
-            return orig(m, params, closure, ref_gdx, mode=mode, settle_only=False)
-        _bm.solve_block_model = _full
+        def _full(*args, **kw):
+            kw["settle_only"] = False
+            return orig(*args, **kw)
+        _recipe.gtap_static = _full
     try:
         t0 = time.perf_counter()
         fb.calibrate_base(p, p.sets, _closure(p), rr, ref_gdx=None)
         return time.perf_counter() - t0
     finally:
-        _bm.solve_block_model = orig
+        _recipe.gtap_static = orig
 
 
 def main():

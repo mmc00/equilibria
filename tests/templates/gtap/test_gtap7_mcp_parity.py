@@ -126,10 +126,12 @@ def _solve_and_measure(
     mode: str,
     gdx: Path,
     basis: str = "gempack",
-    route: str = "old",
+    route: str = "core",
 ):
     """Build + seed + solve base→check→shock via PATH (MCP); return
     {period: {"match": float, "code": int, "total": int}}."""
+    if route != "core":
+        raise ValueError(f"route {route!r}: the gates run on the core only (PR 3a)")
     from _diff_core import gams_levels, list_populated_vars, split_t
     from pyomo.environ import value as V
 
@@ -207,40 +209,19 @@ def _solve_and_measure(
     # is held at the reference, as in the NLP gate. Seeding them with the answer and
     # holding pva/pnd there matched any reference, so the gate could not fail (#192).
     altertax = mode == "altertax"
-    if route == "core":
-        s = solve(
-            "core",
-            pa,
-            ac,
-            rr,
-            ref_gdx=gdx,
-            seed_gdx=gdx,
-            skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=altertax,
-            mode=solve_mode,
-        )
-        m, codes = s.model, s.codes
-    else:
-        mp = GTAPBlockMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
-        m = mp.build_sets()
-        mp.build_vars(m)
-        for per in PERIODS:
-            mp.build_equations_intra(m, per)
-        mp.build_equations_fisher(m)
-        m._residual_region = rr
-        mp.seed_all_periods(m, gdx)
-        res = solve_multiperiod(
-            m,
-            p,
-            ac,
-            ref_gdx=gdx,
-            skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=altertax,
-            mode=solve_mode,
-        )
-        codes = {k: res[k]["code"] for k in res}
+    s = solve(
+        "core",
+        pa,
+        ac,
+        rr,
+        ref_gdx=gdx,
+        seed_gdx=gdx,
+        skip_base_solve=True,
+        mute_welfare=True,
+        seed_from_prior=altertax,
+        mode=solve_mode,
+    )
+    m, codes = s.model, s.codes
 
     def measure(period: str):
         tot = match = 0

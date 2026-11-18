@@ -50,10 +50,10 @@ class _Phase:
 
 
 def run(dataset):
+    from equilibria.core.driver import fly
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_block_model import solve_block_model
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap_sparse.multiperiod import build_sparse_model_mp
+    from equilibria.templates.gtap.template import GTAP
 
     d = dataset_dir(dataset)
     # no GAMS ifSUB=0 reference for 20x41 (only NLP ifSUB=1): runs unseeded, as before
@@ -78,14 +78,17 @@ def run(dataset):
     # report_timing captures Pyomo component construction during build+calibrate.
     rt_buf = io.StringIO()
     report_timing(rt_buf)
-    with _Phase("build_sparse_model_mp(base_calibrated=True)  [build + calibrate settle]"):
-        m, mp, _ = build_sparse_model_mp(
-            p, p.sets, gc, rr, base_calibrated=True, ref_gdx=gdx
-        )
+    gtap = GTAP(
+        p, gc, residual_region=rr, base_calibrated=True, ref_gdx=gdx, builder="sparse"
+    )
+    recipe = gtap.default_recipe()
+    with _Phase("GTAP(builder='sparse', base_calibrated=True).build  [build + calibrate settle]"):
+        model = gtap.build(recipe.names)
     report_timing(False)
 
-    with _Phase("solve_block_model  [squareness patches + base->check->shock PATH]"):
-        res = solve_block_model(m, p, gc, ref_gdx=gdx, mode="gtap")
+    with _Phase("fly(gtap_static)  [squareness patches + base->check->shock PATH]"):
+        with gtap.run_scope():
+            res = fly(model, recipe, template=gtap)
 
     print("\n===== report_timing (Pyomo component construction) =====", flush=True)
     print(rt_buf.getvalue(), flush=True)

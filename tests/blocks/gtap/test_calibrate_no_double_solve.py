@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -181,18 +182,15 @@ def test_full_settle_baseline():
 
 
 def _solve_multiperiod_result(settle_only):
-    """Build the block model + solve, return the results dict (base/check/[shock])."""
-    from equilibria.templates.gtap.gtap_block_model import (
-        build_block_model,
-        solve_block_model,
-    )
+    """Build the block model + solve on the core, return the codes per period
+    (base/check/[shock])."""
+    from tests.templates.gtap._routes import solve
 
     p = _load_params()
     rr = list(p.sets.r)[-1]
-    m, mp = build_block_model(p, p.sets, _closure(p), rr)
-    return solve_block_model(
-        m, p, _closure(p), None, mode="gtap", settle_only=settle_only
-    )
+    return solve(
+        "core", p, _closure(p), rr, skip_base_solve=True, settle_only=settle_only
+    ).codes
 
 
 @pytest.mark.skipif(not DATA.exists(), reason="gtap7_10x7 dataset not present")
@@ -246,37 +244,38 @@ def _sparse_solution(force_full_settle):
     from pyomo.environ import Var
     from pyomo.environ import value as V
 
-    from equilibria.templates.gtap.gtap_block_model import solve_block_model as _sbm
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from equilibria.templates.gtap_sparse.multiperiod import build_sparse_model_mp
+    from equilibria.core.exercise import Exercise
+    from equilibria.templates.gtap.template import GTAP
 
     p = _load_params()
     rr = list(p.sets.r)[-1]
     patch = contextlib.ExitStack()
+    calls: list[int] = []
     if force_full_settle:
-        # calibrate_base imports solve_block_model LOCALLY from gtap_block_model, so
-        # patch it at the source module (not factor). Force settle_only=False so the
-        # settle runs the full base->check->shock stack (the pre-lever-A behavior).
-        import equilibria.templates.gtap.gtap_block_model as _bm
+        # calibrate_base imports gtap_static LOCALLY from the recipe module, so
+        # patch it there (not in factor). settle_only=False makes the settle run
+        # the full base->check->shock stack (the pre-lever-A behavior).
+        import equilibria.templates.gtap.recipe as _recipe
 
-        def _full(m, params, closure, ref_gdx, *, mode="gtap", settle_only=False):
-            return _sbm(m, params, closure, ref_gdx, mode=mode, settle_only=False)
+        _static = _recipe.gtap_static
 
-        patch.enter_context(_monkey(_bm, "solve_block_model", _full))
+        def _full(*args: Any, **kw: Any) -> Any:
+            calls.append(1)
+            kw["settle_only"] = False
+            return _static(*args, **kw)
+
+        patch.enter_context(_monkey(_recipe, "gtap_static", _full))
+    gtap = GTAP(
+        p, _closure(p), residual_region=rr, base_calibrated=True, builder="sparse"
+    )
+    # the run's recipe is made before the patch: only calibrate_base's settle
+    # can reach the patched gtap_static
+    ex = Exercise(gtap, gtap.default_recipe())
     with patch:
-        m, mp, _ = build_sparse_model_mp(
-            p, p.sets, _closure(p), rr, base_calibrated=True
-        )
-        solve_multiperiod(
-            m,
-            p,
-            _closure(p),
-            ref_gdx=None,
-            skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=False,
-            mode="gtap",
-        )
+        ex.run()
+    m = ex.model.pyomo  # type: ignore[union-attr]
+    # the forced full settle must have run, or both solutions are the cut one
+    assert bool(calls) == force_full_settle
     out = {}
     for v in m.component_objects(Var, active=True):
         for idx in v:

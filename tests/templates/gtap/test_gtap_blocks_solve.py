@@ -141,10 +141,7 @@ def _measure(m, period):
 
 
 def _build_seed_solve(nlp: bool):
-    from equilibria.templates.gtap.gtap_block_model import (
-        build_block_model,
-        solve_block_model,
-    )
+    from tests.templates.gtap._routes import solve
 
     if nlp:
         os.environ["EQUILIBRIA_GTAP_SOLVE_NLP"] = "1"
@@ -153,10 +150,11 @@ def _build_seed_solve(nlp: bool):
 
     p = _load_params()
     gc = _closure()
-    m, mp = build_block_model(p, p.sets, gc, RESIDUAL_REGION)
-    mp.seed_all_periods(m, GDX)
-    res = solve_block_model(m, p, gc, ref_gdx=GDX, mode="gtap")
-    return m, res
+    s = solve(
+        "core", p, gc, RESIDUAL_REGION, ref_gdx=GDX, seed_gdx=GDX, skip_base_solve=True
+    )
+    # codes in the old driver's form: {period: {"code": int}}, the skipped base 1
+    return s.model, {k: {"code": c} for k, c in s.codes.items()}
 
 
 @pytest.mark.needs_gdxdump

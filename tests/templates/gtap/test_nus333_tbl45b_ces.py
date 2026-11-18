@@ -42,9 +42,8 @@ ORACLE = {
 @pytest.fixture(
     scope="module",
     params=[
-        ("old", "apply_shock"),
-        ("old", "fix_instrument_shock"),
         ("core", "apply_shock"),
+        ("core", "fix_instrument_shock"),
     ],
     ids=lambda c: "-".join(c),
 )
@@ -53,27 +52,22 @@ def solved(request):
     p = nus333_params("3x3ces.prm")
     ac = closure()
     if how == "fix_instrument_shock":
-        from equilibria.templates.gtap.gtap_block_model import build_block_model
-        from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
         from equilibria.templates.gtap.instruments import fix_instrument_shock
 
-        m, _mp = build_block_model(
-            p, p.sets, ac, "ROW", base_calibrated=False, ref_gdx=None
-        )
-        fix_instrument_shock(m, "lambdava", ("USA", "SER"), factor=1.10)
-        res = solve_multiperiod(
-            m,
+        s = solve(
+            route,
             p,
             ac,
-            ref_gdx=None,
+            "ROW",
+            base_calibrated=False,
             skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=False,
-            mode="gtap",
             solve_check=True,
+            edit_model=lambda m: fix_instrument_shock(
+                m, "lambdava", ("USA", "SER"), factor=1.10
+            ),
         )
-        assert int(res["shock"]["code"]) == 1, res["shock"]
-        return m
+        assert s.codes["shock"] == 1, s.codes
+        return s.model
     s = solve(
         route,
         p,

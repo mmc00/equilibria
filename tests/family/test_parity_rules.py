@@ -65,3 +65,27 @@ def test_family_gempack_within_counts_a_nan_cell_as_a_miss(monkeypatch):
 
     assert (n, code) == (2, 1)
     assert within == 0.5
+
+
+def test_an_altertax_case_reaches_the_core_with_its_mode(monkeypatch):
+    """The altertax strict xfails must fail because the core route refuses
+    ``mode="altertax"`` on family (its ``check_backend`` step), not because of a
+    guard of the old family driver called first: the mode reaches the route."""
+    from tests.templates.gtap import _routes
+
+    seen = {}
+
+    class _Stop(Exception):
+        pass
+
+    def _solve(*a, **k):
+        seen.update(k)
+        raise _Stop
+
+    monkeypatch.setattr(_routes, "solve", _solve)
+    try:
+        _parity._solve("gtap7_3x3", 1, "altertax")
+    except _Stop:
+        pass
+    assert seen.get("mode") == "altertax"
+    assert seen.get("backend") == "family"

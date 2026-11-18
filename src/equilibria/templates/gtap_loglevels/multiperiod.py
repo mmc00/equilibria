@@ -2,9 +2,10 @@
 
 Subclasses GTAPBlockMultiPeriodModel and swaps ONLY the single-period source to the
 log-wrapped block composer. All downstream machinery — var reflection, Fisher rows,
-seeding, closure_stack, MCP pairing, and the solve_multiperiod driver — is inherited
-unchanged (it operates on variable/equation NAMES, which the log-wrap preserves; only
-each equation's body changes from lhs==rhs to log(lhs)==log(rhs)).
+seeding, closure_stack, MCP pairing — is inherited unchanged (it operates on
+variable/equation NAMES, which the log-wrap preserves; only each equation's body
+changes from lhs==rhs to log(lhs)==log(rhs)). Run it on the core driver:
+``Exercise(GTAP(params, closure, builder="loglevels"), gtap_static(...)).run()``.
 """
 
 from __future__ import annotations
@@ -40,8 +41,8 @@ def build_loglevels_model_mp(
 ):
     """Build the full multi-period log-levels model (unseeded). Returns (pyomo_model, mp).
 
-    Mirror of build_block_model but with the log-levels MP driver. Seed with
-    mp.seed_all_periods and solve with the monolith's solve_multiperiod (inherited).
+    Mirror of build_block_model but with the log-levels MP driver. ``GTAP(...,
+    builder="loglevels")`` calls it (with ``seed_gdx`` to seed every period).
     """
     residual_region = resolve_residual_region(params, sets, closure, residual_region)
     if (

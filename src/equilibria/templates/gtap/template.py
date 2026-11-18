@@ -20,6 +20,9 @@ from typing import Any
 from equilibria.core.recipe import Recipe
 
 BACKENDS = ("pyomo", "family")
+# the multiperiod model: the blocks composer, or one of its two variants (padding
+# trade routes fixed; every row log-wrapped), all solved the same way
+BUILDERS = ("blocks", "sparse", "loglevels")
 _PERIODS = (("base", "check", "shock"), ("base", "check"))
 
 
@@ -34,12 +37,19 @@ class GTAP:
         ref_gdx: Any = None,
         seed_gdx: Any = None,
         backend: str = "pyomo",
+        builder: str = "blocks",
         cache_root: Any = None,
         jax_cache: bool = True,
         newton_tol: tuple[float, float] | None = None,
     ) -> None:
         if backend not in BACKENDS:
             raise ValueError(f"backend must be one of {BACKENDS}, got {backend!r}")
+        if builder not in BUILDERS:
+            raise ValueError(f"builder must be one of {BUILDERS}, got {builder!r}")
+        if backend == "family" and builder != "blocks":
+            raise NotImplementedError(
+                f"family backend: builder={builder!r} is not supported (blocks only)"
+            )
         self.params = params
         self.closure = closure
         self.residual_region = residual_region
@@ -49,6 +59,10 @@ class GTAP:
         # GAMS parity gates seed it; pyomo only
         self.seed_gdx = seed_gdx
         self.backend = backend
+        self.builder = builder
+        # the sparse builder's report of what it fixed (``fix_padding_routes``),
+        # set by ``build``; None for the other builders
+        self.fix_stats: dict[str, Any] | None = None
         # family only: where the recorded families live, the JAX compile cache,
         # and (reltol, ftol) of every Newton solve (None: the environment's)
         self.cache_root = cache_root
@@ -73,18 +87,27 @@ class GTAP:
             if self.seed_gdx is not None:
                 raise NotImplementedError("family backend: seed_gdx is not supported")
             return self._build_family()
-        from equilibria.templates.gtap.gtap_block_model import build_block_model
         from equilibria.templates.gtap.pyomo_periods import GTAPPyomoPeriodModel
 
         rr = self.residual_region or list(self.params.sets.r)[-1]
-        m, mp = build_block_model(
-            self.params,
-            self.params.sets,
-            self.closure,
-            rr,
-            base_calibrated=self.base_calibrated,
-            ref_gdx=self.ref_gdx,
-        )
+        args = (self.params, self.params.sets, self.closure, rr)
+        kw = {"base_calibrated": self.base_calibrated, "ref_gdx": self.ref_gdx}
+        if self.builder == "sparse":
+            from equilibria.templates.gtap_sparse.multiperiod import (
+                build_sparse_model_mp,
+            )
+
+            m, mp, self.fix_stats = build_sparse_model_mp(*args, **kw)
+        elif self.builder == "loglevels":
+            from equilibria.templates.gtap_loglevels.multiperiod import (
+                build_loglevels_model_mp,
+            )
+
+            m, mp = build_loglevels_model_mp(*args, **kw)
+        else:
+            from equilibria.templates.gtap.gtap_block_model import build_block_model
+
+            m, mp = build_block_model(*args, **kw)
         if self.seed_gdx is not None:
             mp.seed_all_periods(m, self.seed_gdx)
         return GTAPPyomoPeriodModel(m)

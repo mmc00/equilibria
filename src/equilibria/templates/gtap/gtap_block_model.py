@@ -38,7 +38,8 @@ scaling + the seed.
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING, Any
+import logging
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
@@ -61,6 +62,8 @@ from equilibria.templates.gtap.residual_region import (  # noqa: F401 — API pu
 
 if TYPE_CHECKING:
     from pyomo.environ import ConcreteModel
+
+_log = logging.getLogger(__name__)
 
 # The aggregate-agent set (activities + the four final-demand agents) and the
 # tax-stream set gy — mirror the monolith's set construction.
@@ -832,8 +835,8 @@ def build_block_model(
 ) -> tuple[ConcreteModel, GTAPBlockMultiPeriodModel]:
     """Build the full multi-period block-composed GTAP model (unseeded).
 
-    Returns ``(pyomo_model, mp)``. Seed with ``mp.seed_all_periods(m, gdx)`` and
-    solve with ``solve_block_model`` (or the monolith's ``solve_multiperiod``).
+    Returns ``(pyomo_model, mp)``. Seed with ``mp.seed_all_periods(m, gdx)``; to
+    build and solve on the core driver use ``Exercise(GTAP(...), gtap_static(...))``.
 
     ``base_calibrated`` (F3.5, default ``False`` = faithful-to-GAMS): when ``True``,
     run the settle solve once via ``FactorBlock.calibrate_base`` and stamp the
@@ -1025,9 +1028,22 @@ def _calibrate_capflex_risk(
             contextlib.redirect_stderr(io.StringIO()),
             contextlib.redirect_stdout(io.StringIO()),
         ):
-            mt, _mpt = build_block_model(params, sets, cfix, residual_region)
-            solve_block_model(mt, params, cfix, None, mode="gtap")
-    except Exception:
+            from equilibria.core.exercise import Exercise
+            from equilibria.templates.gtap.recipe import gtap_static
+            from equilibria.templates.gtap.template import GTAP
+
+            ex = Exercise(
+                GTAP(params, cfix, residual_region=residual_region), gtap_static()
+            )
+            ex.run()
+            mt = cast("Any", ex.model).pyomo
+    except Exception as exc:
+        # falls back to risk = 1, as before, but not silently
+        _log.warning(
+            "capFlex risk: the capFix twin-solve failed (%s: %s); risk falls back to 1",
+            type(exc).__name__,
+            exc,
+        )
         return {}
 
     def _base(v, *keys):
@@ -1047,38 +1063,6 @@ def _calibrate_capflex_risk(
         if rore_b and abs(rore_b) > 1e-12:
             out[r] = rorg_b / rore_b
     return out
-
-
-def solve_block_model(
-    m: ConcreteModel,
-    params: Any,
-    closure: Any,
-    ref_gdx: Any,
-    *,
-    mode: str = "gtap",
-    settle_only: bool = False,
-) -> Any:
-    """Seed + solve the composed multi-period block model via the monolith driver.
-
-    Thin wrapper over ``solve_multiperiod`` — the block model is a drop-in for the
-    monolith's multi-period model, so the existing NLP/MCP solve path applies.
-
-    ``settle_only`` (lever A) returns after the check phase (no shock), for
-    calibrate_base which only needs the settled check point.
-    """
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-
-    return solve_multiperiod(
-        m,
-        params,
-        closure,
-        ref_gdx=ref_gdx,
-        skip_base_solve=True,
-        mute_welfare=True,
-        seed_from_prior=False,
-        mode=mode,
-        settle_only=settle_only,
-    )
 
 
 def _fisher_snapshot(pm: Any) -> tuple[dict[str, Any], Any]:

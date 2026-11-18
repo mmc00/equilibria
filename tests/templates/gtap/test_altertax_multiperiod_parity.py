@@ -109,8 +109,10 @@ def _reference_gdx(dataset: str, if_sub: bool) -> Path | None:
     return None if folder is None else folder / "out.gdx"
 
 
-def _solve_and_match(dataset: str, if_sub: bool, route: str = "old"):
+def _solve_and_match(dataset: str, if_sub: bool, route: str = "core"):
     """Build, seed, solve, compare. Returns (codes_dict, match_pct, total)."""
+    if route != "core":
+        raise ValueError(f"route {route!r}: the gates run on the core only (PR 3a)")
     from _diff_core import gams_levels, list_populated_vars, split_t
     from pyomo.environ import value as V
 
@@ -148,39 +150,19 @@ def _solve_and_match(dataset: str, if_sub: bool, route: str = "old"):
         # route builds with it): the basis the gate sets on p
         va_subsidy_basis="gempack",
     )
-    if route == "core":
-        s = solve(
-            "core",
-            pa,
-            ac,
-            rr,
-            ref_gdx=ref,
-            seed_gdx=ref,
-            skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=False,
-            mode="altertax",
-        )
-        m, codes = s.model, s.codes
-    else:
-        mp = GTAPBlockMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
-        m = mp.build_sets()
-        mp.build_vars(m)
-        for per in PERIODS:
-            mp.build_equations_intra(m, per)
-        mp.build_equations_fisher(m)
-        m._residual_region = rr
-        mp.seed_all_periods(m, ref)
-        res = solve_multiperiod(
-            m,
-            p,
-            ac,
-            ref_gdx=ref,
-            skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=False,
-        )
-        codes = {k: res[k]["code"] for k in res}
+    s = solve(
+        "core",
+        pa,
+        ac,
+        rr,
+        ref_gdx=ref,
+        seed_gdx=ref,
+        skip_base_solve=True,
+        mute_welfare=True,
+        seed_from_prior=False,
+        mode="altertax",
+    )
+    m, codes = s.model, s.codes
 
     tot = match = 0
     for vn in list_populated_vars(ref):

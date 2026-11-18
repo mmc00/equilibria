@@ -148,10 +148,12 @@ def _strip(s):
 
 
 def _solve_and_measure(
-    dataset: str, ifsub: int, mode: str, gdx: Path, route: str = "old"
+    dataset: str, ifsub: int, mode: str, gdx: Path, route: str = "core"
 ):
     """Build + seed + solve base→check→shock as an NLP; return
     {period: {"match": float, "code": int, "total": int}}."""
+    if route != "core":
+        raise ValueError(f"route {route!r}: the gates run on the core only (PR 3a)")
     os.environ["EQUILIBRIA_GTAP_SOLVE_NLP"] = "1"
     from _diff_core import gams_levels, list_populated_vars, split_t
     from pyomo.environ import value as V
@@ -222,40 +224,19 @@ def _solve_and_measure(
     # (#192) alike, at 100 % @0.01 %: the gate could not fail. Measured this way the
     # sigma = 1 Python scored 53-77 % on the check, the sigma = 1.01 one 100 %.
     altertax = mode == "altertax"
-    if route == "core":
-        s = solve(
-            "core",
-            pa,
-            ac,
-            rr,
-            ref_gdx=gdx,
-            seed_gdx=gdx,
-            skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=altertax,
-            mode=solve_mode,
-        )
-        m, codes = s.model, s.codes
-    else:
-        mp = GTAPBlockMultiPeriodModel(pa.sets, pa, ac, residual_region=rr)
-        m = mp.build_sets()
-        mp.build_vars(m)
-        for per in PERIODS:
-            mp.build_equations_intra(m, per)
-        mp.build_equations_fisher(m)
-        m._residual_region = rr
-        mp.seed_all_periods(m, gdx)
-        res = solve_multiperiod(
-            m,
-            p,
-            ac,
-            ref_gdx=gdx,
-            skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=altertax,
-            mode=solve_mode,
-        )
-        codes = {k: res[k]["code"] for k in res}
+    s = solve(
+        "core",
+        pa,
+        ac,
+        rr,
+        ref_gdx=gdx,
+        seed_gdx=gdx,
+        skip_base_solve=True,
+        mute_welfare=True,
+        seed_from_prior=altertax,
+        mode=solve_mode,
+    )
+    m, codes = s.model, s.codes
 
     def measure(period: str):
         tot = match = 0

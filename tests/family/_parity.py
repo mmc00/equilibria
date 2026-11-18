@@ -20,7 +20,7 @@ coverage_matrix = __import__("coverage_matrix")  # on sys.path via the mcp gate
 
 @dataclass(frozen=True)
 class _Run:
-    """A family run on either route: its arrays and the code of every stage."""
+    """A family run: its arrays and the code of every stage."""
 
     mp: Any
     codes: dict[str, int]
@@ -68,31 +68,17 @@ def gams_reference(dataset: str, ifsub: int, mode: str) -> Path:
 
 
 def _solve(
-    dataset: str, ifsub: int, mode: str, unit_sigma: str = "gams", route: str = "old"
+    dataset: str, ifsub: int, mode: str, unit_sigma: str = "gams", route: str = "core"
 ):
-    """``(result, code)`` of the family backend on the photos' closure; ``result``
-    carries the arrays as ``.mp`` on both routes (``route``: "old" or "core")."""
+    """``(result, code)`` of the family backend on the photos' closure, on the core
+    route (the only one since PR 3a); ``result`` carries the arrays as ``.mp``."""
+    if route != "core":
+        raise ValueError(f"route {route!r}: the gates run on the core only (PR 3a)")
+    import importlib.util
+
     import pytest
 
-    from equilibria.family.driver import check_supported
     from tests.family._prep import _newton_mumps
-    from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
-
-    if mode != "pure":
-        # the route's own refusal, before any work
-        check_supported(
-            if_sub=bool(ifsub),
-            savf_flag="capFix",
-            mode=mode,
-            skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=False,
-            solve_check=True,
-            shock_steps=None,
-            shock_method="nonlinear",
-            env={**os.environ, **_newton_mumps()},
-        )
-    import importlib.util
 
     linsolve = "mumps" if importlib.util.find_spec("mumps") else "direct"
     with pytest.MonkeyPatch.context() as mp:
@@ -101,49 +87,44 @@ def _solve(
             "EQUILIBRIA_GTAP_TR_LINSOLVE": linsolve,
         }.items():
             mp.setenv(k, v)
-        if route == "core":
-            # _solve_shock's family setup, through the route helper: it keeps the
-            # code of every stage (the gate checks each one)
-            from equilibria.family.photos import photo_closure
-            from equilibria.sources import dataset_dir
-            from equilibria.templates.gtap import GTAPParameters
-            from tests.templates.gtap._routes import solve
-            from tests.templates.gtap.test_gtap7_gempack_parity import _reference_gdx
+        # _solve_shock's family setup, through the route helper: it keeps the
+        # code of every stage (the gate checks each one)
+        from equilibria.family.photos import photo_closure
+        from equilibria.sources import dataset_dir
+        from equilibria.templates.gtap import GTAPParameters
+        from tests.templates.gtap._routes import solve
+        from tests.templates.gtap.test_gtap7_gempack_parity import _reference_gdx
 
-            mp.setenv("EQUILIBRIA_GTAP_SOLVE_NLP", "1")
-            d = dataset_dir(dataset)
-            p = GTAPParameters()
-            p.load_from_har(
-                basedata_path=d / "basedata.har",
-                sets_path=d / "sets.har",
-                default_path=d / "default.prm",
-                baserate_path=d / "baserate.har",
-            )
-            out = solve(
-                "core",
-                p,
-                photo_closure(ifsub, "capFix", cast("Any", unit_sigma)),
-                list(p.sets.r)[-1],
-                backend="family",
-                ref_gdx=_reference_gdx(dataset, ifsub),
-            )
-            return _Run(out.model, out.codes), out.codes["shock"]
-        res, code = _solve_shock(
-            dataset,
-            ifsub,
-            "capFix",
-            solve_nlp=True,
-            backend="family",
-            unit_sigma=unit_sigma,
+        mp.setenv("EQUILIBRIA_GTAP_SOLVE_NLP", "1")
+        d = dataset_dir(dataset)
+        p = GTAPParameters()
+        p.load_from_har(
+            basedata_path=d / "basedata.har",
+            sets_path=d / "sets.har",
+            default_path=d / "default.prm",
+            baserate_path=d / "baserate.har",
         )
-        return _Run(res.mp, {k: int(r["code"]) for k, r in res.results.items()}), code
+        out = solve(
+            "core",
+            p,
+            photo_closure(ifsub, "capFix", cast("Any", unit_sigma)),
+            list(p.sets.r)[-1],
+            backend="family",
+            ref_gdx=_reference_gdx(dataset, ifsub),
+            # "altertax" is refused by the recipe's check_backend on family: the
+            # altertax strict xfails turn red the day the core route runs it
+            mode="gtap" if mode == "pure" else mode,
+        )
+        return _Run(out.model, out.codes), out.codes["shock"]
 
 
 def family_match(
-    dataset: str, ifsub: int, mode: str, gdx: Path, route: str = "old"
+    dataset: str, ifsub: int, mode: str, gdx: Path, route: str = "core"
 ) -> dict[str, dict]:
     """``{stage: {"match": %, "total": cells, "code": code}}`` of the family run
     against ``gdx``."""
+    if route != "core":
+        raise ValueError(f"route {route!r}: the gates run on the core only (PR 3a)")
     from _diff_core import gams_levels, list_populated_vars, split_t  # type: ignore
 
     res, _ = _solve(dataset, ifsub, mode, route=route)
@@ -217,10 +198,12 @@ def gempack_reference(dataset: str) -> Path:
     return sl4
 
 
-def family_gempack_within(dataset: str, ifsub: int, route: str = "old"):
+def family_gempack_within(dataset: str, ifsub: int, route: str = "core"):
     """``(within_1pp, median_pp, cells, code)`` of the family run against GEMPACK: the
     rule of ``test_gtap7_gempack_parity._measure_pp`` (shock/check %-change of the
     ``Q_TO_VAR`` quantities, check falling back to base) on the family's arrays."""
+    if route != "core":
+        raise ValueError(f"route {route!r}: the gates run on the core only (PR 3a)")
     import statistics
 
     from gempack_reference import Q_TO_VAR, gempack_qty_pct  # type: ignore

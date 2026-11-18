@@ -24,12 +24,12 @@ REGLAS = [
         "blocks",
         ("equilibria.templates",),
         {
-            # F3: `FactorBlock.calibrate_base` construye y resuelve un modelo
-            # entero (build_block_model + solve_block_model) desde dentro del
-            # bloque. No es una constante mal colocada sino una
-            # responsabilidad invertida: el arreglo es inyectar el builder, y
-            # eso cambia la firma del camino base_calibrated=True (F3.5).
-            "gtap/factor.py": "F3: calibrate_base orquesta al compositor",
+            # F3: `FactorBlock.calibrate_base` builds a whole model
+            # (build_block_model) and settles it on the core driver (fly +
+            # gtap_static) from inside the block: an inverted responsibility,
+            # not a misplaced constant. The fix is to inject the builder, which
+            # changes the signature of the base_calibrated=True path (F3.5).
+            "gtap/factor.py": "F3: calibrate_base drives the composer and the core",
         },
     ),
 ]
