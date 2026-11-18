@@ -32,6 +32,7 @@ tests/backends/test_pyomo_backend_strict.py
 tests/backends/test_pyomo_periods.py
 tests/blocks/gtap/test_block_uses.py
 tests/blocks/gtap/test_cache_fingerprint.py
+tests/blocks/gtap/test_calibrate_base_on_core.py
 tests/blocks/gtap/test_calibrate_no_double_solve.py
 tests/blocks/gtap/test_cd_mode_blocks.py
 tests/blocks/gtap/test_factor_wedge_basis.py
@@ -271,6 +272,7 @@ tests/templates/gtap/test_blocks_no_demand_fix.py
 tests/templates/gtap/test_calibrate_reuse_model.py
 tests/templates/gtap/test_capfixdp_closure.py
 tests/templates/gtap/test_capflex_closure.py
+tests/templates/gtap/test_capflex_risk_on_core.py
 tests/templates/gtap/test_cd_sigma_guard.py
 tests/templates/gtap/test_coverage_matrix.py
 tests/templates/gtap/test_cudss_linsolve.py
@@ -304,6 +306,7 @@ tests/templates/gtap/test_gtap_solver_iterations.py
 tests/templates/gtap/test_gtap_steps_layering.py
 tests/templates/gtap/test_gtap_strategies.py
 tests/templates/gtap/test_gtap_structure.py
+tests/templates/gtap/test_gtap_template_builders.py
 tests/templates/gtap/test_ifsub_macros_no_silent_freeze.py
 tests/templates/gtap/test_ifsub_shared_macros.py
 tests/templates/gtap/test_imptx_shock_cell.py

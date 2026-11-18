@@ -129,7 +129,11 @@ def _loglevels_reference():
     return None if ref is None else ref / "out.gdx"
 
 
-@pytest.mark.parametrize("builder", ["sparse", "loglevels"])
+@pytest.mark.parametrize(
+    "builder",
+    # the log-levels case seeds from the GAMS GDX: read with gdxdump
+    ["sparse", pytest.param("loglevels", marks=pytest.mark.needs_gdxdump)],
+)
 def test_variant_solves_equal_the_old_driver(builder: str, monkeypatch) -> None:
     """The variant on the core equals the variant on the old driver, every cell
     (the same equality as test_gtap_on_core_solve for the blocks model)."""
