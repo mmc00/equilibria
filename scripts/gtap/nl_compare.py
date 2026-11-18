@@ -1587,9 +1587,9 @@ def main() -> int:
     args = ap.parse_args()
 
     # mode=gtap UNSUPPORTED, honestly: the pure-gtap shock is multi-period — the
-    # tariff wedge enters the equations via solve_multiperiod(mode="gtap") (the
-    # _rebuild_eq_pmeq_shock / NatRes-anchor / ytax[mt] in-equation rebuilds, which
-    # MUTATE constraints in-place at solve time). A single-period .nl write (what
+    # tariff wedge enters the equations when the multi-period gtap exercise runs (the
+    # pmeq shock / NatRes-anchor / ytax[mt] in-equation rebuilds, which MUTATE
+    # constraints in-place at solve time). A single-period .nl write (what
     # this tool does) cannot capture those, so a gtap .nl would diff the WRONG
     # (un-shocked) equations and a "clean" would be a lie. Emit an explicit
     # mode_unsupported error rather than silently writing an altertax/un-shocked .nl.
@@ -1598,7 +1598,7 @@ def main() -> int:
             return dict(
                 status="error", period=args.phase[0] if args.phase else None,
                 headline=("nl_compare does not support --mode gtap: the pure-gtap "
-                          "shock is wired in solve_multiperiod (constraints rebuilt "
+                          "shock is built by the multi-period exercise (constraints rebuilt "
                           "in-place at solve time), which a single-period .nl write "
                           "cannot represent. Use seed_and_solve --mode gtap instead."),
                 violations=[],

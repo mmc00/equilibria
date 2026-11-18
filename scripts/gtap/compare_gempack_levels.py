@@ -214,7 +214,7 @@ def solve(
 ) -> tuple[dict, dict]:
     """Resuelve equilibria (base -> check -> shock, tm uniforme 10) con el cierre del
     fixture de GEMPACK y devuelve (levels, xscale). ``route``: "exercise"
-    (the core driver) or "driver" (the old ``solve_multiperiod``, until PR 4 of
+    (the core driver) or "driver" (the old Pyomo driver, until PR 4 of
     gtap-on-core deletes it)."""
     import os
     import sys
