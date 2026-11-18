@@ -484,11 +484,12 @@ class FactorBlock(Block):
         construir un segundo modelo identico.
         """
         from equilibria.blocks.gtap import seed_cache
-        from equilibria.templates.gtap.gtap_block_model import (
-            build_block_model,
-            solve_block_model,
-        )
+        from equilibria.core.driver import fly
+        from equilibria.templates.gtap.gtap_block_model import build_block_model
+        from equilibria.templates.gtap.pyomo_periods import GTAPPyomoPeriodModel
+        from equilibria.templates.gtap.recipe import gtap_static
         from equilibria.templates.gtap.residual_region import resolve_residual_region
+        from equilibria.templates.gtap.template import GTAP
 
         # La clave del seed cache lleva la region, no "auto".
         residual_region = resolve_residual_region(
@@ -533,8 +534,15 @@ class FactorBlock(Block):
             if ref_gdx is not None:
                 mp.seed_all_periods(m, ref_gdx)
         try:
-            solve_block_model(
-                m, params, closure, ref_gdx, mode="gtap", settle_only=True
+            # base and check of the core recipe on this model; the template is the
+            # steps' context (params, closure, reference), never built here. As
+            # before, the check point is taken whatever the settle's code.
+            fly(
+                GTAPPyomoPeriodModel(m),
+                gtap_static(settle_only=True),
+                template=GTAP(
+                    params, closure, residual_region=residual_region, ref_gdx=ref_gdx
+                ),
             )
             settled = self._settled_check_point(m)
             from equilibria.family.prep_capture import capture_settled

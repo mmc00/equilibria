@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -246,23 +247,27 @@ def _sparse_solution(force_full_settle):
     from pyomo.environ import Var
     from pyomo.environ import value as V
 
-    from equilibria.templates.gtap.gtap_block_model import solve_block_model as _sbm
     from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
     from equilibria.templates.gtap_sparse.multiperiod import build_sparse_model_mp
 
     p = _load_params()
     rr = list(p.sets.r)[-1]
     patch = contextlib.ExitStack()
+    calls: list[int] = []
     if force_full_settle:
-        # calibrate_base imports solve_block_model LOCALLY from gtap_block_model, so
-        # patch it at the source module (not factor). Force settle_only=False so the
-        # settle runs the full base->check->shock stack (the pre-lever-A behavior).
-        import equilibria.templates.gtap.gtap_block_model as _bm
+        # calibrate_base imports gtap_static LOCALLY from the recipe module, so
+        # patch it there (not in factor). settle_only=False makes the settle run
+        # the full base->check->shock stack (the pre-lever-A behavior).
+        import equilibria.templates.gtap.recipe as _recipe
 
-        def _full(m, params, closure, ref_gdx, *, mode="gtap", settle_only=False):
-            return _sbm(m, params, closure, ref_gdx, mode=mode, settle_only=False)
+        _static = _recipe.gtap_static
 
-        patch.enter_context(_monkey(_bm, "solve_block_model", _full))
+        def _full(*args: Any, **kw: Any) -> Any:
+            calls.append(1)
+            kw["settle_only"] = False
+            return _static(*args, **kw)
+
+        patch.enter_context(_monkey(_recipe, "gtap_static", _full))
     with patch:
         m, mp, _ = build_sparse_model_mp(
             p, p.sets, _closure(p), rr, base_calibrated=True
@@ -277,6 +282,8 @@ def _sparse_solution(force_full_settle):
             seed_from_prior=False,
             mode="gtap",
         )
+    # the forced full settle must have run, or both solutions are the cut one
+    assert bool(calls) == force_full_settle
     out = {}
     for v in m.component_objects(Var, active=True):
         for idx in v:
