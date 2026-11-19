@@ -4,8 +4,11 @@ The golden (``tests/examples/golden/pr3c_outputs_main.json``) holds every stdout
 of the old-driver run. The core driver prints its solve differently (codes
 ``"optimal"`` instead of ``1``; no Pyomo bound warnings on the Johansen path), so
 the comparison keeps only the results. Dropped: the solver chatter, the ``codes:``
-line (each notebook asserts its codes itself), Pyomo's warnings, and the body of
-the residual panel. Kept, with the solve code read as the old one: a printed code,
+line (each notebook asserts its codes itself), Pyomo's warnings, the body of the
+residual panel, and the notebooks' "largest differences" table: its rows are the
+near-zero cells (``qxs`` ~1e-5) that move in the 4th digit between Linux and the
+Mac, sorted by differences that tie at 0.000% (the CI listed other cells), while
+the headline (cells, % within, largest difference) does not move. Kept, with the solve code read as the old one: a printed code,
 a ``{'code': ..., 'residual': ...}`` dict (its residual value masked) and the
 panel's title, which says whether the solve succeeded. Every kept line must have
 the same text and the same numbers, a number within ``rel`` (another CPU moves the
@@ -39,6 +42,9 @@ _CHATTER = (
 # title line (╔) is a result
 _BOX = ("║", "╚")
 _PANEL_TITLE = re.compile(r"^╔═*\s*(.*?)\s*═*╗$")
+# a row of the "largest differences" table ("qxs   post  USA,SER,USA ...") and its
+# header ("variable   period  cell ...")
+_TABLE_ROW = re.compile(r"^\S+\s+(?:pre|post|period)\s{2}")
 _RESIDUAL = re.compile(r"('residual': )[^,}]+")
 _NUMBER = re.compile(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?")
 
@@ -61,6 +67,7 @@ def results(lines: list[str]) -> list[str]:
         for line in lines
         if line.strip()
         and not line.lstrip().startswith(_BOX)
+        and not _TABLE_ROW.match(line)
         and not any(c in line for c in _CHATTER)
     ]
 

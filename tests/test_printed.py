@@ -18,12 +18,25 @@ def test_the_golden_matches_itself() -> None:
 
 
 def test_a_changed_number_is_caught() -> None:
-    got = [line.replace("28713.6", "28713.7") for line in TBL55]
-    assert mismatches(got, TBL55) == [
-        "line 4: 28713.7 != 28713.6 in "
-        "'qst          post  USA,SER                        28713.6       "
-        "28707.5   0.021%'"
+    got = [
+        line.replace("within 0.1%: 100.00%", "within 0.1%: 99.78%") for line in TBL55
     ]
+    assert mismatches(got, TBL55) == [
+        "line 1: 99.78 != 100.00 in "
+        "'within 0.1%: 100.00%   within 0.5%: 100.00%   within 1%: 100.00%'"
+    ]
+
+
+def test_the_largest_differences_table_is_not_compared() -> None:
+    """Its rows are the near-zero cells (qxs ~1e-5) that move in the 4th digit
+    between Linux and the Mac, sorted by diffs that tie at 0.000%: TBL77 lists
+    other cells on the CI. The headline (cells, % within) is the result."""
+    rows = [i for i, line in enumerate(TBL55) if line.startswith("qst ")]
+    got = list(TBL55)
+    got[rows[0]] = (
+        "qxs          post  USA,SER,USA                1.49991e-05   1.49991e-05   0.000%"
+    )
+    assert mismatches(got, TBL55) == []
 
 
 def test_a_changed_text_or_a_missing_line_is_caught() -> None:
