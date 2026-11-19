@@ -236,6 +236,7 @@ ipopt.out
 scripts/gtap/*
 !scripts/gtap/run_gtap.py
 !scripts/gtap/_diff_core.py
+!scripts/gtap/_core_run.py
 !scripts/gtap/compare_burfisher_gempack.py
 !scripts/gtap/compare_gempack_levels.py
 !scripts/gtap/_parity_datasets.py

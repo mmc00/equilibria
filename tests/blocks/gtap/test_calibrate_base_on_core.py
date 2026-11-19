@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 import pytest
+from tests._golden import mismatches
 
 from equilibria.sources import has_dataset
 
@@ -70,7 +71,7 @@ def test_calibrate_base_equals_main(cid: str, dataset: str, ifsub: int) -> None:
         var: {repr(body): repr(float(v)) for body, v in cells.items()}
         for var, cells in seed.items()
     }
-    assert _recorder().mismatches(got, want) == []
+    assert mismatches(got, want) == []
 
 
 def test_calibrate_base_restores_the_given_model() -> None:

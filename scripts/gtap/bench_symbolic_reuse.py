@@ -50,11 +50,15 @@ def _run(reuse):
     gtap = GTAP(p, gc, residual_region=rr, base_calibrated=True, builder="sparse")
     recipe = gtap.default_recipe()
     model = gtap.build(recipe.names)  # build + calibrate settle: not timed
+    from equilibria.solver import path_capi
+
+    # the counter is process-wide: count this run's factorizations only
+    before = path_capi._SYMBOLIC_FACT_COUNT
     t0 = time.perf_counter()
     with gtap.run_scope():
         res = fly(model, recipe, template=gtap)
     dt = time.perf_counter() - t0
-    count = sys.modules["run_gtap"]._SYMBOLIC_FACT_COUNT
+    count = path_capi._SYMBOLIC_FACT_COUNT - before
     return dt, count, res["shock"]["code"]
 
 

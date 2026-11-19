@@ -353,8 +353,8 @@ def main() -> int:
     args = ap.parse_args()
 
     # mode=gtap UNSUPPORTED: this tool targets the altertax CD model; the
-    # pure-gtap shock is wired in solve_multiperiod (multi-period, in-place
-    # rebuilds). Accept the flag (the orchestrator passes it) but emit an
+    # pure-gtap shock is built in place when the multi-period exercise runs (the
+    # core recipe gtap_static). Accept the flag (the orchestrator passes it) but emit an
     # honest mode_unsupported rather than diff the wrong model. Use
     # seed_and_solve --mode gtap for the pure-gtap diagnostic.
     if args.mode == "gtap":

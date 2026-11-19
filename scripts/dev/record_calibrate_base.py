@@ -87,25 +87,6 @@ def _risk(dataset: str, ifsub: int) -> dict:
     return {r: repr(float(v)) for r, v in risk.items()}
 
 
-REL_TOL = 1e-12
-
-
-def mismatches(got, want, path: tuple = ()) -> list[str]:
-    """Where a recomputed record leaves the golden: a key on one side only, or a value
-    off by more than ``REL_TOL`` relative. The golden was recorded on one machine;
-    another CPU or BLAS moves the last bits (~1e-15), a real change moves far more."""
-    if isinstance(want, dict) and isinstance(got, dict):
-        out = [f"{(*path, k)}: only in golden" for k in want.keys() - got.keys()]
-        out += [f"{(*path, k)}: not in golden" for k in got.keys() - want.keys()]
-        for k in want.keys() & got.keys():
-            out += mismatches(got[k], want[k], (*path, k))
-        return out
-    g, w = float(got), float(want)
-    if abs(g - w) > REL_TOL * max(abs(g), abs(w)):
-        return [f"{path}: {g!r} != {w!r}"]
-    return []
-
-
 def main() -> None:
     os.environ["EQUILIBRIA_SEED_CACHE_DISABLE"] = "1"
     head = subprocess.run(

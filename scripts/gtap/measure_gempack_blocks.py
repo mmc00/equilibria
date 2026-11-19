@@ -38,13 +38,14 @@ if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
 LAND_CELL = ("EU_28", "Land")
 
 
-def _land_response(dataset: str, base_calibrated: bool, ref_gdx: Path) -> dict:
-    from pyomo.environ import value as V
+def _solve(dataset: str, base_calibrated: bool, ref_gdx: Path):
+    """Build + solve base→check→shock (gtap pure MCP, ifSUB=0, the data's FBEP sign)
+    on the core driver; returns (model, codes in the old driver's form). The default
+    build is seeded from ``ref_gdx``; the F3.5 build starts from its settled base."""
+    from _core_run import solve_on_core
 
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     d = dataset_dir(dataset)
     p = GTAPParameters()
@@ -64,18 +65,27 @@ def _land_response(dataset: str, base_calibrated: bool, ref_gdx: Path) -> dict:
         va_subsidy_basis="gempack",
     )
     with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
-        m, mp = build_block_model(p, p.sets, gc, rr, base_calibrated=base_calibrated)
-        if not base_calibrated:
-            mp.seed_all_periods(m, ref_gdx)
-        res = solve_multiperiod(
-            m, p, gc, ref_gdx=ref_gdx, skip_base_solve=True, mode="gtap"
+        m, codes, _ = solve_on_core(
+            p,
+            gc,
+            rr,
+            ref_gdx=ref_gdx,
+            seed_gdx=None if base_calibrated else ref_gdx,
+            base_calibrated=base_calibrated,
         )
+    return m, codes
+
+
+def _land_response(dataset: str, base_calibrated: bool, ref_gdx: Path) -> dict:
+    from pyomo.environ import value as V
+
+    m, codes = _solve(dataset, base_calibrated, ref_gdx)
     r, f = LAND_CELL
     base = float(V(m.pft[r, f, "base"]))
     shock = float(V(m.pft[r, f, "shock"]))
     resp = 100.0 * (shock - base) / base if abs(base) > 1e-12 else None
     return {
-        "codes": {k: res[k]["code"] for k in res},
+        "codes": codes,
         "pft_base": round(base, 5),
         "pft_shock": round(shock, 5),
         "land_resp_pct": round(resp, 3) if resp is not None else None,
@@ -105,32 +115,9 @@ def _quantity_match(dataset: str, base_calibrated: bool, ref_gdx: Path,
 
     from pyomo.environ import value as V
 
-    from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
     from gempack_reference import Q_TO_VAR, gempack_qty_pct
 
-    d = dataset_dir(dataset)
-    p = GTAPParameters()
-    p.load_from_har(
-        basedata_path=d / "basedata.har", sets_path=d / "sets.har",
-        default_path=d / "default.prm", baserate_path=d / "baserate.har",
-    )
-    rr = list(p.sets.r)[-1]
-    gc = GTAPClosureConfig(
-        name="base", closure_type="MCP", capital_mobility="sluggish",
-        fix_endowments=False, fix_taxes=False, fix_technology=False,
-        if_sub=False, numeraire="pnum",
-        # the data's FBEP sign, as the fbep=header reference has it; the default
-        # "gams" basis keeps the old sign (#191). build_block_model applies it.
-        va_subsidy_basis="gempack",
-    )
-    with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
-        m, mp = build_block_model(p, p.sets, gc, rr, base_calibrated=base_calibrated)
-        if not base_calibrated:
-            mp.seed_all_periods(m, ref_gdx)
-        solve_multiperiod(m, p, gc, ref_gdx=ref_gdx, skip_base_solve=True, mode="gtap")
+    m, _ = _solve(dataset, base_calibrated, ref_gdx)
 
     diffs = []
     for gvar, spec in Q_TO_VAR.items():
