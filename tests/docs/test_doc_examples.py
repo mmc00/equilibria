@@ -27,6 +27,8 @@ from pathlib import Path
 
 import pytest
 
+from tests._printed import GOLDEN, mismatches
+
 ROOT = Path(__file__).resolve().parents[2]
 PAGINAS = sorted((ROOT / "docs" / "site" / "guide").glob("*.md")) + [ROOT / "README.md"]
 
@@ -92,6 +94,10 @@ def test_los_ejemplos_de_la_pagina_corren(pagina: Path, tmp_path: Path) -> None:
     assert r.returncode == 0, (
         f"{pagina.relative_to(ROOT)}: sus ejemplos fallan\n{r.stderr[-3000:]}"
     )
+    # The GTAP pages print what they printed with the old driver (PR 3c oracle).
+    if pagina.name in GOLDEN["docs"]:
+        want = GOLDEN["docs"][pagina.name]
+        assert not mismatches(r.stdout.splitlines(), want), pagina.name
 
 
 def _corre(md: str, tmp_path: Path) -> subprocess.CompletedProcess:

@@ -6,8 +6,8 @@ directly through [`path-capi-python`](https://github.com/mmc00/path-capi-python)
 a thin Python wrapper that hands PATH the residuals and the Jacobian of the
 Pyomo model as callbacks.
 
-You do not call the wrapper yourself. `solve_multiperiod` (see the
-{doc}`GTAP quickstart <gtap_quickstart>`) uses it for every MCP solve, through
+You do not call the wrapper yourself. An `Exercise` on the Pyomo backend (see
+the {doc}`GTAP quickstart <gtap_quickstart>`) uses it for every MCP solve, through
 `equilibria.solver.path_capi`. What you need is to make the wrapper and the
 PATH libraries findable.
 

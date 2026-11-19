@@ -156,3 +156,21 @@ def test_a_clean_solve_logs_no_warning(caplog):
         summary(m, console=_quiet())
 
     assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+
+def test_the_core_drivers_optimal_is_a_complete_solve(caplog):
+    """``Exercise.run`` reports ``"optimal"``, not PATH's code 1 (gtap-on-core)."""
+    console = _quiet()
+    with caplog.at_level(logging.WARNING, logger="equilibria"):
+        summary(
+            _model(), {"shock": {"code": "optimal"}}, period="shock", console=console
+        )
+
+    assert "SOLVE COMPLETE" in console.export_text()
+    assert not [r for r in caplog.records if "solve ended with code" in r.getMessage()]
+
+
+def test_a_core_failure_is_still_a_failure():
+    console = _quiet()
+    summary(_model(), {"shock": {"code": "code 2"}}, period="shock", console=console)
+    assert "SOLVE FAILED (code code 2)" in console.export_text()

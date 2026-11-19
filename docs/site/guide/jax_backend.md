@@ -305,8 +305,9 @@ res = newton_tr(F, J, x0, linsolve="mumps")
 :file: ../../assets/jax-backend/flight.svg
 ```
 
-One call, `solve_gtap_family(params, closure, ...)` in
-`src/equilibria/family/driver.py`, runs the whole flight plan: base, check and shock.
+One call, `Exercise(GTAP(params, closure, backend="family"), gtap_static(...)).run()`,
+runs the whole flight plan: base, check and shock; the stages below live in
+`src/equilibria/family/driver.py`.
 It never builds a Pyomo model. The base is not solved; check and shock are. The
 stages, in order (JAX only unless marked "shared"):
 
@@ -325,7 +326,8 @@ stages, in order (JAX only unless marked "shared"):
    one period and the next, as one more family. (`src/equilibria/family/cross_period.py`)
 6. **Prepare each period.** On arrays: seed values, freeze what the period keeps
    fixed, set bounds, mute welfare and, on the shock, apply the shock.
-   (`src/equilibria/family/prep_recipe.py`, `src/equilibria/family/shock.py`)
+   The steps are the Pyomo ones, written once (`src/equilibria/templates/gtap/steps.py`),
+   over the arrays (`src/equilibria/family/periods.py`, `src/equilibria/family/shock.py`)
 7. **Square the system.** The closure fixes some variables and each equation is
    paired with one unknown, from the pattern of J. The pairing is kept in the box too.
    (`src/equilibria/family/prep_square.py`, `src/equilibria/family/squared_system.py`,
@@ -360,13 +362,13 @@ stale.
 | Shared | Pyomo only | JAX only |
 |---|---|---|
 | The block equations, `src/equilibria/blocks/gtap` | `src/equilibria/backends/pyomo_backend.py`, `src/equilibria/backends/pyomo_equations.py` | `src/equilibria/family/recorder.py`, `src/equilibria/backends/family_backend.py` |
-| Data, closure and starting state, `src/equilibria/templates/gtap` | The multiperiod driver, `src/equilibria/templates/gtap/gtap_model_multiperiod.py`, `src/equilibria/templates/gtap/period_prep.py` | The period steps on arrays: `src/equilibria/family/prep_recipe.py`, `src/equilibria/family/prep_square.py`, `src/equilibria/family/post_solve.py` |
+| Data, closure and starting state, `src/equilibria/templates/gtap`; the period steps, `src/equilibria/templates/gtap/steps.py` | The multiperiod model, `src/equilibria/templates/gtap/gtap_model_multiperiod.py`, `src/equilibria/templates/gtap/pyomo_periods.py` | The periods on arrays: `src/equilibria/family/periods.py`, `src/equilibria/family/prep_square.py`, `src/equilibria/family/post_solve.py` |
 | The engine, `src/equilibria/solver/newton_tr.py`, `src/equilibria/solver/_matching.py` | PATH and ASL, `src/equilibria/solver/path_capi.py`, `src/equilibria/solver/jacobians` | F and J, `src/equilibria/family/core.py`, `src/equilibria/family/aot_cache.py` |
 | The shock instruments, `src/equilibria/blocks/gtap/shock.py` | ALTERTAX on Pyomo, `src/equilibria/templates/gtap/altertax` | ALTERTAX on JAX, `src/equilibria/family/altertax` |
 
 | Step around the math | In Pyomo | In JAX |
 |---|---|---|
-| Prepare each period (fix, seed, bounds) | `PeriodPreparer` | `src/equilibria/family/prep_recipe.py`, with NumPy masks |
+| Prepare each period (fix, seed, bounds) | `src/equilibria/templates/gtap/steps.py` over `src/equilibria/templates/gtap/pyomo_periods.py` | the same steps over `src/equilibria/family/periods.py`, with NumPy masks |
 | Pair each equation with an unknown | from the Pyomo expressions | `src/equilibria/family/squared_system.py`, from the pattern of J |
 | Row scale (when it has converged) | `src/equilibria/solver/path_capi.py` | `src/equilibria/family/fscale.py`, with the same number |
 | After solving | the multiperiod driver | `src/equilibria/family/post_solve.py` |

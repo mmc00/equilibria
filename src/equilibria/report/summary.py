@@ -195,7 +195,7 @@ def _to_log(s: SolveSummary) -> None:
         _e(s.walras),
         worst,
     )
-    if s.code not in (None, 1):
+    if s.code not in _OK:
         _log.warning("%s: solve ended with code %s", s.period or "model", s.code)
     if s.on_floor:
         _log.warning(
@@ -228,8 +228,13 @@ def _table(title: str) -> Table:
     )
 
 
+# A solve that converged: no code, PATH's 1 (old GTAP driver) or the core driver's
+# "optimal" (``Exercise.run``).
+_OK = (None, 1, "optimal")
+
+
 def _panel(s: SolveSummary) -> Panel:
-    ok = s.code in (None, 1)
+    ok = s.code in _OK
     head = Text.assemble(
         (">_ equilibria", f"bold {_G}"),
         (f"  ::  period {s.period or '-'}", _G3),

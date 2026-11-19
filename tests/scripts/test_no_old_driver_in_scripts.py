@@ -2,7 +2,7 @@
 
 No other script, example or data generator names one (a script that reaches an old
 driver through another module, without naming it, is not caught here). The list
-shrinks with the code: PR 3c moves the notebooks' generator, PR 3d the family
+shrinks with the code: PR 3c moved the notebooks' generator, PR 3d the family
 altertax runner, PR 4 deletes the old drivers with the scripts that only make sense
 for them. A new script that calls an old driver fails here; so does an entry that
 no longer names one (take it off the list).
@@ -34,7 +34,6 @@ _MONOLITH = (
     "runs the monolithic GTAPMultiPeriodModel, which the core does not build (PR 4)"
 )
 UNTIL_PR4: dict[str, str] = {
-    "examples/notebooks/gtap7/burfisher/make_notebooks.py": "the notebooks' generator (PR 3c)",
     "scripts/dev/record_pr3b_scripts.py": "records the old driver's results: the PR 3b oracle",
     "scripts/family/altertax_rungtap_measure.py": "family.driver._world_income (PR 3d)",
     "scripts/family/budget_20x41.py": _TIMES_OLD,

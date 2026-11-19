@@ -98,6 +98,7 @@ tests/data/test_sources_schema.py
 tests/data/test_stdcge_reference.py
 tests/docs/test_doc_examples.py
 tests/docs/test_doc_links.py
+tests/docs/test_docs_no_old_driver.py
 tests/docs/test_docs_theme.py
 tests/docs/test_jax_backend_page.py
 tests/docs/test_translations_keep_code.py
@@ -405,3 +406,4 @@ tests/test_jacobian_mode_default.py
 tests/test_local_refs_nus333.py
 tests/test_packaging_sdist.py
 tests/test_path_capi_lib_resolution.py
+tests/test_printed.py
