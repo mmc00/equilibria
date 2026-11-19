@@ -146,6 +146,8 @@ tests/family/test_fscale.py
 tests/family/test_gate1_all_families.py
 tests/family/test_gate1_fidelity.py
 tests/family/test_gate1_recorded.py
+tests/family/test_generic_arrays.py
+tests/family/test_generic_periods.py
 tests/family/test_gtap_family_on_core.py
 tests/family/test_gtap_family_periods.py
 tests/family/test_gtap_family_template.py
@@ -157,6 +159,7 @@ tests/family/test_incidence_csr.py
 tests/family/test_mp_arrays.py
 tests/family/test_mp_build.py
 tests/family/test_newton_checkpoint.py
+tests/family/test_newton_family.py
 tests/family/test_pairing_cache.py
 tests/family/test_parity_ladder_script.py
 tests/family/test_parity_rules.py
@@ -170,6 +173,8 @@ tests/family/test_prep_square.py
 tests/family/test_recorder.py
 tests/family/test_settle_cache.py
 tests/family/test_shock_cell.py
+tests/family/test_simple_open_family.py
+tests/family/test_simple_open_gams_parity.py
 tests/family/test_square_cell_ids.py
 tests/family/test_squared_system.py
 tests/family/test_state_model.py

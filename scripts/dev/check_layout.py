@@ -40,6 +40,12 @@ ROOT_FILES = frozenset(
         ".readthedocs.yaml",
     }
 )
+# The repo's agent skills (open Agent Skills format): .agents/skills/<name>/SKILL.md,
+# each linked from .claude/skills/<name> for Claude Code. Nothing else of .agents/
+# or .claude/ is tracked. SKILL.md and README.md are the names the format fixes.
+SKILL_PREFIXES: tuple[str, ...] = (".agents/skills/", ".claude/skills/")
+SKILL_NAMES = frozenset({"SKILL.md", "README.md"})
+
 # Emptied by later phases of specs/data/changes/one-data-folder; each phase
 # removes its entry.
 ROOT_DIRS_TEMPORARY = frozenset({"results"})
@@ -195,6 +201,8 @@ def violations(paths: list[str]) -> list[str]:
                 bad.append(
                     f"{path}: new file at the root (see data/README.md for where things go)"
                 )
+        elif path.startswith(SKILL_PREFIXES):
+            pass
         elif top not in ROOT_DIRS and top not in ROOT_DIRS_TEMPORARY:
             bad.append(
                 f"{path}: new folder {top}/ at the root (see data/README.md for where things go)"
@@ -210,6 +218,7 @@ def violations(paths: list[str]) -> list[str]:
             any(ch.isalpha() and ch.isupper() for ch in name)
             and path not in ALLOWED_EXACT
             and not _upstream(path)
+            and not (path.startswith(SKILL_PREFIXES) and name in SKILL_NAMES)
         ):
             bad.append(f"{path}: name is not lowercase")
 

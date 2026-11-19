@@ -115,3 +115,18 @@ def test_docs_target_layout_passes() -> None:
         "docs/archive/readme.md",
     ]
     assert _module().violations(paths) == []
+
+
+def test_agent_skills_pass() -> None:
+    paths = [
+        ".agents/skills/README.md",
+        ".agents/skills/port-to-jax/SKILL.md",
+        ".claude/skills/port-to-jax",
+    ]
+    assert _module().violations(paths) == []
+
+
+def test_other_agent_folders_are_rejected() -> None:
+    assert _module().violations([".claude/settings.json"])
+    assert _module().violations([".agents/notes.md"])
+    assert _module().violations([".agents/skills/x/Notes.md"])

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import numpy as np
 import pyomo.environ as pyo
@@ -67,6 +67,10 @@ class SimpleOpenEconomy(ModelTemplate):
     sam_path: Path = Field(default_factory=_default_sam)
     sigma: float = Field(default=2.0, gt=0, description="Armington elasticity")
     psi: float = Field(default=2.0, gt=0, description="CET elasticity")
+    backend: Literal["pyomo", "family"] = Field(
+        default="pyomo",
+        description="pyomo, or family (JAX: the arrays of the blocks, no Pyomo model)",
+    )
     numeraire: str | None = Field(
         default=None,
         description="factor whose price is 1; None reads closure.yaml next to the SAM",
@@ -158,7 +162,27 @@ class SimpleOpenEconomy(ModelTemplate):
             cast("Any", pm.find_component(rate)).fix()
         return pm
 
+    def build(
+        self, periods: Sequence[str], overwrite: Sequence[Block] = ()
+    ) -> PeriodModel:
+        """A fresh model with ``periods``: Pyomo's (``ModelTemplate.build``) or, on
+        the family backend, the blocks' arrays, recorded anew on every call."""
+        if self.backend != "family":
+            return super().build(periods, overwrite)
+        from equilibria.family.generic_arrays import build_arrays
+        from equilibria.family.generic_periods import GenericFamilyPeriodModel
+
+        t = tuple(periods)
+        mp, backend, state = build_arrays(
+            self.create_model(overwrite=overwrite), INSTRUMENTS, t
+        )
+        return GenericFamilyPeriodModel(mp, backend, state, t)
+
     def default_recipe(self) -> Recipe:
+        if self.backend == "family":
+            from equilibria.solver.newton_family import newton_family
+
+            return stdcge_static(solver=newton_family())
         return stdcge_static()
 
 
