@@ -115,6 +115,7 @@ def _needs_data() -> None:
         pytest.skip("gdxdump not on the PATH (comes with GAMS)")
 
 
+@pytest.mark.needs_gdxdump  # the seed reads the GAMS GDX through it
 @pytest.mark.parametrize("case", sorted(RUN))
 def test_script_on_core_equals_main(case: str) -> None:
     _needs_data()
@@ -124,6 +125,7 @@ def test_script_on_core_equals_main(case: str) -> None:
     assert mismatches(model_levels(m), want["levels"]) == []
 
 
+@pytest.mark.needs_gdxdump  # the seed reads the GAMS GDX through it
 @pytest.mark.parametrize("case", sorted(RUN))
 def test_script_never_calls_the_old_driver(case: str, monkeypatch) -> None:
     _needs_data()
@@ -137,6 +139,7 @@ def test_script_never_calls_the_old_driver(case: str, monkeypatch) -> None:
     RUN[case]()
 
 
+@pytest.mark.needs_gdxdump  # the seed reads the GAMS GDX through it
 def test_seed_and_solve_gtap_builds_twice(monkeypatch) -> None:
     """One hand build (the seed: sentinel before, residual tail) and the core's own
     build for the solve; a third build is minutes on the large datasets."""

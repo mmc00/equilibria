@@ -233,6 +233,7 @@ tests/scripts/test_nl_compare_local.py
 tests/scripts/test_no_old_driver_in_scripts.py
 tests/scripts/test_path_opt.py
 tests/scripts/test_plan_test_groups.py
+tests/scripts/test_pr3b_scripts_on_core.py
 tests/scripts/test_regen_gams_reference.py
 tests/scripts/test_regen_nus333.py
 tests/scripts/test_regenerate_gams.py
