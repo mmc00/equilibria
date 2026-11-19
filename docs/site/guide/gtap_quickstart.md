@@ -56,19 +56,20 @@ dataset has one, `baserate.har`, and returns a calibrated `GTAPParameters`.
 
 ## Step 2 — Build the model and run a tariff shock
 
-`build_block_model` composes the GTAP blocks into one multi-period model.
-The shock lives in the `ShockBlock`: every policy or technology instrument
-(`imptx`, `lambdava`, `aft`, ...) is a fixed variable per period, and a shock
-is its `shock`-period cell differing from the `check` one. You write it on the
-built model with `apply_shock`, and `solve_multiperiod` reads it from there.
+An `Exercise` puts three pieces together: the template (`GTAP`: the data, the
+closure, the residual region), the recipe (`gtap_static`: which periods to solve
+and how) and the shock. `run()` builds the multi-period model from the GTAP
+blocks and solves it. The shock lives in the `ShockBlock`: every policy or
+technology instrument (`imptx`, `lambdava`, `aft`, ...) is a fixed variable per
+period, and a shock is its `shock`-period cell differing from the `check` one.
 
 ```python
 from pyomo.environ import value
 
-from equilibria.templates.gtap import apply_shock
-from equilibria.templates.gtap.gtap_block_model import build_block_model
+from equilibria.core.exercise import Exercise
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+from equilibria.templates.gtap.recipe import gtap_static
+from equilibria.templates.gtap.template import GTAP
 
 closure = GTAPClosureConfig(
     name="base",
@@ -80,17 +81,18 @@ closure = GTAPClosureConfig(
     if_sub=False,
     numeraire="pnum",
 )
-m, _ = build_block_model(params, sets, closure, "ROW")  # "ROW": the residual region
-
 # +10% on the tariff power (1 + tms) of one route, as in a GEMPACK .EXP:
 route = ("USA", "MFG", "ROW")  # (exporter, commodity, importer)
-apply_shock(m, {"imptx": {route: 10.0}})
 
 # GAMS compStat does not solve the base: its levels are the benchmark.
-results = solve_multiperiod(
-    m, params, closure, mode="gtap", skip_base_solve=True, solve_check=True
+ex = Exercise(
+    GTAP(params, closure, residual_region="ROW"),  # "ROW": the residual region
+    gtap_static("gtap", solve_check=True),
+    shock={"imptx": {route: 10.0}},
 )
-print(results["shock"])  # {'code': 1, 'residual': ...}
+results = ex.run()
+m = ex.model.pyomo  # the solved Pyomo model
+print(results["shock"])  # {'code': 'optimal', 'residual': ...}
 for t in ("check", "shock"):
     print(t, value(m.xw[(*route, t)]))
 # check 0.9668...
@@ -101,12 +103,12 @@ for t in ("check", "shock"):
 `check` that moves means the model does not reproduce its own data. `shock`
 is the counterfactual.
 
-A termination code of 1 says the solver stopped normally. To see how well the
+A code `"optimal"` says the solver converged. To see how well the
 equations hold, `summary` prints a panel for the period: the code, Walras, the
 largest, mean and median residual, and the equations with the largest
 residuals. It also warns when a variable rests on its floor: prices carry a
-small lower bound only to keep the solver away from zero, so a code 1 with a
-price there is a corner the model does not mean (`s.on_floor` lists them). It
+small lower bound only to keep the solver away from zero, so an `"optimal"`
+solve with a price there is a corner the model does not mean (`s.on_floor` lists them). It
 returns the same numbers.
 
 ```python
@@ -116,13 +118,14 @@ s = summary(m, results, period="shock")
 print(s.max_residual < 1e-6, s.worst[0].equation)
 ```
 
-`summary` works on the period that was solved last: once the driver moves on
+`summary` works on the period that was solved last: once the exercise moves on
 to the next period it deactivates the previous one's equations, and `summary`
 refuses an inactive period rather than report another one under its name.
 
-`apply_shock(m, {instrument: {cell: pct}})` takes each number as the GEMPACK
-percentage change and converts it to levels according to the instrument
-(`shocks.GEMPACK_KIND`), starting from the `check` value:
+The shock, `{instrument: {cell: pct}}`, takes each number as the GEMPACK
+percentage change; the exercise writes it with `apply_shock`, which converts it
+to levels according to the instrument (`shocks.GEMPACK_KIND`), starting from the
+`check` value:
 
 | Kind | Instruments | Level in the shock period |
 |------|-------------|---------------------------|
@@ -131,15 +134,13 @@ percentage change and converts it to levels according to the instrument
 | `power_kappa` | `kappaf` | `1 - (1 - k) / (1 + p/100)` |
 | `power_fct` | `fcttx` | `fcttx` absorbs the change of `1 + fctts + fcttx` |
 
-Several instruments and cells go in one call. To give the level directly,
-pass `levels=True`. Applying the same shock twice gives the same model as
-applying it once. A cell no live equation reads, a misspelt label or an
+Several instruments and cells go in one shock. A cell no live equation reads, a misspelt label or an
 out-of-domain value raises `ValueError` before any solve. With `if_sub=True`
 an `imptx` cell is read by `eq_xweq` (the tariff enters through the inlined
 import price), so it takes a shock as with `if_sub=False`.
 
-Without any shock in the `ShockBlock`, `solve_multiperiod` writes the reference
-GAMS run's default there (`shocks.apply_default_tariff`): in `mode="gtap"`,
+Without a shock, the exercise writes the reference GAMS run's default in the
+`ShockBlock` (`shocks.apply_default_tariff`): in `mode="gtap"`,
 +10% on the power of every import tariff, the domestic diagonal included; in
 `mode="altertax"`, every tariff rate times 1.1. It is a shock like any other:
 the equations are not rebuilt.
@@ -196,8 +197,11 @@ params3.load_from_har(
     baserate_path=data / "baserate.har",
 )
 closure3 = closure.model_copy(update={"va_subsidy_basis": "gempack"})
-m3, _ = build_block_model(params3, params3.sets, closure3, "ROW")
-solve_multiperiod(m3, params3, closure3, mode="gtap", skip_base_solve=True, solve_check=True)
+ex3 = Exercise(
+    GTAP(params3, closure3, residual_region="ROW"), gtap_static("gtap", solve_check=True)
+)
+ex3.run()
+m3 = ex3.model.pyomo
 
 report = compare(
     from_gdx(
@@ -215,7 +219,7 @@ for t in ("check", "shock"):
 # shock 21 of 21 cells within 0.1 %
 ```
 
-No shock is applied here, so the driver writes the GAMS default (+10 % on
+No shock is given here, so the exercise writes the GAMS default (+10 % on
 every tariff power), the same shock GAMS solved. Compare `check` and
 `shock`, the periods both sides solve: in `compStat` GAMS does not solve
 `base`, and its `base` levels are the initial values from `cal.gms`, not an
@@ -234,12 +238,11 @@ uv run python scripts/gtap/run_parity_gates.py --quick
   Walras's law (GAMS's `rres`). Pass it explicitly, as above. Under the
   `capFix` savings closure `"auto"` picks the region with the largest base
   investment, which helps PATH on large aggregations.
-* **Shock formula** — `apply_shock` reads each number as the GEMPACK %
+* **Shock formula** — the shock reads each number as the GEMPACK %
   change and picks the conversion from the instrument: tax shocks act on
   the power `1 + t`, as in GAMS (see Step 2).
-* **Blocks only** — `solve_multiperiod` needs a model built by
-  `build_block_model`; the old single-file model
-  (`gtap_model_equations.py`) is not solved by the driver.
+* **Blocks** — `GTAP` builds the model from the GTAP blocks (`builder="blocks"`,
+  the default).
 
 ## Troubleshooting
 

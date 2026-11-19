@@ -51,7 +51,9 @@ def mismatches(got: list[str], want: list[str], *, rel: float = 1e-9) -> list[st
     """Where ``results(got)`` leaves ``results(want)``: a line missing or extra, a
     line whose text differs, or a number off by more than ``rel`` (plus 1e-12
     absolute, for values printed near zero)."""
-    g, w = results(got), results(want)
+    # a printed solve code: PATH's 1 on the old driver is "optimal" on the core
+    g = ["1" if line == "optimal" else line for line in results(got)]
+    w = results(want)
     if len(g) != len(w):
         return [f"{len(g)} result lines, golden has {len(w)}:\n{g}\n{w}"]
     out = []

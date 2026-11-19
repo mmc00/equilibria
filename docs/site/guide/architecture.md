@@ -190,14 +190,15 @@ that uses that block sees it.
 
 ## The driver follows a recipe
 
-The **driver** (`templates/gtap/gtap_multiperiod_driver.py`) is the person
-assembling the kit: it does not design bricks, it follows the instructions
-([ADR-0002](#decisions)). For each period it asks for the period to be
-prepared, solves it with the closure it gets back, and moves on. How a
-period is prepared (freeze the other periods, seed, recalibrate, fix and
-bound) is a **recipe**: an ordered list of steps per period and mode in
-`templates/gtap/period_prep.py`. Equations, instruments and the shock belong
-to blocks, never to the driver.
+The **driver** (`core/driver.py`) is the person assembling the kit: it does
+not design bricks, it follows the instructions ([ADR-0011](#decisions)).
+`Exercise(template, recipe, shock).run()` hands it the three pieces. The
+**recipe** (`gtap_static` in `templates/gtap/recipe.py`) lists the periods
+(`base`, `check`, `shock`) and, for each kind of period, the steps before and
+after the solve (freeze the other periods, seed, recalibrate, fix and bound),
+how to solve (in one go, in steps, Johansen) and with which solver. For each
+period the driver runs the steps, solves, and moves on. Equations, instruments
+and the shock belong to blocks, never to the driver.
 
 ## The instruction booklet is GAMS and GEMPACK
 
@@ -309,7 +310,7 @@ why, and what was rejected.
 | ADR | Decision |
 |---|---|
 | 0001 | Blocks are the model; a monolith is only a starting point and an oracle |
-| 0002 | The driver prepares and solves; it holds no model logic |
+| 0002 | The driver prepares and solves; it holds no model logic (superseded by 0011) |
 | 0003 | The shock lives in the ShockBlock and is written as in GEMPACK |
 | 0004 | An exercise changes one block with `@overwrite` and leaves the others alone |
 | 0005 | One name, one declaration; each block declares what it uses |
@@ -317,6 +318,7 @@ why, and what was rejected.
 | 0007 | No block registry |
 | 0008 | GAMS and GEMPACK are the source of truth; fidelity outranks match % |
 | 0009 | One name dictionary per model, checked for completeness against both sides |
+| 0011 | One driver for every model, fed by a recipe (supersedes 0002) |
 
 See the {doc}`templates overview <templates>` for per-template status and
 the {doc}`API reference <../api/index>` for the generated reference.

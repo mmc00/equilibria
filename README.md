@@ -103,10 +103,10 @@ for where equilibria looks for the PATH libraries.
 
 ```python
 from equilibria import load_bundled
-from equilibria.templates.gtap import apply_shock
-from equilibria.templates.gtap.gtap_block_model import build_block_model
+from equilibria.core.exercise import Exercise
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+from equilibria.templates.gtap.recipe import gtap_static
+from equilibria.templates.gtap.template import GTAP
 from equilibria.templates.gtap.welfare_regional import regional_ev
 
 params = load_bundled("gtap", "nus333")  # ships in the package
@@ -115,17 +115,21 @@ closure = GTAPClosureConfig(
     fix_endowments=False, fix_taxes=False, fix_technology=False,
     if_sub=False, numeraire="pnum",
 )
-m, _ = build_block_model(params, params.sets, closure, "ROW")
-
 # +10% on the tariff power of US manufacturing exports to ROW, as in a GEMPACK .EXP
-apply_shock(m, {"imptx": {("USA", "MFG", "ROW"): 10.0}})
-results = solve_multiperiod(m, params, closure, mode="gtap", skip_base_solve=True, solve_check=True)
+ex = Exercise(
+    GTAP(params, closure, residual_region="ROW"),
+    gtap_static("gtap", solve_check=True),
+    shock={"imptx": {("USA", "MFG", "ROW"): 10.0}},
+)
+results = ex.run()
+m = ex.model.pyomo  # the solved model
 
-print(results["shock"]["code"])  # 1 = solved
+print(results["shock"]["code"])  # optimal
 print(regional_ev(m))            # {'USA': -0.1079..., 'ROW': 0.0885...}
 ```
 
-The model solves `base → check → shock` in one go, as GAMS's `loop(tsim)`.
+The exercise solves `check → shock` in one go, as GAMS's `loop(tsim)`; the base
+is not solved, its levels are the benchmark.
 The full walk-through, including the comparison against GAMS, is the
 [GTAP quickstart](https://equilibria.readthedocs.io/en/latest/guide/gtap_quickstart.html).
 

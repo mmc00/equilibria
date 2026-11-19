@@ -46,3 +46,9 @@ def test_pyomo_warnings_are_not_results() -> None:
         "a 1.5",
     ]
     assert mismatches(["a 1.5"], old) == []
+
+
+def test_a_printed_optimal_is_the_old_code_1() -> None:
+    """``print(results["shock"]["code"])``: PATH's 1 on the old driver, "optimal" now."""
+    assert mismatches(["optimal", "a 1.5"], ["1", "a 1.5"]) == []
+    assert mismatches(["code 2"], ["1"])

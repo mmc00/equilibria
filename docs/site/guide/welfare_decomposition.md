@@ -21,10 +21,10 @@ free. `regional_ev` does exactly that and leaves the model as it was:
 
 ```python
 from equilibria import load_bundled
-from equilibria.templates.gtap import apply_shock
-from equilibria.templates.gtap.gtap_block_model import build_block_model
+from equilibria.core.exercise import Exercise
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+from equilibria.templates.gtap.recipe import gtap_static
+from equilibria.templates.gtap.template import GTAP
 from equilibria.templates.gtap.welfare_regional import regional_ev
 
 # The model of the GTAP quickstart: +10 % on the tariff power of one route.
@@ -34,9 +34,13 @@ closure = GTAPClosureConfig(
     fix_endowments=False, fix_taxes=False, fix_technology=False,
     if_sub=False, numeraire="pnum",
 )
-m, _ = build_block_model(params, params.sets, closure, "ROW")
-apply_shock(m, {"imptx": {("USA", "MFG", "ROW"): 10.0}})
-solve_multiperiod(m, params, closure, mode="gtap", skip_base_solve=True, solve_check=True)
+ex = Exercise(
+    GTAP(params, closure, residual_region="ROW"),
+    gtap_static("gtap", solve_check=True),
+    shock={"imptx": {("USA", "MFG", "ROW"): 10.0}},
+)
+ex.run()
+m = ex.model.pyomo
 
 print(regional_ev(m))  # in units of regy
 # {'USA': -0.1079..., 'ROW': 0.0885...}

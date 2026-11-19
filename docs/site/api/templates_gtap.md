@@ -1,12 +1,20 @@
 # GTAP template
 
-Public surface of `equilibria.templates.gtap`. The model is built from the
-blocks in `equilibria.blocks.gtap` by `gtap_block_model`; the old single-file
-model (`gtap_model_equations`) is not documented here.
+Public surface of `equilibria.templates.gtap`. An exercise is
+`Exercise(GTAP(...), gtap_static(...), shock=...)`: the `GTAP` template builds the
+model from the blocks in `equilibria.blocks.gtap`, the `gtap_static` recipe says
+how to solve its periods. The old single-file model (`gtap_model_equations`) is not
+documented here.
 
 ```{eval-rst}
-.. automodule:: equilibria.templates.gtap.gtap_block_model
-   :members: build_block_model
+.. automodule:: equilibria.core.exercise
+   :members: Exercise
+
+.. automodule:: equilibria.templates.gtap.template
+   :members: GTAP
+
+.. automodule:: equilibria.templates.gtap.recipe
+   :members: gtap_static
 
 .. automodule:: equilibria.templates.gtap.gtap_contract
    :members:
@@ -18,9 +26,6 @@ model (`gtap_model_equations`) is not documented here.
    :members:
 
 .. automodule:: equilibria.templates.gtap.gtap_solver
-   :members:
-
-.. automodule:: equilibria.templates.gtap.gtap_multiperiod_driver
    :members:
 
 .. automodule:: equilibria.templates.gtap.shocks
