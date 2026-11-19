@@ -306,6 +306,29 @@ def _cascade_derived_seed_mp(m, V, setv, period: str) -> int:
     return n
 
 
+def _solve_gtap(dataset: str, gdx_path: Path, if_sub: bool):
+    """The full multi-period pure-gtap model seeded from ``gdx_path`` in every
+    period, solved base (skipped) -> check -> shock on the core driver. Returns
+    (model, ``{period: {"code": old-form int, "residual": float}}``)."""
+    from _core_run import solve_on_core
+
+    from equilibria.templates.gtap import GTAPParameters
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+
+    d = dataset_dir(dataset)
+    p = GTAPParameters()
+    p.load_from_har(basedata_path=d / "basedata.har", sets_path=d / "sets.har",
+                    default_path=d / "default.prm", baserate_path=d / "baserate.har")
+    rr = list(p.sets.r)[-1]
+    gc = GTAPClosureConfig(
+        name="base", closure_type="MCP", capital_mobility="sluggish",
+        fix_endowments=False, fix_taxes=False, fix_technology=False,
+        if_sub=if_sub, numeraire="pnum")
+    m, codes, core = solve_on_core(p, gc, rr, ref_gdx=gdx_path, seed_gdx=gdx_path)
+    res = {k: {"code": codes[k], "residual": core[k]["residual"]} for k in codes}
+    return m, res
+
+
 def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
                             if_sub: bool):
     """PURE-GTAP (real-CES, non-altertax) variant.
@@ -316,7 +339,7 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
     So we build the FULL multi-period gtap model (mirroring
     test_gtap_multiperiod_parity._solve_and_match / measure_gtap_pure_tols.py),
     seed it from the GAMS gtap GDX (the fixture IS the seed across base/check/shock),
-    solve via solve_multiperiod(mode="gtap"), and compute the residual TAIL for the
+    solve on the core driver (gtap_static, mode "gtap"), and compute the residual TAIL for the
     requested period on a FRESH re-seeded build (so the residual reflects the SEED,
     not the post-solve state — same discipline as the altertax path).
     """
@@ -325,8 +348,6 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
     from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-
     data_dir = dataset_dir(dataset)
 
     def _load_params():
@@ -363,8 +384,10 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
             apply_default_tariff(m, gtap_mode=True)
         return p, gc, m
 
-    # 1) Build + seed + SOLVE the full multi-period gtap model.
-    p, gc, m = _build_seeded()
+    # 1) One hand build holds the SEED: the sentinel before the solve here, the
+    #    residual tail below (it is not solved). The SOLVE runs on the core driver.
+    _p2, _gc2, m2 = _build_seeded()
+    m = m2
 
     def _sentinel():
         # sentinel: the first finite price var FOR THE REQUESTED PERIOD.
@@ -385,10 +408,7 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
 
     sent_name, sent_before = _sentinel()
 
-    res = solve_multiperiod(
-        m, p, gc, ref_gdx=gdx_path,
-        skip_base_solve=True, mute_welfare=True,
-        seed_from_prior=False, mode="gtap")
+    m, res = _solve_gtap(dataset, gdx_path, if_sub)
     code = res.get(period, {}).get("code")
     resid = float(res.get(period, {}).get("residual") or 0.0)
     _, sent_after = _sentinel()
@@ -398,7 +418,6 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
     #    cascade the Python-only derived aggregates for this period BEFORE reading the
     #    residual, else eq_xc/eq_xda/eq_xaa/eq_xigbl carry spurious ~1-2 seed-incomplete
     #    residuals that masquerade as differing equations.
-    _p2, _gc2, m2 = _build_seeded()
 
     def _setv(comp, key, val):
         try:

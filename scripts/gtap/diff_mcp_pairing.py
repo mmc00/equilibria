@@ -359,8 +359,8 @@ def main() -> int:
     args = ap.parse_args()
 
     # mode=gtap UNSUPPORTED: this tool targets the altertax CD model; the
-    # pure-gtap shock is wired in solve_multiperiod (multi-period, in-place
-    # rebuilds). Accept the flag (the orchestrator passes it) but emit an
+    # pure-gtap shock is built in place when the multi-period exercise runs (the
+    # core recipe gtap_static). Accept the flag (the orchestrator passes it) but emit an
     # honest mode_unsupported rather than diff the wrong model. Use
     # seed_and_solve --mode gtap for the pure-gtap diagnostic.
     if args.mode == "gtap":
@@ -398,7 +398,7 @@ def _apply_solver_closure(model, dataset, params):
     # 15x10 altertax) caian bajo el floor — pasan solas y fallan detras de el.  El
     # sintoma enganaba: "Setting Var pwmg[...] to 0.0 outside the bounds", que
     # parece un seed corrupto y era un solve que nunca arranco.  El centinela de
-    # solve_multiperiod no cubre este caso a proposito: solo limpia el valor que
+    # the driver no cubre este caso a proposito: solo limpia el valor que
     # escribe EL MISMO, y uno externo "siempre gana".
     _prev_opts = os.environ.get("PATH_CAPI_OPTIONS")
     os.environ["PATH_CAPI_OPTIONS"] = "major_iteration_limit 0"

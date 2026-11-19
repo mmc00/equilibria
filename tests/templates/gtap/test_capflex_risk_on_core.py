@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 import pytest
+from tests._golden import mismatches
 
 from equilibria.sources import has_dataset
 
@@ -37,7 +38,7 @@ def test_capflex_twin_solve_equals_main(monkeypatch) -> None:
     monkeypatch.setattr(old, "solve_multiperiod", _refuse)
     want = json.loads(GOLDEN.read_text(encoding="utf-8"))["capflex_risk"]
     rec = _recorder()
-    assert rec.mismatches(rec._risk("gtap7_3x3", 0), want["gtap7_3x3-ifsub0"]) == []
+    assert mismatches(rec._risk("gtap7_3x3", 0), want["gtap7_3x3-ifsub0"]) == []
 
 
 def test_solve_block_model_is_gone() -> None:

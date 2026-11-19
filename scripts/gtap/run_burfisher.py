@@ -280,15 +280,16 @@ def solve_exercise(
     *,
     shock_method: str = "nonlinear",
     rows: list[tuple[str, tuple, float]] | None = None,
-    route: str = "old",
+    route: str = "core",
 ):
     """Builds the exercise, applies its shocks and solves base/check/shock.
 
     ``shock_method="johansen"``: the shock as one linear step from check, as the
     book's Johansen exercises (no SHOCK_STEPS). ``rows`` replaces the exercise's
-    shocks (same form as EXERCISES). ``route="core"`` runs the same exercise
-    through ``Exercise(GTAP(...), gtap_static(...))`` instead of
-    ``solve_multiperiod``; the codes keep the old driver's form."""
+    shocks (same form as EXERCISES). It runs on the core driver
+    (``Exercise(GTAP(...), gtap_static(...))``); ``route="old"`` runs the old
+    ``solve_multiperiod`` until PR 4 of gtap-on-core deletes it. The codes keep the
+    old driver's form."""
     if route not in ("old", "core"):
         raise ValueError(f"route must be 'old' or 'core', got {route!r}")
     from equilibria.templates.gtap import GTAPParameters

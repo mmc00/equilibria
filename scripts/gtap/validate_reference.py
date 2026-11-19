@@ -327,9 +327,9 @@ def main() -> int:
     args = ap.parse_args()
 
     # mode=gtap UNSUPPORTED, honestly: the pure-gtap shock equations are produced by
-    # solve_multiperiod(mode="gtap") via an in-place constraint-rebuild SEQUENCE
-    # (_rebuild_eq_pmeq_shock / NatRes anchor / _rebuild_eq_ytax_mt_shock + an imptx
-    # param shock, applied in a specific order). validate_reference checks residuals
+    # the multi-period gtap exercise via an in-place constraint-rebuild SEQUENCE
+    # (pmeq shock / NatRes anchor / ytax[mt] shock + an imptx param shock, applied in
+    # a specific order). validate_reference checks residuals
     # on the AS-BUILT equations; without re-running that exact mutation sequence the
     # shock-period equations here would be the UN-shocked ones, so a residual verdict
     # would be measured against the wrong model. Replicating the sequence risks subtle
@@ -340,8 +340,8 @@ def main() -> int:
             return dict(
                 status="error", period=args.period,
                 headline=("validate_reference does not support --mode gtap: the "
-                          "pure-gtap shock equations are built by solve_multiperiod's "
-                          "in-place rebuild sequence, which this static residual check "
+                          "pure-gtap shock equations are built by the multi-period "
+                          "exercise's in-place rebuild sequence, which this static residual check "
                           "cannot reproduce faithfully. Use seed_and_solve --mode gtap."),
                 violations=[],
                 meta={"error_kind": "mode_unsupported", "mode": "gtap",

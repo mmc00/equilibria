@@ -212,7 +212,7 @@ def main() -> int:
 
     # mode=gtap UNSUPPORTED, honestly: diff_tautology perturbs vars in the SINGLE-period
     # altertax model and measures ∂resid/∂var. The pure-gtap shock equations only exist
-    # after solve_multiperiod's in-place rebuilds (multi-period); perturbing the single-
+    # after the multi-period exercise's in-place rebuilds; perturbing the single-
     # period gtap build would probe the wrong (un-shocked) equations. seed_and_solve
     # --mode gtap is the faithful pure-gtap path (its residual tail already surfaces an
     # unanchored/tautological eq as a high resid-at-GAMS with a clean post-solve resid).
@@ -222,7 +222,7 @@ def main() -> int:
                 status="error", period=args.period,
                 headline=("diff_tautology does not support --mode gtap: it perturbs the "
                           "single-period altertax model; the pure-gtap shock equations are "
-                          "built by solve_multiperiod (multi-period, in-place rebuilds). "
+                          "built when the multi-period exercise runs (in-place rebuilds). "
                           "Use seed_and_solve --mode gtap."),
                 violations=[],
                 meta={"error_kind": "mode_unsupported", "mode": "gtap",

@@ -147,9 +147,14 @@ def _rows(gates: dict[str, Any]) -> Iterator[tuple[str, str, int, Path | None]]:
                 r.ifsub,
                 gates["mcp"]._fixture_gdx(r.dataset, r.ifsub, "altertax"),
             )
-    for ds, ifsub, mode, _floors, status in gates["nlp"]._NLP_CASES:
-        if mode == "altertax" and status != "blocked":
-            yield "nlp", ds, ifsub, gates["nlp"]._fixture_gdx(ds, "altertax", ifsub)
+    for r in gates["nlp"].nlp_rows():
+        if r.mode == "altertax" and r.ci_status != "blocked":
+            yield (
+                "nlp",
+                r.dataset,
+                r.ifsub,
+                gates["nlp"]._fixture_gdx(r.dataset, "altertax", r.ifsub),
+            )
     for r in gates["mp"].altertax_rows():
         # the gate skips the rows checked against GEMPACK (scripts/family)
         if r.ci_status != "blocked" and getattr(r, "reference", "gams") == "gams":
@@ -188,17 +193,22 @@ def measure(out: Path, only: str | None = None, resume: bool = False) -> None:
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
     from equilibria.sources import has_dataset
-    from equilibria.templates.gtap import gtap_multiperiod_driver as drv
 
     gates = {k: _load(k, v) for k, v in GATES.items()}
-    solve: Callable[..., Any] = drv.solve_multiperiod
     captured: list[Any] = []
+    originals: dict[str, Callable[..., Any]] = {k: g.solve for k, g in gates.items()}
 
-    def capture(m: Any, *args: Any, **kwargs: Any) -> Any:
-        captured.append(m)
-        return solve(m, *args, **kwargs)
+    def _capturing(solve: Callable[..., Any]) -> Callable[..., Any]:
+        def capture(*args: Any, **kwargs: Any) -> Any:
+            solved = solve(*args, **kwargs)
+            captured.append(solved.model)
+            return solved
 
-    drv.solve_multiperiod = capture  # the helpers import it at call time
+        return capture
+
+    # each gate solves through the ``solve`` it bound at import (``_routes.solve``)
+    for k, g in gates.items():
+        g.solve = _capturing(originals[k])
     results = initial_results(out, resume)
     try:
         for gate_name, ds, ifsub, gdx in _rows(gates):
@@ -229,7 +239,8 @@ def measure(out: Path, only: str | None = None, resume: bool = False) -> None:
                 flush=True,
             )
     finally:
-        drv.solve_multiperiod = solve
+        for k, g in gates.items():
+            g.solve = originals[k]
 
 
 def main() -> int:
