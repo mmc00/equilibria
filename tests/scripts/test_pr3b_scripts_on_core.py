@@ -37,6 +37,10 @@ def test_compare_gempack_levels_defaults_to_the_core() -> None:
 
 
 GOLDEN = ROOT / "tests/scripts/golden/pr3b_scripts_main.json.gz"
+# A full solve on another machine (Linux CI vs the Mac that recorded the golden):
+# ~6e-12 relative on normal cells, ~2e-11 absolute on residuals near zero (walras).
+# The real changes this PR met were >= 1.5e-8 relative (and a sign flip).
+SOLVE_REL, SOLVE_ABS = 1e-9, 1e-10
 REF = "data/gtap7/gtap7_3x3/gams_mcp_gtap_ifsub{}_fbep-header/out.gdx"
 
 
@@ -122,7 +126,8 @@ def test_script_on_core_equals_main(case: str) -> None:
     want = _golden()[case]
     m, codes = RUN[case]()
     assert codes == want["codes"]
-    assert mismatches(model_levels(m), want["levels"]) == []
+    bad = mismatches(model_levels(m), want["levels"], rel=SOLVE_REL, abs_tol=SOLVE_ABS)
+    assert not bad, f"{len(bad)} cells off, first: {bad[:10]}"
 
 
 @pytest.mark.needs_gdxdump  # the seed reads the GAMS GDX through it

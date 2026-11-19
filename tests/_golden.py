@@ -5,18 +5,22 @@ from __future__ import annotations
 REL_TOL = 1e-12
 
 
-def mismatches(got, want, path: tuple = ()) -> list[str]:
+def mismatches(
+    got, want, path: tuple = (), *, rel: float = REL_TOL, abs_tol: float = 0.0
+) -> list[str]:
     """Where a recomputed record leaves the golden: a key on one side only, or a value
-    off by more than ``REL_TOL`` relative. The golden was recorded on one machine;
-    another CPU or BLAS moves the last bits (~1e-15), a real change moves far more."""
+    off by more than ``abs_tol + rel * max(|got|, |want|)``. The golden was recorded
+    on one machine; another CPU or BLAS moves the last bits (~1e-15 on a settle; on a
+    full solve ~1e-11 relative, and a residual near zero by ~1e-11 absolute, hence
+    ``abs_tol``); a real change moves far more."""
     if isinstance(want, dict) and isinstance(got, dict):
         out = [f"{(*path, k)}: only in golden" for k in want.keys() - got.keys()]
         out += [f"{(*path, k)}: not in golden" for k in got.keys() - want.keys()]
         for k in want.keys() & got.keys():
-            out += mismatches(got[k], want[k], (*path, k))
+            out += mismatches(got[k], want[k], (*path, k), rel=rel, abs_tol=abs_tol)
         return out
     g, w = float(got), float(want)
-    if abs(g - w) > REL_TOL * max(abs(g), abs(w)):
+    if abs(g - w) > abs_tol + rel * max(abs(g), abs(w)):
         return [f"{path}: {g!r} != {w!r}"]
     return []
 
