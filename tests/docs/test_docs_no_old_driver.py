@@ -2,7 +2,8 @@
 
 The README, the guides and the API pages show ``Exercise(GTAP(...), gtap_static(...))``.
 None names an old GTAP driver, nor ``build_block_model`` (the core builds the model
-inside ``run()``): a reader who copies a page must not land on code PR 4 deletes.
+inside ``run()``), nor calls ``apply_shock(m, ...)`` on a built model (the shock
+goes to ``Exercise``): a reader who copies a page must not land on code PR 4 deletes.
 The maintainer notes (``docs/notes``, ``docs/adr``, ``docs/archive``) record history
 and may name them.
 """
@@ -30,4 +31,4 @@ def test_there_are_pages() -> None:
 @pytest.mark.parametrize("page", PAGES, ids=lambda p: p.name)
 def test_user_docs_name_no_old_driver(page: Path) -> None:
     text = page.read_text(encoding="utf-8")
-    assert not [n for n in (*OLD, "build_block_model") if n in text]
+    assert not [n for n in (*OLD, "build_block_model", "apply_shock(m") if n in text]

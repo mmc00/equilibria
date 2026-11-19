@@ -52,3 +52,22 @@ def test_a_printed_optimal_is_the_old_code_1() -> None:
     """``print(results["shock"]["code"])``: PATH's 1 on the old driver, "optimal" now."""
     assert mismatches(["optimal", "a 1.5"], ["1", "a 1.5"]) == []
     assert mismatches(["code 2"], ["1"])
+
+
+QUICKSTART = GOLDEN["docs"]["gtap_quickstart.md"]
+
+
+def test_a_failed_solve_panel_is_a_mismatch() -> None:
+    """The panel's title says whether the solve succeeded: it is a result."""
+    head = next(line for line in QUICKSTART if "SOLVE COMPLETE" in line)
+    failed = head.replace("  SOLVE COMPLETE  ", "  SOLVE FAILED (code optimal)  ")
+    assert mismatches(
+        [failed if line == head else line for line in QUICKSTART], QUICKSTART
+    )
+
+
+def test_the_result_dict_keeps_its_code() -> None:
+    """``print(results["shock"])``: the code is a result, the residual's value is not."""
+    old = ["{'code': 1, 'residual': 8.589158046959055e-14}"]
+    assert mismatches(["{'code': 'optimal', 'residual': 5.1e-13}"], old) == []
+    assert mismatches(["{'code': 'code 2', 'residual': 5.1e-13}"], old)

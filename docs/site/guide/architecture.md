@@ -149,15 +149,16 @@ and the periods in `blocks/gtap/periods.py`.
 The `ShockBlock` declares every policy and technology **instrument** (`imptx`,
 `lambdava`, `aft`, …) as a variable fixed in every period. A **shock** is an
 instrument whose `shock` cell differs from its `check` cell, exactly as in
-GAMS ([ADR-0003](#decisions)). You write it on the built model, in GEMPACK's
-terms: the number is the percentage you would read in a `.EXP` file.
+GAMS ([ADR-0003](#decisions)). You give it to the exercise in GEMPACK's terms:
+the number is the percentage you would read in a `.EXP` file, and the exercise
+writes it in the `shock` period (with `apply_shock`) before solving.
 
 <!-- fragmento -->
 ```python
-from equilibria.templates.gtap import apply_shock
+from equilibria.core.exercise import Exercise
 
 # +10 % on the tariff power (1 + tms) of one route, as in a GEMPACK .EXP
-apply_shock(m, {"imptx": {("EU_28", "Mnfcs", "USA"): 10.0}})
+ex = Exercise(gtap, recipe, shock={"imptx": {("EU_28", "Mnfcs", "USA"): 10.0}})
 ```
 
 Base and check do not move, so they always replicate the benchmark, whatever
