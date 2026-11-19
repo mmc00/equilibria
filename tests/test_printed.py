@@ -1,0 +1,48 @@
+"""``tests/_printed`` keeps the results and catches a changed number."""
+
+from __future__ import annotations
+
+from tests._printed import GOLDEN, mismatches, results
+
+TBL55 = GOLDEN["notebooks"]["TBL55"]
+
+
+def test_results_drop_the_chatter_and_the_codes() -> None:
+    kept = results(TBL55)
+    assert kept[0] == "454 cells (pre and post) against GEMPACK Gragg"
+    assert not [line for line in kept if "codes:" in line or "Jacobian" in line]
+
+
+def test_the_golden_matches_itself() -> None:
+    assert mismatches(TBL55, TBL55) == []
+
+
+def test_a_changed_number_is_caught() -> None:
+    got = [line.replace("28713.6", "28713.7") for line in TBL55]
+    assert mismatches(got, TBL55) == [
+        "line 4: 28713.7 != 28713.6 in "
+        "'qst          post  USA,SER                        28713.6       "
+        "28707.5   0.021%'"
+    ]
+
+
+def test_a_changed_text_or_a_missing_line_is_caught() -> None:
+    assert mismatches([*TBL55[:-1], "not every cell"], TBL55)
+    assert mismatches(TBL55[:-1], TBL55)
+
+
+def test_another_solver_code_line_is_not_a_result() -> None:
+    old = ["codes: {'base': 1, 'check': 1, 'shock': 1}", "a 1.5"]
+    core = ["codes: {'check': 'optimal', 'shock': 'optimal'}", "a 1.5"]
+    assert mismatches(core, old) == []
+
+
+def test_pyomo_warnings_are_not_results() -> None:
+    """The old driver's Johansen path set pwmg to 0 below its bound; Pyomo said so."""
+    old = [
+        "WARNING (W1002): Setting Var 'pwmg[USA,AGR,USA,shock]' to a numeric value",
+        "`0.0` outside the bounds (0.001, None).",
+        "    See also https://pyomo.readthedocs.io/en/stable/errors.html#w1002",
+        "a 1.5",
+    ]
+    assert mismatches(["a 1.5"], old) == []

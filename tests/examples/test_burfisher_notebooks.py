@@ -31,7 +31,8 @@ import sys
 from pathlib import Path
 
 import pytest
-from tests.templates.gtap._routes import ROUTES
+from tests._printed import GOLDEN, mismatches
+from tests.scripts.test_no_old_driver_in_scripts import OLD
 
 ROOT = Path(__file__).resolve().parents[2]
 NB_DIR = ROOT / "examples" / "notebooks" / "gtap7" / "burfisher"
@@ -60,21 +61,6 @@ def _cells_code(nb: dict) -> str:
     return "\n\n".join(
         "".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code"
     )
-
-
-def _route_code(exp: str, route: str) -> str:
-    """The notebook's code: the committed file on the old route; on the core route
-    the generator's ``notebook(exp, route="core")`` (``Exercise``), not committed
-    (PR 3 of gtap-on-core regenerates the notebooks on it)."""
-    if route == "old":
-        return _code(NB_DIR / f"{exp.lower()}.ipynb")
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location("make_notebooks", GENERATOR)
-    assert spec is not None and spec.loader is not None
-    gen = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(gen)
-    return _cells_code(gen.notebook(exp, route=route))
 
 
 def _run(code: str, where: Path) -> subprocess.CompletedProcess:
@@ -108,6 +94,15 @@ def test_notebooks_are_what_the_generator_writes(tmp_path: Path) -> None:
         assert (tmp_path / name).read_bytes() == (NB_DIR / name).read_bytes(), name
 
 
+def test_notebooks_use_only_the_core_driver() -> None:
+    """Code and markdown: no notebook builds, shocks or solves with the old driver."""
+    old = (*OLD, "build_block_model", "apply_shock")
+    for nb in sorted(NB_DIR.glob("*.ipynb")):
+        text = nb.read_text(encoding="utf-8")
+        assert "Exercise(" in text, nb.name
+        assert not [n for n in old if n in text], nb.name
+
+
 def test_notebooks_name_the_prm_files_as_they_are() -> None:
     """With the exact case: Linux (the CI) does not find 3x3CES.prm as 3x3ces.prm."""
     import re
@@ -127,25 +122,36 @@ def test_every_notebook_clears_hooks_before_registering() -> None:
             assert code.index("overwrite.clear()") < code.index("@overwrite"), nb.name
 
 
+def _prints_what_main_printed(exp: str, stdout: str) -> None:
+    """The same report as the old driver's notebook on main (PR 3c oracle)."""
+    assert not mismatches(stdout.splitlines(), GOLDEN["notebooks"][exp]), exp
+
+
 @pytest.mark.needs_path
-@pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize("exp", MATCHED)
-def test_notebook_matches_gempack(exp: str, route: str, tmp_path: Path) -> None:
-    r = _run(_route_code(exp, route), tmp_path)
+def test_notebook_matches_gempack(exp: str, tmp_path: Path) -> None:
+    r = _run(_code(NB_DIR / f"{exp.lower()}.ipynb"), tmp_path)
     assert r.returncode == 0, r.stderr[-3000:]
     assert "every cell within 0.5% of GEMPACK" in r.stdout
     assert (JOHANSEN_OK in r.stdout) == (exp in JOHANSEN), exp
+    _prints_what_main_printed(exp, r.stdout)
 
 
 @pytest.mark.needs_path
-@pytest.mark.parametrize("route", ROUTES)
+@pytest.mark.parametrize("exp", UNCHECKED)
+def test_unchecked_notebook_prints_what_main_printed(exp: str, tmp_path: Path) -> None:
+    r = _run(_code(NB_DIR / f"{exp.lower()}.ipynb"), tmp_path)
+    assert r.returncode == 0, r.stderr[-3000:]
+    _prints_what_main_printed(exp, r.stdout)
+
+
+@pytest.mark.needs_path
 @pytest.mark.parametrize("exp", JOHANSEN_ONLY)
-def test_johansen_notebook_matches_the_book(
-    exp: str, route: str, tmp_path: Path
-) -> None:
-    r = _run(_route_code(exp, route), tmp_path)
+def test_johansen_notebook_matches_the_book(exp: str, tmp_path: Path) -> None:
+    r = _run(_code(NB_DIR / f"{exp.lower()}.ipynb"), tmp_path)
     assert r.returncode == 0, r.stderr[-3000:]
     assert JOHANSEN_OK in r.stdout
+    _prints_what_main_printed(exp, r.stdout)
 
 
 @pytest.mark.needs_path
