@@ -48,7 +48,7 @@ def _closure_of(ds):
 @pytest.fixture(scope="module", params=DATASETS, ids=_ids)
 def case(request):
     from equilibria.family.prep_capture import pairs
-    from equilibria.family.prep_recipe import sp_reference_arrays
+    from equilibria.family.sp_arrays import sp_reference_arrays
 
     ds = request.param
     p = _params(ds)

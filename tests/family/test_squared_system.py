@@ -174,8 +174,8 @@ def test_incidence_keeps_structural_zeros(inc):
 
 def test_square_with_pattern_incidence(inc):
     from equilibria.family.mp_arrays import MPArrays, compare, squared_from_photo
-    from equilibria.family.prep_recipe import sp_reference_arrays
     from equilibria.family.prep_square import ConditionalMasks, square
+    from equilibria.family.sp_arrays import sp_reference_arrays
 
     p = _params(DATASET)
     ref = sp_reference_arrays(p, _closure(), list(p.sets.r)[-1])
@@ -218,8 +218,8 @@ FOLDED_BY_FIXED_ZERO = {"eq_ytax"}
 def systems(inc):
     """(call, SquaredSystem, incidence used, sq) for every 3x3 solve call."""
     from equilibria.family.mp_arrays import MPArrays
-    from equilibria.family.prep_recipe import sp_reference_arrays
     from equilibria.family.prep_square import ConditionalMasks, square
+    from equilibria.family.sp_arrays import sp_reference_arrays
     from equilibria.family.squared_system import SquaredSystem
 
     p = _params(DATASET)
@@ -570,7 +570,7 @@ def _real_square(a, p, ref, masks, backend, state, cross):
 
 @pytest.fixture(scope="module")
 def real_systems(inc, cross):
-    from equilibria.family.prep_recipe import sp_reference_arrays
+    from equilibria.family.sp_arrays import sp_reference_arrays
 
     p = _params(DATASET)
     ref = sp_reference_arrays(p, _closure(), list(p.sets.r)[-1])
@@ -605,8 +605,8 @@ def test_real_system_matches_pyomo_3x3(real_systems, pyomo_mp):
 
 def test_cross_rows_missing_raise_without_proxies(inc):
     """Without the cross recording an active cross-period row is an error."""
-    from equilibria.family.prep_recipe import sp_reference_arrays
     from equilibria.family.prep_square import square
+    from equilibria.family.sp_arrays import sp_reference_arrays
     from equilibria.family.squared_system import SquaredSystem
 
     p = _params(DATASET)

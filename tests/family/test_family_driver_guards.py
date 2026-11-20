@@ -402,7 +402,7 @@ def test_family_backend_load_runs_with_gc_paused(tmp_path, monkeypatch):
 def _stub_prepare_run(monkeypatch, seen):
     import types
 
-    from equilibria.family import cross_period, disk_cache, prep_recipe, prep_square
+    from equilibria.family import cross_period, disk_cache, prep_square, sp_arrays
     from equilibria.family import driver as drv
     from equilibria.templates.gtap import residual_region as rr
 
@@ -429,7 +429,7 @@ def _stub_prepare_run(monkeypatch, seen):
     monkeypatch.setattr(cross_period, "load_or_record", load_cross)
     monkeypatch.setattr(drv.MPArrays, "build", staticmethod(build))
     monkeypatch.setattr(rr, "resolve_residual_region", lambda *a, **k: "R")
-    monkeypatch.setattr(prep_recipe, "sp_reference_arrays", lambda *a, **k: None)
+    monkeypatch.setattr(sp_arrays, "sp_reference_arrays", lambda *a, **k: None)
     monkeypatch.setattr(
         prep_square.ConditionalMasks, "from_params", staticmethod(lambda *a, **k: None)
     )

@@ -148,6 +148,7 @@ repos:
               src/equilibria/templates/gtap/gtap_sets\.py|
               src/equilibria/templates/gtap/gtap_solver\.py|
               src/equilibria/templates/gtap/parity_adapter\.py|
+              src/equilibria/templates/gtap/pyomo_ops\.py|
               src/equilibria/templates/gtap/shocks\.py|
               src/equilibria/templates/gtap/welfare_shadow\.py|
               src/equilibria/templates/init_strategies/base\.py|

@@ -62,7 +62,7 @@ def _calls(d: Path) -> dict[int, str]:
 def case(request, tmp_path_factory):
     from equilibria.family import cross_period
     from equilibria.family.disk_cache import load_or_build
-    from equilibria.family.prep_recipe import sp_reference_arrays
+    from equilibria.family.sp_arrays import sp_reference_arrays
     from tests.family.test_squared_system import _route_closure
 
     ds = request.param

@@ -46,7 +46,7 @@ _DUP_VARS = ("mfr_bs", "mfr_sb", "mfr_ss", "mfw_bs", "mfw_sb", "mfw_ss")
 def test_sp_reference_has_no_duplicate_fisher_aggregates(dataset, if_sub, monkeypatch):
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_multiperiod_driver import _build_sp_reference
+    from equilibria.templates.gtap.sp_reference import build_sp_reference
 
     d = dataset_dir(dataset)
     p = GTAPParameters()
@@ -73,7 +73,7 @@ def test_sp_reference_has_no_duplicate_fisher_aggregates(dataset, if_sub, monkey
     # creia pedir (medido: con "BASURA_XYZ" pasaba igual).  Ahora el valor se
     # valida y "blocks" significa bloques, asi que la intencion queda expresada.
     monkeypatch.setenv("EQUILIBRIA_GTAP_REF_MODEL", "blocks")
-    sp = _build_sp_reference(p.sets, p, gc, rr)
+    sp = build_sp_reference(p.sets, p, gc, rr)
 
     sobran = [n for n in _DUP_EQS if getattr(sp, n, None) is not None]
     assert not sobran, (

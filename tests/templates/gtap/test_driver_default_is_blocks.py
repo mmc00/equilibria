@@ -43,7 +43,7 @@ def _cuenta_monolitos(model, monkeypatch) -> int:
     miden lo mismo (`test_driver_ref_model_source`, `test_mp_builder_uses_blocks`).
     """
     from equilibria.templates.gtap import gtap_model_equations as ME
-    from equilibria.templates.gtap.gtap_multiperiod_driver import _build_sp_reference
+    from equilibria.templates.gtap.sp_reference import build_sp_reference
 
     p, gc = _load_3x3_params(), _closure()
     rr = list(p.sets.r)[-1]
@@ -56,7 +56,7 @@ def _cuenta_monolitos(model, monkeypatch) -> int:
         original(self, *a, **k)
 
     monkeypatch.setattr(ME.GTAPModelEquations, "__init__", contando)
-    _build_sp_reference(p.sets, p, gc, rr, model=model)
+    build_sp_reference(p.sets, p, gc, rr, model=model)
     return n["v"]
 
 

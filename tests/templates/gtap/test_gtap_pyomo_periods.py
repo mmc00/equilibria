@@ -82,21 +82,20 @@ def test_exogenous_is_the_shock_period(built) -> None:
 
 
 def test_reference_matches_sp_snapshot(built) -> None:
-    from equilibria.templates.gtap import gtap_multiperiod_driver as drv
     from equilibria.templates.gtap.period_rules import period_closures
+    from equilibria.templates.gtap.pyomo_ops import mp_index
+    from equilibria.templates.gtap.sp_reference import build_sp_reference, sp_snapshot
 
     gm, m, p = built
     base, _ = period_closures(_closure())
     ref = gm.sp_reference(base, p, "base", fresh=True)
-    snap = drv._sp_snapshot(
-        drv._build_sp_reference(p.sets, p, base, m._residual_region, model=m)
-    )
+    snap = sp_snapshot(build_sp_reference(p.sets, p, base, m._residual_region, model=m))
     want_fixed = {
-        name: {drv._mp_index(ix, k, "base")[:-1]: v for k, v in cells}
+        name: {mp_index(ix, k, "base")[:-1]: v for k, v in cells}
         for name, (ix, cells) in snap.fixed.items()
     }
     want_bounds = {
-        name: {drv._mp_index(ix, k, "base")[:-1]: (lb, ub) for k, lb, ub in cells}
+        name: {mp_index(ix, k, "base")[:-1]: (lb, ub) for k, lb, ub in cells}
         for name, (ix, cells) in snap.bounds.items()
     }
     assert ref.fixed == want_fixed

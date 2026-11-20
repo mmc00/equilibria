@@ -133,13 +133,13 @@ def test_cache_de_modelos_se_salta_con_hooks():
 def test_monolito_con_hooks_falla(monkeypatch):
     """El monolito no ve los hooks: con hooks activos pedirlo es un error, no un
     silencio (el SP de referencia volveria a fijar aft[USA,LABOR])."""
-    from equilibria.templates.gtap.gtap_multiperiod_driver import _build_sp_reference
+    from equilibria.templates.gtap.sp_reference import build_sp_reference
 
     p = nus333_params()
     register_unemployment_hooks()
     monkeypatch.setenv("EQUILIBRIA_GTAP_REF_MODEL", "monolith")
     with pytest.raises(RuntimeError, match="overwrite"):
-        _build_sp_reference(p.sets, p, closure(), "ROW")
+        build_sp_reference(p.sets, p, closure(), "ROW")
 
 
 # ------------------------------------------------------------------------ modelo
@@ -147,11 +147,11 @@ def test_monolito_con_hooks_falla(monkeypatch):
 
 def test_sp_de_referencia_del_driver_con_hooks():
     """El SP que lee el driver tiene la celda libre y la fila."""
-    from equilibria.templates.gtap.gtap_multiperiod_driver import _build_sp_reference
+    from equilibria.templates.gtap.sp_reference import build_sp_reference
 
     p = nus333_params()
     register_unemployment_hooks()
-    sp = cast(Any, _build_sp_reference(p.sets, p, closure(), "ROW"))
+    sp = cast(Any, build_sp_reference(p.sets, p, closure(), "ROW"))
 
     assert not sp.aft["USA", "LABOR"].fixed
     assert sp.aft["ROW", "LABOR"].fixed

@@ -35,6 +35,7 @@ _MONOLITH = (
 )
 UNTIL_PR4: dict[str, str] = {
     "scripts/dev/record_pr3b_scripts.py": "records the old driver's results: the PR 3b oracle",
+    "scripts/dev/record_pr4_old_route.py": "records the old drivers' results: the PR 4 oracle",
     "scripts/family/budget_20x41.py": _TIMES_OLD,
     "scripts/family/fscale_check.py": _TIMES_OLD,
     "scripts/family/newton_checkpoint.py": _TIMES_OLD,

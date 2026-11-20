@@ -189,7 +189,7 @@ def test_build_refuses_overwrite_hooks(case, monkeypatch):
 
 
 def test_sp_reference_from_composed_state_is_bitwise_todays(case):
-    from equilibria.family.prep_recipe import sp_reference_arrays
+    from equilibria.family.sp_arrays import sp_reference_arrays
 
     p, closure, rr = case["params"], case["closure"], case["rr"]
     want = sp_reference_arrays(p, closure, rr)

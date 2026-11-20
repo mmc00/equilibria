@@ -76,7 +76,7 @@ def _key(idx) -> tuple:
 
 @pytest.mark.parametrize("dataset", SP_DATASETS)
 def test_sp_ref_arrays_equal_pyomo_snapshot(dataset):
-    from equilibria.family.prep_recipe import sp_reference_arrays
+    from equilibria.family.sp_arrays import sp_reference_arrays
     from equilibria.templates.gtap import gtap_multiperiod_driver as d
 
     p = _params(dataset)
@@ -176,7 +176,7 @@ def _report(diffs) -> str:
 @pytest.fixture(scope="module", params=DATASETS)
 def case(request):
     from equilibria.family.prep_capture import load_a2, pairs
-    from equilibria.family.prep_recipe import sp_reference_arrays
+    from equilibria.family.sp_arrays import sp_reference_arrays
 
     ds = request.param
     d = capture_dir(ds)

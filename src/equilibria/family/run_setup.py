@@ -227,8 +227,8 @@ def prepare_run(
     before the cache keys are taken."""
     from equilibria.family import cross_period
     from equilibria.family.disk_cache import cache_key, enable_jax_cache, load_or_build
-    from equilibria.family.prep_recipe import sp_reference_arrays
     from equilibria.family.prep_square import ConditionalMasks
+    from equilibria.family.sp_arrays import sp_reference_arrays
     from equilibria.templates.gtap.residual_region import resolve_residual_region
 
     residual_region = resolve_residual_region(

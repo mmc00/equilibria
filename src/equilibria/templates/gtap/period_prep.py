@@ -35,6 +35,13 @@ from equilibria.templates.gtap.period_rules import F35_DERIVED_DEMAND
 from equilibria.templates.gtap.period_rules import RECALIBRATE_FROM as _RECALIBRATE_FROM
 from equilibria.templates.gtap.period_rules import SHOCK_PNUM as _SHOCK_PNUM
 
+# moved (PR 4 of gtap-on-core); the old names stay until this file goes
+from equilibria.templates.gtap.sp_reference import (  # noqa: E402,F401
+    _SHARED_SP_REF,
+    _shared_get,
+    _shared_put,
+)
+
 _log = logging.getLogger(__name__)
 
 
@@ -349,30 +356,6 @@ _RECIPES: dict[tuple[str, str], _Recipe] = {
 }
 
 _CHECK_COPIED = _Recipe(steps=(_copy_from_base,), closure=None)
-
-
-# Foto del modelo de referencia compartida entre las corridas que reciben el mismo
-# objeto ``params``: id(params) -> (ref debil a params, clave, SPSnapshot).  Por id
-# y no como clave debil porque ``GTAPParameters`` no es hasheable (dataclass con
-# igualdad); la ref debil confirma que el id sigue siendo de ese objeto y un
-# finalizador borra la entrada cuando ``params`` muere.  Fuera de los atributos de
-# ``params`` y de ``m``: el cache del modelo los serializa, y su clave digiere todos
-# los atributos de ``params``.
-_SHARED_SP_REF: dict[int, tuple[weakref.ref, str, Any]] = {}
-
-
-def _shared_get(params, key: str):
-    entry = _SHARED_SP_REF.get(id(params))
-    if entry is None or entry[0]() is not params or entry[1] != key:
-        return None
-    return entry[2]
-
-
-def _shared_put(params, key: str, snap) -> None:
-    pid = id(params)
-    if pid not in _SHARED_SP_REF:
-        weakref.finalize(params, _SHARED_SP_REF.pop, pid, None)
-    _SHARED_SP_REF[pid] = (weakref.ref(params), key, snap)
 
 
 class PeriodPreparer:
