@@ -12,7 +12,8 @@ from cascade_config import resolve_ref_gdx, resolve_periods, scenario_for
 from cascade_run import sweep_period
 from cascade_classify import EXPLAIN_STOP
 
-_SOURCE_LABEL = {"durable": "durable", "adapter_output": "adapter-fallback",
+_SOURCE_LABEL = {"explicit": "explicit", "gams_reference": "gams-reference",
+                 "durable": "durable", "adapter_output": "adapter-fallback",
                  "missing": "missing"}
 
 

@@ -5,11 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
-from equilibria._local_refs import refs_dir
 from equilibria.sources import find_reference
 
 ROOT = Path(__file__).resolve().parents[2]
-DURABLE_REFS = Path(str(refs_dir()))
 # Pure-gtap (real-CES, non-altertax) solved refs live committed under the .nl
 # fixture tree, one per ifSUB mode (distinct from the altertax out_altertax_*).
 
@@ -44,7 +42,7 @@ def resolve_periods(dataset: str, requested: list[str]) -> tuple[list[str], list
 @dataclass
 class GdxResolution:
     path: Optional[Path]
-    source: str   # "durable" | "adapter_output" | "missing"
+    source: str   # "explicit" | "gams_reference" | "missing"
     note: str
     usable: bool
 
@@ -58,10 +56,10 @@ def resolve_ref_gdx(dataset: str, *, mode: str = "altertax", ifsub: int = 0,
     """Resolve the reference GDX for the cascade.
 
     explicit  : an exact GDX path the caller passes (--ref); wins if it exists.
-    mode=gtap : the pure-gtap (real-CES) GAMS MCP reference recorded under
-                data/ (fbep=header, one per ifSUB).
-    mode=altertax (default) : the durable altertax CD ref (ifsub0 only, the
-                cascade's original target) with the gitignored adapter fallback.
+    mode=gtap | altertax (default) : the GAMS MCP reference of that mode recorded
+                under data/ (fbep=header, one per ifSUB), the one the MCP gate
+                compares against. The old durable altertax CD ref (June 2026) no
+                longer matches the model: its point is not a fixed point (MAR-216).
     """
     if explicit is not None:
         if _ok(explicit):
@@ -69,28 +67,12 @@ def resolve_ref_gdx(dataset: str, *, mode: str = "altertax", ifsub: int = 0,
         return GdxResolution(None, "missing",
                              f"explicit ref does not exist/non-empty: {explicit}", False)
 
-    if mode == "gtap":
-        folder = find_reference(dataset, "gams", form="mcp", mode="gtap",
-                                ifsub=ifsub, fbep="header")
-        ref = None if folder is None else folder / "out.gdx"
-        if ref is not None and _ok(ref):
-            return GdxResolution(ref, "gams_reference",
-                                 f"pure-gtap GAMS MCP reference {ref}", True)
-        return GdxResolution(None, "missing",
-                             f"NO usable pure-gtap GAMS MCP reference for {dataset} "
-                             f"ifSUB={ifsub}", False)
-
-    durable = DURABLE_REFS / f"{dataset}_altertax_cd" / f"out_altertax_ifsub{ifsub}.gdx"
-    if _ok(durable):
-        return GdxResolution(durable, "durable", f"durable ref {durable}", True)
-    adapter_out = ROOT / "output" / f"{dataset}_altertax_neos_bundle" / "out_local.gdx"
-    if _ok(adapter_out):
-        return GdxResolution(
-            adapter_out, "adapter_output",
-            f"FALLBACK: durable ref absent at {durable}; using gitignored "
-            f"{adapter_out} (may be stale — verify before trusting dirty/clean)",
-            True)
-    return GdxResolution(
-        None, "missing",
-        f"NO usable ref GDX: neither {durable} nor {adapter_out} exists/non-empty",
-        False)
+    folder = find_reference(dataset, "gams", form="mcp", mode=mode,
+                            ifsub=ifsub, fbep="header")
+    ref = None if folder is None else folder / "out.gdx"
+    if ref is not None and _ok(ref):
+        return GdxResolution(ref, "gams_reference",
+                             f"{mode} GAMS MCP reference {ref}", True)
+    return GdxResolution(None, "missing",
+                         f"NO usable {mode} GAMS MCP reference for {dataset} "
+                         f"ifSUB={ifsub}", False)
