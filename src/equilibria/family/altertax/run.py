@@ -302,13 +302,10 @@ def solve_altertax(
 
 
 def _int_code(status: str) -> int:
-    """The core status as the old int code: ``"optimal"`` is 1, ``"code <n>"`` n."""
-    if status == "optimal":
-        return 1
-    try:
-        return int(str(status).split()[-1])
-    except ValueError:
-        return 2
+    """The core status as the old int code (``shock_session._code``)."""
+    from equilibria.family.shock_session import _code
+
+    return _code(status)
 
 
 def _last_nit(solves: list[dict], period: str) -> int | None:

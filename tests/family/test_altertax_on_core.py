@@ -122,3 +122,48 @@ def test_a_warm_sub_step_lands_where_a_cold_one_does(newton_env) -> None:
             == []
         )
     assert rw["nit"] <= rc["nit"]
+
+
+@pytest.mark.parametrize(
+    "status",
+    ["error: RuntimeError: MUMPS factorization error: 1", "error: ValueError: boom"],
+)
+def test_a_raised_solve_is_never_read_as_a_code(status: str) -> None:
+    """The core turns a solver exception into an ``"error: ..."`` status; read as an
+    int code it could come out 1 (solved) from the message's last word."""
+    from equilibria.family.altertax.run import _int_code
+    from equilibria.family.shock_session import _code
+
+    for read in (_int_code, _code):
+        with pytest.raises(RuntimeError, match="raised"):
+            read(status)
+
+
+def test_status_codes() -> None:
+    from equilibria.family.altertax.run import _int_code
+
+    assert [_int_code(s) for s in ("optimal", "code 2", "code -9", "not solved")] == [
+        1,
+        2,
+        -9,
+        2,
+    ]
+
+
+def test_a_raising_shock_solve_stops_the_run(newton_env, monkeypatch) -> None:
+    """As on main, an exception from the shock's Newton solve reaches the caller; it
+    does not come back as a code (here one that would read as solved)."""
+    from equilibria._local_refs import nus333_dir
+    from equilibria.family import period_newton, phases
+    from equilibria.family.altertax.run import solve_altertax
+
+    orig = period_newton._newton
+
+    def raising(*args, **kw):
+        if list(phases.CURRENT._prefix[:1]) == ["shock"]:
+            raise RuntimeError("MUMPS factorization error: 1")
+        return orig(*args, **kw)
+
+    monkeypatch.setattr(period_newton, "_newton", raising)
+    with pytest.raises(RuntimeError, match="MUMPS factorization error: 1"):
+        solve_altertax(nus333_dir(), cache_root=newton_env / "c")

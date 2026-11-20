@@ -12,6 +12,7 @@ three methods, same returns.
 from __future__ import annotations
 
 import dataclasses
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, cast
@@ -88,7 +89,7 @@ class ShockSession:
             shock=shock,
         )
         solves = [dict(r) for r in self.run.solves[n0:]]
-        code = 1 if res["code"] == "optimal" else _code(res["code"])
+        code = _code(res["code"])
         stats = {
             "code": code,
             "residual": res["residual"],
@@ -187,8 +188,14 @@ def _refresh_aggregates(ctx: StepContext) -> None:
 
 
 def _code(status: str) -> int:
-    """``"code <n>"`` (the core solver's failure status) as the int ``n``."""
-    try:
-        return int(str(status).split()[-1])
-    except ValueError:
-        return 2
+    """The core status as the old int code: ``"optimal"`` is 1, ``"code <n>"`` is
+    ``n``, any other status (``"not solved"``) 2. An ``"error: ..."`` status (the
+    solver raised; the core keeps the message) raises again, as the old driver let
+    the exception through: its last word must never be read as a code."""
+    status = str(status)
+    if status == "optimal":
+        return 1
+    if status.startswith("error:"):
+        raise RuntimeError(f"the solve raised: {status[len('error:') :].strip()}")
+    m = re.fullmatch(r"code (-?\d+)", status)
+    return int(m.group(1)) if m else 2
