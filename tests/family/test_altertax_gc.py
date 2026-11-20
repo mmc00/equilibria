@@ -72,22 +72,24 @@ def test_freeze_now_does_not_collect(clean_gc, monkeypatch):
 def test_solve_altertax_keeps_the_gc_setup_through_the_decomp_path(
     clean_gc, monkeypatch
 ):
-    """The decomposition path runs after ``solve_gtap_family`` returns; it is still
-    frozen and under the raised threshold. Everything is restored when the run ends."""
-    from equilibria.family import driver as drv
+    """The decomposition path runs after the periods are flown; it is still frozen
+    and under the raised threshold. Everything is restored when the run ends."""
+    from equilibria.core import driver as core_driver
     from equilibria.family.altertax import path as altpath
     from equilibria.family.altertax import run as altrun
+    from equilibria.templates.gtap.template import GTAP
 
     seen = {}
-    monkeypatch.setattr(drv, "check_supported", lambda **k: None)
+    frun = types.SimpleNamespace(regions=["ROW"], residual_region="ROW", solves=[])
+    mp = types.SimpleNamespace(copy=lambda: mp)
+    model = types.SimpleNamespace(run=frun, mp=mp)
+    monkeypatch.setattr(GTAP, "build", lambda self, names, overwrite: model)
 
-    def fake_solve_family(*a, **k):
-        seen["solve"] = _state()
-        return types.SimpleNamespace(
-            results={"check": {"code": 1}, "shock": {"code": 1}}
-        )
+    def fake_fly_period(model, recipe, period, **k):
+        seen.setdefault("solve", _state())
+        return {"code": "optimal", "residual": 0.0}
 
-    monkeypatch.setattr(drv, "_solve_family", fake_solve_family)
+    monkeypatch.setattr(core_driver, "fly_period", fake_fly_period)
 
     def fake_path(run, shock, steps):
         seen["path"] = _state()

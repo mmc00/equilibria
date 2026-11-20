@@ -32,7 +32,7 @@ START_TOL = 1e-12  # the shock's start residual on the index rows
 
 @pytest.fixture(scope="module")
 def zero_run(tmp_path_factory):
-    import equilibria.family.driver as drv
+    import equilibria.family.period_newton as drv
 
     mp = pytest.MonkeyPatch()
     env = {**_newton_mumps(), "EQUILIBRIA_GTAP_TR_LINSOLVE": "direct"}
@@ -44,7 +44,7 @@ def zero_run(tmp_path_factory):
     columns: list[list[str]] = []
     orig = drv._newton
 
-    def spy(ss, sq):
+    def spy(ss, sq, border=None):
         F0 = np.asarray(ss.F(ss.x0))
         columns.append(list(sq.col_names))
         starts.append(
@@ -54,7 +54,7 @@ def zero_run(tmp_path_factory):
                 if n.startswith(INDEX_ROWS)
             }
         )
-        return orig(ss, sq)
+        return orig(ss, sq, border)
 
     mp.setattr(drv, "_newton", spy)
     try:

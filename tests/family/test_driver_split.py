@@ -17,8 +17,6 @@ CORE_USERS = (
     "src/equilibria/templates/gtap/template.py",
     "src/equilibria/solver/newton_gtap.py",
     "src/equilibria/family/altertax",
-    # Task 3 of the PR 3d plan moves solve_altertax; until then it calls the old driver
-    ":!src/equilibria/family/altertax/run.py",
 )
 
 

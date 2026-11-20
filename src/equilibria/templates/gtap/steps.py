@@ -230,6 +230,9 @@ def seed_from(prior: str, *, only_if: bool = True) -> Step:
             )
         m.refresh_fisher_aggregates()
 
+    # a warm re-solve of the period (``family.shock_session``) swaps this seed for a
+    # refresh of the aggregates: it names the step by this attribute
+    step.seeds_from = prior  # type: ignore[attr-defined]
     return step
 
 

@@ -1,5 +1,6 @@
-"""ALTERTAX on nus333 through the array driver: load ``altertax.prm``, solve base,
-check and shock. No Pyomo here."""
+"""ALTERTAX on nus333 on the family backend: load ``altertax.prm``, solve base, check
+and shock through the core driver (``GTAP(backend="family")`` + ``gtap_static``). No
+Pyomo here."""
 
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from equilibria.family.altertax.closure import ALTAX_RESIDUAL_REGION, altertax_closure
-from equilibria.family.driver import FamilyResult, solve_gtap_family
+from equilibria.family.mp_arrays import MPArrays
 from equilibria.solver.gc_tuning import _gc_family_scope
 from equilibria.templates.gtap import GTAPParameters
 
@@ -25,9 +26,22 @@ _CELL_SETS = {"prdtx_rai": ("r", "a", "i")}
 
 
 @dataclass
+class AltertaxResult:
+    """What the run leaves: the arrays after the shock (``mp``), the check and shock
+    ``results`` (``{"code": int, "residual", "nit"}``, code 1 = solved), every Newton
+    solve record of the run (``solves``) and, with ``decomp_steps``, the shock session
+    of the path decomposition (``session``)."""
+
+    mp: MPArrays
+    results: dict[str, dict[str, Any]]
+    solves: list[dict] = field(default_factory=list)
+    session: Any = None
+
+
+@dataclass
 class AltertaxRun:
     params: GTAPParameters
-    result: FamilyResult
+    result: AltertaxResult
     codes: dict[str, int]
     minutes: float
     dataset_dir: Path
@@ -39,7 +53,7 @@ class AltertaxRun:
     _headers: dict = field(default_factory=dict, init=False, repr=False, compare=False)
 
     def solve_records(self) -> list[dict]:
-        """Every Newton solve of the run (``FamilyResult.solves``: settle, check, shock
+        """Every Newton solve of the run (``AltertaxResult.solves``: settle, check, shock
         and its ratio iterations) then every step of the decomp path, in order; each
         ``{"solve", "code", "nit", "residual", "null_pivots", "gmin_retries", ...}``."""
         recs = [dict(r) for r in getattr(self.result, "solves", ()) or ()]
@@ -201,8 +215,8 @@ def solve_altertax(
     :func:`decomp.decomp_headers`, exact to first order (the Burfisher ALTAX shock is
     ~1e-5). An int K, or ``"auto"`` (K doubled until the EV settles), solves the shock
     path in K sub-steps and integrates the decomposition along it
-    (:func:`path.solve_decomp_path`, ``run.decomp_path``); the run keeps its solver
-    session (``run.result.session``) for that.
+    (:func:`path.solve_decomp_path`, ``run.decomp_path``); the run keeps its shock
+    session (``run.result.session``, a ``family.shock_session.ShockSession``) for that.
 
     ``residual_region`` is the region whose ``cgdslack`` is exogenous (``ROW`` in
     nus333's ``altax.exp``; :func:`closure.residual_region_from_exp` reads it from a
@@ -218,26 +232,86 @@ def solve_altertax(
             f"residual region {residual_region!r} is not a region of the data "
             f"{list(p.sets.r)}: no eq_savf / eq_yi row would be dropped"
         )
+    from equilibria.core.driver import fly_period
+    from equilibria.family.period_newton import world_income
+    from equilibria.family.shock_session import ShockSession
+    from equilibria.templates.gtap.recipe import gtap_static
+    from equilibria.templates.gtap.template import GTAP
+
+    template = GTAP(
+        p,
+        altertax_closure(),
+        residual_region=residual_region,
+        base_calibrated=True,
+        backend="family",
+        cache_root=cache_root,
+        newton_tol=ALTAX_NEWTON_TOL,
+    )
+    # GEMPACK's del_tbal(USA) = 0: the nominal balance, not savf = pigbl * savf_bar;
+    # "ratio": del_tbalry(r) = 0 (savf / world income)
+    recipe = gtap_static(
+        "gtap", base_calibrated=True, solve_check=True, trade_balance=trade_balance
+    )
     # one GC setup over the solve AND the decomposition path (see _gc_family_scope)
     with _gc_family_scope():
         t0 = time.perf_counter()
-        res = solve_gtap_family(
-            p,
-            altertax_closure(),
-            residual_region,
-            shock=shock,
-            cache_root=cache_root,
-            # GEMPACK's del_tbal(USA) = 0: the nominal balance, not
-            # savf = pigbl * savf_bar; "ratio": del_tbalry(r) = 0 (savf / world income)
-            nominal_trade_balance=trade_balance,
-            keep_session=decomp_steps is not None,
-            newton_tol=ALTAX_NEWTON_TOL,
-        )
+        model = template.build(recipe.names, ())
+        frun = model.run
+        frun.nominal_savf = tuple(r for r in frun.regions if r != frun.residual_region)
+        results: dict[str, dict[str, Any]] = {}
+        after_check = None
+        with template.run_scope():
+            for period in recipe.names:
+                if period == "shock":
+                    after_check = model.mp.copy()
+                results[period] = fly_period(
+                    model, recipe, period, template=template, shock=shock
+                )
         minutes = (time.perf_counter() - t0) / 60.0
-        codes = {k: int(res.results[k]["code"]) for k in ("check", "shock")}
+        solves = [dict(r) for r in frun.solves]
+        codes = {k: _int_code(results[k]["code"]) for k in ("check", "shock")}
+        session = None
+        if decomp_steps is not None:
+            assert after_check is not None  # the recipe has a shock period
+            session = ShockSession(
+                template, recipe, frun, after_check, ratio=trade_balance == "ratio"
+            )
+        out = {
+            k: {
+                "code": codes[k],
+                "residual": results[k]["residual"],
+                "nit": _last_nit(solves, k),
+            }
+            for k in ("check", "shock")
+        }
+        if trade_balance == "ratio":
+            # world income is an unknown of the shock's bordered Newton system: one
+            # solve, no outer iterations
+            out["shock"].update(
+                ratio="bordered",
+                ratio_iterations=1,
+                world_income=world_income(model.mp, "shock"),
+            )
+        res = AltertaxResult(model.mp, out, solves, session)
         run = AltertaxRun(p, res, codes, minutes, Path(dataset_dir))
         if decomp_steps is not None:
             from equilibria.family.altertax.path import solve_decomp_path
 
             run.decomp_path = solve_decomp_path(run, shock, decomp_steps)
     return run
+
+
+def _int_code(status: str) -> int:
+    """The core status as the old int code: ``"optimal"`` is 1, ``"code <n>"`` n."""
+    if status == "optimal":
+        return 1
+    try:
+        return int(str(status).split()[-1])
+    except ValueError:
+        return 2
+
+
+def _last_nit(solves: list[dict], period: str) -> int | None:
+    """The Newton iterations of ``period``'s last solve record, None if it has none."""
+    nits = [r.get("nit") for r in solves if str(r.get("solve", "")).startswith(period)]
+    return nits[-1] if nits else None

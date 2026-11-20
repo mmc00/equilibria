@@ -45,9 +45,9 @@ def cache(tmp_path_factory):
 
 
 def _inject_first_shock_failure(monkeypatch):
-    from equilibria.family import driver, phases
+    from equilibria.family import period_newton, phases
 
-    orig = driver._newton
+    orig = period_newton._newton
     seen = {"shock": 0}
 
     def failing(*args, **kw):
@@ -58,7 +58,7 @@ def _inject_first_shock_failure(monkeypatch):
                 return res, resid, 2
         return res, resid, code
 
-    monkeypatch.setattr(driver, "_newton", failing)
+    monkeypatch.setattr(period_newton, "_newton", failing)
     return seen
 
 

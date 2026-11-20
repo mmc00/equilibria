@@ -188,7 +188,11 @@ class GTAP:
                 return cached
         # every period of the arrays: freeze_inactive fixes the shock cells too
         model = GTAPFamilyPeriodModel(run, mp.copy())
+        n0 = len(run.solves)
         results = fly(model, gtap_static(settle_only=True), template=self)
+        # the settle's solve records, named as the old driver named them
+        for rec in run.solves[n0:]:
+            rec["solve"] = f"settle_{rec['solve']}"
         settled = fd.settled_check_point(model.mp)
         if key is not None and results["check"]["code"] == "optimal":
             seed_cache.save(key, settled)
