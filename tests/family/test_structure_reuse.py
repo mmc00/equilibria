@@ -36,34 +36,57 @@ def _fresh(run):
     return dataclasses.replace(run, cell_index=None, adjacency={}, mumps={})
 
 
+def _recipe():
+    from equilibria.templates.gtap.recipe import gtap_static
+
+    return gtap_static(base_calibrated=True, solve_check=True)
+
+
+def _no_solve(recipe, period: str):
+    """``recipe`` with ``period``'s solve (and its steps after) taken out."""
+    plan = next(p for p in recipe.periods if p.name == period)
+    plans = dict(recipe.plans)
+    plans[plan.kind] = dataclasses.replace(plans[plan.kind], solver=None, after=())
+    return dataclasses.replace(recipe, plans=plans)
+
+
+def _solve_check(template, run, cur):
+    """The check of the core recipe flown on ``cur`` with ``run``'s context:
+    ``(arrays, {"code": int})``."""
+    from equilibria.core.driver import fly_period
+    from equilibria.family.gtap_periods import GTAPFamilyPeriodModel
+
+    model = GTAPFamilyPeriodModel(run, cur.copy())
+    res = fly_period(model, _recipe(), "check", template=template)
+    return model.mp, {"code": 1 if res["code"] == "optimal" else 2}
+
+
 @pytest.fixture(scope="module")
 def settled(monkeypatch_module, tmp_path_factory):
     """After the settle (which built the check's structure) and the calibrated base:
-    the run, the arrays the check starts from, the check's recipe output and the
-    arrays the run started from."""
-    from equilibria.family.driver import (
-        _period_recipe,
-        _solve_period,
-        calibrate_base_arrays,
-        prepare_run,
-    )
+    the template, the run, the arrays the check starts from, the check's steps
+    output and the arrays the run started from."""
+    from equilibria.core.driver import fly_period
+    from equilibria.templates.gtap.template import GTAP
 
     load_params(DS)
     for k, v in {**_newton_mumps(), "EQUILIBRIA_GTAP_TR_LINSOLVE": "direct"}.items():
         monkeypatch_module.setenv(k, v)
-    p = _params(DS)
-    run, mp = prepare_run(
-        p,
+    t = GTAP(
+        _params(DS),
         _route_closure(),
-        list(p.sets.r)[-1],
+        backend="family",
+        base_calibrated=True,
         cache_root=tmp_path_factory.mktemp("records"),
         jax_cache=False,
     )
-    settled, _ = calibrate_base_arrays(mp, run)
-    cur = dataclasses.replace(mp, settled_seed=settled, base_calibrated=True)
-    cur, _ = _solve_period(run, cur, "base", base_calibrated=True, solve_check=True)
-    mp1 = _period_recipe(run, cur, "check", base_calibrated=True, solve_check=True)
-    return run, cur, mp1, mp
+    model = t.build(_recipe().names)
+    run = t._family_run
+    start = model.mp.copy()
+    fly_period(model, _recipe(), "base", template=t)
+    cur = model.mp.copy()
+    fly_period(model, _no_solve(_recipe(), "check"), "check", template=t)
+    return t, run, cur, model.mp, start
 
 
 def _fscale_by_names(ss) -> np.ndarray:
@@ -106,9 +129,9 @@ def test_check_reuses_the_settle_structure(settled, monkeypatch):
     compile of the family systems, and the system equals a fresh build."""
     from equilibria.backends.family_backend import FamilyBackend
     from equilibria.family import prep_square
-    from equilibria.family.driver import _period_system
+    from equilibria.family.period_newton import _period_system
 
-    run, _cur, mp1, _ = settled
+    _, run, _cur, mp1, _ = settled
 
     def refused(*_a, **_k):
         raise AssertionError("rebuilt a structure the settle already built")
@@ -125,9 +148,9 @@ def test_a_changed_zero_pattern_compiles_again(settled, monkeypatch):
     """A fixed cell that becomes 0 folds terms away: that pattern is compiled anew
     (not taken from the cache), and equals a fresh build."""
     from equilibria.backends.family_backend import FamilyBackend
-    from equilibria.family.driver import _period_system
+    from equilibria.family.period_newton import _period_system
 
-    run, _cur, mp1, _ = settled
+    _, run, _cur, mp1, _ = settled
     mp2 = mp1.copy()
     name = next(
         n
@@ -161,13 +184,9 @@ def test_a_changed_zero_pattern_compiles_again(settled, monkeypatch):
 def test_check_solution_equals_a_fresh_build(settled):
     """The check solved on the reused structure ends where a run with nothing kept
     ends: every level within 1e-12 (relative above 1)."""
-    from equilibria.family.driver import _solve_period
-
-    run, cur, _, _ = settled
-    a, ra = _solve_period(run, cur, "check", base_calibrated=True, solve_check=True)
-    b, rb = _solve_period(
-        _fresh(run), cur, "check", base_calibrated=True, solve_check=True
-    )
+    t, run, cur, _, _ = settled
+    a, ra = _solve_check(t, run, cur)
+    b, rb = _solve_check(t, _fresh(run), cur)
     assert ra["code"] == rb["code"] == 1
     for name, va in a.vars.items():
         vb = b.vars[name].value
@@ -187,12 +206,11 @@ def test_check_reuses_the_settle_mumps_analysis(settled, monkeypatch):
         MumpsCentralizedAssembledLinearSolver as Mumps,
     )
 
-    from equilibria.family.driver import _solve_period, calibrate_base_arrays
-
     monkeypatch.setenv("EQUILIBRIA_GTAP_TR_LINSOLVE", "mumps")
-    run0, cur, _, mp0 = settled
+    t, run0, cur, _, mp0 = settled
     run = _fresh(run0)
-    calibrate_base_arrays(mp0, run)  # the settle under MUMPS: keeps its analysis
+    # the settle under MUMPS (on the arrays as built): keeps its analysis
+    t._settle_family(run, dataclasses.replace(mp0, base_calibrated=False))
     count = {"n": 0}
     orig = Mumps.do_symbolic_factorization
 
@@ -201,11 +219,9 @@ def test_check_reuses_the_settle_mumps_analysis(settled, monkeypatch):
         return orig(self, *a, **k)
 
     monkeypatch.setattr(Mumps, "do_symbolic_factorization", counted)
-    a, ra = _solve_period(run, cur, "check", base_calibrated=True, solve_check=True)
+    a, ra = _solve_check(t, run, cur)
     assert count["n"] == 0
-    b, rb = _solve_period(
-        _fresh(run), cur, "check", base_calibrated=True, solve_check=True
-    )
+    b, rb = _solve_check(t, _fresh(run), cur)
     assert count["n"] == 1
     assert ra["code"] == rb["code"] == 1
     for name, va in a.vars.items():

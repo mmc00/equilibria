@@ -1,9 +1,9 @@
 """A multi-instrument user shock gives the same result on the Pyomo and the family routes.
 
-The shock (``imptx`` on two cells, ``aft``, ``pnum``, ``lambdava``) is applied with
-``shocks.apply_shock`` to the Pyomo model before ``solve_multiperiod``, and passed as
-``shock=`` to ``solve_gtap_family``. Every Var cell of the three periods agrees within
-1e-9 (value, fixed flag and bounds as in ``diff_to_photo``), codes 1 on both.
+The shock (``imptx`` on two cells, ``aft``, ``pnum``, ``lambdava``) is passed as
+``shock=`` to the core run on both backends (``Exercise``). Every Var cell of the
+three periods agrees within 1e-9 (value, fixed flag and bounds as in
+``diff_to_photo``, against the photo of the solved Pyomo model), codes 1 on both.
 """
 
 from __future__ import annotations
@@ -73,13 +73,12 @@ def _multishock_ifsub0(m) -> dict:
 
 def _check(dataset: str, linsolve: str, monkeypatch, tmp_path, ifsub: int = 1) -> None:
     from equilibria.family import prep_capture
-    from equilibria.family.driver import solve_gtap_family
     from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from equilibria.templates.gtap.shocks import apply_shock
+    from tests.family._core import family_exercise
     from tests.family._data import load_params
     from tests.family.test_mp_build import diff_to_photo
     from tests.family.test_squared_system import _route_closure
+    from tests.templates.gtap._routes import solve
     from tests.templates.gtap.test_gtap7_gempack_parity import find_reference
 
     for k, v in {**_newton_mumps(), "EQUILIBRIA_GTAP_TR_LINSOLVE": linsolve}.items():
@@ -103,31 +102,22 @@ def _check(dataset: str, linsolve: str, monkeypatch, tmp_path, ifsub: int = 1) -
     m, _ = build_block_model(p, p.sets, closure, rr, base_calibrated=True, ref_gdx=gdx)
     shock = _multishock(m) if ifsub == 1 else _multishock_ifsub0(m)
     assert len(shock) >= 3  # several instruments, or the test says nothing
-    apply_shock(m, shock)
 
-    photo_dir = tmp_path / "photo"
-    monkeypatch.setenv(prep_capture.ENV, str(photo_dir))
-    prep_capture.reset()
-    res = solve_multiperiod(
-        m,
-        p,
+    pyo = solve(
+        "core",
+        params(),
         closure,
+        rr,
+        shock=shock,
+        base_calibrated=True,
         ref_gdx=gdx,
         skip_base_solve=True,
-        mute_welfare=True,
-        seed_from_prior=False,
-        mode="gtap",
         solve_check=True,
     )
-    monkeypatch.delenv(prep_capture.ENV)
-    assert {k: v.get("code") for k, v in res.items()} == {
-        "base": 1,
-        "check": 1,
-        "shock": 1,
-    }
-    final = prep_capture.load(Path(photo_dir) / "final.pkl")
+    assert pyo.codes == {"base": 1, "check": 1, "shock": 1}
+    final = prep_capture.final_photo(pyo.model)
 
-    fres = solve_gtap_family(
+    fam, fres = family_exercise(
         params(),
         closure,
         rr,
@@ -135,12 +125,8 @@ def _check(dataset: str, linsolve: str, monkeypatch, tmp_path, ifsub: int = 1) -
         cache_root=tmp_path / "cache",
         jax_cache=False,
     )
-    assert {k: v["code"] for k, v in fres.results.items()} == {
-        "base": 1,
-        "check": 1,
-        "shock": 1,
-    }
-    assert diff_to_photo(fres.mp, final, 1e-9, lb_rtol=1e-9) == []
+    assert [fres[k]["code"] for k in ("check", "shock")] == ["optimal", "optimal"]
+    assert diff_to_photo(fam.mp, final, 1e-9, lb_rtol=1e-9) == []
 
 
 def test_multishock_matches_pyomo_3x3(monkeypatch, tmp_path):
@@ -183,8 +169,8 @@ def aot_state():
 def test_multishock_aot_cache_bitwise_3x3(monkeypatch, tmp_path, aot_state):
     """Two different shocks with the AOT cache on give the arrays of the same runs with
     it off, bit for bit, and the second shock is served by the cache."""
-    from equilibria.family.driver import solve_gtap_family
     from equilibria.templates.gtap.gtap_block_model import build_block_model
+    from tests.family._core import family_exercise
     from tests.family._data import load_params
     from tests.family.test_squared_system import _route_closure
 
@@ -206,7 +192,7 @@ def test_multishock_aot_cache_bitwise_3x3(monkeypatch, tmp_path, aot_state):
     }
 
     def run(shock):
-        res = solve_gtap_family(
+        model, res = family_exercise(
             params(),
             _route_closure(),
             rr,
@@ -214,12 +200,8 @@ def test_multishock_aot_cache_bitwise_3x3(monkeypatch, tmp_path, aot_state):
             cache_root=tmp_path / "cache",
             jax_cache=False,
         )
-        assert {k: v["code"] for k, v in res.results.items()} == {
-            "base": 1,
-            "check": 1,
-            "shock": 1,
-        }
-        return res.mp
+        assert [res[k]["code"] for k in ("check", "shock")] == ["optimal", "optimal"]
+        return model.mp
 
     off = {"a": run(shock_a), "b": run(shock_b)}
 
@@ -258,7 +240,7 @@ def test_aot_cache_bitwise_20x41(monkeypatch, tmp_path, aot_state):
 
     if not has_dataset("gtap7_20x41"):
         pytest.skip("gtap7_20x41 not available")
-    from equilibria.family.driver import solve_gtap_family
+    from tests.family._core import family_exercise
     from tests.family._data import load_params
     from tests.family.test_squared_system import _route_closure
 
@@ -268,19 +250,15 @@ def test_aot_cache_bitwise_20x41(monkeypatch, tmp_path, aot_state):
 
     def run():
         p = copy.deepcopy(load_params("gtap7_20x41"))
-        res = solve_gtap_family(
+        model, res = family_exercise(
             p,
             _route_closure(),
             list(p.sets.r)[-1],
             cache_root=tmp_path / "cache",
             jax_cache=False,
         )
-        assert {k: v["code"] for k, v in res.results.items()} == {
-            "base": 1,
-            "check": 1,
-            "shock": 1,
-        }
-        return res.mp
+        assert [res[k]["code"] for k in ("check", "shock")] == ["optimal", "optimal"]
+        return model.mp
 
     off = run()
     cache.set_dir(tmp_path / "aot")

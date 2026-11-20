@@ -257,15 +257,16 @@ def capture_solve(
     (d / f"{n:03d}_S_{period}.json").write_text(json.dumps(stats, indent=1))
 
 
+def final_photo(model: Any, n: int = 0) -> Photo:
+    """Every Var cell of every period and every row flag of a solved Pyomo model."""
+    return Photo("final", n, "all", _vars(model, None), _rows(model))
+
+
 def capture_final(model: Any) -> None:
-    """``final.pkl``: every Var cell of every period and every row flag, once the whole
-    ``solve_multiperiod`` is done."""
+    """``final.pkl``: :func:`final_photo` once the whole run is done."""
     if _dir() is None:
         return
-    _write_named(
-        "final.pkl",
-        Photo("final", _state["n"], "all", _vars(model, None), _rows(model)),
-    )
+    _write_named("final.pkl", final_photo(model, _state["n"]))
 
 
 def capture_settled(settled: dict) -> None:
