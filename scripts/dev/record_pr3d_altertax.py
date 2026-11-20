@@ -34,6 +34,8 @@ CASES: dict[str, dict] = {
     "nominal_k4": {"decomp_steps": 4},
     "ratio_k2": {"trade_balance": "ratio", "decomp_steps": 2},
     "zero": {"shock": ZERO},
+    # an empty shock: the run writes the default +10 % import tariff
+    "empty": {"shock": {}},
 }
 # the zero-shock test's solver: an absolute stop of 1e-12, no relative test
 ZERO_ENV = {"EQUILIBRIA_GTAP_TR_FTOL": "1e-12", "EQUILIBRIA_GTAP_TR_RELTOL": "0"}
