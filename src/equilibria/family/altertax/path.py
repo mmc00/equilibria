@@ -301,7 +301,7 @@ class _Linear:
                 MumpsCentralizedAssembledLinearSolver,
             )
 
-            from equilibria.family.driver import ICNTL6_FAMILY
+            from equilibria.family.period_newton import ICNTL6_FAMILY
 
             with phase("mumps_symbolic"):
                 lu = MumpsCentralizedAssembledLinearSolver(sym=0)
@@ -354,7 +354,7 @@ class _NewtonSteps:
     from that point gives (tested)."""
 
     def __init__(self, run: Any, shock: Mapping[str, Mapping[tuple, float]]) -> None:
-        from equilibria.family.driver import _world_income
+        from equilibria.family.period_newton import world_income as _world_income
 
         self.session = run.result.session
         mp = run.result.mp
@@ -428,7 +428,7 @@ class _NewtonSteps:
         """One Newton step (class docstring) to the point at ``shock_t``; appends its
         record to ``records``. A factorization that raises or a non-finite step stops
         the path with a ``RuntimeError`` naming the sub-step (``label``)."""
-        from equilibria.family.driver import _world_income
+        from equilibria.family.period_newton import world_income as _world_income
 
         w0 = self.w_chk if start is None else _world_income(start, "shock")
         ss, x0 = self.system_at(shock_t, start, w0)

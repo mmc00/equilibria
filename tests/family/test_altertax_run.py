@@ -107,13 +107,13 @@ def test_shock_is_the_book_cell():
 
 
 def test_bad_shock_cell_raises(monkeypatch):
-    """Raises on the cell itself, before ``solve_gtap_family`` is reached."""
-    import equilibria.family.altertax.run as run_mod
+    """Raises on the cell itself, before the model is built."""
+    from equilibria.templates.gtap.template import GTAP
 
-    def no_solve(*a, **k):
-        raise AssertionError("solve_gtap_family was reached")
+    def no_build(*a, **k):
+        raise AssertionError("the model was built")
 
-    monkeypatch.setattr(run_mod, "solve_gtap_family", no_solve)
+    monkeypatch.setattr(GTAP, "build", no_build)
     with pytest.raises(ValueError, match="'NOPE' is not in the r set"):
         solve_altertax(
             nus333_dir(), shock={"prdtx_rai": {("NOPE", "AGR", "USA"): 0.0012}}

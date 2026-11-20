@@ -100,7 +100,7 @@ def measure(dataset: str, trade_balance: str, decomp_steps: int | str = "auto") 
         for k in ("del_tbalry", "del_tbal", "ywld", "cgdslack")
         if k in sl4.changes
     }
-    from equilibria.family.driver import _world_income
+    from equilibria.family.period_newton import world_income as _world_income
 
     mp = run.result.mp
     w0, w1 = _world_income(mp, "check"), _world_income(mp, "shock")

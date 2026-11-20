@@ -113,6 +113,7 @@ tests/family/test_altertax_decomp_path.py
 tests/family/test_altertax_gc.py
 tests/family/test_altertax_gempack.py
 tests/family/test_altertax_levels.py
+tests/family/test_altertax_on_core.py
 tests/family/test_altertax_pct.py
 tests/family/test_altertax_ratio_bordered.py
 tests/family/test_altertax_run.py
@@ -136,6 +137,7 @@ tests/family/test_core.py
 tests/family/test_cross_period.py
 tests/family/test_disk_cache.py
 tests/family/test_driver_hook.py
+tests/family/test_driver_split.py
 tests/family/test_family_driver_guards.py
 tests/family/test_family_e2e.py
 tests/family/test_family_e2e_capflex.py

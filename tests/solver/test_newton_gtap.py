@@ -72,7 +72,7 @@ def test_solves_the_check_like_solve_period(env, tmp_path) -> None:
 
 
 def test_failed_newton_reports_code_2(env, tmp_path) -> None:
-    from equilibria.family import driver as fd
+    from equilibria.family import period_newton as fd
     from equilibria.solver.newton_gtap import newton_tr
 
     run, mp1 = _check_ready(tmp_path)

@@ -445,9 +445,11 @@ def test_prepare_run_leaves_the_freeze_count_alone_by_default(monkeypatch):
     params, _keep = _stub_prepare_run(monkeypatch, seen)
     # a spy, not gc.get_freeze_count(): an automatic gen-2 collection can change the count
     frozen = []
-    real_now = drv._gc_freeze_now
+    from equilibria.family import run_setup
+
+    real_now = run_setup._gc_freeze_now
     monkeypatch.setattr(
-        drv, "_gc_freeze_now", lambda e=True: (frozen.append(e), real_now(e))
+        run_setup, "_gc_freeze_now", lambda e=True: (frozen.append(e), real_now(e))
     )
     monkeypatch.setattr(gc, "freeze", lambda: frozen.append("gc.freeze"))
     drv.prepare_run(params, None, "R", jax_cache=False)

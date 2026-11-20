@@ -1,7 +1,7 @@
 """Newton-TR as a recipe solver for GTAP on the family backend (ADR-0011).
 
 It does what the family driver does between a period's recipe and its post-solve
-(``family.driver._solve_period_inner``): square the arrays for the staged period,
+(the old family driver's ``_solve_period_inner``): square the arrays for the staged period,
 build the JAX system, solve it with Newton-TR + MUMPS, write the solution back.
 The squared copy (with the closure fixings, deactivated rows and floors it carries)
 becomes the model's arrays, as Pyomo keeps what PATH's squaring left on its model.
@@ -19,11 +19,6 @@ from typing import Any
 import numpy as np
 
 
-def _world_income(mp: Any, period: str) -> float:
-    v = mp.vars["regy"]
-    return float(sum(v.value[i] for i in np.flatnonzero(v.period == period)))
-
-
 def newton_tr(*, border: str | None = None) -> Callable[[Any], str]:
     """A recipe solver for ``GTAPFamilyPeriodModel``.
 
@@ -35,8 +30,10 @@ def newton_tr(*, border: str | None = None) -> Callable[[Any], str]:
         raise ValueError(f"border must be None or 'ratio', got {border!r}")
 
     def solve(model: Any) -> str:
-        from equilibria.family import driver as fd
+        from equilibria.family import period_newton as fd
+        from equilibria.family.phases import scope
         from equilibria.family.post_solve import writeback
+        from equilibria.family.run_setup import solve_record
 
         if getattr(model, "backend", None) != "family":
             raise TypeError(
@@ -50,39 +47,42 @@ def newton_tr(*, border: str | None = None) -> Callable[[Any], str]:
                 "the solve"
             )
         run, period = model.run, staged.period
-        sq, mp_sq, ss = fd._period_system(run, model.mp, period)
-        ratio = None
-        if border == "ratio":
-            if period != "shock":
-                raise ValueError("border='ratio' is for the shock period only")
-            held = [r for r in run.regions if r != run.residual_region]
-            sv = model.mp.vars["savf"]
-            chk = {r: float(sv.value[sv.pos((r, "check"))]) for r in held}
-            ratio = fd.RatioBorder(ss, sq, chk, _world_income(model.mp, "check"))
-            if len(ratio.g_ix) != len(run.regions):
-                raise ValueError(
-                    f"trade_balance='ratio': {len(ratio.g_ix)} regy shock columns "
-                    f"for {len(run.regions)} regions"
-                )
-        token = fd._NEWTON_TOL.set(run.newton_tol)
-        keep = fd._MUMPS_KEEP.set(run.mumps)
-        try:
-            res, resid, code = fd._newton(ss, sq, ratio)
-        finally:
-            fd._NEWTON_TOL.reset(token)
-            fd._MUMPS_KEEP.reset(keep)
-        x = np.asarray(res.x, dtype=float)
-        if ratio is not None:
-            w, x = float(x[-1]), x[:-1]
-            sv1 = mp_sq.vars["savf"]
-            for r, value in ratio.targets(w).items():
-                sv1.value[sv1.pos((r, "shock"))] = value
-        writeback(mp_sq, sq, x)
-        model.mp = mp_sq
-        model.record_solve(
-            {"termination_code": code, "residual": resid, "nit": res.nit}
-        )
-        run.solves.append(fd.solve_record(period, res, resid, code))
+        # the period's phase scope (timing, and the shock solve tags of the
+        # failure-injection tests), as the old driver opened it
+        with scope(period):
+            sq, mp_sq, ss = fd._period_system(run, model.mp, period)
+            ratio = None
+            if border == "ratio":
+                if period != "shock":
+                    raise ValueError("border='ratio' is for the shock period only")
+                held = [r for r in run.regions if r != run.residual_region]
+                sv = model.mp.vars["savf"]
+                chk = {r: float(sv.value[sv.pos((r, "check"))]) for r in held}
+                ratio = fd.RatioBorder(ss, sq, chk, fd.world_income(model.mp, "check"))
+                if len(ratio.g_ix) != len(run.regions):
+                    raise ValueError(
+                        f"trade_balance='ratio': {len(ratio.g_ix)} regy shock columns "
+                        f"for {len(run.regions)} regions"
+                    )
+            token = fd._NEWTON_TOL.set(run.newton_tol)
+            keep = fd._MUMPS_KEEP.set(run.mumps)
+            try:
+                res, resid, code = fd._newton(ss, sq, ratio)
+            finally:
+                fd._NEWTON_TOL.reset(token)
+                fd._MUMPS_KEEP.reset(keep)
+            x = np.asarray(res.x, dtype=float)
+            if ratio is not None:
+                w, x = float(x[-1]), x[:-1]
+                sv1 = mp_sq.vars["savf"]
+                for r, value in ratio.targets(w).items():
+                    sv1.value[sv1.pos((r, "shock"))] = value
+            writeback(mp_sq, sq, x)
+            model.mp = mp_sq
+            model.record_solve(
+                {"termination_code": code, "residual": resid, "nit": res.nit}
+            )
+            run.solves.append(solve_record(period, res, resid, code))
         return "optimal" if code == 1 else f"code {code}"
 
     return solve
