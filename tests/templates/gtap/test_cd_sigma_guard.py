@@ -117,29 +117,26 @@ def test_blocks_build_at_sigma_one_under_gempack(nest):
 def test_altertax_by_default_leaves_the_production_nest_free(monkeypatch):
     """pva, pnd and px are solved, not held at their seed, in check and shock.
 
-    Read right after each period is prepared: once the shock is solved the driver
-    freezes the check, so the end state says nothing about how it was solved.
+    Read when each period is handed to its solve: once the shock is solved the
+    recipe freezes the check, so the end state says nothing about how it was solved.
     """
-    from equilibria.templates.gtap import period_prep
+    from equilibria.core.exercise import Exercise
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+    from equilibria.templates.gtap.recipe import _by_backend, gtap_static
+    from equilibria.templates.gtap.template import GTAP
 
     held: dict[str, list] = {}
-    prepare = period_prep.PeriodPreparer.prepare
 
-    def recording_prepare(self, m, period, params):
-        closure = prepare(self, m, period, params)
+    def recording_solver(model):
+        m, period = model.pyomo, model.staged.period
         for vn, eqn in (("pva", "eq_pvaeq"), ("pnd", "eq_pndeq"), ("px", "eq_pxeq")):
             var, eq = getattr(m, vn), getattr(m, eqn)
             held.setdefault(period, []).extend(
                 [(vn, i) for i in var if i[-1] == period and var[i].fixed]
                 + [(eqn, i) for i in eq if i[-1] == period and not eq[i].active]
             )
-        return closure
-
-    monkeypatch.setattr(period_prep.PeriodPreparer, "prepare", recording_prepare)
+        return _by_backend(model)
 
     folder = find_reference(
         "gtap7_3x3", "gams", form="mcp", mode="altertax", ifsub=1, fbep="header"
@@ -148,6 +145,9 @@ def test_altertax_by_default_leaves_the_production_nest_free(monkeypatch):
     gdx = folder / "out.gdx"
     p = _params("gtap7_3x3")
     p.set_va_subsidy_basis("gempack")
+    # built with the altertax elasticities, so the nests are at sigma = 1 in the
+    # model (built from the base ones, the shock does not converge here: code 0,
+    # the old driver too)
     pa = apply_altertax_elasticities(p, in_place=False)
     closure = GTAPClosureConfig(
         name="altertax",
@@ -160,12 +160,12 @@ def test_altertax_by_default_leaves_the_production_nest_free(monkeypatch):
         numeraire="pnum",
     )
     rr = list(p.sets.r)[-1]
-    m, mp = build_block_model(pa, pa.sets, closure, residual_region=rr)
-    mp.seed_all_periods(m, gdx)
-    res = solve_multiperiod(
-        m, p, closure, ref_gdx=gdx, skip_base_solve=True, mode="altertax"
+    ex = Exercise(
+        GTAP(pa, closure, residual_region=rr, ref_gdx=gdx, seed_gdx=gdx),
+        gtap_static("altertax", solver=recording_solver),
     )
-    assert all(res[k]["code"] == 1 for k in ("check", "shock")), res
+    res = ex.run()
+    assert all(res[k]["code"] == "optimal" for k in ("check", "shock")), res
     assert set(held) >= {"check", "shock"}, held.keys()
     for period in ("check", "shock"):
         assert not held[period], (period, held[period][:3])
