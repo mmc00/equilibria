@@ -29,7 +29,7 @@ import pytest
 from tests.family._data import load_params
 from tests.family._prep import capture_dir
 from tests.family.test_mp_build import diff_to_photo
-from tests.family.test_prep_recipe import ROUTE, _closure, _params
+from tests.family.test_sp_arrays import ROUTE, _closure, _params
 
 # values and lower bounds: the photos come from the Mac, CI runs Linux, and the
 # single-period reference bounds differ there in the last bits (~7e-16 relative)

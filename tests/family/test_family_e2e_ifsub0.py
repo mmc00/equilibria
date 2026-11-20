@@ -86,7 +86,7 @@ def test_spy_sees_the_pyomo_route():
 
 def test_cache_key_differs_from_ifsub1():
     from equilibria.family.disk_cache import cache_key
-    from tests.family.test_prep_recipe import _params
+    from tests.family.test_sp_arrays import _params
     from tests.family.test_squared_system import _route_closure
 
     p = _params(DATASET)
@@ -101,7 +101,7 @@ def built(tmp_path_factory):
     from equilibria.family import cross_period
     from equilibria.family.disk_cache import load_or_build
     from equilibria.family.mp_arrays import MPArrays
-    from tests.family.test_prep_recipe import _params
+    from tests.family.test_sp_arrays import _params
 
     p = _params(DATASET)
     closure = _closure0()

@@ -74,7 +74,7 @@ def recording(dataset: str = "gtap7_3x3", ifsub: int = 1):
     import tempfile
 
     from equilibria.family.disk_cache import load_or_build
-    from tests.family.test_prep_recipe import _params
+    from tests.family.test_sp_arrays import _params
     from tests.family.test_squared_system import _route_closure
 
     p = _params(dataset)

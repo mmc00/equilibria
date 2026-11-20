@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from tests.family._prep import capture_dir
-from tests.family.test_prep_recipe import ROUTE, _closure
+from tests.family.test_sp_arrays import ROUTE, _closure
 from tests.family.test_squared_system import _backends
 
 DS = "gtap7_3x3"

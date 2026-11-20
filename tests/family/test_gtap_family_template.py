@@ -12,7 +12,7 @@ import pytest
 
 from tests.family._data import load_params
 from tests.family._prep import _newton_mumps
-from tests.family.test_prep_recipe import _params
+from tests.family.test_sp_arrays import _params
 from tests.family.test_squared_system import _route_closure
 
 DS = "gtap7_3x3"

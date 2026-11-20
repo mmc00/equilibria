@@ -1,11 +1,11 @@
-"""The family driver refuses what it cannot run, by name, and stays out of the Pyomo route."""
+"""The family route refuses what it cannot run, by name, and stays out of the Pyomo route."""
 
 import gc
 from typing import Any
 
 import pytest
 
-from equilibria.family import driver
+from equilibria.family import period_newton, run_setup
 
 GOOD_ENV = {
     "EQUILIBRIA_GTAP_SOLVER": "scipy_newton_tr",
@@ -26,7 +26,7 @@ GOOD: dict[str, Any] = dict(  # noqa: C408
 
 
 def run(env: dict[str, str] | None = None, **kw: Any) -> None:
-    driver.check_supported(**{**GOOD, **kw}, env={**GOOD_ENV, **(env or {})})
+    run_setup.check_supported(**{**GOOD, **kw}, env={**GOOD_ENV, **(env or {})})
 
 
 def test_supported_config_passes():
@@ -126,15 +126,15 @@ def test_failed_newton_has_code_2_like_pyomo(monkeypatch):
     )
     res = types.SimpleNamespace(success=False, x=np.zeros(2), nit=3)
     monkeypatch.setattr(ntr, "newton_tr", lambda *a, **k: res)
-    assert driver._newton(SS(), sq)[2] == 2
+    assert period_newton._newton(SS(), sq)[2] == 2
     res.success = True
-    assert driver._newton(SS(), sq)[2] == 2  # residual 1.0 above the tolerance
+    assert period_newton._newton(SS(), sq)[2] == 2  # residual 1.0 above the tolerance
 
 
 def test_missing_solve_nlp_key_is_refused():
     env = {k: v for k, v in GOOD_ENV.items() if k != "EQUILIBRIA_GTAP_SOLVE_NLP"}
     with pytest.raises(NotImplementedError, match="SOLVE_NLP"):
-        driver.check_supported(**GOOD, env=env)
+        run_setup.check_supported(**GOOD, env=env)
 
 
 def test_active_overwrite_hooks_are_refused():
@@ -158,7 +158,7 @@ def test_user_shocks_are_not_a_refusal_reason():
 
     assert not any(
         "shock" in p and p not in ("shock_steps", "shock_method")
-        for p in inspect.signature(driver.check_supported).parameters
+        for p in inspect.signature(run_setup.check_supported).parameters
     )
 
 
@@ -204,154 +204,6 @@ def test_unknown_backend_is_rejected():
     mod = _parity_module()
     with pytest.raises(ValueError, match="backend"):
         mod._solve_shock("gtap7_3x3", 1, "capFix", solve_nlp=True, backend="nope")
-
-
-def test_pyomo_route_runs_no_family_driver_code(monkeypatch):
-    mod = _parity_module()
-    monkeypatch.delenv("EQUILIBRIA_GTAP_BACKEND", raising=False)
-    calls = []
-    monkeypatch.setattr(driver, "check_supported", lambda **k: calls.append("check"))
-    monkeypatch.setattr(
-        driver, "solve_gtap_family", lambda *a, **k: calls.append("solve")
-    )
-    # Stop the Pyomo route right after the switch, before the HAR is read.
-    import equilibria.templates.gtap as gtap
-
-    class Stop(Exception):
-        pass
-
-    def boom(*a, **k):
-        raise Stop
-
-    monkeypatch.setattr(gtap.GTAPParameters, "load_from_har", boom)
-    with pytest.raises(Stop):
-        mod._solve_shock("gtap7_3x3", 1, "capFix", solve_nlp=True)
-    assert calls == []
-
-
-def test_family_solve_runs_under_the_gc_threshold_of_the_pyomo_route(monkeypatch):
-    """``solve_gtap_family`` wraps its work in ``_gc_relaxed_threshold`` (through
-    ``_gc_family_scope``) with the same env control (``EQUILIBRIA_GTAP_GC_THRESHOLD``)
-    as ``solve_multiperiod``."""
-    import contextlib
-    import gc
-
-    from equilibria.family import driver as drv
-    from equilibria.solver import gc_tuning
-
-    # the Pyomo route's helpers are the very same objects
-    from equilibria.templates.gtap import gtap_multiperiod_driver as pyomo_drv
-
-    assert pyomo_drv._gc_relaxed_threshold is gc_tuning._gc_relaxed_threshold
-    assert pyomo_drv._gc_threshold_from_env is gc_tuning._gc_threshold_from_env
-    seen = []
-
-    @contextlib.contextmanager
-    def spy(threshold0):
-        seen.append(("enter", threshold0, gc.get_threshold()[0]))
-        yield
-        seen.append(("exit",))
-
-    monkeypatch.setattr(gc_tuning, "_gc_relaxed_threshold", spy)
-    monkeypatch.setattr(drv, "check_supported", lambda **k: None)
-
-    def inner(*a, **k):
-        seen.append(("inner",))
-        return "result"
-
-    monkeypatch.setattr(drv, "_solve_family", inner)
-    monkeypatch.setenv("EQUILIBRIA_GTAP_GC_THRESHOLD", "1234")
-    assert drv.solve_gtap_family(None, None, "R") == "result"
-    assert seen == [("enter", 1234, gc.get_threshold()[0]), ("inner",), ("exit",)]
-
-
-def test_family_solve_freezes_the_gc_and_undoes_it(monkeypatch):
-    """Like ``solve_multiperiod``: the family solve runs under ``gc.freeze()`` (same
-    ``EQUILIBRIA_GTAP_GC_FREEZE`` control) and unfreezes on exit, also on error."""
-    import contextlib
-    import gc
-
-    import pytest
-
-    from equilibria.family import driver as drv
-    from equilibria.solver import gc_tuning
-    from equilibria.templates.gtap import gtap_multiperiod_driver as pyomo_drv
-
-    assert pyomo_drv._gc_frozen_permanent_graph is gc_tuning._gc_frozen_permanent_graph
-    assert pyomo_drv._gc_freeze_from_env is gc_tuning._gc_freeze_from_env
-    monkeypatch.setattr(drv, "check_supported", lambda **k: None)
-    monkeypatch.setattr(
-        gc_tuning, "_gc_relaxed_threshold", lambda t: contextlib.nullcontext()
-    )
-    gc.unfreeze()
-    monkeypatch.delenv("EQUILIBRIA_GTAP_GC_FREEZE", raising=False)
-    inside = []
-
-    def inner(*a, **k):
-        inside.append(gc.get_freeze_count())
-        return "result"
-
-    monkeypatch.setattr(drv, "_solve_family", inner)
-    assert drv.solve_gtap_family(None, None, "R") == "result"
-    assert inside[0] > 0
-    assert gc.get_freeze_count() == 0
-
-    def boom(*a, **k):
-        inside.append(gc.get_freeze_count())
-        raise RuntimeError
-
-    monkeypatch.setattr(drv, "_solve_family", boom)
-    with pytest.raises(RuntimeError):
-        drv.solve_gtap_family(None, None, "R")
-    assert inside[1] > 0
-    assert gc.get_freeze_count() == 0
-
-    # EQUILIBRIA_GTAP_GC_FREEZE=0 turns it off
-    monkeypatch.setenv("EQUILIBRIA_GTAP_GC_FREEZE", "0")
-    monkeypatch.setattr(drv, "_solve_family", inner)
-    drv.solve_gtap_family(None, None, "R")
-    assert inside[2] == 0
-
-
-def test_solve_family_freezes_what_prepare_run_loaded(monkeypatch):
-    """The records/cross/MPArrays built by ``prepare_run`` are long-lived too: they
-    are frozen right after it, and the outer unfreeze releases everything."""
-    import gc
-
-    import pytest
-
-    from equilibria.family import driver as drv
-
-    class Stop(Exception):
-        pass
-
-    keep = []
-    seen = {}
-
-    def fake_prepare(*a, **k):
-        seen["before"] = gc.get_freeze_count()
-        keep.append([[i] for i in range(5000)])  # young long-lived containers
-        return "run", "mp"
-
-    def fake_calibrate(mp, run):
-        seen["after"] = gc.get_freeze_count()
-        raise Stop
-
-    monkeypatch.setattr(drv, "prepare_run", fake_prepare)
-    monkeypatch.setattr(drv, "calibrate_base_cached", fake_calibrate)
-    monkeypatch.setattr(drv, "check_supported", lambda **k: None)
-    monkeypatch.delenv("EQUILIBRIA_GTAP_GC_FREEZE", raising=False)
-    gc.unfreeze()
-    with pytest.raises(Stop):
-        drv.solve_gtap_family(None, None, "R")
-    assert seen["after"] >= seen["before"] + 5000
-    assert gc.get_freeze_count() == 0
-
-    monkeypatch.setenv("EQUILIBRIA_GTAP_GC_FREEZE", "0")
-    seen.clear()
-    with pytest.raises(Stop):
-        drv.solve_gtap_family(None, None, "R")
-    assert seen["after"] == seen["before"] == 0
 
 
 def test_gc_paused_disables_and_restores():
@@ -403,7 +255,7 @@ def _stub_prepare_run(monkeypatch, seen):
     import types
 
     from equilibria.family import cross_period, disk_cache, prep_square, sp_arrays
-    from equilibria.family import driver as drv
+    from equilibria.family import run_setup as drv
     from equilibria.templates.gtap import residual_region as rr
 
     keep = []
@@ -439,7 +291,7 @@ def _stub_prepare_run(monkeypatch, seen):
 
 
 def test_prepare_run_leaves_the_freeze_count_alone_by_default(monkeypatch):
-    from equilibria.family import driver as drv
+    from equilibria.family import run_setup as drv
 
     seen = {}
     params, _keep = _stub_prepare_run(monkeypatch, seen)
@@ -456,32 +308,8 @@ def test_prepare_run_leaves_the_freeze_count_alone_by_default(monkeypatch):
     assert frozen == [False]  # asked with freezing off; gc.freeze never reached
 
 
-def test_solve_family_passes_freeze_from_env(monkeypatch):
-    from equilibria.family import driver as drv
-
-    class Stop(Exception):
-        pass
-
-    got = {}
-
-    def fake_prepare(*a, **k):
-        got["freeze"] = k.get("freeze")
-        raise Stop
-
-    monkeypatch.setattr(drv, "prepare_run", fake_prepare)
-    monkeypatch.setattr(drv, "check_supported", lambda **k: None)
-    monkeypatch.delenv("EQUILIBRIA_GTAP_GC_FREEZE", raising=False)
-    with pytest.raises(Stop):
-        drv.solve_gtap_family(None, None, "R")
-    assert got["freeze"] is True
-    monkeypatch.setenv("EQUILIBRIA_GTAP_GC_FREEZE", "0")
-    with pytest.raises(Stop):
-        drv.solve_gtap_family(None, None, "R")
-    assert got["freeze"] is False
-
-
 def test_prepare_run_freezes_the_loaded_records_before_mp_build(monkeypatch):
-    from equilibria.family import driver as drv
+    from equilibria.family import run_setup as drv
 
     seen = {}
     params, _keep = _stub_prepare_run(monkeypatch, seen)
@@ -497,7 +325,10 @@ def test_family_driver_import_does_not_load_pyomo():
     import subprocess
     import sys
 
-    code = "import sys, equilibria.family.driver; sys.exit('pyomo' in sys.modules)"
+    code = (
+        "import sys, equilibria.family.run_setup, equilibria.family.period_newton; "
+        "sys.exit('pyomo' in sys.modules)"
+    )
     assert subprocess.run([sys.executable, "-c", code], check=False).returncode == 0
 
 
@@ -514,10 +345,9 @@ def test_capflex_still_refuses_auto_residual_region():
     "dataset", ["gtap7_3x3", "gtap7_10x7", "gtap7_15x10", "gtap7_20x41"]
 )
 def test_family_and_pyomo_read_the_same_gdx(monkeypatch, dataset):
-    """Both routes of ``_solve_shock`` hand the same ``ref_gdx`` on (no solve runs)."""
-    import equilibria.family.driver as fdriver
+    """Both backends of ``_solve_shock`` hand the same ``ref_gdx`` on (no solve runs)."""
     import equilibria.templates.gtap as gtap
-    import equilibria.templates.gtap.gtap_block_model as bm
+    import equilibria.templates.gtap.template as tpl
 
     mod = _parity_module()
     seen: dict[str, Any] = {}
@@ -525,12 +355,8 @@ def test_family_and_pyomo_read_the_same_gdx(monkeypatch, dataset):
     class Stop(Exception):
         pass
 
-    def fam(p, ac, rr, *, ref_gdx=None, **kw):
-        seen["family"] = ref_gdx
-        raise Stop
-
-    def pyo(p, sets, ac, rr, *, ref_gdx=None, **kw):
-        seen["pyomo"] = ref_gdx
+    def fake_gtap(p, ac, *, ref_gdx=None, backend="pyomo", **kw):
+        seen[backend] = ref_gdx
         raise Stop
 
     class FakeParams:
@@ -539,8 +365,7 @@ def test_family_and_pyomo_read_the_same_gdx(monkeypatch, dataset):
         def load_from_har(self, **kw):
             pass
 
-    monkeypatch.setattr(fdriver, "solve_gtap_family", fam)
-    monkeypatch.setattr(bm, "build_block_model", pyo)
+    monkeypatch.setattr(tpl, "GTAP", fake_gtap)
     monkeypatch.setattr(gtap, "GTAPParameters", FakeParams)
     monkeypatch.setenv("EQUILIBRIA_GTAP_SOLVER", "scipy_newton_tr")
     monkeypatch.setenv("EQUILIBRIA_GTAP_TR_LINSOLVE", "direct")
@@ -584,31 +409,8 @@ def test_family_newton_analyses_mumps_with_the_values(monkeypatch):
         return types.SimpleNamespace(success=True, x=np.zeros(1), nit=1)
 
     monkeypatch.setattr(ntr, "newton_tr", fake)
-    driver._newton(SS(), _any(sq))
+    period_newton._newton(SS(), _any(sq))
     assert seen["mumps_values_at_analysis"] is True
-
-
-def test_capflex_without_a_gdx_refuses_before_any_work(monkeypatch, tmp_path):
-    import types
-
-    from equilibria.templates.gtap import residual_region as rr
-
-    touched = []
-    params = types.SimpleNamespace(
-        set_va_subsidy_basis=lambda b: touched.append("basis"),
-    )
-    monkeypatch.setattr(
-        rr, "resolve_residual_region", lambda *a, **k: touched.append("rr") or "R"
-    )
-    monkeypatch.setattr(
-        driver, "_solve_family", lambda *a, **k: touched.append("solve")
-    )
-    monkeypatch.setattr(driver, "check_supported", lambda **k: None)
-    closure = types.SimpleNamespace(if_sub=True, savf_flag="capFlex")
-    for gdx in (None, tmp_path / "missing.gdx"):
-        with pytest.raises(NotImplementedError, match="capFlex.*needs rore/rorg"):
-            driver.solve_gtap_family(params, closure, "R", ref_gdx=gdx)
-    assert touched == []
 
 
 def test_solve_shock_family_capflex_without_a_gdx_refuses_before_loading(monkeypatch):

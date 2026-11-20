@@ -25,7 +25,7 @@ import pytest
 
 from tests.family._data import load_params
 from tests.family._prep import capture_dir
-from tests.family.test_prep_recipe import ROUTE, _closure, _params
+from tests.family.test_sp_arrays import ROUTE, _closure, _params
 from tests.family.test_squared_system import _route_closure
 
 # (dataset, ifSUB): ifSUB=0 only on 3x3, where it accepts the instruments that

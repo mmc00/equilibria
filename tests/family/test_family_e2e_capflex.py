@@ -78,7 +78,7 @@ def _closure_flex():
 def test_cache_key_differs_from_capfix(stamped):
     from equilibria.family.disk_cache import cache_key
     from tests.family._oracle import comp_stat_closure
-    from tests.family.test_prep_recipe import _params
+    from tests.family.test_sp_arrays import _params
 
     p = _params(DATASET)
     rr = list(p.sets.r)[-1]
@@ -90,7 +90,7 @@ def test_cache_key_differs_from_capfix(stamped):
 @pytest.fixture(scope="module")
 def stamped():
     from tests.family._oracle import _stamped_copy
-    from tests.family.test_prep_recipe import _params
+    from tests.family.test_sp_arrays import _params
 
     return _stamped_copy(_params(DATASET), _closure_flex(), DATASET, bool(IFSUB))
 

@@ -100,7 +100,7 @@ def test_user_shock_is_applied_not_the_default(
     tariff (the default tariff's cells keep their check value)."""
     from equilibria.family.run_setup import prepare_run
     from tests.family._core import family_exercise
-    from tests.family.test_prep_recipe import _params
+    from tests.family.test_sp_arrays import _params
     from tests.family.test_squared_system import _route_closure
 
     for k, v in {**_newton_mumps(), "EQUILIBRIA_GTAP_TR_LINSOLVE": linsolve}.items():

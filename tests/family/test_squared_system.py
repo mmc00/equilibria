@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from tests.family._prep import capture_dir, recording
-from tests.family.test_prep_recipe import ROUTE, _closure, _params
 from tests.family.test_prep_square import _recipe
+from tests.family.test_sp_arrays import ROUTE, _closure, _params
 
 DATASET = "gtap7_3x3"
 
@@ -689,7 +689,7 @@ def test_pairs_equal_pyomo_with_period_incidence(inc):
     from equilibria.family.mp_arrays import MPArrays
     from equilibria.family.prep_recipe import run_recipe, sp_reference_arrays
     from equilibria.family.prep_square import ConditionalMasks, square
-    from tests.family.test_prep_recipe import ROUTE
+    from tests.family.test_sp_arrays import ROUTE
 
     p = _params(DATASET)
     closure = _closure()

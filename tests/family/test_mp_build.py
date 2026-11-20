@@ -15,7 +15,7 @@ import pytest
 
 from tests.family._data import load_params
 from tests.family._prep import capture_dir
-from tests.family.test_prep_recipe import _params
+from tests.family.test_sp_arrays import _params
 from tests.family.test_squared_system import _route_closure
 
 RTOL = 1e-9
