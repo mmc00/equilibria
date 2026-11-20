@@ -119,7 +119,7 @@ class GTAP:
         import dataclasses
 
         from equilibria.blocks.gtap.overwrite import overwrite
-        from equilibria.family import driver as fd
+        from equilibria.family import run_setup as fd
         from equilibria.family.capflex import require_ref_gdx
         from equilibria.family.gtap_periods import GTAPFamilyPeriodModel
         from equilibria.solver.gc_tuning import (
@@ -177,7 +177,7 @@ class GTAP:
         ``calibrate_base_cached`` does: only a converged settle is saved."""
         from equilibria.blocks.gtap import seed_cache
         from equilibria.core.driver import fly
-        from equilibria.family import driver as fd
+        from equilibria.family import run_setup as fd
         from equilibria.family.gtap_periods import GTAPFamilyPeriodModel
         from equilibria.templates.gtap.recipe import gtap_static
 

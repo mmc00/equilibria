@@ -111,7 +111,9 @@ def test_any_input_change_misses(env, change):
     elif change == "linsolve_env":
         monkeypatch.setenv("EQUILIBRIA_GTAP_TR_LINSOLVE", "scipy")
     elif change == "family_code":
-        monkeypatch.setattr(driver, "_family_code_digest", lambda: "other-code")
+        from equilibria.family import run_setup
+
+        monkeypatch.setattr(run_setup, "_family_code_digest", lambda: "other-code")
     run2, mp2 = _run(tmp_path, **kw)
     if change == "nominal_savf":
         run2.nominal_savf = tuple(run2.regions[:1])
