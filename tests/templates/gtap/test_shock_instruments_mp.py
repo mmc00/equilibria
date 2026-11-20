@@ -92,7 +92,6 @@ def test_build_vars_fija_y_registra_sin_pasar_por_build_block_model():
     libres y _replicate_sp_fixing los fijaria con el valor del SP del shock: el
     arancel +10% entraria vivo en todas las ecuaciones (altertax 3x3: 100% -> 73,4%).
     """
-    import pathlib
 
     from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
     from equilibria.templates.gtap import GTAPParameters

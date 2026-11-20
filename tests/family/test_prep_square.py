@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import pytest
 
-from tests.family._data import load_params
 from tests.family._prep import capture_dir, recording
 from tests.family.test_sp_arrays import ROUTE, _closure, _params
 

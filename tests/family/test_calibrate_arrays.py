@@ -11,7 +11,6 @@ unchanged. The iteration count is reported, never asserted.
 from __future__ import annotations
 
 import importlib.util
-import os
 import pickle
 
 import numpy as np

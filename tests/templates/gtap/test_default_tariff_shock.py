@@ -63,10 +63,7 @@ def _solve(mode: str, ifsub: int, gdx: Path, route: str = "core"):
     if route != "core":
         raise ValueError(f"route {route!r}: the gates run on the core only (PR 3a)")
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     d = dataset_dir(DATASET)
     p = GTAPParameters()

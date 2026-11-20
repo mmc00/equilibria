@@ -155,9 +155,6 @@ def _solve_and_match(
     from pyomo.environ import value as V
 
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
-    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     ref = _reference_gdx(dataset, if_sub)
     d = dataset_dir(dataset)

@@ -7,7 +7,6 @@ The check period must reproduce the base (every ``EQ_VARS`` cell within
 
 from __future__ import annotations
 
-import importlib.util
 import sys
 
 import numpy as np
@@ -17,7 +16,7 @@ from equilibria._local_refs import nus333_dir
 from equilibria.family.altertax.levels import family_levels
 from equilibria.family.altertax.run import ALTAX_SHOCK, solve_altertax
 from equilibria.family.altertax.tolerances import CHECK_TOL
-from tests.family._prep import ROOT, _newton_mumps
+from tests.family._prep import _newton_mumps
 
 pytest.importorskip("pyomo")
 
