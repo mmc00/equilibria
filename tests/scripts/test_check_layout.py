@@ -126,6 +126,15 @@ def test_agent_skills_pass() -> None:
     assert _module().violations(paths) == []
 
 
+def test_agent_guides_pass_at_the_root() -> None:
+    assert _module().violations(["AGENTS.md", "CLAUDE.md"]) == []
+
+
+def test_agent_guides_pass_only_at_the_root() -> None:
+    assert _module().violations(["docs/AGENTS.md"])
+    assert _module().violations(["src/CLAUDE.md"])
+
+
 def test_other_agent_folders_are_rejected() -> None:
     assert _module().violations([".claude/settings.json"])
     assert _module().violations([".agents/notes.md"])

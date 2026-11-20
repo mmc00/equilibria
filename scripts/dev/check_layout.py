@@ -29,6 +29,9 @@ ROOT_FILES = frozenset(
         "README.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",
+        # The guide for coding agents; CLAUDE.md only points Claude Code to it.
+        "AGENTS.md",
+        "CLAUDE.md",
         "LICENSE",
         "NOTICE",
         "CITATION.cff",
@@ -138,6 +141,8 @@ _TOKEN_SPLIT = re.compile(r"[_\-.\s]+")
 SPANISH_LEGACY: frozenset[str] = frozenset()
 
 ALLOWED_EXACT: set[str] = {
+    "AGENTS.md",
+    "CLAUDE.md",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
     "Makefile",
