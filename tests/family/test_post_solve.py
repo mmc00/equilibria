@@ -1,4 +1,4 @@
-"""The base recipe and the post-solve steps on arrays equal Pyomo's, solver injected.
+"""The core's base steps and the post-solve steps on arrays equal Pyomo's, solver injected.
 
 Oracles are the photos of the saved Pyomo run (``tests/family/_prep.capture_dir``):
 
@@ -10,10 +10,10 @@ Oracles are the photos of the saved Pyomo run (``tests/family/_prep.capture_dir`
 Each step starts from Pyomo's own photo (not from the previous array result) and injects
 Pyomo's solution from ``P``, so a mismatch names one step and no Newton noise enters:
 
-* base recipe on ``A`` == ``A2`` (call 1 without a settled seed, call 3 with it);
+* the core's base steps on ``A`` == ``A2`` (call 1 without a settled seed, call 3 with it);
 * base post-solve on ``A2`` == the next call's ``A``;
 * ``square`` on ``A2`` + writeback of ``P`` + post-solve == the next call's ``A`` (check),
-  == ``final.pkl`` (shock, after the recipe's default tariff, which ``A2`` lacks);
+  == ``final.pkl`` (shock, after the core's default tariff, which ``A2`` lacks);
 * the welfare cells and the ifSUB report cells against the same photos, by name.
 """
 
@@ -26,10 +26,11 @@ from typing import Any
 import numpy as np
 import pytest
 
+from tests.family._core import core_prep
 from tests.family._data import load_params
-from tests.family._prep import capture_dir
+from tests.family._prep import capture_dir, core_template
 from tests.family.test_mp_build import diff_to_photo
-from tests.family.test_sp_arrays import ROUTE, _closure, _params
+from tests.family.test_sp_arrays import _closure, _params
 
 # values and lower bounds: the photos come from the Mac, CI runs Linux, and the
 # single-period reference bounds differ there in the last bits (~7e-16 relative)
@@ -195,48 +196,38 @@ def _restrict_mp(mp, names):
 # ── The base recipe ─────────────────────────────────────────────────────────
 
 
+def _core_base(case, n: int, *, seeded: bool):
+    """Photo ``A`` of base call ``n`` through the core's base steps; ``seeded``: the
+    settled seed handed over (``mp.settled_seed``), read only with ``base_calibrated``."""
+    from equilibria.family.mp_arrays import MPArrays
+
+    mp = MPArrays.from_photo(_load(case["dir"], f"{n:03d}_A_base.pkl"))
+    calibrated = _flags(n)["base_calibrated"]
+    if seeded:
+        mp.settled_seed = case["settled"]
+    mp.base_calibrated = calibrated
+    return core_prep(
+        core_template(case["ds"]),
+        mp,
+        "base",
+        base_calibrated=calibrated,
+        solve_check=_flags(n)["solve_check"],
+    )
+
+
 @pytest.mark.parametrize("n", [1, 3])
 def test_base_recipe_equals_a2(case, n):
-    from equilibria.family.prep_recipe import run_recipe
-
     if n not in case["calls"]:
         pytest.skip("no such call")
     assert case["calls"][n] == "base"
-    mp = _mp(case, f"{n:03d}_A_base.pkl")
-    flags = _flags(n)
-    if flags["base_calibrated"]:
-        mp.settled_seed = case["settled"]
-    got = run_recipe(
-        mp,
-        "base",
-        params=case["params"],
-        closure=case["recipe_closure"],
-        sp_ref=case["ref"],
-        mode="gtap",
-        backend=case["backend"],
-        **flags,
-        cross=case["cross"],
-    )
+    got = _core_base(case, n, seeded=_flags(n)["base_calibrated"])
     a2 = _load(case["dir"], f"{n:03d}_A2_base.pkl")
     assert diff_to_photo(got, a2, TOL, lb_rtol=TOL) == []
 
 
 def test_base_recipe_without_seed_ignores_settled(case):
     """No ``base_calibrated``: the settled dict is not read (faithful to GAMS)."""
-    from equilibria.family.prep_recipe import run_recipe
-
-    mp = _mp(case, "001_A_base.pkl")
-    mp.settled_seed = case["settled"]
-    got = run_recipe(
-        mp,
-        "base",
-        params=case["params"],
-        closure=case["recipe_closure"],
-        sp_ref=case["ref"],
-        mode="gtap",
-        backend=case["backend"],
-        **_flags(1),
-    )
+    got = _core_base(case, 1, seeded=True)
     a2 = _load(case["dir"], "001_A2_base.pkl")
     assert diff_to_photo(got, a2, TOL, lb_rtol=TOL) == []
 
@@ -296,22 +287,15 @@ def test_settle_check_equals_settled(case):
 
 
 def _shock_final(case):
-    """Array state after the shock call's post-solve (recipe, default tariff, square,
-    Pyomo's solution injected)."""
-    from equilibria.family.prep_recipe import run_recipe
-
+    """Array state after the shock call's post-solve (the core's shock steps, default
+    tariff included, square, Pyomo's solution injected)."""
     n = max(case["calls"])
     assert case["calls"][n] == "shock"
-    mp0 = run_recipe(
+    mp0 = core_prep(
+        core_template(case["ds"]),
         _mp(case, f"{n:03d}_A_shock.pkl"),
         "shock",
-        params=case["params"],
-        closure=case["recipe_closure"],
-        sp_ref=case["ref"],
-        mode="gtap",
-        backend=case["backend"],
-        **ROUTE,
-        cross=case["cross"],
+        base_calibrated=True,
     )
     mp_sq, sq = _square(case, mp0, "shock")
     x = _solution(sq, _load(case["dir"], f"{n:03d}_P_shock.pkl"))

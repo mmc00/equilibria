@@ -85,9 +85,9 @@ def family_template(
     return t, model.mp
 
 
-def core_prep(built: tuple[Any, Any], mp: Any, period: str) -> Any:
+def core_prep(built: tuple[Any, Any], mp: Any, period: str, **recipe: Any) -> Any:
     """``mp`` (a copy) with ``period`` prepared by the core: the period's steps of
-    ``gtap_static(solve_check=True)``, without its solve, on the run of ``built``
+    ``gtap_static(solve_check=True, **recipe)``, without its solve, on the run of ``built``
     (``family_template``). From a photo A, the state the photo's run handed the
     squaring; a photo carries no instrument registry, so the build's is used."""
     import dataclasses
@@ -96,6 +96,7 @@ def core_prep(built: tuple[Any, Any], mp: Any, period: str) -> Any:
     from equilibria.family.gtap_periods import GTAPFamilyPeriodModel
     from equilibria.templates.gtap.recipe import gtap_static
 
+    recipe.setdefault("solve_check", True)
     template, like = built
     mp = dataclasses.replace(
         mp.copy(),
@@ -108,7 +109,7 @@ def core_prep(built: tuple[Any, Any], mp: Any, period: str) -> Any:
     with newton_env():
         fly_period(
             model,
-            no_solve(gtap_static(solve_check=True), stop=period),
+            no_solve(gtap_static(**recipe), stop=period),
             period,
             template=template,
         )
