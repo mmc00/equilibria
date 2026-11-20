@@ -38,15 +38,13 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
 
 import importlib.util as _u
-from equilibria._local_refs import refs_dir
+from equilibria.sources import find_reference
 _spec = _u.spec_from_file_location(
     "validate_reference", str(ROOT / "scripts" / "gtap" / "validate_reference.py")
 )
 _vr = _u.module_from_spec(_spec)
 sys.modules["validate_reference"] = _vr
 _spec.loader.exec_module(_vr)
-
-DEFAULT_REFS = str(refs_dir())
 
 # Explicit GAMS-equation -> Python-constraint pairing. The name heuristic below
 # (eq_<gams_eq>, eq_<stem>, ...) is FRAGILE: it silently resolves to a same-named
@@ -163,11 +161,15 @@ def _py_family_state(model, gams_eq: str, paired_var: str | None = None):
 #  - LINEAR market-clearing / balance identities (xseq with omegax=inf is xs=xds+xet;
 #    capAccteq is Σsavf=0; savfeq under capFix is trivial) — these have ONE root, so
 #    pairing them with the variable they define is correct, NOT the multi-root class.
-# The DANGEROUS class is a power/quadratic free row (pfteq: pft^(1+omega)=Σgf·pfy^…),
-# which is multi-valued; that is the only one PATH can converge to a wrong root for.
+#  - pfteq: it WAS the dangerous class, a power/quadratic free row
+#    (pft^(1+omega)=Σgf·pfy^…, two roots: the gtap7_3x3 factor-2 bug). Since ef807eb
+#    eq_pfteq is the single positive root pft=(Σgf·pfy^(1+omega))^(1/(1+omega)), so
+#    pairing it with pft has one root (blocks/gtap/factor.py, EqPfteq).
+# The DANGEROUS class is a power/quadratic free row, which is multi-valued; that is
+# the only one PATH can converge to a wrong root for.
 # NOTE: xseq/savfeq's benignness depends on omegax=inf / savfFlag=capFix — re-check
 # for datasets with finite omegax or capFlex/capShrFix closures.
-BENIGN = {"pnumeq", "walraseq", "eveq", "cveq", "xseq", "capAccteq", "savfeq"}
+BENIGN = {"pnumeq", "walraseq", "eveq", "cveq", "xseq", "capAccteq", "savfeq", "pfteq"}
 _NUMERAIRE_WALRAS = {"pnumeq", "walraseq", "eveq", "cveq"}
 
 
@@ -185,6 +187,7 @@ def _classify_free_row(eq: str, pyname, active: int, total: int) -> tuple[str, f
         return ("matches", 0.0, "deactivated → matches GAMS free-row")
     if eq in BENIGN:
         kindnote = ("numeraire/walras/welfare report" if eq in _NUMERAIRE_WALRAS
+                    else "single-root form, ef807eb" if eq == "pfteq"
                     else "linear market-clearing/balance identity (single root)")
         return ("benign_active", 0.0, f"active but BENIGN ({kindnote})")
     return ("pairing_mismatch", 1.0,
@@ -209,21 +212,21 @@ def _debug_print(model_name, gms_name, pairs, free_rows, rows):
               f"{r['note']}", file=sys.stderr)
 
 
-# The `model gtap /eq.var/` pairing block is the SAME GAMS model for every dataset
-# (only sets/data differ), so a dataset lacking its own .gms can borrow a sibling's
-# for the pairing parse. The Python model build below is still dataset-specific.
-_GMS_FALLBACK_DATASETS = ("gtap7_3x3", "gtap7_10x7", "9x10", "gtap7_15x10")
-
-
 def _resolve_gms_path(dataset: str, ifsub: int) -> tuple[Path | None, bool]:
-    own = Path(f"{DEFAULT_REFS}/{dataset}_altertax_cd/model_altertax_ifsub{ifsub}.gms")
-    if own.exists():
-        return (own, False)
-    for fb in _GMS_FALLBACK_DATASETS:
-        cand = Path(f"{DEFAULT_REFS}/{fb}_altertax_cd/model_altertax_ifsub{ifsub}.gms")
-        if cand.exists():
-            return (cand, True)
+    """The GAMS model recorded with the cascade's reference (data/, altertax,
+    fbep=header; cascade_config.resolve_ref_gdx), so the pairing is read from the
+    model that wrote the reference. The `model gtap /eq.var/` block is the SAME for
+    every dataset (only sets/data differ), so a dataset without its own reference
+    borrows a sibling's."""
+    for i, ds in enumerate((dataset, *(d for d in _GMS_FALLBACK_DATASETS if d != dataset))):
+        folder = find_reference(ds, "gams", form="mcp", mode="altertax",
+                                ifsub=ifsub, fbep="header")
+        if folder is not None and (folder / "model.gms").exists():
+            return (folder / "model.gms", i > 0)
     return (None, False)
+
+
+_GMS_FALLBACK_DATASETS = ("gtap7_3x3", "gtap7_10x7", "9x10", "gtap7_15x10")
 
 
 def _work(args) -> dict:
