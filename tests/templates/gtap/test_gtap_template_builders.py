@@ -135,16 +135,14 @@ def _loglevels_reference():
     ["sparse", pytest.param("loglevels", marks=pytest.mark.needs_gdxdump)],
 )
 def test_variant_solves_equal_the_old_driver(builder: str, monkeypatch) -> None:
-    """The variant on the core equals the variant on the old driver, every cell
-    (the same equality as test_gtap_on_core_solve for the blocks model)."""
+    """The variant on the core reaches the cells the variant on the old driver
+    reached, recorded on main before PR 4 deleted it (``tests/_old_route_golden.py``;
+    the same comparison as test_gtap_on_core_solve for the blocks model)."""
+    from tests._old_route_golden import case, level_mismatches
+
     from equilibria.core.exercise import Exercise
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
     from equilibria.templates.gtap.recipe import gtap_static
     from equilibria.templates.gtap.template import GTAP
-    from equilibria.templates.gtap_loglevels.multiperiod import (
-        build_loglevels_model_mp,
-    )
-    from equilibria.templates.gtap_sparse.multiperiod import build_sparse_model_mp
 
     gdx = None
     if builder == "loglevels":
@@ -152,39 +150,45 @@ def test_variant_solves_equal_the_old_driver(builder: str, monkeypatch) -> None:
         if gdx is None:
             pytest.skip("gtap7_3x3 GAMS MCP reference (fbep=header) not recorded")
         monkeypatch.setenv("EQUILIBRIA_GTAP_SOLVE_NLP", "1")
-
-    def setup():
-        p = _params()
-        if gdx is None:
-            return p, _closure()
+    want = case(f"variant_{builder}")
+    p = _params()
+    cl = _closure()
+    if gdx is not None:
         p.set_va_subsidy_basis("gempack")
-        return p, _closure(va_subsidy_basis="gempack")
-
-    p, cl = setup()
-    rr = list(p.sets.r)[-1]
-    if builder == "sparse":
-        m_old = build_sparse_model_mp(p, p.sets, cl, rr)[0]
-    else:
-        m_old, mp = build_loglevels_model_mp(p, p.sets, cl, rr, ref_gdx=gdx)
-        mp.seed_all_periods(m_old, gdx)
-    old = solve_multiperiod(
-        m_old,
-        p,
-        cl,
-        ref_gdx=gdx,
-        skip_base_solve=True,
-        mute_welfare=True,
-        seed_from_prior=False,
-        mode="gtap",
-    )
-    p2, cl2 = setup()
+        cl = _closure(va_subsidy_basis="gempack")
     ex = Exercise(
-        GTAP(p2, cl2, builder=builder, ref_gdx=gdx, seed_gdx=gdx), gtap_static()
+        GTAP(p, cl, builder=builder, ref_gdx=gdx, seed_gdx=gdx), gtap_static()
     )
     res = ex.run()
-    assert [old[k]["code"] for k in ("check", "shock")] == [1, 1]
+    assert want["codes"] == {"check": 1, "shock": 1}
     assert [res[k]["code"] for k in ("check", "shock")] == ["optimal", "optimal"]
-    a, b = _levels(m_old), _levels(ex.model.pyomo)  # type: ignore[union-attr]
-    assert a.keys() == b.keys()
-    bad = [k for k in a if not _same(a[k], b[k])]
-    assert bad == []
+    got = _levels(ex.model.pyomo)  # type: ignore[union-attr]
+    assert level_mismatches(got, want["levels"]) == []
+
+
+def _levels(m) -> dict[str, float]:
+    from pyomo.environ import Var
+    from pyomo.environ import value as V
+
+    out = {}
+    for v in m.component_objects(Var, active=True):
+        for idx in v:
+            x = v[idx].value
+            out[f"{v.name}{idx}"] = math.nan if x is None else float(V(v[idx]))
+    return out
+
+
+def _same(a: float, b: float) -> bool:
+    return a == b or (math.isnan(a) and math.isnan(b))
+
+
+def _loglevels_reference():
+    """The setup of the log-levels gate (tests/templates/gtap_loglevels): from a cold
+    start PATH does not converge on the log form; seeded from the GAMS MCP solution
+    and solved as an NLP it does. ``None`` when that reference is not recorded."""
+    from equilibria.sources import find_reference
+
+    ref = find_reference(
+        "gtap7_3x3", "gams", form="mcp", mode="gtap", ifsub=0, fbep="header"
+    )
+    return None if ref is None else ref / "out.gdx"

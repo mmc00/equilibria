@@ -280,23 +280,15 @@ def solve_exercise(
     *,
     shock_method: str = "nonlinear",
     rows: list[tuple[str, tuple, float]] | None = None,
-    route: str = "core",
 ):
     """Builds the exercise, applies its shocks and solves base/check/shock.
 
     ``shock_method="johansen"``: the shock as one linear step from check, as the
     book's Johansen exercises (no SHOCK_STEPS). ``rows`` replaces the exercise's
     shocks (same form as EXERCISES). It runs on the core driver
-    (``Exercise(GTAP(...), gtap_static(...))``); ``route="old"`` runs the old
-    ``solve_multiperiod`` until PR 4 of gtap-on-core deletes it. The codes keep the
-    old driver's form."""
-    if route not in ("old", "core"):
-        raise ValueError(f"route must be 'old' or 'core', got {route!r}")
+    (``Exercise(GTAP(...), gtap_static(...))``); the codes are ints by period."""
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-    from equilibria.templates.gtap.shocks import apply_shock
 
     prm, shocks = EXERCISES[exp]
     if rows is not None:
@@ -320,32 +312,13 @@ def solve_exercise(
         numeraire="pnum",
     )
     steps = SHOCK_STEPS if shock_method == "nonlinear" else None
-    if route == "core":
-        return _solve_on_core(p, gc, as_shock(shocks), steps, shock_method)
-    # GAMS compStat no resuelve la base: sus niveles (cal.gms) son la referencia de
-    # los indices de Fisher del check y del shock.
-    m, _ = build_block_model(p, p.sets, gc, "ROW", base_calibrated=False, ref_gdx=None)
-    apply_shock(m, as_shock(shocks))
-    res = solve_multiperiod(
-        m,
-        p,
-        gc,
-        ref_gdx=None,
-        skip_base_solve=True,
-        mute_welfare=True,
-        seed_from_prior=False,
-        mode="gtap",
-        solve_check=True,
-        shock_steps=steps,
-        shock_method=shock_method,
-    )
-    return m, p, {k: int(res[k]["code"]) for k in res}
+    return _solve_on_core(p, gc, as_shock(shocks), steps, shock_method)
 
 
 def _solve_on_core(p, gc, shock, steps, shock_method):
     """``solve_exercise`` on the core driver: same model, closure and options
-    (base not solved, check solved, welfare muted). Codes in the old form: the
-    skipped base is 1, ``"code N"`` is N."""
+    (base not solved, check solved, welfare muted). Codes as ints: the skipped
+    base is 1, ``"code N"`` is N."""
     from equilibria.core.driver import NOT_SOLVED
     from equilibria.core.exercise import Exercise
     from equilibria.templates.gtap.recipe import gtap_static

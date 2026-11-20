@@ -54,7 +54,6 @@ UNTIL_PR4: dict[str, str] = {
     "scripts/gtap/measure_gtap_pure_tols.py": _MONOLITH,
     "scripts/gtap/measure_nlp_vs_nlp.py": _MONOLITH,
     "scripts/gtap/measure_nlp_vs_nlp_altertax.py": _MONOLITH,
-    "scripts/gtap/run_burfisher.py": "route='old' for the old-vs-core equality test (PR 4)",
 }
 
 

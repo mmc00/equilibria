@@ -1,10 +1,10 @@
-"""The family route on the core driver leaves the same arrays as solve_gtap_family.
+"""The family route on the core driver leaves the arrays the old family driver left.
 
-Both routes run in the same process on gtap7_3x3 (the direct linear solve, which
-is bit-reproducible; same record cache), and every array of the final ``MPArrays`` (Var ``value``/``fixed``/``lb``/
-``ub``, row ``active``) must be equal: ``==``, NaN equal to NaN. The codes agree
-period by period (the base is not solved by either: ``skipped_solve`` against
-``"not solved"``). The new run builds no Pyomo model (the spies of
+The old driver's final ``MPArrays`` of each case on gtap7_3x3 (the direct linear
+solve) was recorded on main before PR 4 deleted it (``tests/_old_route_golden.py``):
+every array (Var ``value``/``fixed``/``lb``/``ub``, row ``active``) must match it,
+keys and flags exactly, values within the golden tolerance. The codes agree period
+by period (the base is not solved). The run builds no Pyomo model (the spies of
 ``test_family_e2e``).
 """
 
@@ -48,7 +48,7 @@ def _gdx(if_sub: bool) -> Any:
 
 def _shock_cell(cache: Any) -> tuple:
     """The first ``imptx`` shock cell, as ``test_family_e2e`` picks it."""
-    from equilibria.family.driver import prepare_run
+    from equilibria.family.run_setup import prepare_run
 
     p = _params(DS)
     _, mp = prepare_run(
@@ -80,29 +80,6 @@ CASES = [
 ]
 
 
-def _first_differences(a, b, n: int = 20) -> list[str]:
-    out: list[str] = []
-    for name, v in a.vars.items():
-        w = b.vars[name]
-        for f in ("value", "fixed", "lb", "ub"):
-            x, y = getattr(v, f), getattr(w, f)
-            same = (
-                (x == y) | (np.isnan(x) & np.isnan(y))
-                if x.dtype.kind == "f"
-                else x == y
-            )
-            for i in np.flatnonzero(~same)[: n - len(out)]:
-                out.append(f"{name}{v.keys[i]}.{f}: old {y[i]!r} new {x[i]!r}")
-            if len(out) >= n:
-                return out
-    for name, r in a.rows.items():
-        for i in np.flatnonzero(r.active != b.rows[name].active)[: n - len(out)]:
-            out.append(
-                f"{name}{r.keys[i]}.active: old {b.rows[name].active[i]} new {r.active[i]}"
-            )
-    return out
-
-
 @pytest.mark.parametrize(
     "case",
     [
@@ -112,16 +89,18 @@ def _first_differences(a, b, n: int = 20) -> list[str]:
     ],
     ids=lambda c: c.name,
 )
-def test_same_arrays_as_solve_gtap_family(case: Case, monkeypatch, tmp_path) -> None:
+def test_same_arrays_as_the_old_family_driver(
+    case: Case, monkeypatch, tmp_path
+) -> None:
     from equilibria.core.exercise import Exercise
-    from equilibria.family.driver import solve_gtap_family
     from equilibria.templates.gtap.recipe import gtap_static
     from equilibria.templates.gtap.template import GTAP
+    from tests._old_route_golden import case as golden
+    from tests._old_route_golden import mp_mismatches
     from tests.family.test_family_e2e import _spies
 
     load_params(DS)
-    # MUMPS is not bit-reproducible run to run (the old route against itself
-    # differs in walras[check] at 1e-21); the direct solve is, so it is the referee
+    # the golden's linear solve (MUMPS is not bit-reproducible run to run)
     linsolve = "direct"
     for k, v in {**_newton_mumps(), "EQUILIBRIA_GTAP_TR_LINSOLVE": linsolve}.items():
         monkeypatch.setenv(k, v)
@@ -132,16 +111,6 @@ def test_same_arrays_as_solve_gtap_family(case: Case, monkeypatch, tmp_path) -> 
     cache = tmp_path / "records"
     shock = {"imptx": {_shock_cell(cache): 5.0}} if case.user_shock else None
 
-    old = solve_gtap_family(
-        _params(DS),
-        _closure(case.if_sub, case.savf),
-        rr,
-        ref_gdx=gdx,
-        shock=shock,
-        cache_root=cache,
-        jax_cache=False,
-        nominal_trade_balance=case.trade_balance or False,
-    )
     template = GTAP(
         _params(DS),
         _closure(case.if_sub, case.savf),
@@ -163,15 +132,9 @@ def test_same_arrays_as_solve_gtap_family(case: Case, monkeypatch, tmp_path) -> 
         new = ex.run()
     assert calls == {"ConcreteModel": 0, "PyomoNLP": 0, "identify_variables": 0}
 
-    assert (
-        old.results["base"].get("skipped_solve") and new["base"]["code"] == "not solved"
-    )
+    old = golden(f"family_{case.name}")
+    assert old["base_skipped"] and new["base"]["code"] == "not solved"
     for period in ("check", "shock"):
-        assert (old.results[period]["code"] == 1) == (
-            new[period]["code"] == "optimal"
-        ), period
-    mp_new = ex.model.mp  # type: ignore[union-attr]
-    assert mp_new.vars.keys() == old.mp.vars.keys()
-    assert mp_new.rows.keys() == old.mp.rows.keys()
-    diffs = _first_differences(mp_new, old.mp)
-    assert not diffs, "\n".join(diffs)
+        assert (old["codes"][period] == 1) == (new[period]["code"] == "optimal"), period
+    diffs = mp_mismatches(ex.model.mp, old["mp"])  # type: ignore[union-attr]
+    assert not diffs, "\n".join(diffs[:20])
