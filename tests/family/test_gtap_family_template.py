@@ -186,21 +186,23 @@ def test_settle_through_core_equals_calibrate_base_arrays(env) -> None:
 
 
 def test_settle_cache_hit_skips_the_solves(env) -> None:
-    from equilibria.family import driver as fd
+    from equilibria.family import period_newton
 
     monkeypatch, tmp_path = env
     monkeypatch.setenv("EQUILIBRIA_FAMILY_SETTLE_CACHE", "1")
     monkeypatch.delenv("EQUILIBRIA_SEED_CACHE_DISABLE", raising=False)
     monkeypatch.setenv("EQUILIBRIA_SEED_CACHE", str(tmp_path / "seeds"))
-    first = _gtap(tmp_path, base_calibrated=True).build(("base", "check", "shock"))
     calls: list[int] = []
-    real = fd._newton
+    real = period_newton._newton
 
     def counted(*a: Any, **k: Any) -> Any:
         calls.append(1)
         return real(*a, **k)
 
-    monkeypatch.setattr(fd, "_newton", counted)
+    monkeypatch.setattr(period_newton, "_newton", counted)
+    first = _gtap(tmp_path, base_calibrated=True).build(("base", "check", "shock"))
+    assert calls, "the counter must see the settle solves of a cold build"
+    calls.clear()
     second = _gtap(tmp_path, base_calibrated=True).build(("base", "check", "shock"))
     assert calls == []
     assert second.settled_seed == first.settled_seed
