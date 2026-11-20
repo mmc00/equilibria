@@ -2,7 +2,9 @@
 
 ``tests/golden/pr4_old_route_main.json.gz`` was recorded on main (2c0d882a) by the
 PR 4 recorder (``scripts/dev/record_pr4_old_route.py`` in that commit), before
-PR 4 of gtap-on-core deleted the old drivers; two runs were identical. Each case is
+PR 4 of gtap-on-core deleted the old drivers; two runs were identical. The seven
+``on_core_*`` cases (test_gtap_on_core_solve) were recorded later by the same
+recorder on a checkout of that commit, two identical runs again. Each case is
 the old side of one old-vs-core equality test. The core is compared against it with
 a tolerance (``tests/_golden.py``): another CPU moves the last bits.
 """

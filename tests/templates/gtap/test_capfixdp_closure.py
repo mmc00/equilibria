@@ -80,7 +80,7 @@ REF = (
 )
 
 
-def _solve(sf, route="old"):
+def _solve(sf, route="core"):
     from equilibria.templates.gtap import GTAPParameters
 
     p = GTAPParameters()

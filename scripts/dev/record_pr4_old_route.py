@@ -33,10 +33,15 @@ FAMILY = (
     "nominal",
     "ratio",
 )
+# tests/templates/gtap/test_gtap_on_core_solve.py
+ON_CORE = tuple(
+    f"static_{mode}_ifsub{int(s)}" for mode in ("gtap", "altertax") for s in (0, 1)
+) + ("steps", "johansen", "overwrite_nus333")
 CASES = (
     [f"family_{c}" for c in FAMILY]
     + ["template_build", "routes_3x3", "variant_sparse", "variant_loglevels"]
     + ["burfisher_nonlinear", "burfisher_johansen"]
+    + [f"on_core_{c}" for c in ON_CORE]
 )
 
 
@@ -222,6 +227,52 @@ def case_burfisher(shock_method: str) -> dict:
     return {"codes": dict(codes), "levels": pyomo_levels(m)}
 
 
+def case_on_core(name: str, mp: Any) -> dict:
+    """The old side of ``_run_both`` in test_gtap_on_core_solve (its env fixture)."""
+    from tests.templates.gtap import _period_snapshot as snap
+    from tests.templates.gtap import test_gtap_on_core_solve as t
+    from tests.templates.gtap._routes import solve
+
+    mp.setenv("EQUILIBRIA_SEED_CACHE_DISABLE", "1")
+    for k in (
+        "EQUILIBRIA_GTAP_MODEL_CACHE",
+        "EQUILIBRIA_GTAP_SHOCK_CONTINUATION",
+        "PATH_CAPI_OPTIONS",
+    ):
+        mp.delenv(k, raising=False)
+    kw: dict[str, Any] = {}
+    if name == "overwrite_nus333":
+        from tests.templates.gtap._nus333 import closure, nus333_params
+        from tests.templates.gtap._unemployment import register_unemployment_hooks
+
+        from equilibria.blocks.gtap import overwrite
+
+        p, cl, rr = nus333_params(), closure(), "ROW"
+        kw = {
+            "shock": {"prdtx_rai": {("USA", "MFG", "MFG"): -10.9414}},
+            "solve_check": True,
+        }
+        register_unemployment_hooks()
+        try:
+            old = solve("old", p, cl, rr, skip_base_solve=True, **kw)
+        finally:
+            overwrite.clear()
+    else:
+        p = snap._load_params()
+        if name.startswith("static_"):
+            _, mode, ifsub = name.split("_")
+            cl, kw = t._closure(ifsub == "ifsub1"), {"mode": mode}
+        else:
+            cl = t._closure(False)
+            kw = (
+                {"shock_steps": (0.5, 1.0)}
+                if name == "steps"
+                else {"shock_method": "johansen"}
+            )
+        old = solve("old", p, cl, list(p.sets.r)[-1], skip_base_solve=True, **kw)
+    return {"codes": dict(old.codes), "levels": pyomo_levels(old.model)}
+
+
 def child(name: str, out: Path) -> None:
     import pytest
 
@@ -235,6 +286,8 @@ def child(name: str, out: Path) -> None:
             res = case_routes(mp)
         elif name.startswith("variant_"):
             res = case_variant(name[len("variant_") :], mp)
+        elif name.startswith("on_core_"):
+            res = case_on_core(name[len("on_core_") :], mp)
         else:
             res = case_burfisher(name[len("burfisher_") :])
     mp.undo()
