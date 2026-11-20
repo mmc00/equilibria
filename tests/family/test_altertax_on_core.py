@@ -6,7 +6,10 @@ each case here runs that same recorder on this checkout, in a child process with
 same environment, and must give the same codes, every level the GEMPACK comparison
 reads and every decomposition header (the path's, for the ``decomp_steps`` cases),
 within 1e-9 relative + 1e-12 absolute (a run is bit-identical on one machine; the
-tolerance is for another CPU).
+tolerance is for another CPU). The decomposition headers get a 1e-7 absolute floor:
+they are sums of level differences that cancel, so another CPU moves them more (Linux
+CI vs the Mac golden: levels within 1e-9, headers up to 8e-9 absolute on values up to
+1.5); a real change moves them far more.
 """
 
 from __future__ import annotations
@@ -64,7 +67,10 @@ def test_altertax_gives_what_main_gave(case: str, recorder) -> None:
     got = recorder.run_case(case, ROOT)
     want = GOLDEN[case]
     assert got["codes"] == want["codes"]
-    assert mismatches(_as_dict(got), _as_dict(want), rel=1e-9, abs_tol=1e-12) == []
+    assert mismatches(got["levels"], want["levels"], rel=1e-9, abs_tol=1e-12) == []
+    assert set(got) == set(want) == {"codes", "levels", "decomp"}
+    got_d, want_d = _as_dict(got["decomp"]), _as_dict(want["decomp"])
+    assert mismatches(got_d, want_d, rel=1e-9, abs_tol=1e-7) == []
 
 
 @pytest.fixture
