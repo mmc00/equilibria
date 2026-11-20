@@ -1,13 +1,14 @@
 """The saved Pyomo photos the family (JAX) route is checked against.
 
-A photo is a Pyomo run of one dataset and closure, captured by
-``scripts/family/regen_photos.py`` on a machine with MUMPS and committed under
+A photo is a Pyomo run of one dataset and closure, committed under
 ``data/gtap7/<dataset>/equilibria_pyomo-photo_<closure tag>/`` with its
 ``source.yaml``: the family tests read it instead of solving Pyomo.  Its
 ``model_print.json`` (``fingerprint.ModelPrint``) says what it was made from, so a
 change in the Pyomo-only code makes it stale (see ``freshness``).
 
-This module is the read side; writing needs Pyomo and lives in the script.
+The photos are frozen: the capture that made them ran inside the old Pyomo
+multiperiod driver, deleted in PR 4 of gtap-on-core. Regenerating one needs that
+capture ported to the core first (Linear MAR-218).
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ PHOTO_FOLDER = "equilibria_pyomo-photo"
 # the dataset files a photo's data print covers (the inputs _solve_shock loads)
 DATA_FILES = ("basedata.har", "sets.har", "default.prm", "baserate.har")
 LINSOLVE = "mumps"  # every photo is made with MUMPS (20x41 needs it)
-REGEN = "scripts/family/regen_photos.py"
+FROZEN = "the photos are frozen; regenerating one needs the capture ported to the core (MAR-218)"
 
 # (dataset, ifsub, savf, mode, keep): "all" keeps the per-step photos the prep tests
 # read, "gate" only final.pkl, settled.pkl and the solve records.
@@ -102,7 +103,7 @@ def plain_name(stored: str) -> str:
 
 
 def _regen_hint(dataset: str) -> str:
-    return f"run {REGEN} --dataset {dataset} (with MUMPS)"
+    return f"{dataset}: {FROZEN}"
 
 
 def _record(folder: Path, dataset: str) -> Mapping[str, Any]:

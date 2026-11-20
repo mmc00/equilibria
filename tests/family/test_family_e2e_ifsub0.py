@@ -65,61 +65,6 @@ def reference(linsolve):
                 os.environ[k] = v
 
 
-@pytest.fixture(scope="module")
-def family_run(reference, linsolve, tmp_path_factory):
-    """``_solve_shock`` on the family route with the Pyomo entry points spied."""
-    import pyomo.contrib.pynumero.interfaces.pyomo_nlp as pn
-    import pyomo.core.expr.visitor as visitor
-    from pyomo.environ import ConcreteModel
-
-    calls = {"ConcreteModel": 0, "PyomoNLP": 0, "identify_variables": 0}
-
-    def spy_init(cls, key):
-        orig = cls.__init__
-
-        def wrapped(self, *a, **k):
-            calls[key] += 1
-            return orig(self, *a, **k)
-
-        return orig, wrapped
-
-    orig_cm, wrap_cm = spy_init(ConcreteModel, "ConcreteModel")
-    orig_nlp, wrap_nlp = spy_init(pn.PyomoNLP, "PyomoNLP")
-    orig_iv = visitor.identify_variables
-
-    def wrap_iv(*a, **k):
-        calls["identify_variables"] += 1
-        return orig_iv(*a, **k)
-
-    # every module that bound the name at import time
-    holders = [
-        mod
-        for mod in list(sys.modules.values())
-        if vars(mod).get("identify_variables") is orig_iv
-    ]
-    mpatch = pytest.MonkeyPatch()
-    for mod in holders:
-        mpatch.setattr(mod, "identify_variables", wrap_iv)
-    mpatch.setattr(ConcreteModel, "__init__", wrap_cm)
-    mpatch.setattr(pn.PyomoNLP, "__init__", wrap_nlp)
-    for k, v in {**_newton_mumps(), "EQUILIBRIA_GTAP_TR_LINSOLVE": linsolve}.items():
-        mpatch.setenv(k, v)
-    mpatch.setenv("EQUILIBRIA_FAMILY_CACHE", str(tmp_path_factory.mktemp("cache")))
-    mpatch.setenv("EQUILIBRIA_GTAP_BACKEND", "family")
-    try:
-        from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
-
-        res, code = _solve_shock(DATASET, IFSUB, "capFix", solve_nlp=True)
-    finally:
-        mpatch.undo()
-    return res, code, calls
-
-
-def test_family_route_builds_no_pyomo_model(family_run):
-    _, _, calls = family_run
-    assert calls == {"ConcreteModel": 0, "PyomoNLP": 0, "identify_variables": 0}
-
-
 def test_spy_sees_the_pyomo_route():
     """The spy would have caught a build: a ConcreteModel built under the same wrap
     is counted (re-armed here, since the fixture has already undone its patches)."""
@@ -137,43 +82,6 @@ def test_spy_sees_the_pyomo_route():
         ConcreteModel()
     assert calls["n"] == 1
     assert ConcreteModel.__init__ is orig
-
-
-def test_every_cell_of_the_three_periods_equals_final_pkl(family_run, reference):
-    from equilibria.family.prep_capture import load
-
-    res, code, _ = family_run
-    assert code == 1
-    final = load(reference / "final.pkl")
-    # The relative lower bounds (1e-3 * the level the period starts from, ``square``)
-    # follow the check solution, which differs from Pyomo's by ~1e-10: the same 1e-9 as the values.
-    assert diff_to_photo(res.mp, final, 1e-9, lb_rtol=1e-9) == []
-
-
-def test_codes_and_iteration_counts(family_run, reference):
-    import json
-
-    res, _, _ = family_run
-    assert res.results["base"]["code"] == 1
-    assert res.results["check"]["code"] == 1
-    assert res.results["shock"]["code"] == 1
-    for n, period in ((2, "check"), (4, "check"), (5, "shock")):
-        s = json.loads((reference / f"{n:03d}_S_{period}.json").read_text())
-        assert s["code"] == 1
-    # reported, not asserted
-    print(
-        "nit ours",
-        {k: v.get("nit") for k, v in res.results.items()},
-        "settle",
-        res.settle["check"]["nit"],
-        "pyomo",
-        [
-            json.loads((reference / f"{n:03d}_S_{p}.json").read_text())["nit"]
-            for n, p in ((2, "check"), (4, "check"), (5, "shock"))
-        ],
-    )
-    assert np.isfinite(res.results["shock"]["residual"])
-    assert res.results["shock"]["residual"] < 1e-5
 
 
 def test_cache_key_differs_from_ifsub1():
@@ -235,43 +143,11 @@ def test_imptx_accept_reject_equals_pyomos(built):
     assert any(want.values())
 
 
-def test_phase_timing_covers_the_run(family_run):
-    res, _, _ = family_run
-    ph = res.phases
-    for name in (
-        "compose_state",
-        "sp_cache_key",
-        "cross_cache_key",
-        "mp_build",
-        "sp_reference",
-        "masks",
-        "settle_base.recipe",
-        "settle_check.square",
-        "settle_check.system_build",
-        "settle_check.fscale",
-        "settle_check.newton_F",
-        "settle_check.newton_J",
-        "settle_check.newton_other",
-        "settle_check.post_solve",
-        "check.recipe",
-        "shock.newton_J",
-        "shock.post_solve",
-    ):
-        assert ph[name] >= 0.0, name
-    assert any(k.startswith(("sp_records_", "cross_records_")) for k in ph)
-    assert res.phase_counts["shock.newton_J"] >= 1
-    # what is not in a phase (copies, the settled slice) stays a small part of the run
-    assert sum(ph.values()) <= res.timing["total_s"] + 1e-6
-    assert sum(ph.values()) >= 0.9 * res.timing["total_s"]
-
-
 # The core route (``Exercise(GTAP(backend="family"), gtap_static)``) against the
-# same photo, as PR 2 of gtap-on-core compares every gate. The tests above that
-# read the family driver's own result (``results``, ``settle``, ``phases``) stay
-# on the old route: PR 4 deletes them with it.
+# Pyomo photo.
 @pytest.fixture(scope="module")
 def core_run(reference, linsolve, tmp_path_factory):
-    """``_solve_shock(route="exercise")`` on the family backend, spied."""
+    """``_solve_shock`` on the family backend, spied."""
     from tests.family.test_family_e2e import _spies
     from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
 
@@ -287,7 +163,6 @@ def core_run(reference, linsolve, tmp_path_factory):
                 "capFix",
                 solve_nlp=True,
                 backend="family",
-                route="exercise",
             )
     finally:
         mpatch.undo()

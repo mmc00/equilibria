@@ -12,7 +12,7 @@ DATASETS = ("gtap7_3x3", "gtap7_10x7", "gtap7_15x10")
 # macOS with Python 3.13 and the locked jax/numpy/scipy. Other interpreters and
 # platforms round differently in the last bits: measured 2026-11, py3.11 (jax 0.10.2)
 # differs on macOS and Linux, and py3.13 on Linux aarch64 differs on the hashed rows
-# only. Like test_newton_golden, a golden for another interpreter is a skip, not a
+# only. A golden for another interpreter is a skip, not a
 # failure; the tolerance-based parity tests cover those environments.
 GOLDEN_PY = (3, 13)
 

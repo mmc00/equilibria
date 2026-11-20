@@ -19,7 +19,7 @@ def test_every_variant_is_fresh_or_shared_changed(variant):
     state = photos.freshness(ds, ifsub, savf, mode)
     assert state in ("fresh", "shared_changed"), (
         f"{ds} ifsub={ifsub} {savf}: the photo is stale (Pyomo-only code, data or "
-        f"closure changed); run {photos.REGEN} --dataset {ds}"
+        f"closure changed); {photos.FROZEN}"
     )
 
 
@@ -31,7 +31,7 @@ def _copy(tmp_path, ds="gtap7_3x3", ifsub=1, savf="capFix"):
 
 
 def test_missing_photo_is_an_error_not_a_skip(tmp_path):
-    with pytest.raises(photos.PhotoError, match="regen_photos.py --dataset gtap7_3x3"):
+    with pytest.raises(photos.PhotoError, match="gtap7_3x3: the photos are frozen"):
         photos.unpacked("gtap7_3x3", root=tmp_path, cache_root=tmp_path / "c")
 
 

@@ -19,12 +19,9 @@ def _newton_mumps() -> dict:
 
 
 def _closure_tag(ifsub: int, savf: str, mode: str) -> str:
-    path = ROOT / "scripts" / "family" / "capture_prep.py"
-    spec = importlib.util.spec_from_file_location("capture_prep", path)
-    assert spec is not None and spec.loader is not None
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod.closure_tag(ifsub, savf, mode)
+    from equilibria.family.photos import closure_tag
+
+    return closure_tag(ifsub, savf, mode)
 
 
 def reference_dir(
@@ -63,8 +60,7 @@ def capture_dir(
         return ref
     raise photos.PhotoError(
         f"{dataset} ifsub={ifsub} {savf}: no committed photo and no saved reference "
-        f"at {ref}; add the variant to photos.VARIANTS and run {photos.REGEN} "
-        f"--dataset {dataset}"
+        f"at {ref}; {photos.FROZEN}"
     )
 
 
