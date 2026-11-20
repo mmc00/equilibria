@@ -59,23 +59,46 @@ def fly(
     A period whose solve fails, or raises, is reported and the next one still
     runs. Exceptions from the steps are not caught: they are bugs, not results.
     """
-    results: dict[str, dict[str, Any]] = {}
-    for period in recipe.periods:
-        plan = recipe.plan(period)
-        ctx = StepContext(
-            model=model,
-            template=template,
-            recipe=recipe,
-            period=period,
-            prior=recipe.prior(period),
-            shock=dict(shock or {}),
+    return {
+        period.name: fly_period(
+            model, recipe, period.name, template=template, shock=shock
         )
-        for step in plan.before:
-            step(ctx)
-        code = _solve(model, plan, period.name)
-        residual = _residual(model, period.name)
-        ctx.status = code
-        for step in plan.after:
-            step(ctx)
-        results[period.name] = {"code": code, "residual": residual}
-    return results
+        for period in recipe.periods
+    }
+
+
+def fly_period(
+    model: PeriodModel,
+    recipe: Recipe,
+    period: str,
+    *,
+    template: Any = None,
+    shock: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Run one period of ``recipe`` on ``model``, as :func:`fly` runs it (its steps
+    before, the solve, the residual, its steps after); returns its
+    ``{"code", "residual"}``. Flying the periods one by one in the recipe's order
+    is :func:`fly`; a caller may look at the model between them."""
+    by_name = {p.name: p for p in recipe.periods}
+    if period not in by_name:
+        raise ValueError(
+            f"no period {period!r} in the recipe (periods: {', '.join(by_name)})"
+        )
+    p = by_name[period]
+    plan = recipe.plan(p)
+    ctx = StepContext(
+        model=model,
+        template=template,
+        recipe=recipe,
+        period=p,
+        prior=recipe.prior(p),
+        shock=dict(shock or {}),
+    )
+    for step in plan.before:
+        step(ctx)
+    code = _solve(model, plan, p.name)
+    residual = _residual(model, p.name)
+    ctx.status = code
+    for step in plan.after:
+        step(ctx)
+    return {"code": code, "residual": residual}

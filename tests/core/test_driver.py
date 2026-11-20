@@ -144,3 +144,45 @@ def test_after_steps_see_the_status() -> None:
     recipe = Recipe((Period("base", "calibrate"),), {"calibrate": plan})
     fly(model(), recipe)
     assert seen == [None, "code 2"]
+
+
+def test_fly_period_runs_one_period_as_fly_does() -> None:
+    """Period by period, in the recipe's order, it gives what fly gives: the same
+    steps in the same order, each seeing the same prior, template and shock."""
+    from equilibria.core.driver import fly_period
+
+    def run(by_period: bool) -> tuple[list, list, dict]:
+        log: list[str] = []
+        seen: list[tuple] = []
+        plan = logging_plan(log, "optimal")
+
+        def look(ctx: StepContext) -> None:
+            seen.append((ctx.template, dict(ctx.shock), ctx.prior and ctx.prior.name))
+
+        plan = KindPlan(
+            before=(look, *plan.before), after=plan.after, solver=plan.solver
+        )
+        recipe = Recipe(
+            PERIODS, dict.fromkeys(("calibrate", "replicate", "shock"), plan)
+        )
+        m = model()
+        if by_period:
+            results = {
+                p.name: fly_period(m, recipe, p.name, template="T", shock={"tau": 1.0})
+                for p in PERIODS
+            }
+        else:
+            results = fly(m, recipe, template="T", shock={"tau": 1.0})
+        return log, seen, results
+
+    assert run(by_period=True) == run(by_period=False)
+
+
+def test_fly_period_names_the_recipe_periods_when_unknown() -> None:
+    from equilibria.core.driver import fly_period
+
+    recipe = Recipe(
+        PERIODS, dict.fromkeys(("calibrate", "replicate", "shock"), KindPlan())
+    )
+    with pytest.raises(ValueError, match="base, check, shock"):
+        fly_period(model(), recipe, "nope")
