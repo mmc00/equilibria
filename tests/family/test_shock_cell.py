@@ -3,9 +3,9 @@
 The oracle is a Pyomo ``build_block_model`` built here, taken through the stages a user
 and the driver see it in:
 
-* ``user``: as built, where a user calls ``shocks.apply_shock`` (before ``solve_multiperiod``);
-* ``prepared``: after ``PeriodPreparer.prepare(m, "shock")``, where the driver writes the
-  default tariff.
+* ``user``: as built, where a user calls ``shocks.apply_shock`` (before a run);
+* ``prepared``: after the core driver flies the shock period's steps without its solve
+  (``_prepared``), where the recipe writes the default tariff; both backends.
 
 Accept / reject of ``check_shock_cell`` is compared cell by cell (every ``imptx`` cell,
 a sample of the cells of each other instrument, plus a cell that does not exist). A
@@ -23,10 +23,10 @@ from typing import Any
 import numpy as np
 import pytest
 
+from tests.family._core import newton_env, no_solve
 from tests.family._data import load_params
 from tests.family._prep import capture_dir
-from tests.family.test_sp_arrays import ROUTE, _closure, _params
-from tests.family.test_squared_system import _route_closure
+from tests.family.test_sp_arrays import _params, _route_closure
 
 # (dataset, ifSUB): ifSUB=0 only on 3x3, where it accepts the instruments that
 # ifSUB=1 rejects (fcttx, kappaf, exptx, prdtx_rai, lambdamg). Under ifSUB=1 the array
@@ -45,15 +45,32 @@ def _ids(param) -> str:
     return ds if ifsub == 1 else f"{ds}-ifsub{ifsub}"
 
 
-def _closures(ifsub: int):
-    """The model closure (``_route_closure``) and the driver's ``_closure`` at ``ifsub``."""
-    if ifsub == 1:
-        return _route_closure(), _closure()
-    off = {"if_sub": False}
-    return (
-        _route_closure().model_copy(update=off),
-        _closure().model_copy(update=off),
+def _closure_at(ifsub: int):
+    """The run's closure (``_route_closure``) at ``ifsub``."""
+    return _route_closure().model_copy(update={"if_sub": bool(ifsub)})
+
+
+def _prepared(params, closure, rr, backend: str, root, shock):
+    """The core model with the shock period prepared, not solved: every period of
+    ``gtap_static`` flown in order through ``no_solve``, ``shock`` the exercise's."""
+    from equilibria.core.driver import fly_period
+    from equilibria.templates.gtap.recipe import gtap_static
+    from equilibria.templates.gtap.template import GTAP
+
+    t = GTAP(
+        params,
+        closure,
+        residual_region=rr,
+        backend=backend,
+        cache_root=root,
+        jax_cache=False,
     )
+    recipe = no_solve(gtap_static())
+    with newton_env():
+        model = t.build(recipe.names)
+        for per in recipe.periods:
+            fly_period(model, recipe, per.name, template=t, shock=shock)
+    return model
 
 
 SAMPLE = 300
@@ -149,17 +166,15 @@ def case(request, tmp_path_factory):
     from equilibria.family import cross_period
     from equilibria.family.disk_cache import load_or_build
     from equilibria.family.mp_arrays import MPArrays
-    from equilibria.family.prep_recipe import run_recipe, sp_reference_arrays
     from equilibria.family.shock import apply_shock, can_take_shock
     from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.period_prep import PeriodPreparer
     from equilibria.templates.gtap.shocks import _can_take_shock
     from equilibria.templates.gtap.shocks import apply_shock as pyomo_apply
 
     ds, ifsub = request.param
     load_params(ds)  # skip when the dataset is missing
     p = _params(ds)
-    closure, base_closure = _closures(ifsub)
+    closure = _closure_at(ifsub)
     rr = list(p.sets.r)[-1]
     root = (
         tmp_path_factory.mktemp("records")
@@ -170,7 +185,6 @@ def case(request, tmp_path_factory):
     cross = cross_period.load_or_record(
         p, closure, rr, root, sets=backend.sets, var_domains=backend.var_domains
     )
-    sp_ref = sp_reference_arrays(p, base_closure, rr, state=state)
     mp0 = MPArrays.build(state, backend, cross, params=p)
     m: Any = build_block_model(p, p.sets, closure, rr, base_calibrated=False)[0]
 
@@ -201,14 +215,13 @@ def case(request, tmp_path_factory):
     out = {
         "ds": ds,
         "ifsub": ifsub,
-        "base_closure": base_closure,
         "params": p,
         "closure": closure,
         "rr": rr,
         "backend": backend,
         "state": state,
         "cross": cross,
-        "sp_ref": sp_ref,
+        "root": root,
         "mp0": mp0,
         "probes": probes,
     }
@@ -231,34 +244,15 @@ def case(request, tmp_path_factory):
     apply_shock(mp_sh, backend, shock)
     out["user_snap_pyomo"] = _snapshot(m)
     out["user_snap_arrays"] = _arrays_snapshot(mp_sh)
-    # stage 2: after the driver's prepare of the shock period
-    prep = PeriodPreparer(
-        mode="gtap",
-        base_closure=base_closure,
-        alt_closure=base_closure,
-        residual_region=rr,
-        **ROUTE,
-    )
-    prep.prepare(m, "shock", p)
+    # stage 2: after the core prepares the shock period
+    m = _prepared(p, closure, rr, "pyomo", root, shock).pyomo
     out["prep_pyomo"] = pyomo_table()
     out["prep_snap_pyomo"] = _snapshot(m)
-
-    def recipe(shock_arg):
-        return run_recipe(
-            mp0,
-            "shock",
-            params=p,
-            closure=base_closure,
-            sp_ref=sp_ref,
-            mode="gtap",
-            backend=backend,
-            shock=shock_arg,
-            **ROUTE,
-        )
-
-    got = recipe(shock)
-    out["prep_snap_arrays"] = _arrays_snapshot(got)
-    plain = recipe(None)  # default tariff
+    out["prep_snap_arrays"] = _arrays_snapshot(
+        _prepared(p, closure, rr, "family", root, shock).mp
+    )
+    plain = _prepared(p, closure, rr, "family", root, None).mp  # default tariff
+    out["plain"] = plain.copy()
     out["prep_arrays"] = array_table(plain)
     # stage 3: switch rows off / fix xft on both sides so that real cells get rejected
     stress = {}
@@ -413,23 +407,11 @@ def test_rejections_raise_like_pyomo(case):
 
 def test_default_tariff_equals_final_pkl(case):
     """The recipe's default tariff fixes the cells and values of the Pyomo run."""
-    from equilibria.family.mp_arrays import MPArrays
-    from equilibria.family.prep_capture import load, pairs
-    from equilibria.family.prep_recipe import run_recipe
+    from equilibria.family.prep_capture import load
 
     d = capture_dir(case["ds"], ifsub=case["ifsub"])
     final = load(d / "final.pkl")
-    a, _ = next((a, b) for a, b in pairs(d) if a.period == "shock")
-    got = run_recipe(
-        MPArrays.from_photo(a),
-        "shock",
-        params=case["params"],
-        closure=case["base_closure"],
-        sp_ref=case["sp_ref"],
-        mode="gtap",
-        backend=case["backend"],
-        **ROUTE,
-    )
+    got = case["plain"]
     g = got.var("imptx")
     w = final.vars["imptx"]
     shock = np.array([k[-1] == "shock" for k in w.keys])

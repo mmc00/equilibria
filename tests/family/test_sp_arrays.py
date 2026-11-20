@@ -49,6 +49,14 @@ def _closure():
     )
 
 
+def _route_closure():
+    """The closure ``_solve_shock`` (tests/templates/gtap/test_gtap7_gempack_parity.py)
+    runs: the base closure with the GEMPACK factor-subsidy basis."""
+    return _closure().model_copy(
+        update={"savf_flag": "capFix", "va_subsidy_basis": "gempack"}
+    )
+
+
 def _params(dataset: str):
     """The run's params: ``build_block_model`` recalibrates them to the GEMPACK
     factor-subsidy basis of the test route (in place), and the reference model
