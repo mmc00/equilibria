@@ -213,9 +213,9 @@ def _debug_print(model_name, gms_name, pairs, free_rows, rows):
 
 
 def _resolve_gms_path(dataset: str, ifsub: int) -> tuple[Path | None, bool]:
-    """The GAMS model recorded with the cascade's reference (data/, altertax,
+    """The GAMS model recorded with the cascade's altertax reference (data/,
     fbep=header; cascade_config.resolve_ref_gdx), so the pairing is read from the
-    model that wrote the reference. The `model gtap /eq.var/` block is the SAME for
+    model that wrote it; --mode gtap reads it too, as before. The `model gtap /eq.var/` block is the SAME for
     every dataset (only sets/data differ), so a dataset without its own reference
     borrows a sibling's."""
     for i, ds in enumerate((dataset, *(d for d in _GMS_FALLBACK_DATASETS if d != dataset))):
@@ -226,7 +226,7 @@ def _resolve_gms_path(dataset: str, ifsub: int) -> tuple[Path | None, bool]:
     return (None, False)
 
 
-_GMS_FALLBACK_DATASETS = ("gtap7_3x3", "gtap7_10x7", "9x10", "gtap7_15x10")
+_GMS_FALLBACK_DATASETS = ("gtap7_3x3", "gtap7_10x7", "gtap7_15x10")
 
 
 def _work(args) -> dict:

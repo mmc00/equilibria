@@ -78,5 +78,7 @@ def test_gams_altertax_point_stays_on_gtap7_3x3(period):
         text=True,
         timeout=1800,
     )
-    payload = json.loads(proc.stdout.strip().splitlines()[-1])
+    lines = proc.stdout.strip().splitlines()
+    assert lines, f"no JSON on stdout (exit {proc.returncode}):\n{proc.stderr[-2000:]}"
+    payload = json.loads(lines[-1])
     assert payload["status"] == "clean", payload["headline"]

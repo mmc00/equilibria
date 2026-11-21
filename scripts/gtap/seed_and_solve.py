@@ -23,11 +23,13 @@ SETUP DISCIPLINES (each one previously manufactured a false "differing equation"
      so eq_xd_agg/eq_xc/eq_xaa/eq_xigbl show spurious residuals 1–2 that CASCADE to ~0 once
      the derived vars are set from their own identities. A genuinely-differing equation does
      NOT fall on consistent seed; an artifact does. This tool cascades the derived seed first.
-  2. BUILD THE CASE AS THE MCP GATE BUILDS IT (``_case``): both modes run the full
-     multi-period model on the core driver, the shock tariff written into the
-     ShockBlock. altertax takes the altertax closure, its elasticities and the FBEP
-     sign of the fbep=header reference; with the base closure the shock's factor rows
-     do not build and the solve never runs (MAR-216).
+  2. BUILD THE CASE ON THE CORE DRIVER (``_case``): both modes run the full
+     multi-period model, the shock tariff written into the ShockBlock. altertax is
+     built as the MCP gate builds it: the altertax closure, its elasticities and the
+     FBEP sign of the fbep=header reference; with the base closure the shock's factor
+     rows do not build and the solve never runs (MAR-216). gtap keeps its old build
+     (default FBEP sign), so against the fbep=header reference it still shows an
+     eq_ytax ft/fs seed residual of ~0.07 (MAR-219).
   3. SEED THE CDE HOUSEHOLD HELPERS (uh, zcons, xcshr): GAMS keeps them on a
      household index Python drops, and an unseeded uh=1.0 leaves a ~1e-3 residual
      on eq_xc/eq_uh at the shocked GAMS point.
@@ -186,11 +188,13 @@ def _seed_household_vars(m, gdx_path: Path) -> int:
 
 
 def _case(dataset: str, if_sub: bool, mode: str):
-    """(params, closure, residual region) of one case, built as the MCP gate builds
-    it (``test_gtap7_mcp_parity._solve_and_measure``). gtap: the data's params and
-    the base closure. altertax: the data's FBEP sign (the fbep=header reference has
-    it, #191), the altertax elasticities and the altertax closure; with the base
-    closure the shock's factor rows do not build and the solve never runs."""
+    """(params, closure, residual region) of one case. gtap: the data's params and
+    the base closure, as before (the MCP gate also sets the gempack FBEP sign; not
+    done here yet, MAR-219). altertax: as the MCP gate builds it
+    (``test_gtap7_mcp_parity._solve_and_measure``): the data's FBEP sign (the
+    fbep=header reference has it, #191), the altertax elasticities and the altertax
+    closure; with the base closure the shock's factor rows do not build and the
+    solve never runs."""
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
@@ -359,8 +363,9 @@ def _work(dataset: str, gdx_path: Path, period: str, top: int,
     out = run_seed_and_solve_gtap(dataset, gdx_path, period, top, if_sub, mode)
     code, resid = out["code"], out["resid"]
     if code is None:
-        # The solve never ran (e.g. the callbacks could not be built): the tool is
-        # broken, the GAMS point was not tested. Never read it as "an equation differs".
+        # The core reported the period as not solved (a solve that raises is an
+        # "error" status, which old_codes turns into an exception): the GAMS point was
+        # not tested. Never read it as "an equation differs".
         return {
             "status": "error",
             "headline": (f"the solve did not run at the GAMS {period} point "
