@@ -26,14 +26,13 @@ def _script(name: str) -> ModuleType:
     return mod
 
 
-def test_run_burfisher_defaults_to_the_core() -> None:
-    sig = inspect.signature(_script("run_burfisher").solve_exercise)
-    assert sig.parameters["route"].default == "core"
-
-
-def test_compare_gempack_levels_defaults_to_the_core() -> None:
-    sig = inspect.signature(_script("compare_gempack_levels").solve)
-    assert sig.parameters["route"].default == "exercise"
+def test_the_scripts_take_no_route() -> None:
+    """The core is the only route: neither script offers another."""
+    for name, fn in (
+        ("run_burfisher", "solve_exercise"),
+        ("compare_gempack_levels", "solve"),
+    ):
+        assert "route" not in inspect.signature(getattr(_script(name), fn)).parameters
 
 
 GOLDEN = ROOT / "tests/scripts/golden/pr3b_scripts_main.json.gz"
@@ -128,20 +127,6 @@ def test_script_on_core_equals_main(case: str) -> None:
     assert codes == want["codes"]
     bad = mismatches(model_levels(m), want["levels"], rel=SOLVE_REL, abs_tol=SOLVE_ABS)
     assert not bad, f"{len(bad)} cells off, first: {bad[:10]}"
-
-
-@pytest.mark.needs_gdxdump  # the seed reads the GAMS GDX through it
-@pytest.mark.parametrize("case", sorted(RUN))
-def test_script_never_calls_the_old_driver(case: str, monkeypatch) -> None:
-    _needs_data()
-    import equilibria.templates.gtap.gtap_multiperiod_driver as old
-
-    def _refuse(*a, **k):
-        raise AssertionError(f"{case} reached solve_multiperiod")
-
-    monkeypatch.setattr(old, "solve_multiperiod", _refuse)
-    monkeypatch.setattr(old, "_solve_multiperiod_inner", _refuse)
-    RUN[case]()
 
 
 @pytest.mark.needs_gdxdump  # the seed reads the GAMS GDX through it

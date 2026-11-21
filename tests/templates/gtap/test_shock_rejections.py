@@ -77,26 +77,3 @@ def test_rejects_a_fixed_endowment_in_the_shock_period(built):
             apply_shock(m, {"aft": {("USA", "CAPITAL"): 10.0}})
     finally:
         m.xft[idx].unfix()
-
-
-# ── el driver: un modelo sin ShockBlock ─────────────────────────────────────
-
-
-def test_a_model_without_shockblock_is_rejected_before_the_solver(monkeypatch):
-    """El monolito (GTAPMultiPeriodModel) no tiene ShockBlock: no hay donde
-    escribir el shock, ni el arancel por defecto. Error claro, sin solver."""
-    from tests.templates.gtap.test_multiperiod_sets import _load_3x3_params
-
-    from equilibria.templates.gtap import gtap_multiperiod_driver as driver
-    from equilibria.templates.gtap.gtap_model_multiperiod import GTAPMultiPeriodModel
-
-    def _explode():
-        raise AssertionError("must be rejected before loading the solver")
-
-    monkeypatch.setattr(driver, "_load_run_gtap", _explode)
-    p = _load_3x3_params()
-    mp = GTAPMultiPeriodModel(p.sets, p, None, residual_region=list(p.sets.r)[-1])
-    m = mp.build_sets()
-    mp.build_vars(m)
-    with pytest.raises(ValueError, match="ShockBlock.*GTAPBlockMultiPeriodModel"):
-        driver.solve_multiperiod(m, p, None)

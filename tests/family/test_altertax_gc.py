@@ -39,7 +39,7 @@ def test_family_scope_freezes_raises_and_restores(clean_gc):
 
 
 def test_family_scope_nested_keeps_the_outer_setup(clean_gc):
-    """An inner scope (``solve_gtap_family`` inside ``solve_altertax``) neither unfreezes
+    """An inner scope (the template's inside ``solve_altertax``) neither unfreezes
     nor restores the threshold: what runs after it is still inside the outer scope."""
     with gc_tuning._gc_family_scope():
         with gc_tuning._gc_family_scope():

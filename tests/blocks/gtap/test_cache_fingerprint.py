@@ -173,7 +173,7 @@ def test_any_py_file_in_the_code_folders_moves_the_key(monkeypatch, tmp_path):
     root = tmp_path / "equilibria"
     files = [
         "blocks/gtap/floors.py",  # missing from the old hand list
-        "templates/gtap/gtap_multiperiod_driver.py",
+        "templates/gtap/recipe.py",
         "templates/gtap/altertax/outer_loop.py",  # nested folder
         "solver/path_capi.py",
         "backends/pyomo_backend.py",

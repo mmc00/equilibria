@@ -98,20 +98,6 @@ def test_calibrate_base_restores_the_given_model() -> None:
     assert state() == before
 
 
-def test_calibrate_base_never_calls_the_old_driver(monkeypatch) -> None:
-    if not has_dataset("gtap7_3x3"):
-        pytest.skip("gtap7_3x3 not present")
-    import equilibria.templates.gtap.gtap_multiperiod_driver as old
-
-    def _refuse(*a, **k):
-        raise AssertionError("calibrate_base reached solve_multiperiod")
-
-    monkeypatch.setattr(old, "solve_multiperiod", _refuse)
-    monkeypatch.setattr(old, "_solve_multiperiod_inner", _refuse)
-    seed = _calibrate(*_built("gtap7_3x3", 0))
-    assert seed
-
-
 def test_the_seed_cache_key_covers_the_core_settle_path() -> None:
     """The settle cache keys on the code of CODE_FOLDERS: every module the core
     settle runs must be in one, or a seed computed by other code is served."""
@@ -138,7 +124,7 @@ def test_the_seed_cache_key_covers_the_core_settle_path() -> None:
 
 def test_calibrate_base_settles_inside_the_run_scope(monkeypatch) -> None:
     """The settle flies inside ``GTAP.run_scope`` (the GC freeze of the built model
-    over every period, as ``solve_multiperiod`` held it): without it the steps
+    over every period, as the old driver held it): without it the steps
     between solves walk the whole model again (minutes on 20x41)."""
     if not has_dataset("gtap7_3x3"):
         pytest.skip("gtap7_3x3 not present")

@@ -13,8 +13,9 @@ from typing import Any
 import numpy as np
 import pytest
 
-from tests.family._prep import capture_dir
-from tests.family.test_sp_arrays import ROUTE, _closure
+from tests.family._core import core_prep
+from tests.family._prep import capture_dir, core_template
+from tests.family.test_sp_arrays import _closure
 from tests.family.test_squared_system import _backends
 
 DATASETS = ["gtap7_3x3", "gtap7_10x7"]
@@ -64,28 +65,16 @@ def _legacy_square(mp, period, *, params, closure, incidence, exogenous, masks):
 def route(request):
     from equilibria.family.mp_arrays import MPArrays
     from equilibria.family.prep_capture import pairs
-    from equilibria.family.prep_recipe import run_recipe, sp_reference_arrays
     from equilibria.family.prep_square import ConditionalMasks
+    from equilibria.family.sp_arrays import sp_reference_arrays
 
     ds = request.param
     p, backend, state, cross = _backends(ds)
     ref = sp_reference_arrays(p, _closure(), list(p.sets.r)[-1])
     calls = pairs(capture_dir(ds))
     masks = ConditionalMasks.from_params(p, MPArrays.from_photo(calls[0][0]))
-    mps = [
-        run_recipe(
-            MPArrays.from_photo(a),
-            a.period,
-            params=p,
-            closure=_closure(),
-            sp_ref=ref,
-            mode="gtap",
-            cross=cross,
-            backend=backend,
-            **ROUTE,
-        )
-        for a, _ in calls
-    ]
+    built = core_template(ds)
+    mps = [core_prep(built, MPArrays.from_photo(a), a.period) for a, _ in calls]
     periods = [a.period for a, _ in calls]
     return p, backend, state, cross, ref, masks, mps, periods
 

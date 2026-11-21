@@ -1,6 +1,6 @@
-"""Foto del modelo justo antes de cada solve del driver multiperiodo.
+"""Foto del modelo justo antes de cada solve de la corrida multiperiodo.
 
-El driver (base -> check -> shock) prepara cada periodo con muchos pasos
+La receta (base -> check -> shock) prepara cada periodo con muchos pasos
 (congelar, recalibrar, fijar, cotas, holdfix...).  Esta foto registra, por cada
 llamada al solver y al final de la corrida, el estado de cada componente:
 
@@ -16,9 +16,9 @@ que no hace falta PATH (unos 0,5 s por caso en gtap7_3x3).  La foto se guarda
 como un hash POR COMPONENTE: cuando cambia, el test dice que Var o ecuacion
 cambio, en que llamada.
 
-Regenerar (solo si el cambio de la preparacion es INTENCIONAL):
-
-    EQUILIBRIA_UPDATE_PERIOD_SNAPSHOT=1 uv run pytest tests/templates/gtap/test_period_prep_snapshot.py
+La foto guardada (``FIXTURE``) la grabo el driver viejo en main y esta CONGELADA:
+no se regenera desde el core (``test_gtap_on_core_snapshot`` compara el core contra
+ella).
 """
 
 from __future__ import annotations
@@ -154,18 +154,17 @@ def _load_params():
     return p
 
 
-def take(case: str, monkeypatch, route: str = "driver") -> list[dict]:
+def take(case: str, monkeypatch) -> list[dict]:
     """Corre el caso con un solver falso; devuelve las fotos en orden: una por
     llamada al solver (con el nombre del cierre) y una final.
 
-    ``route="driver"``: ``build_block_model`` + ``solve_multiperiod``.
-    ``route="exercise"``: ``Exercise(GTAP(...), gtap_static(...))`` on the core
-    driver, with the case's driver options mapped to the recipe's arguments."""
+    ``Exercise(GTAP(...), gtap_static(...))`` on the core driver, with the case's
+    old driver options mapped to the recipe's arguments."""
+    from equilibria.core.exercise import Exercise
     from equilibria.solver import path_gtap
-    from equilibria.templates.gtap import gtap_multiperiod_driver as drv
-    from equilibria.templates.gtap.gtap_block_model import build_block_model
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.shocks import apply_shock
+    from equilibria.templates.gtap.recipe import gtap_static
+    from equilibria.templates.gtap.template import GTAP
 
     mode, if_sub, build_kw, drive_kw = CASES[case]
     shots: list[dict] = []
@@ -180,7 +179,6 @@ def take(case: str, monkeypatch, route: str = "driver") -> list[dict]:
             )
             return {"termination_code": 1, "residual": 0.0}
 
-    monkeypatch.setattr(drv, "_load_run_gtap", lambda: _FakeSolver)
     monkeypatch.setattr(path_gtap, "_load_path_capi", lambda: _FakeSolver)
     monkeypatch.setenv("EQUILIBRIA_SEED_CACHE_DISABLE", "1")
     monkeypatch.delenv("EQUILIBRIA_GTAP_MODEL_CACHE", raising=False)
@@ -199,37 +197,26 @@ def take(case: str, monkeypatch, route: str = "driver") -> list[dict]:
     )
     drive_kw = dict(drive_kw)
     shock = drive_kw.pop("shock", None)
-    if route == "exercise":
-        from equilibria.core.exercise import Exercise
-        from equilibria.templates.gtap.recipe import gtap_static
-        from equilibria.templates.gtap.template import GTAP
-
-        bc = bool(build_kw.get("base_calibrated", False))
-        kw = {k: v for k, v in drive_kw.items() if k != "skip_base_solve"}
-        ex = Exercise(
-            template=GTAP(p, closure, base_calibrated=bc),
-            recipe=gtap_static(
-                mode,
-                base_calibrated=bc,
-                solve_base=not drive_kw.get("skip_base_solve", False),
-                **kw,
-            ),
-            shock=shock,
-        )
-        ex.run()
-        assert ex.model is not None
-        shots.append(
-            {
-                "call": "final",
-                "components": _component_hashes(cast("Any", ex.model).pyomo),
-            }
-        )
-        return shots
-    m, _ = build_block_model(p, p.sets, closure, list(p.sets.r)[-1], **build_kw)
-    if shock is not None:
-        apply_shock(m, shock)
-    drv.solve_multiperiod(m, p, closure, mode=mode, **drive_kw)
-    shots.append({"call": "final", "components": _component_hashes(m)})
+    bc = bool(build_kw.get("base_calibrated", False))
+    kw = {k: v for k, v in drive_kw.items() if k != "skip_base_solve"}
+    ex = Exercise(
+        template=GTAP(p, closure, base_calibrated=bc),
+        recipe=gtap_static(
+            mode,
+            base_calibrated=bc,
+            solve_base=not drive_kw.get("skip_base_solve", False),
+            **kw,
+        ),
+        shock=shock,
+    )
+    ex.run()
+    assert ex.model is not None
+    shots.append(
+        {
+            "call": "final",
+            "components": _component_hashes(cast("Any", ex.model).pyomo),
+        }
+    )
     return shots
 
 
@@ -237,10 +224,6 @@ def load_fixture() -> dict:
     if not FIXTURE.exists():
         return {}
     return json.loads(FIXTURE.read_text())
-
-
-def save_fixture(data: dict) -> None:
-    FIXTURE.write_text(json.dumps(data, indent=1, sort_keys=True) + "\n")
 
 
 def diff(expected: list[dict], got: list[dict]) -> list[str]:

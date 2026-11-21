@@ -1,7 +1,7 @@
 """GTAP altertax multi-period SOLVING parity gate (both ifSUB modes).
 
 For each (dataset, ifSUB) this builds the multi-period model, seeds it from the
-committed GAMS GDX fixture, solves base->check->shock via solve_multiperiod, and
+committed GAMS GDX fixture, solves base->check->shock on the core, and
 asserts:
   1. all 3 periods converge (termination code == 1), and
   2. the shock-period real-cell match vs the GDX is >= the per-row gap_min from

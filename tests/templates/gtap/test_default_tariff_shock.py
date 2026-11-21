@@ -222,9 +222,7 @@ def test_table1_3x3_keeps_its_solution(route):
     with gzip.open(TABLE1_ORACLE, "rt") as fh:
         oracle = json.load(fh)
     want = {(v, t, tuple(i)): a for v, t, i, a in oracle["cells"]}
-    levels, xscale = solve_levels(
-        DATASET, "capFlex", "path", route={"old": "driver", "core": "exercise"}[route]
-    )
+    levels, xscale = solve_levels(DATASET, "capFlex", "path")
     r = run(
         levels,
         xscale,

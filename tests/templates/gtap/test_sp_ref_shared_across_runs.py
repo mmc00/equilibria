@@ -23,7 +23,6 @@ from typing import Any
 import pytest
 from pyomo.environ import ConcreteModel, Var
 
-from equilibria.templates.gtap import gtap_multiperiod_driver as drv
 from equilibria.templates.gtap import sp_reference
 from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 from equilibria.templates.gtap.sp_reference import SPReferenceCache
@@ -116,17 +115,41 @@ def _prep(closure=None, residual_region: str = "ROW") -> SPReferenceCache:
 # ── Replicar desde la foto = replicar desde el modelo ───────────────────────────
 
 
+def _expected(period: str) -> dict:
+    """``_mp_model`` tras replicar ``_sp_model`` en ``period``, derivado a mano: las
+    fijadas del SP se fijan con su valor (sin valor: 0.0) salvo la que ``m`` ya tenia
+    fija, las cotas se copian, el otro periodo no se toca."""
+    out = {}
+    for p in ("base", "check"):
+        on = p == period
+        out["x", ("r1", "i1", p)] = (True, 1.5, None, None) if on else _FREE
+        out["x", ("r1", "i2", p)] = (False, None, 0.25, None) if on else _FREE
+        if p == "check":
+            out["y", ("r1", p)] = (True, 7.0, None, None)  # ya fija en m
+        else:
+            out["y", ("r1", p)] = (True, 3.0, None, None) if on else _FREE
+        out["y", ("r2", p)] = (False, None, None, 9.0) if on else _FREE
+        out["z", p] = (True, 0.0, None, None) if on else _FREE
+    return out
+
+
+_FREE = (False, None, None, None)
+
+
 @pytest.mark.parametrize("period", ["base", "check"])
-def test_replicating_the_snapshot_leaves_m_like_replicating_the_model(period):
-    via_model, via_snapshot = _mp_model(), _mp_model()
-    drv._replicate_sp_fixing(via_model, _sp_model(), period)
-    drv._replicate_sp_bounds(via_model, _sp_model(), period)
+def test_replicating_the_snapshot_leaves_m_as_derived(period):
+    """El core replica la foto del modelo de referencia (``sp_snapshot``) en ``m``."""
+    from equilibria.templates.gtap.period_model import apply_reference
+    from equilibria.templates.gtap.pyomo_periods import (
+        GTAPPyomoPeriodModel,
+        _as_reference,
+    )
 
+    m = _mp_model()
     snap = sp_reference.sp_snapshot(_sp_model())
-    drv._replicate_snapshot_fixing(via_snapshot, snap, period)
-    drv._replicate_snapshot_bounds(via_snapshot, snap, period)
+    apply_reference(GTAPPyomoPeriodModel(m), _as_reference(snap, period), period)
 
-    assert _state(via_snapshot) == _state(via_model)
+    assert _state(m) == _expected(period)
 
 
 # ── Se comparte entre corridas del mismo modelo, solo con la misma clave ────────
@@ -135,7 +158,7 @@ def test_replicating_the_snapshot_leaves_m_like_replicating_the_model(period):
 def test_a_second_run_on_the_same_model_reuses_the_reference(builds):
     m, params, closure = _mp_model(), _Params(), _closure()
     _prep(closure).cached(m, params, closure, "base")  # calibrate_base
-    _prep(closure).cached(m, params, closure, "base")  # solve_multiperiod
+    _prep(closure).cached(m, params, closure, "base")  # la corrida
     assert builds == ["base"]
 
 
@@ -172,7 +195,7 @@ def test_another_residual_region_builds_again(builds):
 
 def test_a_new_model_with_the_same_params_reuses_the_reference(builds):
     """El flujo real: calibrate_base resuelve OTRO modelo (medido: otro id(m)) con
-    el MISMO objeto params que despues usa solve_multiperiod."""
+    el MISMO objeto params que despues usa la corrida."""
     params, closure = _Params(), _closure()
     _prep(closure).cached(_mp_model(), params, closure, "base")
     _prep(closure).cached(_mp_model(), params, closure, "base")

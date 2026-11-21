@@ -83,22 +83,11 @@ def newton_env(monkeypatch, tmp_path):
     return tmp_path
 
 
-def test_altertax_runs_no_old_family_driver(newton_env, monkeypatch) -> None:
-    """Neither the solve nor the path decomposition reaches the old orchestration."""
-    import equilibria.family.driver as old
+def test_altertax_solves_with_the_path_decomposition(newton_env) -> None:
+    """The solve and the path decomposition (``decomp_steps``) run through."""
     from equilibria._local_refs import nus333_dir
     from equilibria.family.altertax.run import solve_altertax
 
-    def boom(*a, **k):
-        raise AssertionError("the old family driver was reached")
-
-    for name in (
-        "solve_gtap_family",
-        "_solve_family",
-        "_solve_period",
-        "_period_recipe",
-    ):
-        monkeypatch.setattr(old, name, boom)
     run = solve_altertax(nus333_dir(), cache_root=newton_env / "c", decomp_steps=2)
     assert run.codes == {"check": 1, "shock": 1}
     assert run.decomp_path is not None

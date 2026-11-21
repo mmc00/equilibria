@@ -7,9 +7,9 @@ en ninguna ecuacion).  Quedan 12 que SI existen en ambos y solo el monolito
 fija: `pa` y `xaa` en el sector `tmg`, con el MISMO valor en los dos (1 y 0).
 Lo que falta en bloques es el flag.
 
-Importa porque `gtap_multiperiod_driver` construye un GTAPModelEquations
-entero — 3,4M de celdas en 20x41 — en tres sitios (3021/3232/3786) SOLO para
-leerle `.fixed`/`lb`/`ub` y replicarlo.  Mientras bloques no reproduzca ese
+Importaba porque el driver viejo construia un GTAPModelEquations entero
+— 3,4M de celdas en 20x41 — en tres sitios SOLO para leerle `.fixed`/`lb`/`ub`
+y replicarlo.  Mientras bloques no reproduzca ese
 fixing, el monolito sigue siendo dependencia de runtime y F3 no cierra.
 
 Dos comentarios del repo afirman que "the composer applies the .fix"

@@ -1,11 +1,10 @@
 """``MPArrays.build`` (the multiperiod state from the composed state) equals the Pyomo model's.
 
-Oracle: photo ``001_A_base`` of the saved Pyomo run, the whole multiperiod state at entry
-of the first ``PeriodPreparer.prepare``. ``calibrate_base`` runs the settle on the model
-``build_block_model`` just built, and its first ``prepare`` is that call: nothing touches
-the state between the reflection (plus the Fisher rows) and the photo except
-``solve_multiperiod`` stamping ``_residual_region`` / ``_gtap_mode`` (attributes, not
-cells).
+Oracle: photo ``001_A_base`` of the saved Pyomo run (frozen), the whole multiperiod state
+at entry of the first period prepare. ``calibrate_base`` runs the settle on the model
+``build_block_model`` just built, and its first prepare is that call: nothing touched
+the state between the reflection (plus the Fisher rows) and the photo except the old
+driver stamping ``_residual_region`` / ``_gtap_mode`` (attributes, not cells).
 """
 
 from __future__ import annotations

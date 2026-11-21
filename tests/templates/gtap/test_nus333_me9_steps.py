@@ -31,7 +31,7 @@ def test_me9_resuelve_y_coincide_con_gempack(exp: str, route: str) -> None:
     from equilibria.blocks.gtap._derived_params import xscale_data
 
     sys.path.insert(0, str(path_capi_src()))
-    m, p, codes = cb.rb.solve_exercise(exp, nus333_dir(), route=route)
+    m, p, codes = cb.rb.solve_exercise(exp, nus333_dir())
     assert codes == {"base": 1, "check": 1, "shock": 1}
     r = cb.run(exp, cb.cg.model_levels(m), dict(xscale_data(p, p.sets)))
     post = [c for c in r.cells if c.period == "post"]

@@ -180,7 +180,7 @@ def test_full_settle_baseline():
     print(f"BASELINE settled_seed: {count} cells, sig={h}")
 
 
-def _solve_multiperiod_result(settle_only):
+def _core_codes(settle_only):
     """Build the block model + solve on the core, return the codes per period
     (base/check/[shock])."""
     from tests.templates.gtap._routes import solve
@@ -195,7 +195,7 @@ def _solve_multiperiod_result(settle_only):
 @pytest.mark.skipif(not DATA.exists(), reason="gtap7_10x7 dataset not present")
 def test_settle_only_skips_shock():
     os.environ["EQUILIBRIA_SEED_CACHE_DISABLE"] = "1"
-    res = _solve_multiperiod_result(settle_only=True)
+    res = _core_codes(settle_only=True)
     assert "check" in res, "settle_only must still solve the check phase"
     assert "shock" not in res, "settle_only must NOT solve the shock phase"
 
@@ -322,7 +322,7 @@ def test_seed_cache_roundtrip_preserves_key_types():
 
     The old encoder joined the tuple with \\x1f and split it back, which turned
     every element into a str and collapsed a 1-tuple into a bare scalar.  The
-    consumer (gtap_multiperiod_driver, base-calibrated seeding) looks the key up
+    consumer (the base-calibrated seeding) looks the key up
     inside ``except (KeyError, TypeError, ValueError): pass`` — so a mistyped key
     does not raise, it silently seeds NOTHING and the model solves from a
     different starting point.  That is the failure this pins.

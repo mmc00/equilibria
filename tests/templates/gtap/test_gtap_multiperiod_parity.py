@@ -3,7 +3,7 @@
 This is the Task 2 fidelity gate.  It builds the pure-gtap (NON-altertax)
 multi-period model, seeds it from the recorded GAMS MCP reference
 (data/gtap7/<ds>/gams_mcp_gtap_ifsub{0,1}_fbep-header/out.gdx — solved Variables
-with the base/check/shock t-axis), solves base->check->shock via solve_multiperiod in gtap-mode, and
+with the base/check/shock t-axis), solves base->check->shock on the core in gtap-mode, and
 asserts:
   1. all 3 periods converge (termination code == 1), and
   2. the SHOCK-period real-cell match vs the GAMS GDX is >= a MEASURED floor.

@@ -26,7 +26,6 @@ def _mod(name: str) -> Any:
     return cast(Any, importlib.import_module(name))
 
 
-DRV = "equilibria.templates.gtap.gtap_multiperiod_driver"
 PC = "equilibria.solver.path_capi"
 
 
@@ -41,10 +40,17 @@ def _nus333_model():
 
 @pytest.mark.integration
 def test_walras_libre_y_eq_walras_activa_en_modo_gtap():
-    from equilibria.templates.gtap.gtap_multiperiod_driver import _mute_welfare_tail
+    from tests.templates.gtap._core_step import run_step
+
+    from equilibria.templates.gtap.steps import mute_welfare
 
     m = _nus333_model()
-    _mute_welfare_tail(m, "check", list(m.r), gtap_mode=True)
+    run_step(
+        mute_welfare(gtap_mode=True),
+        m,
+        "check",
+        staged=(closure(), nus333_params(), True),
+    )
 
     def _per(k):
         return k[-1] if isinstance(k, tuple) else k
@@ -57,16 +63,15 @@ def test_walras_libre_y_eq_walras_activa_en_modo_gtap():
 
 @pytest.mark.integration
 def test_cotas_de_gams_en_el_periodo_resuelto():
-    drv = _mod(DRV)
-    GAMS_BOUNDED_VARS, _apply_gams_bounds = (
-        drv.GAMS_BOUNDED_VARS,
-        drv._apply_gams_bounds,
-    )
+    from tests.templates.gtap._core_step import run_step
+
+    from equilibria.templates.gtap.period_rules import GAMS_BOUNDED_VARS
+    from equilibria.templates.gtap.steps import gams_bounds
 
     m = _nus333_model()
     pf_lb = {k: m.pf[k].lb for k in m.pf if k[-1] == "check"}
     base_lb = {k: m.xf[k].lb for k in m.xf if k[-1] == "base"}
-    _apply_gams_bounds(m, "check")
+    run_step(gams_bounds, m, "check")
     # Libres en GAMS: sin cota, ni siquiera la del dominio.
     for v in (
         m.xft["USA", "LAND", "check"],

@@ -27,14 +27,13 @@ def _frozen_nlp(period: str):
     from pyomo.environ import Objective
 
     from equilibria.templates.gtap.gtap_block_model import build_block_model
-    from equilibria.templates.gtap.gtap_multiperiod_driver import (
-        freeze_inactive_periods,
-    )
+    from equilibria.templates.gtap.steps import freeze_inactive
+    from tests.templates.gtap._core_step import run_step
 
     p = load_params(DATASET)
     rr = list(p.sets.r)[-1]
     m, _ = build_block_model(p, p.sets, comp_stat_closure(), rr)
-    freeze_inactive_periods(m, period)
+    run_step(freeze_inactive, m, period)
     m._family_test_obj = Objective(expr=0.0)
     return m, PyomoNLP(m)
 

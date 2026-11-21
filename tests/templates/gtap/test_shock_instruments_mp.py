@@ -1,12 +1,15 @@
-"""Instrumentos en el modelo de 3 periodos: fijos en todos, y el driver no los toca.
+"""Instrumentos en el modelo de 3 periodos: fijos en todos, y la receta no los toca.
 
-La traza de 2026-09-29 (spec ShockBlock) mostro que freeze_inactive_periods
-libera toda celda del periodo activo y _seed_period_from_prior la re-siembra con
-el valor del check: un xft fijado a mano volvio de 3,5791 a 3,2537 con code=1.
-Sin solver: nus333.
+La traza de 2026-09-29 (spec ShockBlock) mostro que el congelado de periodos
+liberaba toda celda del periodo activo y la siembra desde el periodo previo la
+re-sembraba con el valor del check: un xft fijado a mano volvio de 3,5791 a
+3,2537 con code=1. Aqui, los pasos del core (``steps.freeze_inactive``,
+``steps.seed_from``, ``steps.copy_from_base``) sobre el modelo Pyomo. Sin
+solver: nus333.
 """
 
 import pytest
+from tests.templates.gtap._core_step import run_step
 
 from equilibria.sources import dataset_dir
 from equilibria.templates.gtap.instruments import period_key
@@ -26,16 +29,14 @@ def test_registro_y_fijado_antes_del_cache(nus333_mp_model):
 def test_freeze_no_libera_instrumentos_en_ningun_periodo(nus333_mp_model, period):
     from pyomo.environ import value
 
-    from equilibria.templates.gtap.gtap_multiperiod_driver import (
-        freeze_inactive_periods,
-    )
+    from equilibria.templates.gtap.steps import freeze_inactive
 
     m = nus333_mp_model
     idx = ("USA", "CAPITAL", period)
     x0 = float(value(m.aft[idx]))
     m.aft[idx].fix(x0 * 1.1)
     try:
-        freeze_inactive_periods(m, period)
+        run_step(freeze_inactive, m, period)
         assert m.aft[idx].fixed
         assert float(value(m.aft[idx])) == pytest.approx(x0 * 1.1)
     finally:
@@ -46,9 +47,7 @@ def test_seed_from_prior_no_pisa_un_instrumento(nus333_mp_model):
     """Aun liberado (lo que hacia freeze antes), el re-sembrado no lo toca."""
     from pyomo.environ import value
 
-    from equilibria.templates.gtap.gtap_multiperiod_driver import (
-        _seed_period_from_prior,
-    )
+    from equilibria.templates.gtap.steps import seed_from
 
     m = nus333_mp_model
     idx = ("USA", "CAPITAL", "shock")
@@ -56,7 +55,7 @@ def test_seed_from_prior_no_pisa_un_instrumento(nus333_mp_model):
     m.aft[idx].unfix()
     m.aft[idx].set_value(x0 * 1.1)
     try:
-        _seed_period_from_prior(m, "check", "shock")
+        run_step(seed_from("check"), m, "shock")
         assert float(value(m.aft[idx])) == pytest.approx(x0 * 1.1)
     finally:
         m.aft[idx].fix(x0)
@@ -67,7 +66,7 @@ def test_copia_base_a_check_no_pisa_instrumentos(nus333_mp_model):
     que saltar los instrumentos, como freeze y seed_from_prior."""
     from pyomo.environ import value
 
-    from equilibria.templates.gtap import gtap_multiperiod_driver as driver
+    from equilibria.templates.gtap.steps import copy_from_base
 
     m = nus333_mp_model
     ins = ("USA", "CAPITAL", "check")
@@ -77,7 +76,7 @@ def test_copia_base_a_check_no_pisa_instrumentos(nus333_mp_model):
     m.aft[ins].fix(antes_ins * 1.1)
     m.xft[otra].set_value(antes_otra * 3.0)
     try:
-        driver._copy_base_to_check(m)
+        run_step(copy_from_base, m, "check")
         assert float(value(m.aft[ins])) == pytest.approx(antes_ins * 1.1)
         base = (*otra[:-1], "base")
         assert float(value(m.xft[otra])) == float(value(m.xft[base]))

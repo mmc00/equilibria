@@ -1,7 +1,7 @@
 """GTAPFamilyPeriodModel: the GTAP operations over the arrays, on gtap7_3x3.
 
-Each operation is checked against the array function of the old family recipe it
-stands for (``prep_recipe``), on a copy of the same ``prepare_run`` arrays.
+Each operation is checked against the array function it stands for
+(``family.shock``), on a copy of the same ``prepare_run`` arrays.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ DS = "gtap7_3x3"
 
 @pytest.fixture(scope="module")
 def prepared(tmp_path_factory):
-    from equilibria.family.driver import prepare_run
+    from equilibria.family.run_setup import prepare_run
 
     load_params(DS)
     mp_env = pytest.MonkeyPatch()
@@ -71,7 +71,7 @@ def test_reference_matches_sp_ref(prepared) -> None:
                 assert ref.bounds[name][k] == (lo, hi), (name, k)
 
 
-def test_default_tariff_same_cells_as_prep_recipe(prepared) -> None:
+def test_default_tariff_same_cells_as_the_array_function(prepared) -> None:
     from equilibria.family.shock import apply_default_tariff
 
     run, mp = prepared
@@ -83,7 +83,7 @@ def test_default_tariff_same_cells_as_prep_recipe(prepared) -> None:
     assert m.shock_labels()
 
 
-def test_user_shock_same_cells_as_prep_recipe(prepared) -> None:
+def test_user_shock_same_cells_as_the_array_function(prepared) -> None:
     from equilibria.family.shock import apply_shock
 
     run, mp = prepared

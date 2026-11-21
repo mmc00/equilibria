@@ -40,13 +40,13 @@ def test_family_run_equals_the_gate_photo(dataset, monkeypatch):
         monkeypatch.setenv(k, v)
     res, code = _solve_shock(dataset, 1, "capFix", solve_nlp=True, backend="family")
 
-    codes = {p: int(r["code"]) for p, r in res.results.items()}
+    # the run's solve records, the settle's left out
+    solves = [r for r in res.run.solves if not r["solve"].startswith("settle")]
+    codes = {r["solve"]: int(r["code"]) for r in solves}
     assert code == 1 and set(codes.values()) == {1}, codes
     for n, period in ((2, "check"), (4, "check"), (5, "shock")):
         s = json.loads((reference / f"{n:03d}_S_{period}.json").read_text())
         assert s["code"] == 1
     final = load(reference / "final.pkl")
     assert diff_to_photo(res.mp, final, 1e-9, lb_rtol=1e-9) == []
-    print(
-        dataset, "nit", {p: r.get("nit") for p, r in res.results.items()}, os.getpid()
-    )
+    print(dataset, "nit", {r["solve"]: r.get("nit") for r in solves}, os.getpid())

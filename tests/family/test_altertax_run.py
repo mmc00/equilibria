@@ -144,7 +144,7 @@ def test_trade_balance_nominal(altax_run):
 
 def test_default_path_keeps_real_savf(env):
     """Default off: the shock's eq_savf[USA] stays active (savf = pigbl * savf_bar, real),
-    and with ``nominal_trade_balance`` it is off; the option is refused outside capFix."""
+    and with ``trade_balance`` it is off; the option is refused outside capFix."""
     import inspect
 
     from equilibria.family.altertax.closure import (
@@ -152,18 +152,19 @@ def test_default_path_keeps_real_savf(env):
         altertax_closure,
     )
     from equilibria.family.altertax.run import load_altertax_params
-    from equilibria.family.driver import solve_gtap_family
+    from equilibria.templates.gtap.recipe import gtap_static
+    from tests.family._core import family_exercise
 
-    param = inspect.signature(solve_gtap_family).parameters["nominal_trade_balance"]
-    assert param.default is False
-    res = solve_gtap_family(
+    param = inspect.signature(gtap_static).parameters["trade_balance"]
+    assert param.default is None
+    model, _ = family_exercise(
         load_altertax_params(nus333_dir()),
         altertax_closure(),
         ALTAX_RESIDUAL_REGION,
         shock=ALTAX_SHOCK,
         cache_root=env.mktemp("default_cache"),
     )
-    eq = res.mp.rows["eq_savf"]
+    eq = model.mp.rows["eq_savf"]
     assert bool(eq.active[eq.keys.index(("USA", "shock"))])
 
 
@@ -172,14 +173,20 @@ def test_nominal_balance_drops_the_row(altax_run):
     assert not bool(eq.active[eq.keys.index(("USA", "shock"))])
 
 
-def test_nominal_balance_needs_capfix(env):
-    # env: check_supported reads the solver settings before the capFix guard
+def test_nominal_balance_needs_capfix():
+    """The recipe's first step refuses a trade balance without the capFix row."""
+    from types import SimpleNamespace
+
     from equilibria.family.altertax.closure import altertax_closure
-    from equilibria.family.driver import solve_gtap_family
+    from equilibria.templates.gtap import steps
 
     closure = altertax_closure().model_copy(update={"savf_flag": "capFlex"})
-    with pytest.raises(NotImplementedError, match="nominal_trade_balance"):
-        solve_gtap_family(object(), closure, "ROW", nominal_trade_balance=True)
+    ctx = SimpleNamespace(
+        model=SimpleNamespace(backend="family"),
+        template=SimpleNamespace(closure=closure),
+    )
+    with pytest.raises(NotImplementedError, match="trade_balance='nominal'"):
+        steps.check_backend({"trade_balance": "nominal"})(ctx)  # ty: ignore[invalid-argument-type]
 
 
 def test_altertax_solves_converge_to_1e10_whatever_the_env(env, monkeypatch):
@@ -188,7 +195,7 @@ def test_altertax_solves_converge_to_1e10_whatever_the_env(env, monkeypatch):
     from the root and left small cancelling indices (pfactor[USA] of 3x4) off by 3e-6 pp.
     Other routes keep reading the env: ``FamilyRun.newton_tol`` defaults to ``None``."""
     import equilibria.solver.newton_tr as nt
-    from equilibria.family.driver import FamilyRun
+    from equilibria.family.run_setup import FamilyRun
 
     assert FamilyRun.__dataclass_fields__["newton_tol"].default is None
     monkeypatch.setenv("EQUILIBRIA_GTAP_TR_RELTOL", "1e-6")

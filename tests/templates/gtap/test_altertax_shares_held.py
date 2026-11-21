@@ -30,7 +30,7 @@ HELD = [
 @pytest.mark.parametrize("prefix", HELD)
 @pytest.mark.parametrize("case", ["altertax_ifsub0", "altertax_ifsub1"])
 def test_altertax_does_not_rebuild(case, prefix, monkeypatch):
-    shots = snap.take(case, monkeypatch, route="exercise")
+    shots = snap.take(case, monkeypatch)
 
     rebuilt = sorted(
         {

@@ -30,12 +30,6 @@ def _recorder():
 @pytest.mark.skipif(not has_dataset("gtap7_3x3"), reason="gtap7_3x3 not present")
 def test_capflex_twin_solve_equals_main(monkeypatch) -> None:
     monkeypatch.setenv("EQUILIBRIA_SEED_CACHE_DISABLE", "1")
-    import equilibria.templates.gtap.gtap_multiperiod_driver as old
-
-    def _refuse(*a, **k):
-        raise AssertionError("the capFlex twin-solve reached solve_multiperiod")
-
-    monkeypatch.setattr(old, "solve_multiperiod", _refuse)
     want = json.loads(GOLDEN.read_text(encoding="utf-8"))["capflex_risk"]
     rec = _recorder()
     assert mismatches(rec._risk("gtap7_3x3", 0), want["gtap7_3x3-ifsub0"]) == []

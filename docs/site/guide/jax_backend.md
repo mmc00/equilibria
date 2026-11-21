@@ -406,8 +406,8 @@ older box is safe.
 A photo is a Pyomo run saved in `data/gtap7/<dataset>/equilibria_pyomo-photo_<tag>/`:
 the final value of every variable, with its bounds and fixed flag. It is read by
 `src/equilibria/family/photos.py`. The tests do not run Pyomo: they compare against
-the photo. When the model changes, the photo is taken again with
-`scripts/family/regen_photos.py`, which also checks it against GAMS and GEMPACK.
+the photo. The photos are frozen: taking one again needs the capture ported to the
+core (Linear MAR-218).
 
 | Dataset | Photos | What is saved | Where it runs |
 |---|---|---|---|

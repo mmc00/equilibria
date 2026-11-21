@@ -1,9 +1,8 @@
-"""solve_multiperiod must not build the same reference model twice.
+"""A run must not build the same reference model twice.
 
-WHAT THE DRIVER DOES.  For each period it builds a COMPLETE single-period
-``GTAPModelEquations(...).build_model()`` — 3.4M vars on 20x41 — purely to read
-which variables it leaves fixed/bounded (``_replicate_sp_fixing`` /
-``_replicate_sp_bounds``), then throws the model away.
+WHAT THE RUN DOES.  For each period it builds a COMPLETE single-period reference
+model — 3.4M vars on 20x41 — purely to read which variables it leaves
+fixed/bounded (the replication of the reference), then throws the model away.
 
 WHY IT IS WASTE.  In gtap mode the check period passes ``base_closure`` — the
 SAME four arguments as the base period — so the second build is byte-identical
