@@ -64,7 +64,8 @@ uv run pytest -m gams              # GAMS parity tests (need a local GAMS)
 - **A new test file** must be added to the CI groups:
   `uv run python scripts/dev/plan_test_groups.py --suite python --refresh-files`
   (and `--suite gdxdump`), then commit the result (see `CONTRIBUTING.md`).
-- **`gtap7_20x41` runs locally only**: on the Linux CI it runs out of memory (over 11 GB).
+- **`gtap7_20x41` runs locally only**: it starves a standard GitHub runner
+  (`tests/family/test_family_e2e_gate.py`), so its tests are `slow` and run on the Mac.
 
 ## Build a model, in short
 
