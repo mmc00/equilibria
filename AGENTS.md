@@ -36,14 +36,16 @@ Setup and the full detail are in [`CONTRIBUTING.md`](CONTRIBUTING.md). In short:
 
 ```bash
 uv sync --dev                      # dependencies and tooling
-uv tool install prek && prek install   # git hooks (pre-commit and commit-msg)
+uv tool install prek && prek install   # git hooks (pre-commit, commit-msg, pre-push)
 uv run pytest -m "not gams"        # tests without GAMS
 uv run pytest -m gams              # GAMS parity tests (need a local GAMS)
 ```
 
 - **Run Python through `uv run`**, never a bare `python` or a hard-coded `.venv` path.
 - **Pre-commit is fast hygiene only** (ruff, `ty` as a ratchet, layout, commit
-  message). Never add a solver or GAMS check to it.
+  message). Never add a solver or GAMS check to it. The pre-push hook runs the small
+  family (JAX) datasets against the photos and needs a Python with jax and pymumps:
+  set `EQUILIBRIA_FAMILY_PYTHON` to it (`scripts/dev/pre_push_family.sh`).
 - **GTAP gates before every push or PR that touches GTAP**:
   `uv run python scripts/gtap/run_parity_gates.py` (about 20 min; `--quick` runs the
   gates without writing the stamp). It refuses a dirty tree, runs the MCP, NLP,
@@ -62,7 +64,7 @@ uv run pytest -m gams              # GAMS parity tests (need a local GAMS)
 - **A new test file** must be added to the CI groups:
   `uv run python scripts/dev/plan_test_groups.py --suite python --refresh-files`
   (and `--suite gdxdump`), then commit the result (see `CONTRIBUTING.md`).
-- **`gtap7_20x41` runs locally only**; its fixtures are not in git.
+- **`gtap7_20x41` runs locally only**: on the Linux CI it runs out of memory (over 11 GB).
 
 ## Build a model, in short
 
