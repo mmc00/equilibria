@@ -248,8 +248,11 @@ def test_the_shared_reference_dies_with_the_params(builds):
 
     closure = _closure()
     params = _Params()
+    # other tests' params (a cached GTAPParameters) may hold entries of their own
+    before = set(sp_reference._SHARED_SP_REF)
     _prep(closure).cached(_mp_model(), params, closure, "base")
-    assert sp_reference._SHARED_SP_REF
+    mine = set(sp_reference._SHARED_SP_REF) - before
+    assert mine
     del params
     gc.collect()
-    assert not sp_reference._SHARED_SP_REF
+    assert not mine & set(sp_reference._SHARED_SP_REF)
