@@ -4,12 +4,17 @@ from pathlib import Path
 
 import pytest
 
-from equilibria._local_refs import refs_dir
+from equilibria.sources import find_reference
 
 ROOT = Path(__file__).resolve().parents[2]
 PY = str(ROOT / ".venv" / "bin" / "python")
-REF = refs_dir() / "gtap7_3x3_altertax_cd" / "out_altertax_ifsub0.gdx"
-pytestmark = pytest.mark.skipif(not REF.exists(), reason="durable ref GDX absent")
+_FOLDER = find_reference(
+    "gtap7_3x3", "gams", form="mcp", mode="altertax", ifsub=0, fbep="header"
+)
+REF = None if _FOLDER is None else _FOLDER / "out.gdx"
+pytestmark = pytest.mark.skipif(
+    REF is None or not REF.exists(), reason="GAMS MCP altertax ref absent"
+)
 
 
 def test_orchestrator_emits_parseable_json_with_provenance():
@@ -30,7 +35,7 @@ def test_orchestrator_emits_parseable_json_with_provenance():
     # stdout is exactly one JSON object
     report = json.loads(proc.stdout)
     assert report["dataset"] == "gtap7_3x3"
-    assert report["ref"]["source"] == "durable"
+    assert report["ref"]["source"] == "gams_reference"
     assert report["kkt_reader"] == "pure-python"
     assert "shock" in report["periods"]
     # provenance line is on stderr
