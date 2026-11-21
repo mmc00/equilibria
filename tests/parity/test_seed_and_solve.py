@@ -58,6 +58,7 @@ def test_a_solve_that_ran_and_drifted_is_still_dirty(monkeypatch):
     REF is None or not REF.exists(), reason="GAMS MCP altertax ref absent"
 )
 @pytest.mark.needs_path
+@pytest.mark.needs_gdxdump  # the seed reads the GAMS GDX through it
 @pytest.mark.parametrize("period", ["check", "shock"])
 def test_gams_altertax_point_stays_on_gtap7_3x3(period):
     proc = subprocess.run(
