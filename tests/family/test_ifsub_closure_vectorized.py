@@ -21,7 +21,7 @@ GOLDEN = Path(__file__).parent / "golden"
 def closure():
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
-    # The closure scripts/family/budget_20x41.py composes with (ifSUB=1, capFix).
+    # The 20x41 budget closure (ifSUB=1, capFix).
     return GTAPClosureConfig(
         name="base",
         closure_type="MCP",

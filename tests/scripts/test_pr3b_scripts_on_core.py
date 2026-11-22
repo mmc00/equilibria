@@ -1,7 +1,7 @@
 """The scripts moved by PR 3b of gtap-on-core run on the core driver (``Exercise``)
 and solve to the same point as on main. Oracle:
-``tests/scripts/golden/pr3b_scripts_main.json.gz`` (``scripts/dev/record_pr3b_scripts.py``,
-recorded on main before the move)."""
+``tests/scripts/golden/pr3b_scripts_main.json.gz`` (recorded on main before the move;
+its recorder was deleted by PR 4)."""
 
 from __future__ import annotations
 

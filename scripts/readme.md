@@ -96,7 +96,6 @@ cada script y quién lo nombra (CI, tests, docs u otro código). Un script con
 | `_parity_json.py` | Shared JSON-output contract for the parity-debug cascade tools. | tests, docs, código |  |
 | `bench.py` | FAST ITERATION BENCH — edit a convention → run → see the per-cell delta vs the | tests, código |  |
 | `bench_build_once.py` | A/B wall-clock of the two multi-period equations-build paths on a dataset. | — | monolito |
-| `bench_nlp_timing.py` | NLP wall-time benchmark: Python (IPOPT, EQUILIBRIA_GTAP_SOLVE_NLP=1) vs GAMS | CI | monolito |
 | `bench_nus333_dual.py` | NUS333 dual-reference benchmark: parity vs GAMS local + GAMS NEOS, with wall-time. | CI, código | monolito |
 | `bench_settle_cut.py` | A/B wall-clock of calibrate_base's settle: settle_only (cut at check) vs the | — |  |
 | `bench_symbolic_reuse.py` | A/B: MUMPS symbolic-reuse ON vs OFF on 15x10 GMIN+MUMPS. Prints solve wall-clock | código |  |
@@ -126,8 +125,6 @@ cada script y quién lo nombra (CI, tests, docs u otro código). Un script con
 | `coverage_matrix.py` | GTAP7 parity coverage matrix — the single source of truth. | tests, docs, código |  |
 | `demo_parity_both_models.py` | Demo: Run Both Python GTAP and Simulated GAMS - Compare Solutions | — | monolito |
 | `demo_parity_simple.py` | Demo: Parity Comparison Between Python and GAMS | código |  |
-| `diag_mp_3x3.py` | Task-6 decision gate: 3x3 multi-period model → does shock reach code=1? | código | monolito |
-| `diag_mp_check_drift.py` | PURE DIAGNOSTIC (no fix): instrument the multi-period CHECK solve. | — | monolito |
 | `diff_9x10_full.py` | Full variable-by-variable diff: Python GTAP 9x10 vs GAMS COMP.gdx. | CI, docs, código | monolito |
 | `diff_9x10_vs_gams.py` | Compare Python 9x10 baseline + shocked solutions vs GAMS COMP.gdx. | — | monolito |
 | `diff_altertax.py` | Cell-by-cell diff: Python altertax vs GAMS NEOS altertax out.gdx. | código | monolito |
@@ -152,16 +149,12 @@ cada script y quién lo nombra (CI, tests, docs u otro código). Un script con
 | `gen_burfisher_gams.py` | Burfisher 3e / nus333: genera el oraculo GAMS de cada ejercicio. | tests, código |  |
 | `gen_coverage_doc.py` | Generate docs/site/guide/gtap7_coverage_matrix.md from coverage_matrix.ROWS. | tests, docs, código |  |
 | `gen_gempack_doc.py` | Generate docs/site/guide/gtap7_coverage_matrix_gempack.md from the gempack rows. | tests, docs, código |  |
-| `gen_linearization_study.py` | Generate the against-GEMPACK linearization-study page from whatever grid | tests, docs, código | monolito |
+| `gen_linearization_study.py` | Generate the against-GEMPACK linearization-study page from whatever grid | tests, docs, código |  |
 | `gen_nlp_matrix_page.py` | Generate docs/site/guide/gtap7_nlp_matrix.html — the rich per-stage NLP-vs-NLP | docs, código |  |
 | `homotopy_shock.py` | GAMS-faithful homotopy driver for the altertax +10% import-tariff shock. | código | monolito |
 | `inheritance_table.py` | EXHAUSTIVE inter-period INHERITANCE sweep: every variable GAMS seeds from the prior | — |  |
 | `inspect_updated_har.py` | Inspect a RunGTAP updated.har: print every header's name, rank, shape, and | — |  |
-| `measure_gate_tols.py` | Fresh status sweep: run the EXACT altertax multi-period gate solve path | — | monolito |
 | `measure_gempack_blocks.py` | F3.5 against-GEMPACK measurement: the specific-factor (Land) price response. | tests, docs | bloques |
-| `measure_gtap_pure_tols.py` | Fresh status sweep for the PURE-GTAP (non-altertax) multi-period SOLVE gate. | código | monolito |
-| `measure_nlp_vs_nlp.py` | NLP-vs-NLP parity: solve the Python multi-period model as an NLP (maximize | tests, código | monolito |
-| `measure_nlp_vs_nlp_altertax.py` | NLP-vs-NLP parity: solve the Python multi-period model as an NLP (maximize | — | monolito |
 | `mk_exp_directos.py` | Traduce la sintaxis de shock de la GUI de RunGTAP a valores directos. | tests |  |
 | `nl_compare.py` | GTAP .nl comparison tool — Layer 6 diagnostic. | tests, docs, código | monolito |
 | `pairing_table.py` | EXHAUSTIVE pairing/free-row table: every equation in GAMS `model gtap /.../` vs | — |  |

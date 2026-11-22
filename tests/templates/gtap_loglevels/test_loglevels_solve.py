@@ -72,15 +72,17 @@ def _strip(x):
 def _measure(m, period):
     """Cell-by-cell match% vs the GAMS GDX for one period, with the c_/a_ prefix
     stripped and a 1% band — the SAME criterion the levels-block gate uses (identical
-    SKIP/RF exclusions from measure_nlp_vs_nlp), written locally to avoid import-path
+    SKIP/RF exclusions, ``_diff_core.GATE_*``), written locally to avoid import-path
     fragility. RF report vars (pm/pmcif/pfa/imptx/…) are EXCLUDED: GAMS computes them
     post-solve and they are not part of the compared equilibrium."""
+    from _diff_core import GATE_ALIAS as ALIAS  # ty: ignore[unresolved-import]
+    from _diff_core import GATE_RF as RF  # ty: ignore[unresolved-import]
+    from _diff_core import GATE_SKIP as SKIP  # ty: ignore[unresolved-import]
     from _diff_core import (  # ty: ignore[unresolved-import]
         gams_levels,
         list_populated_vars,
         split_t,
     )
-    from measure_nlp_vs_nlp import ALIAS, RF, SKIP  # ty: ignore[unresolved-import]
     from pyomo.environ import value
 
     tot = match = 0

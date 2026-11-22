@@ -337,7 +337,7 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
     cell of imptx in the ShockBlock (shocks.apply_default_tariff), which the
     single-period altertax build does NOT have.
     So we build the FULL multi-period gtap model (mirroring
-    test_gtap_multiperiod_parity._solve_and_match / measure_gtap_pure_tols.py),
+    test_gtap_multiperiod_parity._solve_and_match),
     seed it from the GAMS gtap GDX (the fixture IS the seed across base/check/shock),
     solve on the core driver (gtap_static, mode "gtap"), and compute the residual TAIL for the
     requested period on a FRESH re-seeded build (so the residual reflects the SEED,

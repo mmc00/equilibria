@@ -45,7 +45,7 @@ class _Incidence:
 
 @pytest.fixture(scope="module")
 def inc():
-    """The backend as scripts/family/newton_cost_20x41.py builds it: the run's params
+    """The backend as the 20x41 Newton-cost measurement built it: the run's params
     (gempack basis), the route's closure, ifSUB-skipped families left out."""
     from equilibria.backends.family_backend import FamilyBackend
     from equilibria.templates.gtap.gtap_block_model import compose_block_state

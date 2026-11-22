@@ -54,6 +54,34 @@ def _resolver_gdxdump() -> str:
 
 GDXDUMP = _resolver_gdxdump()
 T_LABELS = {"base", "check", "shock"}
+# The level gates against a GAMS GDX: welfare/walras skipped, the post-solve report
+# vars (RF) left out, and the GAMS names the Python model spells otherwise.
+GATE_SKIP = {"walras", "ev", "cv", "uh", "u", "ug", "us"}
+GATE_RF = {
+    "pfa",
+    "pfy",
+    "pm",
+    "pmcif",
+    "pefob",
+    "pwmg",
+    "pp",
+    "pdp",
+    "pmp",
+    "xwmg",
+    "xmgm",
+    "lambdamg",
+    "imptx",
+    "exptx",
+}
+GATE_ALIAS = {
+    "xa": "xaa",
+    "xd": "xda",
+    "xm": "xma",
+    "pp": "pp_rai",
+    "p": "p_rai",
+    "ytaxInd": "ytax_ind",
+    "ytaxind": "ytax_ind",
+}
 _DROPPABLE_HHD = {"hhd"}
 
 CSV_FIELDS = [

@@ -306,13 +306,14 @@ res = newton_tr(F, J, x0, linsolve="mumps")
 ```
 
 One call, `Exercise(GTAP(params, closure, backend="family"), gtap_static(...)).run()`,
-runs the whole flight plan: base, check and shock; the stages below live in
-`src/equilibria/family/driver.py`.
+runs the whole flight plan: base, check and shock; the core driver
+(`src/equilibria/core/driver.py`) flies the stages below, with the GTAP steps of
+`src/equilibria/templates/gtap/steps.py`.
 It never builds a Pyomo model. The base is not solved; check and shock are. The
 stages, in order (JAX only unless marked "shared"):
 
 1. **Refuse what it cannot do.** Before any work, `check_supported` stops on the
-   first setting the road does not run. (`src/equilibria/family/driver.py`)
+   first setting the road does not run. (`src/equilibria/family/run_setup.py`)
 2. **Read the data and the closure** (shared). The same `GTAPParameters` and
    `GTAPClosureConfig` as Pyomo. For capFlex, the risk factor is read first from the
    GAMS reference GDX. (`src/equilibria/templates/gtap`,
@@ -430,7 +431,7 @@ the phase 3 work and PR #257 (2026-11-16) unless they give another date.
 
 ### What it does not do yet, in detail
 
-`check_supported` in `src/equilibria/family/driver.py` refuses these before it
+`check_supported` in `src/equilibria/family/run_setup.py` refuses these before it
 starts, with a message that names the setting:
 
 - capFlex with ifSUB=0, or a closure other than capFix and capFlex.

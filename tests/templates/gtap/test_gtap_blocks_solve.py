@@ -10,7 +10,7 @@ matrix floor.
 
 This is the framework's FIRST solve+parity test — no prior test solves a symbolic
 block model and asserts feasibility + GAMS parity. The measure logic (SKIP/RF report
-sets, ALIAS, prefix-strip, 1% band) is reused verbatim from ``measure_nlp_vs_nlp`` so
+sets, ALIAS, prefix-strip, 1% band) is the level gates' (``_diff_core.GATE_*``), so
 the block gate is identical to the monolith's parity gate.
 """
 
@@ -79,11 +79,13 @@ def _closure():
 def _measure(m, period):
     """Cell-by-cell match% of the block model vs the GAMS GDX for one period.
 
-    Reuses the exact SKIP/RF/ALIAS report sets and 1%-band tolerance from
-    measure_nlp_vs_nlp so this gate is identical to the monolith's parity gate.
+    Reuses the exact SKIP/RF/ALIAS report sets (``_diff_core.GATE_*``) and 1%-band
+    tolerance so this gate is identical to the monolith's parity gate.
     """
+    from _diff_core import GATE_ALIAS as ALIAS
+    from _diff_core import GATE_RF as RF
+    from _diff_core import GATE_SKIP as SKIP
     from _diff_core import gams_levels, list_populated_vars, split_t
-    from measure_nlp_vs_nlp import ALIAS, RF, SKIP
     from pyomo.environ import value
 
     def _strip(x):

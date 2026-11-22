@@ -5,8 +5,8 @@ traducidos a instrumentos del ShockBlock: (instrumento, indice, % GEMPACK). El
 shock se aplica con ``shocks.apply_shock`` (solo la celda 'shock'), que decide la
 conversion a niveles segun el instrumento; base y check son el benchmark.
 Despues se comparan TODAS las celdas de check y shock contra el GDX de GAMS del
-mismo ejercicio (``<gams-dir>/<EXP>_capFlex.gdx``), con las exclusiones de
-``measure_gtap_pure_tols.py``.
+mismo ejercicio (``<gams-dir>/<EXP>_capFlex.gdx``), con las exclusiones
+``SKIP``/``RF`` de abajo.
 
 Uso:
     .venv/bin/python scripts/gtap/run_burfisher.py --gams-dir <dir> [--only TBL46A,TBL78]

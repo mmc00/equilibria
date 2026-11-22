@@ -56,7 +56,7 @@ logging.getLogger("equilibria.core.driver").setLevel(logging.INFO)
 sys.path[:0] = [{src!r}, {scripts!r}, {tests!r}, {root!r}]
 from templates.gtap.test_gtap7_gempack_parity import _solve_shock
 t = time.perf_counter()
-_, code = _solve_shock("gtap7_20x41", 1, "capFix", solve_nlp=True, backend={backend!r}, route={route!r})
+_, code = _solve_shock("gtap7_20x41", 1, "capFix", solve_nlp=True, backend={backend!r})
 print("PERF " + json.dumps({{"code": code, "wall_min": (time.perf_counter() - t) / 60}}))
 """
 
@@ -105,10 +105,9 @@ def _falta_mumps() -> str | None:
     )
 
 
-def medir(backend: str = "pyomo", route: str = "driver") -> tuple[dict, float]:
+def medir(backend: str = "pyomo") -> tuple[dict, float]:
     codigo = _HIJO.format(
         backend=backend,
-        route=route,
         src=str(ROOT / "src"),
         scripts=str(ROOT / "scripts" / "gtap"),
         tests=str(ROOT / "tests"),
@@ -150,20 +149,11 @@ def main() -> int:
         default="pyomo",
         help="family: la ruta de arreglos, solo mide (la linea base es de Pyomo)",
     )
-    ap.add_argument(
-        "--route",
-        choices=("driver", "exercise"),
-        default="driver",
-        help="exercise: Exercise(GTAP, gtap_static) on the core driver (Pyomo)",
-    )
     args = ap.parse_args()
-    if args.route == "exercise" and (args.update or args.backend != "pyomo"):
-        print("--route exercise only measures the Pyomo backend, without --update")
-        return 2
     if falta := _falta_mumps():
         print(falta)
         return 2
-    medido, swap = medir(args.backend, args.route)
+    medido, swap = medir(args.backend)
     # Siempre, aunque la medicion se anule: con swap el numero sigue orientando.
     print(
         f"medido: {medido['wall_min']:.2f} min, {medido['peak_gb']:.2f} GB, "

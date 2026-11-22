@@ -10,11 +10,12 @@ and may name them.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
 
-from tests.scripts.test_no_old_driver_in_scripts import OLD
+from tests.test_no_old_driver_names import OLD
 
 ROOT = Path(__file__).resolve().parents[2]
 PAGES = [
@@ -31,4 +32,5 @@ def test_there_are_pages() -> None:
 @pytest.mark.parametrize("page", PAGES, ids=lambda p: p.name)
 def test_user_docs_name_no_old_driver(page: Path) -> None:
     text = page.read_text(encoding="utf-8")
-    assert not [n for n in (*OLD, "build_block_model", "apply_shock(m") if n in text]
+    assert not [n for n in OLD if re.search(n, text)]
+    assert not [n for n in ("build_block_model", "apply_shock(m") if n in text]
