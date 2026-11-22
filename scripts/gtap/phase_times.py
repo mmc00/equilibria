@@ -92,11 +92,11 @@ def _fases() -> list[tuple[object, str, str]]:
     """
     from pyomo.contrib.pynumero.interfaces import pyomo_nlp
 
+    import equilibria.core.driver as drv
     import equilibria.solver._closure_patches as cp
     import equilibria.solver.path_capi as pc
     import equilibria.templates.gtap.gtap_block_model as gbm
-    import equilibria.templates.gtap.gtap_multiperiod_driver as drv
-    import equilibria.templates.gtap.period_prep as pp
+    import equilibria.templates.gtap.steps as steps
     from equilibria.blocks.gtap.factor import FactorBlock
 
     mp = gbm.GTAPBlockMultiPeriodModel
@@ -105,8 +105,9 @@ def _fases() -> list[tuple[object, str, str]]:
         (mp, "build_vars", "reflejar Var a 3 periodos"),
         (mp, "build_equations_all_periods", "reflejar filas a 3 periodos"),
         (FactorBlock, "calibrate_base", "calibracion (resto)"),
-        (pp.PeriodPreparer, "prepare", "preparar periodo"),
-        (drv, "freeze_period", "congelar periodo"),
+        # lo exclusivo de un periodo del core: sus pasos y el residuo, sin el solve
+        (drv, "fly_period", "preparar periodo"),
+        (steps, "freeze_period", "congelar periodo"),
         (pc, "_run_path_capi_nonlinear_full", PREPARAR_SOLVE),
         (cp, "structural_matching", "emparejamiento estructural"),
         (pyomo_nlp.PyomoNLP, "__init__", "escribir .nl (PyomoNLP)"),
