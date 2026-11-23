@@ -430,3 +430,22 @@ def test_default_tariff_equals_final_pkl(case):
     sel = [g.pos(k) for k in w.keys]
     np.testing.assert_allclose(g.value[sel], w.value, rtol=1e-12, atol=1e-14)
     np.testing.assert_array_equal(g.fixed[sel], w.fixed)
+
+
+def test_uniform_10_equals_default_tariff_arrays(case):
+    """``{"imptx": uniform(10)}`` writes the cells and levels of the default tariff."""
+    from equilibria.family.shock import apply_default_tariff, apply_shock
+    from equilibria.templates.gtap import uniform
+
+    be = case["backend"]
+    mp_a, mp_b = case["mp0"].copy(), case["mp0"].copy()
+    want = apply_default_tariff(mp_a, be)
+    got = apply_shock(mp_b, be, {"imptx": uniform(10)})
+    assert set(got) == set(want) == {"imptx"}
+    assert set(got["imptx"]) == set(want["imptx"])
+    for cell, v in want["imptx"].items():
+        assert got["imptx"][cell] == pytest.approx(v, rel=1e-12, abs=1e-14)
+    np.testing.assert_allclose(
+        mp_b.vars["imptx"].value, mp_a.vars["imptx"].value, rtol=1e-12, atol=1e-14
+    )
+    np.testing.assert_array_equal(mp_b.vars["imptx"].fixed, mp_a.vars["imptx"].fixed)

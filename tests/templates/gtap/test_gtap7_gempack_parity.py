@@ -342,3 +342,35 @@ def test_gtap7_gempack_parity(row, route):
         f"[{row.dataset}/gempack/{savf_flag}] {within * 100:.1f}% of quantity cells within "
         f"1pp < floor {floor * 100:.0f}% (median |Δ|={med * 100:.2f}pp) — regression"
     )
+
+
+@pytest.mark.needs_path
+def test_uniform_10_solves_like_default():
+    """The linearization study's shock sizes go through ``uniform``: at 10 % it must
+    solve the same shock as the default tariff (every shock-period Var, 1e-12 rel)."""
+    from pyomo.environ import Var, value
+
+    if not has_dataset("gtap7_3x3"):
+        pytest.skip("dataset HAR missing: gtap7_3x3")
+
+    def shock_vars(m) -> dict[str, float]:
+        out = {}
+        for v in m.component_data_objects(Var):
+            idx = v.index()
+            if (
+                isinstance(idx, tuple)
+                and idx
+                and idx[-1] == "shock"
+                and v.value is not None
+            ):
+                out[v.name] = float(value(v))
+        return out
+
+    m_def, code_def = _solve_shock("gtap7_3x3", 1, "capFlex")
+    want = shock_vars(m_def)
+    m_uni, code_uni = _solve_shock("gtap7_3x3", 1, "capFlex", tariff_pct=10.0)
+    got = shock_vars(m_uni)
+    assert code_def == 1 and code_uni == 1
+    assert got.keys() == want.keys() and want
+    bad = [n for n in want if got[n] != pytest.approx(want[n], rel=1e-12, abs=1e-14)]
+    assert not bad, f"{len(bad)} shock vars differ, e.g. {bad[:5]}"
