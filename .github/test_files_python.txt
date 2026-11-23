@@ -397,7 +397,9 @@ tests/test_datasets_bundled.py
 tests/test_golden_helper.py
 tests/test_jacobian_mode_default.py
 tests/test_local_refs_nus333.py
+tests/test_named_paths_exist.py
 tests/test_no_old_driver_names.py
+tests/test_old_route_golden.py
 tests/test_packaging_sdist.py
 tests/test_path_capi_lib_resolution.py
 tests/test_printed.py
