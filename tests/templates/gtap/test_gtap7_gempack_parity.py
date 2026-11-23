@@ -72,6 +72,7 @@ def _solve_shock(
     residual_region: str | None = None,
     backend: str | None = None,
     unit_sigma: str = "gams",
+    tariff_pct: float | None = None,
 ):
     """Build + seed + solve base→check→shock (gtap pure MCP) and return the model.
 
@@ -98,6 +99,10 @@ def _solve_shock(
     ``unit_sigma`` "gams" (the default) keeps the 1.01 stand-in for a unit elasticity,
     as the recorded oracles (paper Table 1, the example-15 gaps) were solved; "gempack"
     solves it as exact sigma = 1 (log-form CD), which the gtap7_gempack gate uses.
+
+    ``tariff_pct`` None (the default) passes no shock, so the driver writes its +10 %
+    default tariff; a number passes ``{"imptx": uniform(tariff_pct)}``, the same cells
+    at that size (GEMPACK ``Shock tm = uniform <x>``, the linearization study).
     """
     import os as _os
 
@@ -147,6 +152,7 @@ def _solve_shock(
         from equilibria.family.photos import photo_closure
         from equilibria.templates.gtap import GTAPParameters
         from equilibria.templates.gtap.recipe import gtap_static
+        from equilibria.templates.gtap.shocks import uniform
         from equilibria.templates.gtap.template import GTAP
 
         d = dataset_dir(dataset)
@@ -175,6 +181,7 @@ def _solve_shock(
                 backend=backend,
             ),
             recipe=gtap_static(base_calibrated=True, solve_check=True),
+            shock=None if tariff_pct is None else {"imptx": uniform(tariff_pct)},
         )
         out = ex.run()
         assert ex.model is not None
