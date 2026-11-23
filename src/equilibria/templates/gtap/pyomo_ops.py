@@ -163,7 +163,7 @@ WELFARE_SOLVE_ORDER = _rules.WELFARE_SOLVE_ORDER
 
 
 def solve_welfare_tail(m, period: str) -> int:
-    """Solve each row muted by `_mute_welfare_tail` for its own var, after the
+    """Solve each row muted by `steps.mute_welfare` for its own var, after the
     period's solve, so the reported ev/cv/u/ug/us are the period's and not the seed.
     The rows stay deactivated and the vars fixed (the solved system is unchanged).
     A row with no real solution (e.g. u with us < 0 after negative saving) leaves

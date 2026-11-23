@@ -45,7 +45,13 @@ def _hits(root: Path = ROOT) -> list[str]:
     # error, never a pass
     assert p.returncode in (0, 1), p.stderr
     pattern = re.compile("|".join(OLD))
-    return [h for h in p.stdout.splitlines() if pattern.search(h.split(":", 2)[-1])]
+    lines = [h for h in p.stdout.splitlines() if pattern.search(h.split(":", 2)[-1])]
+    # a tracked file named after an old module, whatever its text
+    files = subprocess.run(
+        ["git", "ls-files"], cwd=root, capture_output=True, text=True, check=True
+    ).stdout.splitlines()
+    named = [f"{f}:0:(file name)" for f in files if f != SELF and pattern.search(f)]
+    return named + lines
 
 
 def test_no_file_names_the_old_drivers() -> None:
@@ -85,3 +91,16 @@ def test_the_scan_finds_every_name_in_a_checkout(tmp_path: Path) -> None:
         subprocess.run(["git", *cmd], cwd=tmp_path, check=True)
     found = sorted(h.split(":", 1)[0] for h in _hits(tmp_path))
     assert found == ["f0.py", "f1.py", "f2.py", "f3.py"]
+
+
+def test_the_scan_finds_a_name_in_a_file_path(tmp_path: Path) -> None:
+    """A tracked file named after an old module is a hit even when its text names
+    nothing old."""
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_prep_recipe.py").write_text("x = 1\n")
+    (tmp_path / "ok.py").write_text("x = 1\n")
+    for cmd in (["init", "-q"], ["add", "."]):
+        subprocess.run(["git", *cmd], cwd=tmp_path, check=True)
+    assert [h.split(":", 1)[0] for h in _hits(tmp_path)] == [
+        "tests/test_prep_recipe.py"
+    ]

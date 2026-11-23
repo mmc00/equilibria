@@ -15,12 +15,12 @@ _log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# _replicate_sp_fixing — copy fixed-var state from single-period model to mp
+# the single-period reference model whose fixing and bounds replicate_reference copies
 # ---------------------------------------------------------------------------
 def sp_ref_reusable(prev_closure, closure) -> bool:
     """True when a reference model built for ``prev_closure`` also serves ``closure``.
 
-    ``_replicate_sp_fixing``/``_replicate_sp_bounds`` read a COMPLETE single-period
+    The reference replication (``replicate_reference``) reads a COMPLETE single-period
     model built only to be inspected and discarded — 3.4M vars on 20x41.  In gtap
     mode the check period passes the same ``base_closure`` as the base period, so
     that second build is byte-identical to the first: verified by hashing every
@@ -136,9 +136,8 @@ def build_sp_reference(sets, params, closure, residual_region, model=None):
     # La fuente TIENE que coincidir con la clase que construyo `model`: un
     # modelo del monolito con un SP de bloques deja el fixing desalineado
     # —medido en gtap7_3x3 pure ifSUB=1: codes {base:1, check:0, shock:0}, y
-    # test_ifsub_primary_block_consistent en frac_agree 0.00%—.  Siete scripts
-    # de scripts/gtap/ construyen con el monolito y resuelven con este driver,
-    # asi que se detecta aqui en vez de parchear cada uno.
+    # test_ifsub_primary_block_consistent en frac_agree 0.00%—. A model built by
+    # hand with the monolith is caught here instead of in each caller.
     # El monolito hay que PEDIRLO: o el modelo se declara "monolith"
     # (GTAPMultiPeriodModel lo hace en build_sets), o se fuerza por entorno.
     #
@@ -187,7 +186,7 @@ def build_sp_reference(sets, params, closure, residual_region, model=None):
 
 
 class SPSnapshot:
-    """Lo que ``_replicate_sp_fixing``/``_replicate_sp_bounds`` leen de un modelo de
+    """What the reference replication (``replicate_reference``) reads from a
     referencia, sin el modelo: por variable, las celdas fijas con su valor y las
     celdas con cota con ``(lb, ub)``.
 

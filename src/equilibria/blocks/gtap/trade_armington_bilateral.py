@@ -534,7 +534,7 @@ class ArmingtonBilateralBlock(Block):
                 # absorption of this good.  GAMS emits NO equation (a $-condition on
                 # xatmgeq) and the monolith returns Constraint.Skip (6099-6103), while
                 # ALSO fixing xaa[r,i,tmg]=0 (6118-6125) — that fix is replicated onto
-                # the multi-period model by _replicate_sp_fixing (base + check + shock).
+                # the multi-period model by the period steps' replicate_reference (base + check + shock).
                 # Emitting `xaa==0` here instead leaves an ACTIVE row whose only var is
                 # then fixed by that replication → an EMPTY Jacobian row.  On 20x41 that
                 # fabricates (|i|-|marg|)*|r| = 19*41 = 779 empty eq_xaa_tmg[check] rows

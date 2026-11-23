@@ -48,7 +48,7 @@ outputs:
   005_p_shock.pkl.gz: 96878eacb79d50ae78ba0f805c2117fe09256c20a7588cd7f360634f649d666c
   005_s_shock.json: 472b5cc59cbb423fc523ce186b8d30de9a936f46b01c64d7b92a3096822fc22d
   final.pkl.gz: 2a75c60a2bc50798fcc5721a05cf78f10c72529177834ebc4eec9697a8f14b3e
-  model_print.json: 1523d7e1631a768b299621ec51bf80297079ebcc549bd0a920a0bcdadfd6b5bf
+  model_print.json: d3966d81dec79ca0f018720d8da79f18dd3170c172fb256089908cc9a9358af2
   settled.pkl.gz: 4110c3aa36c4f74db7dc6d11cf12e9824b396e4863f4eff85115a4accbf968b3
 run:
   date: '2026-11-16T22:58:13-06:00'
@@ -59,4 +59,4 @@ run:
     cores: 11
     ram_gb: 18.0
 status: verified
-notes: 'FROZEN (MAR-218): its generator, scripts/family/regen_photos.py, ran inside the old Pyomo multiperiod driver and was deleted by PR 4 of gtap-on-core; it can be read with git show 2c0d882a:scripts/family/regen_photos.py. pyomo_code re-stamped by PR 4 of gtap-on-core (61ef31a1 -> 425a15e8): the Pyomo-only change was comments (identical AST in gtap_model_multiperiod.py and gtap_model_equations.py) and the removal of two no-op capture hooks in path_capi.py; the photo itself is unchanged.'
+notes: 'FROZEN (MAR-218): its generator, scripts/family/regen_photos.py, ran inside the old Pyomo multiperiod driver and was deleted by PR 4 of gtap-on-core; it can be read with git show 2c0d882a:scripts/family/regen_photos.py. pyomo_code re-stamped by PR 4 of gtap-on-core (61ef31a1 -> 425a15e8): the Pyomo-only change was comments (identical AST in gtap_model_multiperiod.py and gtap_model_equations.py) and the removal of two no-op capture hooks in path_capi.py; the photo itself is unchanged. Re-stamped again 425a15e8 -> d78bbe8c: comments only (identical AST in path_capi.py, gtap_model_multiperiod.py, period_debug.py).'

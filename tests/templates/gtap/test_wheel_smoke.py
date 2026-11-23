@@ -68,9 +68,9 @@ def test_pynumero_imports_with_declared_deps_only():
 def test_full_multiperiod_solve_end_to_end(monkeypatch):
     """Solve completo 3x3 base->check->shock, medido en las filas Fisher de `m`.
 
-    Mismo criterio que test_multiperiod_driver: el "code" del solver NO es el
-    contrato — lo es que las ecuaciones evaluen sobre `m`. Exige
-    reverse_numeric por lo mismo que aquel (ASL aborta bajo ifSUB).
+    Same criterion as the old multiperiod driver test: the solver's "code" is NOT
+    the contract, the equations evaluating on `m` is. It needs reverse_numeric for
+    the same reason (ASL aborts under ifSUB).
     """
     monkeypatch.setenv("EQUILIBRIA_GTAP_JAC_MODE", "reverse_numeric")
 

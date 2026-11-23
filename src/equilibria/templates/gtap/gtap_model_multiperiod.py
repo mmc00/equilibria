@@ -658,8 +658,8 @@ class GTAPMultiPeriodModel:
             if var is None:
                 # Index over exactly the (rest..., period) entries this aggregate can
                 # take — never a superset. An entry without a defining row would be a
-                # free column, and fixing it does not help: the driver's
-                # freeze_inactive_periods UNFIXES everything in the period it is about
+                # free column, and fixing it does not help: the period step
+                # freeze_inactive UNFIXES everything in the period it is about
                 # to solve, so the orphan comes back as an unmatched free variable and
                 # PATH stalls (measured: 7 unmatched, shock code=0 on every altertax
                 # dataset). A (base,base) cross belongs to the base period only.
@@ -882,7 +882,7 @@ class GTAPMultiPeriodModel:
         # Hopcroft-Karp the missing adjacency entries to achieve a full matching.
         # Mirroring GAMS: pabs.fx(r,'base')=1, pfact.fx(r,'base')=1, pwfact.fx('base')=1.
         # Index base anchors with (r, 'base') / ('base',) so that
-        # freeze_inactive_periods can deactivate them when base is frozen
+        # the freeze_inactive period step can deactivate them when base is frozen
         # (the deactivator checks idx[-1] in PERIODS and skips non-base solves).
         _base_rt = [(r, "base") for r in m.r]
         m.eq_pabs_base = Constraint(

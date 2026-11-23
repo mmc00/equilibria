@@ -3,7 +3,7 @@
 Vive aca, abajo de los constructores, para que TODA entrada que recibe una
 residual la resuelva: build_block_model, build_block_single_period,
 GTAPMultiPeriodModel, GTAPModelEquations, gtap_sparse/gtap_loglevels,
-calibrate_base y _build_sp_reference. Un "auto" sin resolver no casa con
+calibrate_base y build_sp_reference. Un "auto" sin resolver no casa con
 ninguna region: eq_walras sumaria TODAS y eq_yi no omitiria ninguna, un modelo
 equivocado sin error.
 """

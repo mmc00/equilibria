@@ -155,7 +155,7 @@ def stage_closure(which: str, mode: str) -> Step:
 def freeze_inactive(ctx: StepContext) -> None:
     """Only this period is free: its cells unfixed and its rows on; every other
     period's cells fixed at their level and its rows off. Instruments are left
-    as they are (``freeze_inactive_periods``)."""
+    as they are."""
     m, period = _gm(ctx), ctx.period.name
     for name in m.var_names():
         for t in m.periods:

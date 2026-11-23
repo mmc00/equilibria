@@ -799,8 +799,8 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
         # no copia el .fixed. Se fijan aca, en los 3 periodos, en su valor de
         # benchmark, para que TODO camino de construccion (build_block_model o los
         # gates, que arman el modelo paso a paso) los tenga fijos y registrados. Si
-        # quedaran libres, _replicate_sp_fixing los fijaria con el valor del SP del
-        # shock y el arancel +10% entraria vivo en todas las ecuaciones.
+        # were left free, replicate_reference would fix them at the shock SP's value
+        # and the +10% tariff would enter every equation live.
         m._endogenous_instrument_cells = dict(
             getattr(sp_model, "_endogenous_instrument_cells", {}) or {}
         )

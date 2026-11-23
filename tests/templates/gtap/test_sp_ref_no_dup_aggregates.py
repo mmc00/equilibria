@@ -8,7 +8,7 @@ inlinea esas sumas y no los declara.
 La maquinaria MULTIPERIODO ya los borra —gtap_model_multiperiod
 build_equations_fisher, 733-758, con el diagnostico completo escrito ahi— y
 por eso el modelo multiperiodo de bloques esta bien.  Pero el driver pide un
-SP (`_build_sp_reference`), que nunca pasa por ese borrado.
+SP (`sp_reference.build_sp_reference`), que nunca pasa por ese borrado.
 
 Por que importa: el driver solo le lee `.fixed`/`lb`/`ub`, pero esas 33 filas
 sobredeterminan el sistema, `_closure_patches.py:439` lo cuadra desactivando

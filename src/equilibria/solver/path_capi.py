@@ -118,7 +118,7 @@ def _default_jacobian_eval_mode() -> str:
     because the module was loaded by path *inside* the solve call — i.e. after
     any ``monkeypatch.setenv``. Now that the solver is imported normally, an
     import-time constant would freeze the default before callers can set the
-    variable (test_multiperiod_driver.py needs "reverse_numeric" and would
+    variable (the old multiperiod driver test needed "reverse_numeric" and would
     silently get "asl": ASL aborts on this ifSUB model, success=False, values
     never written back, and the Fisher row shows the residual of an UNSOLVED
     model).
@@ -900,7 +900,7 @@ def _run_path_capi_nonlinear_full(
                 _yi_data = model.yi[_r]
             except KeyError:
                 # Multi-period model: yi is indexed by (r, t); skip since
-                # freeze_inactive_periods already handles period selectivity.
+                # the freeze_inactive period step already handles period selectivity.
                 continue
             if _yi_data.fixed:
                 continue

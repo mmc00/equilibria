@@ -86,10 +86,11 @@ def test_copia_base_a_check_no_pisa_instrumentos(nus333_mp_model):
 
 
 def test_build_vars_fija_y_registra_sin_pasar_por_build_block_model():
-    """Los gates arman el modelo paso a paso (build_sets/build_vars/...), sin
-    build_block_model. Si solo este fijara los instrumentos, en los gates quedarian
-    libres y _replicate_sp_fixing los fijaria con el valor del SP del shock: el
-    arancel +10% entraria vivo en todas las ecuaciones (altertax 3x3: 100% -> 73,4%).
+    """The gates build the model step by step (build_sets/build_vars/...), without
+    build_block_model. If only that one fixed the instruments, they would be free in
+    the gates and replicate_reference (the period step) would fix them at the shock
+    SP's value: the +10% tariff would enter every equation live (altertax 3x3: 100% ->
+    73.4%).
     """
 
     from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS

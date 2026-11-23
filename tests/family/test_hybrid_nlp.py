@@ -1,7 +1,7 @@
 """HybridNLP: family rows served to the Newton driver, verified against PyomoNLP.
 
-The multiperiod model is frozen to one period the way the driver does it
-(``freeze_inactive_periods``); the wrapper must give the same F and J as the plain
+The multiperiod model is frozen to one period the way the period steps do it
+(``steps.freeze_inactive``); the wrapper must give the same F and J as the plain
 PyomoNLP, serving every family it can verify and leaving only the cross-period rows
 to Pyomo.
 """
