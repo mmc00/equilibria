@@ -39,13 +39,22 @@ def _closure(if_sub: bool) -> Any:
 
 
 def _run_both(
-    name: str, p: Any, closure: Any, rr: str, *, mode: str = "gtap", **kw: Any
+    name: str,
+    p: Any,
+    closure: Any,
+    rr: str,
+    *,
+    mode: str = "gtap",
+    rel: float = golden.REL,
+    **kw: Any,
 ) -> None:
     """The core run against the old driver's, recorded as case ``on_core_<name>``."""
     old = golden.case(f"on_core_{name}")
     core = solve("core", p, closure, rr, mode=mode, skip_base_solve=True, **kw)
     assert core.codes == old["codes"]
-    bad = golden.level_mismatches(golden.pyomo_levels(core.model), old["levels"])
+    bad = golden.level_mismatches(
+        golden.pyomo_levels(core.model), old["levels"], rel=rel
+    )
     assert not bad, f"{len(bad)} cells differ, first: {bad[:20]}"
 
 
@@ -98,6 +107,9 @@ def test_johansen_3x3() -> None:
         _closure(False),
         list(p.sets.r)[-1],
         shock_method="johansen",
+        # one linear step from the check amplifies the CPU's noise: the Linux CI
+        # lands 1.0e-8 relative from the Mac recording on 13 trade cells
+        rel=1e-7,
     )
 
 

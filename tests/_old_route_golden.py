@@ -23,6 +23,10 @@ from tests._golden import mismatches
 GOLDEN = Path(__file__).parent / "golden" / "pr4_old_route_main.json.gz"
 # a full solve: ~1e-11 relative on another CPU, a level near zero ~1e-11 absolute
 REL, ABS = 1e-9, 1e-12
+# walras is the solve's residual, zero in exact arithmetic: the Linux CI gives
+# 3e-11 where the Mac recording has 3e-12 (2e-9 vs 7e-10 after a Johansen step)
+WALRAS_ABS = 1e-8
+_WALRAS = ("('walras',", "walrasbase", "walrascheck", "walrasshock")
 
 
 @cache
@@ -51,16 +55,28 @@ def _num(x: Any) -> float:
     return math.nan if x is None else float(x)
 
 
-def level_mismatches(got: dict, want: dict) -> list[str]:
-    """Cells off the golden; NaN (no value) equals NaN, a key on one side fails."""
+def level_mismatches(got: dict, want: dict, *, rel: float = REL) -> list[str]:
+    """Cells off the golden; NaN (no value) equals NaN, a key on one side fails.
+    ``rel`` widens the band for a caller whose solve amplifies the CPU's noise (the
+    Johansen step); walras is held to an absolute floor (``WALRAS_ABS``)."""
     if got.keys() != want.keys():
         return [f"keys: {sorted(got.keys() ^ want.keys())[:5]}"]
     g = {k: _num(v) for k, v in got.items() if not math.isnan(_num(v))}
     w = {k: _num(v) for k, v in want.items() if not math.isnan(_num(v))}
     nan_side = [k for k in got if math.isnan(_num(got[k])) != math.isnan(_num(want[k]))]
-    return [f"{k}: value on one side only" for k in nan_side] + mismatches(
-        g, w, rel=REL, abs_tol=ABS
+    walras = {k for k in g if k.startswith(_WALRAS)}
+    levels = mismatches(
+        {k: v for k, v in g.items() if k not in walras},
+        {k: v for k, v in w.items() if k not in walras},
+        rel=rel,
+        abs_tol=ABS,
     )
+    residual = [
+        f"{k}: {g[k]} != {w.get(k)}"
+        for k in sorted(walras)
+        if k not in w or abs(g[k] - w[k]) > WALRAS_ABS
+    ]
+    return [f"{k}: value on one side only" for k in nan_side] + levels + residual
 
 
 def mp_mismatches(mp: Any, want: dict) -> list[str]:
