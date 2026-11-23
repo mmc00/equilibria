@@ -209,8 +209,22 @@ def apply_shock(
     the levels fixed. ``ValueError`` as the Pyomo function: unregistered instrument,
     missing / endogenous / unread cell, percent <= -100, value outside the instrument's
     domain, or a value equal to the check one."""
+    from equilibria.templates.gtap.shocks import Uniform, expand_uniform
+
+    def cells_of(name: str) -> list[tuple]:
+        if name not in mp.exogenous:
+            check_shock_cell(mp, sys, name, ())  # raises: not a registered instrument
+        return [
+            c
+            for c in period_table(mp.var(name), SHOCK)
+            if can_take_shock(mp, sys, name, c)
+        ]
+
     out: dict[str, dict[tuple, float]] = {}
-    for name, cells in shock.items():
+    for name, spec in shock.items():
+        if levels and isinstance(spec, Uniform):
+            raise ValueError(f"uniform({spec.pct}) on {name} is a percent, not a level")
+        cells = expand_uniform(name, spec, cells_of)
         for cell, x in cells.items():
             cell = tuple(cell)
             check_shock_cell(mp, sys, name, cell)  # before reading its check

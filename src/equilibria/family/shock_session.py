@@ -172,7 +172,9 @@ def _write_levels(mp: MPArrays, shock: Mapping[str, Mapping[tuple, float]]) -> N
     written without ``apply_shock``'s live-row check, as the path's Newton steps
     write theirs."""
     from equilibria.family.shock import level
+    from equilibria.templates.gtap.shocks import reject_uniform
 
+    reject_uniform(shock, "the shock session's level write")
     for name, cells in shock.items():
         var = mp.vars[name]
         for cell, pct in cells.items():

@@ -166,6 +166,9 @@ def load_altertax_params(
 
 def _check_cells(params: GTAPParameters, shock: dict) -> None:
     """Refuse a shock cell that names no element of the model, before any solve."""
+    from equilibria.templates.gtap.shocks import reject_uniform
+
+    reject_uniform(shock, "the altertax run")
     s = params.sets
     for name, cells in shock.items():
         if name not in _CELL_SETS:

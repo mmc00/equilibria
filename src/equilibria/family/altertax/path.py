@@ -87,6 +87,9 @@ def shock_fraction(
 ) -> dict[str, dict[tuple, float]]:
     """The percent shock at fraction ``t`` (0 < t <= 1) of GEMPACK's path: the power
     compounds, ``1 + p_t/100 = (1 + p/100)**t``."""
+    from equilibria.templates.gtap.shocks import reject_uniform
+
+    reject_uniform(shock, "the altertax path")
     if not 0.0 < t <= 1.0:
         raise ValueError(f"shock fraction {t!r} outside (0, 1]")
     if t == 1.0:
