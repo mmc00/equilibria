@@ -189,6 +189,7 @@ tests/parity/test_correlate_region.py
 tests/parity/test_detection_prescription.py
 tests/parity/test_diff_mcp_pairing.py
 tests/parity/test_probe.py
+tests/parity/test_seed_and_solve.py
 tests/qa/test_baseline_manifest.py
 tests/qa/test_gams_nlp_reference_manifest.py
 tests/qa/test_sam_qa.py

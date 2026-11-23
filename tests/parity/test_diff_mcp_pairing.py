@@ -7,12 +7,12 @@ gtap7_3x3/check:
   - dintxeq.dintx, mintxeq.mintx -> equation deactivated BUT the variable is
                     fixed (exogenous wedge / holdfix-equivalent), which is a valid
                     pairing, not a free variable.
-The only REAL anomaly is pfteq: a GAMS free-row that Python keeps active+paired
-(the factor-2 class).
+pfteq is a GAMS free-row that Python keeps active+paired. It was the factor-2
+class while eq_pfteq read pft^2 == K (two roots); since ef807eb it is the single
+positive root pft == K^(1/2), so it is benign and the check is clean.
 
-This test gates on the resolver returning exactly the pfteq violation.
-Requires the local GAMS reference + the model build path, so it is skipped when
-the reference .gms is absent.
+The .gms is the one recorded with the cascade's reference (data/, fbep=header);
+the tests that build the model are skipped when it is absent.
 """
 
 import sys
@@ -20,15 +20,17 @@ from pathlib import Path
 
 import pytest
 
-from equilibria._local_refs import refs_dir
+from equilibria.sources import find_reference
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-GMS = refs_dir() / "gtap7_3x3_altertax_cd" / "model_altertax_ifsub0.gms"
-
-pytestmark = pytest.mark.skipif(
-    not GMS.exists(), reason="local GAMS reference .gms not present"
+_FOLDER = find_reference(
+    "gtap7_3x3", "gams", form="mcp", mode="altertax", ifsub=0, fbep="header"
+)
+GMS = None if _FOLDER is None else _FOLDER / "model.gms"
+needs_gms = pytest.mark.skipif(
+    GMS is None or not GMS.exists(), reason="GAMS reference .gms not present"
 )
 
 
@@ -47,17 +49,32 @@ def _run_check():
     return _work(args)
 
 
-def test_check_reports_only_pfteq():
+def test_pfteq_single_root_free_row_is_benign():
+    from diff_mcp_pairing import _classify_free_row
+
+    kind, severity, _ = _classify_free_row("pfteq", "eq_pfteq", 15, 15)
+    assert (kind, severity) == ("benign_active", 0.0)
+
+
+def test_the_gms_is_the_cascade_reference_model():
+    from diff_mcp_pairing import _resolve_gms_path
+
+    path, _ = _resolve_gms_path("gtap7_3x3", 0)
+    assert GMS is not None and path == GMS
+
+
+@needs_gms
+def test_check_is_clean():
     res = _run_check()
-    viols = res["violations"]
-    entities = sorted(v["entity"] for v in viols)
-    assert entities == ["pfteq"], (
-        f"expected only pfteq, got {entities} "
+    entities = sorted(v["entity"] for v in res["violations"])
+    assert entities == [], (
+        f"expected no violation, got {entities} "
         f"(false positives from name-heuristic pairing not eliminated)"
     )
-    assert res["status"] == "dirty"  # pfteq is a real anomaly -> still dirty
+    assert res["status"] == "clean"
 
 
+@needs_gms
 def test_pseq_resolves_to_active_homolog_not_legacy_eq_ps():
     """pseq must resolve to eq_xs (active), not eq_ps (deactivated legacy)."""
     res = _run_check()
@@ -65,6 +82,7 @@ def test_pseq_resolves_to_active_homolog_not_legacy_eq_ps():
     assert "pseq" not in {v["entity"] for v in res["violations"]}
 
 
+@needs_gms
 def test_fixed_var_with_deactivated_eq_is_not_a_violation():
     """dintxeq/mintxeq: eq deactivated but var fixed -> valid exogenous pairing."""
     res = _run_check()

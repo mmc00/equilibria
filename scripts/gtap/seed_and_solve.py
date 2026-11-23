@@ -17,16 +17,25 @@ Reading the median instead of the tail is exactly what produced the two false "f
 1e-10, equilibrium selection" closures in this project. This tool ranks and reports the worst
 N equation residuals AT the seed; that tail is the lead.
 
-TWO SETUP DISCIPLINES (each one previously manufactured a false "differing equation" lead):
+SETUP DISCIPLINES (each one previously manufactured a false "differing equation" lead):
   1. CASCADE the derived-var seed. warmstart_from_gams does NOT seed Python-only derived
      aggregates (xd/xmt/xc/xg/xi/xiagg/xigbl/pigbl/kapEnd) consistently with their components,
      so eq_xd_agg/eq_xc/eq_xaa/eq_xigbl show spurious residuals 1–2 that CASCADE to ~0 once
      the derived vars are set from their own identities. A genuinely-differing equation does
      NOT fall on consistent seed; an artifact does. This tool cascades the derived seed first.
-  2. BUILD THE SHOCK MODEL WITH THE TAX SHOCK APPLIED BEFORE BUILD. For the shock period,
-     imptx*1.10 must be applied to the params BEFORE build_model — NOT by seeding shock values
-     onto a base-built model (that leaves model.imptx at base while pm is shock → false 0.014
-     residual on eq_pmeq). diff_altertax's shock build does this; this tool mirrors it.
+  2. BUILD THE CASE ON THE CORE DRIVER (``_case``): both modes run the full
+     multi-period model, the shock tariff written into the ShockBlock. altertax is
+     built as the MCP gate builds it: the altertax closure, its elasticities and the
+     FBEP sign of the fbep=header reference; with the base closure the shock's factor
+     rows do not build and the solve never runs (MAR-216). gtap keeps its old build
+     (default FBEP sign), so against the fbep=header reference it still shows an
+     eq_ytax ft/fs seed residual of ~0.07 (MAR-219).
+  3. SEED THE CDE HOUSEHOLD HELPERS (uh, zcons, xcshr): GAMS keeps them on a
+     household index Python drops, and an unseeded uh=1.0 leaves a ~1e-3 residual
+     on eq_xc/eq_uh at the shocked GAMS point.
+
+A solve that never ran (code None) is a tool error (error_kind="solve_not_run"),
+never "an equation differs".
 
 DECISIVE PRECEDENT: gtap7_3x3 altertax shock. Seeded the exact GAMS point and solved → it
 DRIFTED (code=2, pft[EU_28,NatRes] 1.004→1.05). The residual tail's only real non-ROW/non-leaf
@@ -37,7 +46,7 @@ eight other leads. See project_gtap7_3x3_gap_is_factor_bias.
 Usage:
     uv run python scripts/gtap/seed_and_solve.py --dataset gtap7_3x3 \\
         --gdx data/gtap7/gtap7_3x3/gams_mcp_altertax_ifsub0_fbep-header/out.gdx \\
-        --period shock --top 20
+        --period shock --top 20   # --mode altertax (default) or gtap
 
 JSON contract (shared _parity_json schema): status=clean (STAYS = equilibrium selection,
 nothing to fix) | dirty (GOES = a differing equation, see violations = residual tail) |
@@ -46,7 +55,6 @@ error (solve crash). exit 0/1/2.
 from __future__ import annotations
 from equilibria.sources import dataset_dir
 import argparse
-import copy
 import statistics
 import sys
 from pathlib import Path
@@ -60,12 +68,13 @@ _PATH_CAPI = path_capi_src()
 if _PATH_CAPI.exists() and str(_PATH_CAPI) not in sys.path:
     sys.path.insert(0, str(_PATH_CAPI))
 
-from _diff_core import gams_levels, list_populated_vars  # type: ignore  # noqa: E402
-import diff_altertax as DA  # reuse the exact altertax build recipe + shock build  # noqa: E402
 from _parity_json import make_violation, make_detection, run_tool  # noqa: E402
 
 # Residual above which an equation counts as "not satisfied at the GAMS point".
 RESID_TOL = 1e-4
+# The FBEP sign of the altertax reference the cascade reads (fbep=header, #191),
+# the basis the MCP gate builds that case with.
+ALTERTAX_BASIS = "gempack"
 # Families that are KNOWN-benign even when they carry residual at the GAMS point:
 # rgdpmp/pgdpmp are report leaves (no feedback); ROW-region rows ride a corrupt reference
 # (project_gtap7_3x3_ref_corrupt_ROW). The tool flags these separately so the real lead
@@ -79,160 +88,6 @@ _LEAF_EQS = {
     "eq_rgdpmp", "eq_pgdpmp",
     "eq_cv", "eq_ev", "eq_walras", "eq_u", "eq_ug", "eq_us",
 }
-
-
-def _build_run_gtap():
-    import importlib.util as _u
-    spec = _u.spec_from_file_location("run_gtap", str(ROOT / "scripts" / "gtap" / "run_gtap.py"))
-    mod = _u.module_from_spec(spec)
-    sys.modules["run_gtap"] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def _cascade_derived_seed(m, V, setv) -> int:
-    """DISCIPLINE 1: set the Python-only derived aggregates from their own identities so
-    their residual reflects the equation, not an un-seeded init. Returns cells set."""
-    n = 0
-    for r in m.r:
-        for i in m.i:
-            try:
-                n += setv(m.xd, (r, i), sum(V(m.xda[r, i, aa]) / V(m.xscale[r, aa])
-                          for aa in m.aa if (r, aa) in m.xscale))
-            except Exception:
-                pass
-            try:
-                n += setv(m.xmt, (r, i), sum(V(m.xma[r, i, aa]) / V(m.xscale[r, aa])
-                          for aa in m.aa if (r, aa) in m.xscale))
-            except Exception:
-                pass
-            try:
-                n += setv(m.xc, (r, i), V(m.xcshr[r, i]) * V(m.yc[r]) / max(V(m.pa[r, i, "hhd"]), 1e-9))
-            except Exception:
-                pass
-            try:
-                n += setv(m.xg, (r, i), V(m.g_share[r, i]) * V(m.yg[r]) / max(V(m.pa[r, i, "gov"]), 1e-9))
-            except Exception:
-                pass
-            try:
-                n += setv(m.xi, (r, i), V(m.xaa[r, i, "inv"]))
-            except Exception:
-                pass
-    for r in m.r:
-        try:
-            n += setv(m.xiagg, (r,), V(m.yi[r]) / max(V(m.pi[r]), 1e-9))
-        except Exception:
-            pass
-        try:
-            n += setv(m.kapEnd, (r,), (1 - V(m.depr[r])) * V(m.kstock[r]) + V(m.xiagg[r]))
-        except Exception:
-            pass
-    try:
-        n += setv(m.xigbl, None, sum(V(m.xiagg[r]) - V(m.depr[r]) * V(m.kstock[r]) for r in m.r))
-    except Exception:
-        pass
-    try:
-        num = sum(V(m.pi[r]) * (V(m.xiagg[r]) - V(m.depr[r]) * V(m.kstock[r])) for r in m.r)
-        n += setv(m.pigbl, None, num / max(V(m.xigbl), 1e-9))
-    except Exception:
-        pass
-    return n
-
-
-def run_seed_and_solve(dataset: str, gdx_path: Path, period: str, top: int):
-    import pyomo.environ as pyo
-    from pyomo.environ import value as V, Constraint
-    from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_parity_pipeline import GTAPVariableSnapshot
-
-    run_gtap = _build_run_gtap()
-    data_dir = dataset_dir(dataset)
-    p = GTAPParameters()
-    p.load_from_har(basedata_path=data_dir / "basedata.har", sets_path=data_dir / "sets.har",
-                    default_path=data_dir / "default.prm", baserate_path=data_dir / "baserate.har")
-    res = list(p.sets.r)[-1]
-    base_clo = GTAPClosureConfig(name="base", closure_type="MCP", capital_mobility="sluggish",
-        fix_endowments=False, fix_taxes=False, fix_technology=False, if_sub=False, numeraire="pnum")
-    alt_clo = GTAPClosureConfig(name="altertax", closure_type="MCP", capital_mobility="mobile",
-        fix_endowments=False, fix_taxes=True, fix_technology=True, if_sub=False, numeraire="pnum")
-
-    # DISCIPLINE 2: build the shock model with the tax shock applied BEFORE build.
-    p_shock = p
-    if period == "shock":
-        p_shock = copy.deepcopy(p)
-        for k in list(p_shock.taxes.imptx.keys()):
-            p_shock.taxes.imptx[k] = float(p_shock.taxes.imptx[k] or 0.0) * 1.10
-    _mb, p_alt, m = DA.build_altertax_models(p_shock, res, base_clo, alt_clo)
-
-    # Seed the exact GAMS point for the requested period (complete warm-start).
-    n_seed = DA.warmstart_from_gams(m, gdx_path, period)
-
-    def setv(comp, key, val):
-        try:
-            comp[key].set_value(val)
-            return 1
-        except Exception:
-            return 0
-
-    n_cascade = _cascade_derived_seed(m, V, setv)
-
-    # Record a sentinel var to report stay/drift unambiguously (first finite price).
-    def _sentinel():
-        for nm in ("pft", "pf", "px", "pa"):
-            comp = getattr(m, nm, None)
-            if comp is None:
-                continue
-            for idx in comp:
-                try:
-                    val = float(V(comp[idx]))
-                    if val > 1e-6:
-                        return f"{nm}{tuple(str(x) for x in (idx if isinstance(idx, tuple) else (idx,)))}", val
-                except Exception:
-                    pass
-        return "(none)", None
-    sent_name, sent_before = _sentinel()
-
-    # SOLVE from the seed.
-    r = run_gtap._run_path_capi_nonlinear_full(
-        m, p_alt, enforce_post_checks=False, strict_path_capi=False,
-        closure_config=alt_clo, equation_scaling=True,
-        solution_hint=GTAPVariableSnapshot.from_python_model(m))
-    code = r.get("termination_code")
-    resid = float(r.get("residual") or 0.0)
-    _, sent_after = _sentinel()
-
-    # Residual TAIL at the (cascaded) seed — re-seed the GAMS point + cascade AGAIN on a
-    # fresh build so the residual reflects the SEED, not the post-solve state.
-    _mb2, p_alt2, m2 = DA.build_altertax_models(p_shock, res, base_clo, alt_clo)
-    DA.warmstart_from_gams(m2, gdx_path, period)
-    _cascade_derived_seed(m2, V, setv)
-    eq_resid = []  # (resid, family, idx)
-    for c in m2.component_objects(Constraint, active=True):
-        for idx in c:
-            cd = c[idx]
-            if not cd.active:
-                continue
-            try:
-                b = V(cd.body)
-                lo = V(cd.lower) if cd.lower is not None else None
-                up = V(cd.upper) if cd.upper is not None else None
-                rr = 0.0
-                if lo is not None:
-                    rr = max(rr, abs(b - lo))
-                if up is not None:
-                    rr = max(rr, abs(b - up))
-                eq_resid.append((rr, c.name, idx))
-            except Exception:
-                pass
-    eq_resid.sort(reverse=True)
-    median = statistics.median([r_ for r_, _, _ in eq_resid]) if eq_resid else 0.0
-
-    return {
-        "code": code, "resid": resid, "median": median, "eq_resid": eq_resid,
-        "n_seed": n_seed, "n_cascade": n_cascade,
-        "sent_name": sent_name, "sent_before": sent_before, "sent_after": sent_after,
-    }
 
 
 def _cascade_derived_seed_mp(m, V, setv, period: str) -> int:
@@ -306,12 +161,40 @@ def _cascade_derived_seed_mp(m, V, setv, period: str) -> int:
     return n
 
 
-def _solve_gtap(dataset: str, gdx_path: Path, if_sub: bool):
-    """The full multi-period pure-gtap model seeded from ``gdx_path`` in every
-    period, solved base (skipped) -> check -> shock on the core driver. Returns
-    (model, ``{period: {"code": old-form int, "residual": float}}``)."""
-    from _core_run import solve_on_core
+# GAMS keeps the CDE household helpers on (r, [i,] h, t) with h = hhd; Python drops
+# h. seed_all_periods misses them, so uh stays 1.0 and eq_xc/eq_uh carry a seed-only
+# residual of ~1e-3 at the shocked GAMS point.
+_HOUSEHOLD_VARS = ("uh", "zcons", "xcshr")
 
+
+def _seed_household_vars(m, gdx_path: Path) -> int:
+    """Seed the CDE household helpers from GAMS, dropping its household index."""
+    from _diff_core import gams_levels  # type: ignore
+
+    def _strip(x):
+        return x[2:] if isinstance(x, str) and len(x) > 2 and x[1] == "_" and x[0] in "acfr" else x
+
+    n = 0
+    for vn in _HOUSEHOLD_VARS:
+        comp = getattr(m, vn, None)
+        if comp is None:
+            continue
+        for k, val in gams_levels(gdx_path, vn).items():
+            key = tuple(_strip(x) for x in k if x != "hhd")
+            if key in comp:
+                comp[key].set_value(val)
+                n += 1
+    return n
+
+
+def _case(dataset: str, if_sub: bool, mode: str):
+    """(params, closure, residual region) of one case. gtap: the data's params and
+    the base closure, as before (the MCP gate also sets the gempack FBEP sign; not
+    done here yet, MAR-219). altertax: as the MCP gate builds it
+    (``test_gtap7_mcp_parity._solve_and_measure``): the data's FBEP sign (the
+    fbep=header reference has it, #191), the altertax elasticities and the altertax
+    closure; with the base closure the shock's factor rows do not build and the
+    solve never runs."""
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
@@ -320,52 +203,52 @@ def _solve_gtap(dataset: str, gdx_path: Path, if_sub: bool):
     p.load_from_har(basedata_path=d / "basedata.har", sets_path=d / "sets.har",
                     default_path=d / "default.prm", baserate_path=d / "baserate.har")
     rr = list(p.sets.r)[-1]
+    if mode == "gtap":
+        gc = GTAPClosureConfig(
+            name="base", closure_type="MCP", capital_mobility="sluggish",
+            fix_endowments=False, fix_taxes=False, fix_technology=False,
+            if_sub=if_sub, numeraire="pnum")
+        return p, gc, rr
+    from equilibria.templates.gtap.altertax import apply_altertax_elasticities
+
+    p.set_va_subsidy_basis(ALTERTAX_BASIS)
+    pa = apply_altertax_elasticities(p, in_place=False)
     gc = GTAPClosureConfig(
-        name="base", closure_type="MCP", capital_mobility="sluggish",
-        fix_endowments=False, fix_taxes=False, fix_technology=False,
-        if_sub=if_sub, numeraire="pnum")
-    m, codes, core = solve_on_core(p, gc, rr, ref_gdx=gdx_path, seed_gdx=gdx_path)
+        name="altertax", closure_type="MCP", capital_mobility="mobile",
+        fix_endowments=False, fix_taxes=True, fix_technology=True,
+        if_sub=if_sub, numeraire="pnum", va_subsidy_basis=ALTERTAX_BASIS)
+    return pa, gc, rr
+
+
+def _solve_gtap(dataset: str, gdx_path: Path, if_sub: bool, mode: str = "gtap"):
+    """The full multi-period model seeded from ``gdx_path`` in every period, solved
+    base (skipped) -> check -> shock on the core driver. Returns
+    (model, ``{period: {"code": old-form int, "residual": float}}``)."""
+    from _core_run import solve_on_core
+
+    p, gc, rr = _case(dataset, if_sub, mode)
+    m, codes, core = solve_on_core(p, gc, rr, mode=mode, ref_gdx=gdx_path, seed_gdx=gdx_path)
     res = {k: {"code": codes[k], "residual": core[k]["residual"]} for k in codes}
     return m, res
 
 
 def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
-                            if_sub: bool):
-    """PURE-GTAP (real-CES, non-altertax) variant.
+                            if_sub: bool, mode: str = "gtap"):
+    """Seed-and-solve on the core driver, for both modes (gtap real-CES, altertax CD).
 
-    The pure-gtap shock is intrinsically MULTI-PERIOD: the tariff is the 'shock'
-    cell of imptx in the ShockBlock (shocks.apply_default_tariff), which the
-    single-period altertax build does NOT have.
-    So we build the FULL multi-period gtap model (mirroring
-    test_gtap_multiperiod_parity._solve_and_match),
-    seed it from the GAMS gtap GDX (the fixture IS the seed across base/check/shock),
-    solve on the core driver (gtap_static, mode "gtap"), and compute the residual TAIL for the
-    requested period on a FRESH re-seeded build (so the residual reflects the SEED,
-    not the post-solve state — same discipline as the altertax path).
+    The shock is MULTI-PERIOD: the tariff is the 'shock' cell of imptx in the
+    ShockBlock (shocks.apply_default_tariff). So we build the FULL multi-period
+    model as the MCP gate does (``_case``), seed it from the GAMS GDX in every
+    period, solve on the core driver (gtap_static), and compute the residual TAIL
+    for the requested period on a FRESH re-seeded build (so the residual reflects
+    the SEED, not the post-solve state).
     """
     from pyomo.environ import value as V, Constraint
-    from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
     from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
-    data_dir = dataset_dir(dataset)
-
-    def _load_params():
-        p = GTAPParameters()
-        p.load_from_har(basedata_path=data_dir / "basedata.har", sets_path=data_dir / "sets.har",
-                        default_path=data_dir / "default.prm", baserate_path=data_dir / "baserate.har")
-        return p
-
-    def _gc(p, if_sub_):
-        return GTAPClosureConfig(
-            name="base", closure_type="MCP", capital_mobility="sluggish",
-            fix_endowments=False, fix_taxes=False, fix_technology=False,
-            if_sub=if_sub_, numeraire="pnum")
 
     def _build_seeded():
-        p = _load_params()
-        rr = list(p.sets.r)[-1]
-        gc = _gc(p, if_sub)
+        p, gc, rr = _case(dataset, if_sub, mode)
         mp = GTAPBlockMultiPeriodModel(p.sets, p, gc, residual_region=rr)
         m = mp.build_sets()
         mp.build_vars(m)
@@ -374,14 +257,15 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
         mp.build_equations_fisher(m)
         m._residual_region = rr
         mp.seed_all_periods(m, gdx_path)
-        m._gtap_mode = True
+        _seed_household_vars(m, gdx_path)
+        m._gtap_mode = mode == "gtap"
         # The shock period reads the tariff from the ShockBlock: write the default
         # tariff the driver would, so the residual at the shocked seed is the
         # residual of the actual shock system.
         if period == "shock":
             from equilibria.templates.gtap.shocks import apply_default_tariff
 
-            apply_default_tariff(m, gtap_mode=True)
+            apply_default_tariff(m, gtap_mode=mode == "gtap")
         return p, gc, m
 
     # 1) One hand build holds the SEED: the sentinel before the solve here, the
@@ -408,7 +292,7 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
 
     sent_name, sent_before = _sentinel()
 
-    m, res = _solve_gtap(dataset, gdx_path, if_sub)
+    m, res = _solve_gtap(dataset, gdx_path, if_sub, mode)
     code = res.get(period, {}).get("code")
     resid = float(res.get(period, {}).get("residual") or 0.0)
     _, sent_after = _sentinel()
@@ -476,11 +360,20 @@ def _classify_eq(family: str, idx) -> str:
 
 def _work(dataset: str, gdx_path: Path, period: str, top: int,
           mode: str = "altertax", if_sub: bool = False) -> dict:
-    if mode == "gtap":
-        out = run_seed_and_solve_gtap(dataset, gdx_path, period, top, if_sub)
-    else:
-        out = run_seed_and_solve(dataset, gdx_path, period, top)
+    out = run_seed_and_solve_gtap(dataset, gdx_path, period, top, if_sub, mode)
     code, resid = out["code"], out["resid"]
+    if code is None:
+        # The core reported the period as not solved (a solve that raises is an
+        # "error" status, which old_codes turns into an exception): the GAMS point was
+        # not tested. Never read it as "an equation differs".
+        return {
+            "status": "error",
+            "headline": (f"the solve did not run at the GAMS {period} point "
+                         f"(code=None, resid={resid:.1e}); see the solver log on stderr"),
+            "violations": [],
+            "period": period,
+            "meta": {"error_kind": "solve_not_run", "mode": mode, "if_sub": int(if_sub)},
+        }
     sb, sa = out["sent_before"], out["sent_after"]
     drift = (abs(sa - sb) / abs(sb)) if (sb and sa and abs(sb) > 1e-9) else None
 
@@ -552,7 +445,7 @@ def main() -> int:
     ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
                     help="altertax CD (default) or pure-gtap real-CES")
     ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
-                    help="ifSUB mode (pure-gtap build only)")
+                    help="ifSUB mode")
     args = ap.parse_args()
     return run_tool("seed_and_solve", args.dataset,
                     lambda: _work(args.dataset, args.gdx, args.period, args.top,
