@@ -10,11 +10,11 @@ as the equilibria against-GEMPACK gate.
 This settles two questions about the against-GEMPACK page:
   * Q3 (is %-change the right comparison?): Horridge's own GAMS computes
     CH_XFAC=(xfac.l/xfac0-1)*100 — identical to our (s/b-1)*100. Yes.
-  * Q2 (why is our matrix match only ~52%?): our matrix shock is +10% tariff power
-    on every bilateral route globally — highly non-linear. Horridge's SIMPLE shock is
+  * Q2 (does GAMS match GEMPACK on a small shock?): Horridge's SIMPLE shock is
     small/localized (−10% labour productivity in one sector). This script measures
-    GAMS-vs-GEMPACK on THAT small shock; it should be ~99–100% within 1pp, proving
-    the ~52% is the shock-size linearization gap, not a defect.
+    GAMS-vs-GEMPACK on THAT shock; it should be ~99–100% within 1pp. (The matrix's
+    +10% tariff, once read as a ~52% linearization gap, is 99-100% with the
+    fixtures' capFlex closure: MAR-223, gen_linearization_study.py.)
 
 WORKFLOW (Windows, needs GEMPACK + GAMS):
   1. GEMPACK:  gempack.bat        -> writes fixcap.sl4 (+ .har)
@@ -208,12 +208,7 @@ def main() -> int:
         tot = sum(c for _, c in all_within)
         wavg = sum(w * c for w, c in all_within) / tot
         print(f"\n  OVERALL within {args.tol_pp}pp = {wavg * 100:.1f}%")
-        print(
-            "  (Horridge's small localized shock should give ~99–100% — vs our matrix's"
-        )
-        print(
-            "   ~52% at a +10% global bilateral tariff = the shock-size linearization gap.)"
-        )
+        print("  (Horridge's small localized shock should give ~99–100%.)")
     return 0
 
 

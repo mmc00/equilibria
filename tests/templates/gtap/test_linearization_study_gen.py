@@ -6,6 +6,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts/gtap"))
 sys.path.insert(0, str(ROOT / "src"))
@@ -47,3 +49,43 @@ def test_gragg_axis_is_documented(tmp_path):
     # the Gragg refinement axis (steps) appears
     for steps in ("4", "8", "16", "32", "64"):
         assert steps in md
+
+
+def test_python_solves_with_the_closure_of_the_fixture_it_reads(monkeypatch, tmp_path):
+    """The GEMPACK fixture is looked up by its closure and Python solves with that
+    same closure, through the paper's comparator (``_solve_shock``). MAR-223: Python
+    ran capFix against a capFlex fixture and the page published 52-76 %."""
+    import types
+
+    import gen_linearization_study as g
+
+    asked, solved = {}, []
+
+    def fake_find(dataset, tool, **kw):
+        asked.update(kw)
+        return None
+
+    monkeypatch.setattr(g, "find_reference", fake_find)
+    g._sl4_fixture(tmp_path, "gtap7_3x3", "10", "8 16 32")
+    assert asked["closure"] == g.FIXTURE_CLOSURE
+
+    fake = types.ModuleType("templates.gtap.test_gtap7_gempack_parity")
+    fake._solve_shock = lambda *a, **k: solved.append((a, k)) or ("m", 1)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, fake.__name__, fake)
+    g._solve_shock_10.cache_clear()
+    assert g._solve_shock_10("gtap7_3x3") == "m"
+    ((args, kw),) = solved
+    assert args == ("gtap7_3x3", 1, g.FIXTURE_CLOSURE) and kw == {}
+
+
+def test_a_failed_solve_is_not_measured(monkeypatch):
+    import types
+
+    import gen_linearization_study as g
+
+    fake = types.ModuleType("templates.gtap.test_gtap7_gempack_parity")
+    fake._solve_shock = lambda *a, **k: ("m", 0)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, fake.__name__, fake)
+    g._solve_shock_10.cache_clear()
+    with pytest.raises(RuntimeError, match="did not solve"):
+        g._solve_shock_10("gtap7_3x3")
