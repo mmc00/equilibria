@@ -59,4 +59,4 @@ run:
     cores: 11
     ram_gb: 18.0
 status: verified
-notes: 'pyomo_code re-stamped by PR 4 of gtap-on-core (61ef31a1 -> 425a15e8): the Pyomo-only change was comments (identical AST in gtap_model_multiperiod.py and gtap_model_equations.py) and the removal of two no-op capture hooks in path_capi.py; the photo itself is unchanged.'
+notes: 'FROZEN (MAR-218): its generator, scripts/family/regen_photos.py, ran inside the old Pyomo multiperiod driver and was deleted by PR 4 of gtap-on-core; it can be read with git show 2c0d882a:scripts/family/regen_photos.py. pyomo_code re-stamped by PR 4 of gtap-on-core (61ef31a1 -> 425a15e8): the Pyomo-only change was comments (identical AST in gtap_model_multiperiod.py and gtap_model_equations.py) and the removal of two no-op capture hooks in path_capi.py; the photo itself is unchanged.'

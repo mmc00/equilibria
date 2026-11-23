@@ -126,7 +126,8 @@ jobs:
   # `needs_gdxdump and not gams and not slow and not pyomo_solve`. Changing
   # one requires the other (and the marker table in
   # scripts/dev/plan_test_groups.py). `pyomo_solve` cases have a family (JAX)
-  # twin and leave both suites; scripts/family/regen_photos.py runs them.
+  # twin and leave both suites; run them locally with `pytest -m pyomo_solve`
+  # (their photos are frozen, MAR-218).
   python-tests:
     name: python-tests (${{ matrix.group }})
     needs: [changes, plan-groups]

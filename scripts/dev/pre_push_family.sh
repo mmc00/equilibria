@@ -29,6 +29,6 @@ pytest=("${py[@]}" -m pytest -q -p no:cacheprovider -o addopts= -m "not slow and
 "${pytest[@]}" tests/family/test_family_e2e.py tests/family/test_family_e2e_capflex.py \
   tests/family/test_family_e2e_ifsub0.py tests/family/test_squared_system.py \
   tests/family/test_mp_arrays.py tests/family/test_fscale.py tests/family/test_photos.py \
-  tests/family/test_pairing_cache.py tests/family/test_newton_checkpoint.py \
+  tests/family/test_pairing_cache.py \
   -k "not (gtap7_3x3 or gtap7_3x4 or gtap7_5x5)"
 echo "pre-push family: $(( ($(date +%s) - start) / 60 )) min $(( ($(date +%s) - start) % 60 )) s"

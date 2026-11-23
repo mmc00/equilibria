@@ -525,8 +525,8 @@ class FactorBlock(Block):
 
             m = model
             estado = model_state.capture(m)
-            # El settle se hacia sobre un modelo armado con base_calibrated=False,
-            # y el driver lee el flag (los pasos del periodo): aca tambien. restore lo repone.
+            # The settle ran on a model built with base_calibrated=False, and the
+            # period steps read the flag: so here too. restore puts it back.
             m._base_calibrated = False
             m._settled_seed = None
         else:

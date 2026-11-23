@@ -9,6 +9,16 @@ commit log.
 
 ## [Unreleased]
 
+### Removed
+- The old GTAP drivers: the old Pyomo multiperiod driver and its period recipe, and the
+  old family (JAX) driver and its period recipe. Every GTAP run, on both backends, goes
+  through the core driver: `Exercise(GTAP(params, closure, backend=...), gtap_static(...)).run()`
+  (`equilibria.core.exercise`, `equilibria.templates.gtap.template`,
+  `equilibria.templates.gtap.recipe`). Code that imported the old modules gets an
+  `ImportError`; the options of the old entry points are arguments of `gtap_static`
+  (`solve_base`, `solve_check`, `mute_welfare`, `seed_from_prior`, `shock_steps`,
+  `shock_method`, `trade_balance`). No number changes (gtap-on-core PR 4).
+
 ## [0.6.4] — 2026-11-10
 
 The release the paper's replication package is built from; no change to any number.

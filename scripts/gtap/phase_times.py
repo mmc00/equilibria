@@ -105,7 +105,7 @@ def _fases() -> list[tuple[object, str, str]]:
         (mp, "build_vars", "reflejar Var a 3 periodos"),
         (mp, "build_equations_all_periods", "reflejar filas a 3 periodos"),
         (FactorBlock, "calibrate_base", "calibracion (resto)"),
-        # lo exclusivo de un periodo del core: sus pasos y el residuo, sin el solve
+        # a core period's exclusive time: its steps and residual, not the solve
         (drv, "fly_period", "preparar periodo"),
         (steps, "freeze_period", "congelar periodo"),
         (pc, "_run_path_capi_nonlinear_full", PREPARAR_SOLVE),

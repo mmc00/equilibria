@@ -210,8 +210,8 @@ def dataset_xscale(dataset: str, va_subsidy_basis: str = "gempack") -> dict:
 
 
 def solve(dataset: str, closure: str, solver: str) -> tuple[dict, dict]:
-    """Resuelve equilibria (base -> check -> shock, tm uniforme 10, en el core) con el
-    cierre del fixture de GEMPACK y devuelve (levels, xscale)."""
+    """Solve equilibria (base -> check -> shock, uniform tm 10, on the core) with the
+    GEMPACK fixture's closure and return (levels, xscale)."""
     import os
     import sys
 
