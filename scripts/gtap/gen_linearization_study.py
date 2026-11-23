@@ -18,6 +18,7 @@ Usage:
 from __future__ import annotations
 
 import sys
+from functools import cache
 from pathlib import Path
 
 from equilibria._local_refs import path_capi_src
@@ -32,6 +33,8 @@ SWEEP_SHOCKS = ["10", "3", "1", "0.3", "0.1"]
 GRAGG_STEPS = ["4", "8", "16", "32", "64"]
 DEFAULT_DATA_ROOT = ROOT / "data"
 DEFAULT_OUT = ROOT / "docs/site/guide/gtap7_gempack_linearization_study.md"
+# the closure of the GEMPACK fixtures (RORDELTA=1); Python solves with the same one
+FIXTURE_CLOSURE = "capFlex"
 
 
 def _config_tag(shock_pct: str, steps: str) -> str:
@@ -50,7 +53,7 @@ def _sl4_fixture(data_root: Path, dataset: str, shock_pct: str, steps: str) -> P
         root=data_root,
         shock=int(shock) if shock.is_integer() else shock,
         steps=steps.replace(" ", "-"),
-        closure="capFlex",
+        closure=FIXTURE_CLOSURE,
     )
     return None if folder is None else folder / "sl4dump.har"
 
@@ -123,7 +126,8 @@ def _measure_within_pp(dataset: str, sl4: Path) -> str:
             continue
         for key, gfrac in gem.items():
             try:
-                b = float(V(pv[(*key, "base")]))
+                # shock/check, the denominator GEMPACK and the comparator use
+                b = float(V(pv[(*key, "check")]))
                 s = float(V(pv[(*key, "shock")]))
             except (KeyError, ValueError):
                 continue
@@ -136,38 +140,21 @@ def _measure_within_pp(dataset: str, sl4: Path) -> str:
     return f"{within * 100:.0f}%"
 
 
+@cache
 def _solve_shock_10(dataset: str):
-    from equilibria.core.exercise import Exercise
-    from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.recipe import gtap_static
-    from equilibria.templates.gtap.template import GTAP
+    """The 10 % shock solved as the paper's against-GEMPACK comparator solves it
+    (``_solve_shock``: ifSUB=1, the fixture's closure, base calibrated, check
+    solved), so the page and the gate measure the same run. Cached: every 10 %
+    cell of a dataset reads the same run."""
+    tests = str(ROOT / "tests")
+    if tests not in sys.path:
+        sys.path.insert(0, tests)
+    from templates.gtap.test_gtap7_gempack_parity import _solve_shock
 
-    d = dataset_dir(dataset)
-    p = GTAPParameters()
-    p.load_from_har(
-        basedata_path=d / "basedata.har",
-        sets_path=d / "sets.har",
-        default_path=d / "default.prm",
-        baserate_path=d / "baserate.har",
-    )
-    # the data's FBEP sign, as the fbep=header reference has it; the default
-    # "gams" basis keeps the old sign (#191)
-    p.set_va_subsidy_basis("gempack")
-    rr = list(p.sets.r)[-1]
-    ac = GTAPClosureConfig(
-        name="base", closure_type="MCP", capital_mobility="sluggish",
-        fix_endowments=False, fix_taxes=False, fix_technology=False,
-        if_sub=True, numeraire="pnum", va_subsidy_basis="gempack",
-    )
-    gdx = _seed_gdx(dataset)
-    # every period starts from the GAMS shock solution; the base is not solved
-    ex = Exercise(
-        GTAP(p, ac, residual_region=rr, ref_gdx=gdx, seed_gdx=gdx),
-        gtap_static("gtap", mute_welfare=True, seed_from_prior=False),
-    )
-    ex.run()
-    return ex.model.pyomo
+    m, code = _solve_shock(dataset, 1, FIXTURE_CLOSURE)
+    if code != 1:
+        raise RuntimeError(f"{dataset}: the 10 % shock did not solve (code {code})")
+    return m
 
 
 def build_page(data_root: Path, out_md: Path) -> str:
@@ -205,11 +192,16 @@ def build_page(data_root: Path, out_md: Path) -> str:
 
     md = f"""# GTAP7 vs GEMPACK — linearization study
 
-This page quantifies **why** the against-GEMPACK quantity match is only ~52% at a
-+10% global bilateral tariff, across all five matrix datasets. It measures the
-match% as (1) the shock shrinks and (2) GEMPACK's Gragg solution method is refined
-— two independent angles on the claim that the residual is the Gragg-linearized↔
-levels method gap, **not** a model defect.
+This page measures how close equilibria's levels solution of GTAP7 lands to
+GEMPACK's Gragg-linearized one at a +10% global bilateral tariff, across all five
+matrix datasets, and how that match moves as (1) the shock shrinks and (2)
+GEMPACK's Gragg method is refined.
+
+At the 10% shock the match is **99-100% within 1pp** on every dataset. An earlier
+version of this page reported 52-76% and read the gap as linearization: it compared
+a capFix Python run (returns not equalized) with the capFlex GEMPACK fixtures. With
+the fixtures' closure (`FIXTURE_CLOSURE`, the paper's comparator `_solve_shock`) the
+gap is gone (MAR-223).
 
 **Reference number (PR #40):** on Horridge's small SIMPLE shock, GAMS(levels) ≡
 GEMPACK(linearized) at 100% within 1pp. This study extends that to the real GTAP7
@@ -226,9 +218,10 @@ Cells read **—** where the Windows-produced GEMPACK fixture is not yet present
 
 ## Evidence 1 — shock-size sweep (default Gragg steps)
 
-A uniform `tm` shock at decreasing magnitude. As the shock → 0 the match → 100%,
-confirming the residual is shock-size (linearization). The **non-linearity** column
-is |match(10%) − match(0.1%)|.
+A uniform `tm` shock at decreasing magnitude. GEMPACK is recorded at every size;
+Python is solved at 10% only (driving the levels solve at another magnitude is not
+wired yet), so the smaller sizes read **— (py-shock pending)**. The
+**non-linearity** column is |match(10%) − match(0.1%)| once both exist.
 
 {sweep_header}
 {sweep_sep}
@@ -236,8 +229,9 @@ is |match(10%) − match(0.1%)|.
 
 ## Evidence 2 — Gragg refinement (fixed 10% shock)
 
-Solving the SAME 10% shock with a finer Gragg subinterval count. A match% that
-rises with Steps isolates GEMPACK's numerical method as the source, not the model.
+Solving the SAME 10% shock with a finer Gragg subinterval count. The match does
+not move from 4 to 64 steps: at this shock GEMPACK's linearization error is well
+under the 1pp band, so what remains (one 3x3 cell) is not GEMPACK's method.
 
 {gragg_header}
 {gragg_sep}

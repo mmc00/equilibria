@@ -1,10 +1,15 @@
 # GTAP7 vs GEMPACK — linearization study
 
-This page quantifies **why** the against-GEMPACK quantity match is only ~52% at a
-+10% global bilateral tariff, across all five matrix datasets. It measures the
-match% as (1) the shock shrinks and (2) GEMPACK's Gragg solution method is refined
-— two independent angles on the claim that the residual is the Gragg-linearized↔
-levels method gap, **not** a model defect.
+This page measures how close equilibria's levels solution of GTAP7 lands to
+GEMPACK's Gragg-linearized one at a +10% global bilateral tariff, across all five
+matrix datasets, and how that match moves as (1) the shock shrinks and (2)
+GEMPACK's Gragg method is refined.
+
+At the 10% shock the match is **99-100% within 1pp** on every dataset. An earlier
+version of this page reported 52-76% and read the gap as linearization: it compared
+a capFix Python run (returns not equalized) with the capFlex GEMPACK fixtures. With
+the fixtures' closure (`FIXTURE_CLOSURE`, the paper's comparator `_solve_shock`) the
+gap is gone (MAR-223).
 
 **Reference number (PR #40):** on Horridge's small SIMPLE shock, GAMS(levels) ≡
 GEMPACK(linearized) at 100% within 1pp. This study extends that to the real GTAP7
@@ -21,30 +26,32 @@ Cells read **—** where the Windows-produced GEMPACK fixture is not yet present
 
 ## Evidence 1 — shock-size sweep (default Gragg steps)
 
-A uniform `tm` shock at decreasing magnitude. As the shock → 0 the match → 100%,
-confirming the residual is shock-size (linearization). The **non-linearity** column
-is |match(10%) − match(0.1%)|.
+A uniform `tm` shock at decreasing magnitude. GEMPACK is recorded at every size;
+Python is solved at 10% only (driving the levels solve at another magnitude is not
+wired yet), so the smaller sizes read **— (py-shock pending)**. The
+**non-linearity** column is |match(10%) − match(0.1%)| once both exist.
 
 | dataset | 10% | 3% | 1% | 0.3% | 0.1% | non-linearity |
 |---|---|---|---|---|---|---|
-| `gtap7_3x3` | 76% | — | — | — | — | — |
-| `gtap7_3x4` | — (no seed GDX) | — | — | — | — | — |
-| `gtap7_5x5` | 73% | — | — | — | — | — |
-| `gtap7_10x7` | 64% | — | — | — | — | — |
-| `gtap7_15x10` | 52% | — | — | — | — | — |
+| `gtap7_3x3` | 99% | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — |
+| `gtap7_3x4` | 100% | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — |
+| `gtap7_5x5` | 100% | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — |
+| `gtap7_10x7` | 100% | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — |
+| `gtap7_15x10` | 100% | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — |
 
 ## Evidence 2 — Gragg refinement (fixed 10% shock)
 
-Solving the SAME 10% shock with a finer Gragg subinterval count. A match% that
-rises with Steps isolates GEMPACK's numerical method as the source, not the model.
+Solving the SAME 10% shock with a finer Gragg subinterval count. The match does
+not move from 4 to 64 steps: at this shock GEMPACK's linearization error is well
+under the 1pp band, so what remains (one 3x3 cell) is not GEMPACK's method.
 
 | dataset | Steps 4 | Steps 8 | Steps 16 | Steps 32 | Steps 64 |
 |---|---|---|---|---|---|
-| `gtap7_3x3` | — | — | — | — | — |
-| `gtap7_3x4` | — | — | — | — | — |
-| `gtap7_5x5` | — | — | — | — | — |
-| `gtap7_10x7` | — | — | — | — | — |
-| `gtap7_15x10` | — | — | — | — | — |
+| `gtap7_3x3` | 99% | 99% | 99% | 99% | 99% |
+| `gtap7_3x4` | 100% | 100% | 100% | 100% | 100% |
+| `gtap7_5x5` | 100% | 100% | 100% | 100% | 100% |
+| `gtap7_10x7` | 100% | 100% | 100% | 100% | 100% |
+| `gtap7_15x10` | 100% | 100% | 100% | 100% | 100% |
 
 ## Variables compared
 
