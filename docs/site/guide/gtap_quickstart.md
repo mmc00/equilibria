@@ -145,6 +145,13 @@ Without a shock, the exercise writes the reference GAMS run's default in the
 `mode="altertax"`, every tariff rate times 1.1. It is a shock like any other:
 the equations are not rebuilt.
 
+To shock every cell of an instrument at one size, as GEMPACK's
+`Shock tm = uniform 3`, write `uniform(pct)` in place of the cells:
+`shock={"imptx": uniform(3)}` (`from equilibria.templates.gtap import uniform`).
+It takes every `shock` cell of the instrument that a live equation reads, the
+cells the default tariff takes, so in `mode="gtap"` `uniform(10)` on `imptx` is
+that default. It is a percentage: `apply_shock(..., levels=True)` refuses it.
+
 An exercise that needs a different closure (a real-wage target, a quantity
 target) changes one block in the shock period with `@overwrite`; see
 {doc}`architecture`. Hooks last for the whole Python process: call
