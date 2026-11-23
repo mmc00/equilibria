@@ -2,7 +2,6 @@
 
 Constants and the period closures the multiperiod driver used inline, moved here
 so the steps (``templates/gtap/steps.py``) read them without importing a backend.
-The old names in ``period_prep`` and ``gtap_multiperiod_driver`` point here.
 """
 
 from __future__ import annotations
@@ -52,7 +51,7 @@ GAMS_BOUNDED_VARS = frozenset(
 )  # fmt: skip
 
 # The inert welfare report tail: each row with the variable it defines. See
-# ``gtap_multiperiod_driver._mute_welfare_tail`` for the measurement.
+# ``steps.mute_welfare`` for the measurement.
 WELFARE_LEAVES = (
     ("eq_cv", "cv"),
     ("eq_ev", "ev"),

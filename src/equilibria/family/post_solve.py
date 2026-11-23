@@ -1,6 +1,6 @@
 """What the multiperiod driver does around a solve, on arrays (no Pyomo model).
 
-``_solve_multiperiod_inner`` leaves each period in a state the next ``prepare`` reads.
+The post-solve leaves each period in a state the next period's steps read.
 After the Newton solve of a period (or, for the base, in place of it) it runs, in order:
 
 * the writeback of the solution into the squared columns (``path_capi``: ``set_value``

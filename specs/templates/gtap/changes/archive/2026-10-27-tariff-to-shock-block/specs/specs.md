@@ -3,7 +3,7 @@
 ### Requirement: A model without the ShockBlock is rejected
 Source: change tariff-to-shock-block, ADR-0001
 
-`solve_multiperiod` must raise `ValueError` before loading the solver when the
+the old Pyomo multiperiod driver must raise `ValueError` before loading the solver when the
 model has no ShockBlock (the monolith `GTAPMultiPeriodModel`): there is nowhere
 to write the shock, the default tariff included.
 

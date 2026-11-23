@@ -2,7 +2,7 @@
 
 El shock vive en el ShockBlock: cada instrumento es una Var fija por periodo, y el
 shock es que su celda del periodo ``shock`` difiera de la del ``check`` (GAMS
-``x.fx(..., 'shock') = v``).  Se escribe ANTES de ``solve_multiperiod``; el driver
+``x.fx(..., 'shock') = v``).  Se escribe ANTES de correr el recipe; el driver
 no recibe el shock, lo lee del modelo (``shock_of``).
 
     apply_shock(m, {"imptx": {("ROW", "MFG", "USA"): 8.6637},

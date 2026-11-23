@@ -3,8 +3,8 @@
 ``prepare_run`` loads or records the families of a GTAP run (no Pyomo model) and
 returns its ``FamilyRun``; ``check_supported`` refuses, before any work, what the
 family route cannot run; the settle-cache key and the settled check point of
-``FactorBlock.calibrate_base``. Moved here from ``family/driver.py`` (PR 3d of
-gtap-on-core): the core template uses them, the old driver re-imports them.
+``FactorBlock.calibrate_base``. Moved here from the old family driver (PR 3d of
+gtap-on-core): the core template uses them.
 """
 
 from __future__ import annotations
@@ -189,7 +189,7 @@ class FamilyRun:
 
 
 def _driver_closure(closure: Any) -> Any:
-    """``base_closure`` of ``_solve_multiperiod_inner`` for the route's closure."""
+    """The base closure the old Pyomo multiperiod driver used for the route's closure."""
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
     return GTAPClosureConfig(

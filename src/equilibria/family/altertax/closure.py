@@ -18,7 +18,7 @@ from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 # savf fixed under capFix) and cgdslack("ROW") is exogenous: ROW is the region whose
 # balance is left free, so ROW is the residual region of the capital account.
 # The closure carries no residual region: Task 2 passes it explicitly, as
-# ``solve_gtap_family(params, altertax_closure(), ALTAX_RESIDUAL_REGION, ...)``.
+# ``GTAP(params, altertax_closure(), residual_region=ALTAX_RESIDUAL_REGION, ...)``.
 ALTAX_RESIDUAL_REGION = "ROW"
 
 MAP_PATH = Path(__file__).with_name("closure_map.yaml")

@@ -2,7 +2,7 @@
 
 ## Why
 
-`templates/gtap/gtap_multiperiod_driver.py` is 2,502 lines and about 80 % of
+the old Pyomo multiperiod driver is 2,502 lines and about 80 % of
 them are not orchestration: it rewrites block equations between periods
 (`_recalibrate_*`), carries GTAP-only fixes to square the system, builds a
 single-period reference model, and tunes the garbage collector and PATH options.

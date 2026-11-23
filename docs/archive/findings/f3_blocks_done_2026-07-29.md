@@ -13,7 +13,7 @@ PRODUCTION+SUPPLY, FACTOR, ARMINGTON+BILATERAL, DEMAND+UTILITY, INCOME, CLOSURE)
 build their equations through the `SymbolicEquation → PyomoBackend` bridge, then compose
 into a single-period model (`build_block_single_period`) which reflects into the
 multi-period structure (`GTAPBlockMultiPeriodModel`) and solves through the existing
-`solve_multiperiod` driver. The acceptance gate (user decision, 2026-07-20) is the
+the old Pyomo multiperiod driver. The acceptance gate (user decision, 2026-07-20) is the
 NLP-vs-NLP + MCP-vs-MCP cell sweep vs a GAMS reference — not a `.nl` byte diff, which
 stays a diagnostic.
 

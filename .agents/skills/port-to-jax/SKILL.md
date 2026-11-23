@@ -13,7 +13,7 @@ Two stretches: **(1) original code → equilibria blocks** (parity against the o
 
 - A template has a non-Pyomo `create_model()` of blocks and runs through `Exercise` on Pyomo, and you want `backend="family"`.
 - A model exists only as `.gms`/`.tab`: do stretch 1 first (section "Stretch 1").
-- Not for GTAP: it has its own family route (`family/driver.py`, `family/gtap_periods.py`, `solver/newton_gtap.py`).
+- Not for GTAP: it has its own family route (`family/gtap_periods.py`, `family/run_setup.py`, `solver/newton_gtap.py`).
 
 ## Stretch 2: blocks → JAX (reuse, do not rewrite)
 

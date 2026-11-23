@@ -108,7 +108,7 @@ Once the Windows-produced capFix fixtures landed (`run_gempack_matrix --rordelta
 solver — NOT model — limit. The capFix **MCP** does not converge in PATH's in-process capi at that
 size (10x7: code=2 in ~6min; 15x10: spins ~48min at 97% CPU). But the SAME model **is feasible as
 an NLP**: with `EQUILIBRIA_GTAP_SOLVE_NLP=1` (maximize walras, IPOPT — read per-call inside
-`run_gtap._run_path_capi_nonlinear_full`, which `solve_multiperiod` lazy-loads), IPOPT closes it:
+`run_gtap._run_path_capi_nonlinear_full`, which the old Pyomo multiperiod driver lazy-loads), IPOPT closes it:
 
 | dataset | capFix MCP (PATH) | capFix NLP (IPOPT) | vs capFix fixture |
 |---|---|---|---|
@@ -123,7 +123,7 @@ Two subtleties fixed along the way:
 - **Fixture name glob.** The study grid emits `..._tm10_s8-16-32_capfix.har`; `_capfix_fixture_for`
   now also globs `sl4dump_<ds>_*_capfix.har` so the step-tag is matched.
 - **Env var must cover the BUILD, not just the solve.** Setting `EQUILIBRIA_GTAP_SOLVE_NLP` only
-  around `solve_multiperiod` left the 10x7 build in a mismatched mode → nondeterministic code=2.
+  around the old Pyomo multiperiod driver left the 10x7 build in a mismatched mode → nondeterministic code=2.
   It is now set for the whole `_solve_shock` (build + solve), mirroring `test_gtap7_nlp_parity`.
 
 15x10 is `@pytest.mark.slow` (20min) — `run_parity_gates.py` runs `-m "not slow"`, so it is

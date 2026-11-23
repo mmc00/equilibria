@@ -1,10 +1,10 @@
 """What the old GTAP drivers gave, for the tests that compared them to the core.
 
 ``tests/golden/pr4_old_route_main.json.gz`` was recorded on main (2c0d882a) by the
-PR 4 recorder (``scripts/dev/record_pr4_old_route.py`` in that commit), before
-PR 4 of gtap-on-core deleted the old drivers; two runs were identical. The seven
-``on_core_*`` cases (test_gtap_on_core_solve) were recorded later by the same
-recorder on a checkout of that commit, two identical runs again. Each case is
+PR 4 recorder (``scripts/dev/record_pr4_old_route.py``, committed in 6a6fd1bf and
+deleted with the old drivers by PR 4 of gtap-on-core); two runs were identical. The
+seven ``on_core_*`` cases (test_gtap_on_core_solve, commit f50dad93) were recorded
+later by the same recorder on a checkout of 2c0d882a, two identical runs again. Each case is
 the old side of one old-vs-core equality test. The core is compared against it with
 a tolerance (``tests/_golden.py``): another CPU moves the last bits.
 """

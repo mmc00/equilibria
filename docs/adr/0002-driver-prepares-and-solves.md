@@ -5,20 +5,21 @@ date: 2026-10-02
 
 # The driver prepares and solves; it holds no model logic
 
-The multi-period driver (`templates/gtap/gtap_multiperiod_driver.py`) only
+The multi-period driver (the old Pyomo multiperiod driver, deleted by PR 4 of
+gtap-on-core) only
 orchestrates: it asks for each period to be prepared, solves it with the closure
 it gets back, and moves on. How a period is prepared (freeze the other periods,
 seed, recalibrate, fix and bound from the single-period reference model, holdfix)
 is a **recipe**: an ordered list of steps per `(period, mode)` in
-`templates/gtap/period_prep.py`, run by `PeriodPreparer.prepare(m, period,
-params)`. Equations, instruments and the shock belong to blocks, not to the
+the old Pyomo period recipe, run once per period before its solve. Equations, instruments and the shock belong to blocks, not to the
 driver.
 
 Before this, each period's preparation was written by hand inside the driver, one
 copy per period with an `if _gtap_mode` at every step, so the three copies drifted
 and nobody could tell which differences were intended. A recipe makes the
-sequence visible and testable: `tests/templates/gtap/test_period_prep_snapshot.py`
-pins a snapshot of the model before every solve.
+sequence visible and testable: a snapshot test pinned the model before every
+solve (the snapshot is frozen now; `tests/templates/gtap/test_gtap_on_core_snapshot.py`
+checks the core against it).
 
 ## Considered Options
 

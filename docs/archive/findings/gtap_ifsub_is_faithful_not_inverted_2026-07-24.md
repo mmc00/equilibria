@@ -32,7 +32,7 @@ equations use the algebraic macro `_m_xwmg = tmarg·xw` directly
 
 `xwmg`/`xmgm` become substituted-out **report vars** under condensation. Their Var
 objects keep their seed value; the solution lives in `tmarg·xw`. The driver's
-`_recompute_ifsub_report_vars` (`gtap_multiperiod_driver.py:2295`) exists precisely
+`_recompute_ifsub_report_vars` (the old Pyomo multiperiod driver) exists precisely
 to refill such vars post-solve — its docstring warns *"a direct read mis-reports
 them… GAMS recomputes them post-solve in postsim"* — and it recomputes
 `pfa/pfy/pp/pwmg/pefob/pmcif/pm` **but omits `xwmg`/`xmgm`**. So `V(m.xwmg)` returns

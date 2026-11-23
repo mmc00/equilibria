@@ -142,7 +142,6 @@ repos:
               src/equilibria/templates/gtap/gtap_contract\.py|
               src/equilibria/templates/gtap/gtap_model_equations\.py|
               src/equilibria/templates/gtap/gtap_model_multiperiod\.py|
-              src/equilibria/templates/gtap/gtap_multiperiod_driver\.py|
               src/equilibria/templates/gtap/gtap_parameters\.py|
               src/equilibria/templates/gtap/gtap_parity_pipeline\.py|
               src/equilibria/templates/gtap/gtap_sets\.py|

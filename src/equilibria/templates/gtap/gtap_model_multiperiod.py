@@ -626,7 +626,7 @@ class GTAPMultiPeriodModel:
         # point. Evaluation may fail while vars are uninitialized; 1.0 is the fallback.
         # INDEXED BY PERIOD, not scalar. The driver solves one period at a time and
         # selects rows and columns with `idx[-1] == active_period` (see
-        # gtap_multiperiod_driver). A scalar aggregate matches no period, so its
+        # the period steps). A scalar aggregate matches no period, so its
         # defining row would never enter the system PATH solves — leaving the Fisher
         # row reading a stale aggregate (measured: residual 157 on the defining row
         # after a solve, and 0.16 on eq_rgdpmp).

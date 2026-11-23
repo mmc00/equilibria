@@ -1,0 +1,20 @@
+kind: data
+model: gtap7
+dataset: gtap7_3x3_equilibria_period_snapshot
+source: 'equilibria snapshot of the model before each solve (gtap7_3x3), FROZEN: last
+  regenerated at ee43f5f7 from the old Pyomo multiperiod driver, which PR 4 of
+  gtap-on-core deleted (branched from 2c0d882a); it cannot be regenerated. The snapshot before 81bca7e4 is kept
+  as period_snapshot_pre-81bca7e4.json. Step 0 of the driver recipe then dropped the
+  altertax rebuilds of the investment and CDE household alphaa. Moved byte for byte
+  from tests/fixtures at 4e91d12a. Read by tests/templates/gtap/test_gtap_on_core_snapshot.py
+  (the core against this snapshot).'
+license: equilibria output (MIT, as the package)
+outputs:
+  period_snapshot.json: 1056beb69e37d796864001868734482603fa6f15de200dda008a1543e283e242
+  period_snapshot_pre-81bca7e4.json: 978204d28b3068a7e0b00bec84ae19d603fe0606b8cd2abe3b5ddbec33113c94
+status: verified
+notes: 'Regenerated 2026-11-16 after p_rai starts at 1 (prdtx 0) where the activity
+  does not make the commodity (xFlag, cal.gms:293-294): only the Var:p_rai and
+  Var:pp_rai component hashes change (40 of them, every case). Folder and files
+  renamed by PR 4 of gtap-on-core (they were named after the old period recipe);
+  the content is unchanged.'

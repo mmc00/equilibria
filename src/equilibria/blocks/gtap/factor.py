@@ -526,7 +526,7 @@ class FactorBlock(Block):
             m = model
             estado = model_state.capture(m)
             # El settle se hacia sobre un modelo armado con base_calibrated=False,
-            # y el driver lee el flag (period_prep): aca tambien. restore lo repone.
+            # y el driver lee el flag (los pasos del periodo): aca tambien. restore lo repone.
             m._base_calibrated = False
             m._settled_seed = None
         else:
@@ -538,7 +538,7 @@ class FactorBlock(Block):
             # steps' context (params, closure, reference), never built here. As
             # before, the check point is taken whatever the settle's code.
             # run_scope: the GC freeze of the built model over every period, as
-            # solve_multiperiod held it (without it each gap walks the whole model)
+            # the old Pyomo multiperiod driver held it (without it each gap walks the whole model)
             gtap = GTAP(
                 params, closure, residual_region=residual_region, ref_gdx=ref_gdx
             )
@@ -549,9 +549,6 @@ class FactorBlock(Block):
                     template=gtap,
                 )
             settled = self._settled_check_point(m)
-            from equilibria.family.prep_capture import capture_settled
-
-            capture_settled(settled)  # opt-in reference for the family port
         finally:
             if estado is not None:
                 model_state.restore(m, estado)

@@ -48,7 +48,7 @@ outputs:
   005_p_shock.pkl.gz: 906f39a4d72cae2357799a6cc8db12c5973bf39f76ec7abc9927370ddba7a71c
   005_s_shock.json: 00f7f1e559b2cd6ae15a9d6ca46a9b54a84d837329812e7def2e69621980a315
   final.pkl.gz: 248fbd60ee808d61e316571082603022773502497e7ff78b00a743ba0c4970f5
-  model_print.json: 8da05e7754251364ddf6ea5da0d24443c7c09eaaaa5c4e065b4cc03425896a81
+  model_print.json: 93eba768aa83b730f01912f3039be9478af58169a4b2869f6c2f33f31dcb92c6
   settled.pkl.gz: 00d81c8a5f68ffdc1c0629264edea8b184837700ea66238f1a072ce8ff284903
 run:
   date: '2026-11-16T22:58:15-06:00'
@@ -59,4 +59,4 @@ run:
     cores: 11
     ram_gb: 18.0
 status: verified
-notes: ''
+notes: 'pyomo_code re-stamped by PR 4 of gtap-on-core (61ef31a1 -> 425a15e8): the Pyomo-only change was comments (identical AST in gtap_model_multiperiod.py and gtap_model_equations.py) and the removal of two no-op capture hooks in path_capi.py; the photo itself is unchanged.'

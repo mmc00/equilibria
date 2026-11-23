@@ -2,7 +2,7 @@
 
 Moved VERBATIM from ``scripts/gtap/run_gtap.py`` (L1063-1589, L2322-5557) so
 that the solver travels inside the installed package. Before this move
-``gtap_multiperiod_driver`` loaded it by path from the repo's ``scripts/``
+the old Pyomo multiperiod driver loaded it by path from the repo's ``scripts/``
 directory, which is not part of the wheel: any pip-installed run raised
 ``FileNotFoundError`` on the first solve.
 
@@ -1511,7 +1511,7 @@ def _run_path_capi_nonlinear_full(
     # ALREADY-SQUARED (constraints, free_variables) pair from structural_matching
     # above as an NLP (maximize walras) and solve it in-process with IPOPT.
     # Earlier attempts hooked BEFORE structural_matching ran (in
-    # gtap_multiperiod_driver.py, right before this function is even called),
+    # the old Pyomo multiperiod driver, right before this function is even called),
     # which left 292 variables genuinely unconstrained (25167 vars vs 24875
     # constraints, not 24845 vs 24845 like the real squared system PATH would
     # solve) — IPOPT was hunting for a feasible point in a system with 292
@@ -1591,17 +1591,6 @@ def _run_path_capi_nonlinear_full(
             f"[nlp-square] deactivated {_n_deact} extra constraints, "
             f"fixed {_n_fixed} extra vars (matching the real squared system)",
             file=sys.stderr,
-        )
-        from equilibria.family.prep_capture import capture_squared
-
-        # Opt-in oracle for the array port of this prep; no-op by default.
-        capture_squared(
-            model,
-            constraints,
-            free_variables,
-            _n_deact,
-            _n_fixed,
-            locals().get("_gams_pairs", ()),
         )
         _eq_walras_sq = getattr(model, "eq_walras", None)
         _walras_var_sq = getattr(model, "walras", None)
@@ -2718,23 +2707,6 @@ def _run_path_capi_nonlinear_full(
             # (res.solver.status / termination_condition) works. Success = converged AND
             # residual within tolerance (fatol was 1e-7; accept ||F||<1e-5).
             _ok_sr = bool(_sol_sr.success) and _rf_sr < 1e-5
-            from equilibria.family.prep_capture import capture_solve
-
-            # Opt-in reference for the family port; no-op by default.
-            capture_solve(
-                model,
-                code=1 if _ok_sr else 2,
-                nit=int(getattr(_sol_sr, "nit", 0)),
-                nfact=getattr(_sol_sr, "nfact", None),
-                trace=getattr(_sol_sr, "trace", None),
-                residual=_rf_sr,
-                method=_method,
-                linsolve=getattr(_sol_sr, "linsolve", None),
-                cfg=getattr(_sol_sr, "cfg", None),
-                null_pivots=getattr(_sol_sr, "null_pivots", None),
-                converged=bool(_sol_sr.success),
-                wall=_dt_sr,
-            )
 
             class _R:  # minimal Pyomo-results shim
                 class solver:

@@ -97,7 +97,7 @@ def _enc_key(k):
     The previous encoding joined a tuple with ``\\x1f`` and split it back, which
     silently rewrote ``("USA", 2020)`` as ``("USA", "2020")`` and collapsed the
     1-tuple ``("USA",)`` to the bare string ``"USA"``.  That matters because the
-    consumer (``gtap_multiperiod_driver``, base-calibrated seeding) does the
+    consumer (the base-calibrated seeding of the period steps) does the
     lookup inside ``except (KeyError, TypeError, ValueError): pass`` -- a mistyped
     key raises nothing, it just seeds NOTHING, and the model solves from a
     different starting point with no diagnostic.

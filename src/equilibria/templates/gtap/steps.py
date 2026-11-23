@@ -1,7 +1,7 @@
 """GTAP's period steps (ADR-0011), written once over ``GTAPPeriodModel``.
 
-Each step mirrors one step of the old Pyomo period recipe (``period_prep``) or one
-line of ``solve_multiperiod``, with the same cells and the same writes, so the core
+Each step mirrors one step of the old Pyomo period recipe or one
+line of the old Pyomo multiperiod driver, with the same cells and the same writes, so the core
 driver leaves the model in the state the old driver left it (gated by the
 period-preparation snapshot). They never touch a backend: the same steps fly the
 Pyomo model and the family arrays.
@@ -74,7 +74,7 @@ def check_model_flags(base_calibrated: bool) -> Step:
 def check_backend(options: Mapping[str, Any]) -> Step:
     """Refuse, before any work, what the model's backend cannot run. ``options``:
     the recipe's (``gtap_static`` arguments, ``copied_check`` for a check copied
-    from the base). The family backend runs what ``solve_gtap_family`` runs; the
+    from the base). The family backend runs what the old family driver ran; the
     nominal trade balance (``trade_balance``) is family-only, capFix only."""
 
     def step(ctx: StepContext) -> None:

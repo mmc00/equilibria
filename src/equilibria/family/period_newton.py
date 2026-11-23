@@ -3,9 +3,8 @@
 ``_period_system`` squares the staged arrays and builds the JAX system;
 ``_newton`` solves it with Newton-TR + MUMPS (``_NEWTON_TOL`` and ``_MUMPS_KEEP``
 set around the call); ``RatioBorder`` borders it with world income for
-``trade_balance="ratio"``. Moved here from ``family/driver.py`` (PR 3d of
-gtap-on-core): the core solver (``solver/newton_gtap``) uses them, the old driver
-re-imports them.
+``trade_balance="ratio"``. Moved here from the old family driver (PR 3d of
+gtap-on-core): the core solver (``solver/newton_gtap``) uses them.
 """
 
 from __future__ import annotations
@@ -220,7 +219,3 @@ class RatioBorder:
         cols = np.concatenate([c, np.full(nv, n), self.g_ix, [n]])
         data = np.concatenate([d, self.v_vals, -np.ones(ng), [1.0]])
         return sp.csr_matrix((data, (rows, cols)), shape=(n + 1, n + 1))
-
-
-# the name the old driver and its callers used
-_world_income = world_income

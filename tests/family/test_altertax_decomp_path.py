@@ -351,18 +351,18 @@ def test_newton_path_matches_the_full_solve_path_on_3x3(run_3x3):
 def test_newton_points_hold_the_ratio_closure(run_3x3):
     """``savf[r] / W`` of every ratio region equals the check's ratio at every Newton
     point (``dW = g . dx`` is in the linear system, savf follows it)."""
-    from equilibria.family.driver import _world_income
+    from equilibria.family.period_newton import world_income
 
     run = run_3x3
     path = run.decomp_path
     assert path.substep == "newton"
     mp0 = run.result.mp
     sv0 = mp0.vars["savf"]
-    w_chk = _world_income(mp0, "check")
+    w_chk = world_income(mp0, "check")
     regions = run.result.session.run.nominal_savf
     assert regions
     for mp in path.points[:-1]:
-        w = _world_income(mp, "shock")
+        w = world_income(mp, "shock")
         sv = mp.vars["savf"]
         for r in regions:
             want = float(sv0.value[sv0.pos((r, "check"))]) / w_chk
@@ -376,7 +376,7 @@ def test_updated_system_equals_a_fresh_build_at_a_sub_step_point(run_3x3):
     path towards the second, targets at that point's world income) its start point, F
     and J equal those of the system built from scratch (recipe, square, build)."""
     from equilibria.family.altertax.path import _NewtonSteps
-    from equilibria.family.driver import _world_income
+    from equilibria.family.period_newton import world_income
 
     run = run_3x3
     shock = load_tms_shock(folder("gtap7_3x3") / "tms_rate10.shk")
@@ -384,7 +384,7 @@ def test_updated_system_equals_a_fresh_build_at_a_sub_step_point(run_3x3):
     steps = _NewtonSteps(run, shock)
     s1, s2 = shock_fraction(shock, 1 / k), shock_fraction(shock, 2 / k)
     start = steps.step(s1, None)
-    w = _world_income(start, "shock")
+    w = world_income(start, "shock")
     ss, x = steps.system_at(s2, start, w)
     fresh, sq_f, _ = run.result.session.shock_system(
         s2, start=start, savf_targets=steps.targets(w)

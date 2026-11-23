@@ -113,7 +113,7 @@ class GTAP:
         return GTAPPyomoPeriodModel(m)
 
     def _build_family(self) -> Any:
-        """``solve_gtap_family``'s setup: refuse what the route cannot run, load
+        """The family run's setup: refuse what the route cannot run, load
         or record the families (``prepare_run``), then with ``base_calibrated`` the
         settled seed (``calibrate_base_cached``). No Pyomo model is built."""
         import dataclasses
@@ -149,7 +149,7 @@ class GTAP:
         if savf == "capFlex":
             require_ref_gdx(self.ref_gdx)
         rr = self.residual_region or list(self.params.sets.r)[-1]
-        # as solve_gtap_family: the load and the settle under one GC setup; the
+        # as the old family driver: the load and the settle under one GC setup; the
         # loaded records frozen as soon as they are in
         with _gc_family_scope():
             run, mp = fd.prepare_run(
@@ -200,7 +200,7 @@ class GTAP:
 
     @contextlib.contextmanager
     def run_scope(self) -> Iterator[None]:
-        """The GC setup of the whole run, as ``solve_multiperiod`` held it: the
+        """The GC setup of the whole run, as the old Pyomo multiperiod driver held it: the
         built model frozen once over base, check and shock. A solve inside it
         leaves it alone (``_gc_family_scope`` is reentrant); freezing per solve
         instead walked the whole model twice in every gap between solves
@@ -208,7 +208,7 @@ class GTAP:
 
         On family the freeze skips the full collection (the build already froze
         the records: a collection would walk them, 7.4 s on 20x41) and the run's
-        MUMPS analysis is dropped at the end, as ``solve_gtap_family`` drops it."""
+        MUMPS analysis is dropped at the end, as the old family driver dropped it."""
         from equilibria.solver.gc_tuning import _gc_family_scope
 
         family = self.backend == "family"

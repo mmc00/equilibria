@@ -381,7 +381,7 @@ Dos de las citas explican decisiones de modelado reales que merecen vivir en el 
 
 **Archivos:**
 - Crear: `docs/architecture/monolito_vs_bloques.md`
-- Modificar: `src/equilibria/templates/gtap/gtap_multiperiod_driver.py:753`,
+- Modificar: the old Pyomo multiperiod driver,
   `src/equilibria/templates/gtap/gtap_model_equations.py:2785`,
   `tests/templates/gtap/test_gtap_baseline_mirror.py:96`,
   `scripts/gtap/compare_nus333_vs_neos.py:196`, `scripts/gtap/_parity_json.py:4`
@@ -452,7 +452,7 @@ del camino de bloques y no puede retirarse.
 
 - [ ] **Paso 2: Reescribir las 5 citas**
 
-En `gtap_multiperiod_driver.py:753` y `gtap_model_equations.py:2785`, sustituir
+En the old Pyomo multiperiod driver y `gtap_model_equations.py:2785`, sustituir
 `CLAUDE.md` por `docs/architecture/monolito_vs_bloques.md`. En
 `test_gtap_baseline_mirror.py:96`, `compare_nus333_vs_neos.py:196` y `_parity_json.py:4`,
 sustituir `CLAUDE.md` por `CONTRIBUTING.md`.
@@ -508,7 +508,7 @@ deuda antes de cerrar el PR correspondiente.
 gh pr close 1 --comment "Cerrado por obsoleto. El lector HAR nativo vive hoy en src/equilibria/babel/har/ (reader, writer, symbols, wire), reimplementado tras el PR #44; el fix de los headers multi-record REFULL entro por el PR #46."
 gh pr close 8 --comment "Cerrado por obsoleto. altertax vive hoy en src/equilibria/templates/gtap/altertax/, con tests en tests/templates/gtap/test_altertax.py y test_altertax_multiperiod_parity.py."
 gh pr close 9 --comment "Cerrado por obsoleto. La paridad de altertax se cubre hoy en los gates de run_parity_gates.py; el emparejamiento MCP se resolvio en la rama f3.5."
-gh pr close 14 --comment "Cerrado por obsoleto. El multiperiodo vive hoy en gtap_model_multiperiod.py y gtap_multiperiod_driver.py, con 9 tests en tests/templates/gtap/."
+gh pr close 14 --comment "Cerrado por obsoleto. El multiperiodo vive hoy en gtap_model_multiperiod.py y the old Pyomo multiperiod driver, con 9 tests en tests/templates/gtap/."
 ```
 
 - [ ] **Paso 3: Verificar**
