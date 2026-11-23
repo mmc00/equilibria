@@ -72,10 +72,13 @@ def test_python_solves_with_the_closure_of_the_fixture_it_reads(monkeypatch, tmp
     fake = types.ModuleType("templates.gtap.test_gtap7_gempack_parity")
     fake._solve_shock = lambda *a, **k: solved.append((a, k)) or ("m", 1)  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, fake.__name__, fake)
-    g._solve_shock_10.cache_clear()
-    assert g._solve_shock_10("gtap7_3x3") == "m"
-    ((args, kw),) = solved
-    assert args == ("gtap7_3x3", 1, g.FIXTURE_CLOSURE) and kw == {}
+    g._solve_at.cache_clear()
+    assert g._solve_at("gtap7_3x3", "10") == "m"
+    assert g._solve_at("gtap7_3x3", "0.3") == "m"
+    (args10, kw10), (args03, kw03) = solved
+    # 10 % is the gate's run (the default tariff); the other sizes go through uniform
+    assert args10 == args03 == ("gtap7_3x3", 1, g.FIXTURE_CLOSURE)
+    assert kw10 == {} and kw03 == {"tariff_pct": 0.3}
 
 
 def test_a_failed_solve_is_not_measured(monkeypatch):
@@ -86,6 +89,39 @@ def test_a_failed_solve_is_not_measured(monkeypatch):
     fake = types.ModuleType("templates.gtap.test_gtap7_gempack_parity")
     fake._solve_shock = lambda *a, **k: ("m", 0)  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, fake.__name__, fake)
-    g._solve_shock_10.cache_clear()
+    g._solve_at.cache_clear()
     with pytest.raises(RuntimeError, match="did not solve"):
-        g._solve_shock_10("gtap7_3x3")
+        g._solve_at("gtap7_3x3", "3")
+
+
+@pytest.mark.parametrize(
+    "shock,tol", [("10", 0.01), ("3", 0.003), ("1", 0.001), ("0.1", 0.0001)]
+)
+def test_the_scaled_tolerance_shrinks_with_the_shock(shock, tol):
+    """At 0.1 % almost no cell moves 1 pp, so a fixed 1 pp band would read ~100 %
+    whatever Python does: the second number scales the band with the shock."""
+    import gen_linearization_study as g
+
+    assert g._scaled_tol(shock) == pytest.approx(tol, rel=1e-12)
+
+
+def test_every_shock_size_is_measured(monkeypatch, tmp_path):
+    """No size reads 'py-shock pending': each one is measured at its own size."""
+    import gen_linearization_study as g
+
+    seen = []
+    monkeypatch.setattr(g, "_sl4_fixture", lambda *a: tmp_path / "x.har")
+    monkeypatch.setattr(g, "_seed_gdx", lambda ds: tmp_path / "out.gdx")
+    monkeypatch.setattr(
+        g, "_measure_within_pp", lambda ds, sl4, s: seen.append(s) or ("99%", "97%")
+    )
+    for s in g.SWEEP_SHOCKS:
+        assert g._match_cell(tmp_path, "gtap7_3x3", s, "8 16 32") == "99% / 97%"
+    assert seen == g.SWEEP_SHOCKS
+
+
+def test_nonlinearity_reads_the_scaled_numbers():
+    import gen_linearization_study as g
+
+    assert g._nonlinearity(["99% / 90%", "—", "—", "—", "100% / 98%"]) == "8pp"
+    assert g._nonlinearity(["99% / 90%", "—", "—", "—", "—"]) == "—"
