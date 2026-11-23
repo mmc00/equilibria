@@ -376,7 +376,16 @@ def newton_tr(
                 maximum_bipartite_matching as _mbm_m,
             )
 
-            class _MumpsValuesAtAnalysis(_Mumps_tr):
+            class _Mumps(_Mumps_tr):
+                """Pyomo's wrapper, ending its MUMPS instance before restarting it."""
+
+                def _init(self):
+                    # Pyomo re-runs job=-1 before each analysis on the instance its
+                    # constructor already started; end it first or it leaks.
+                    cast(Any, self._mumps).run(job=-2)
+                    super()._init()
+
+            class _MumpsValuesAtAnalysis(_Mumps):
                 """Pyomo's wrapper with the values set before the analysis."""
 
                 def do_symbolic_factorization(self, matrix, raise_on_error=True):
@@ -588,7 +597,7 @@ def newton_tr(
                             _lu_tr = (
                                 _MumpsValuesAtAnalysis(sym=0)
                                 if mumps_values_at_analysis
-                                else _Mumps_tr(sym=0)
+                                else _Mumps(sym=0)
                             )
                             _lu_tr.set_icntl(14, 100)
                             _lu_tr.set_icntl(6, _icntl6)

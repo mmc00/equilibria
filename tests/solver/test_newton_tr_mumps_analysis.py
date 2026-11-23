@@ -117,3 +117,38 @@ def test_values_at_analysis_needs_no_gmin():
     res = _run(F, J, 9, mumps_values_at_analysis=True)
     assert set(res.null_pivots) == {0} and res.gmin_factors == 0
     assert np.max(np.abs(F(res.x))) < 1e-10
+
+
+@pytest.fixture
+def mumps_instances(monkeypatch):
+    """Count MUMPS instances started (``job=-1``) and ended (``job=-2`` on a live one)."""
+    mumps = pytest.importorskip("mumps")
+    count = {"started": 0, "ended": 0}
+    ctx = mumps.DMumpsContext
+    run, destroy = ctx.run, ctx.destroy
+
+    def spy_run(self, job):
+        count["started"] += job == -1
+        count["ended"] += job == -2
+        return run(self, job=job)
+
+    def spy_destroy(self):
+        count["ended"] += self.id is not None
+        return destroy(self)
+
+    monkeypatch.setattr(ctx, "run", spy_run)
+    monkeypatch.setattr(ctx, "destroy", spy_destroy)
+    return count
+
+
+@pytest.mark.parametrize("values_at_analysis", [False, True])
+def test_every_mumps_instance_is_ended(mumps_instances, values_at_analysis):
+    # Pyomo's wrapper re-runs job=-1 before each analysis on the instance its
+    # constructor already started; without a job=-2 first, that instance leaks.
+    import gc
+
+    F, J, _, _ = _near_singular()
+    _run(F, J, 9, mumps_values_at_analysis=values_at_analysis)
+    gc.collect()
+    assert mumps_instances["started"] >= 2
+    assert mumps_instances["ended"] == mumps_instances["started"]
