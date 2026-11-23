@@ -55,6 +55,14 @@ def _num(x: Any) -> float:
     return math.nan if x is None else float(x)
 
 
+def _is_walras(key: Any) -> bool:
+    """A walras cell: a Pyomo level key (``"('walras', 'shock')"`` or
+    ``"walrasshock"``) or an array cell ``("walras", field, position)``."""
+    if isinstance(key, tuple):
+        return bool(key) and key[0] == "walras"
+    return str(key).startswith(_WALRAS)
+
+
 def level_mismatches(got: dict, want: dict, *, rel: float = REL) -> list[str]:
     """Cells off the golden; NaN (no value) equals NaN, a key on one side fails.
     ``rel`` widens the band for a caller whose solve amplifies the CPU's noise (the
@@ -64,7 +72,7 @@ def level_mismatches(got: dict, want: dict, *, rel: float = REL) -> list[str]:
     g = {k: _num(v) for k, v in got.items() if not math.isnan(_num(v))}
     w = {k: _num(v) for k, v in want.items() if not math.isnan(_num(v))}
     nan_side = [k for k in got if math.isnan(_num(got[k])) != math.isnan(_num(want[k]))]
-    walras = {k for k in g if k.startswith(_WALRAS)}
+    walras = {k for k in g if _is_walras(k)}
     levels = mismatches(
         {k: v for k, v in g.items() if k not in walras},
         {k: v for k, v in w.items() if k not in walras},

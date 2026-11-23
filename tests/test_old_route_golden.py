@@ -29,3 +29,11 @@ def test_a_caller_can_widen_the_band() -> None:
     got, want = {X: 0.5126869643468949}, {X: 0.5126869649502608}
     assert level_mismatches(got, want, rel=1e-7) == []
     assert level_mismatches({X: 0.5}, {X: 0.5 * (1 + 1e-6)}, rel=1e-7)
+
+
+def test_tuple_keys_of_the_family_arrays() -> None:
+    """``mp_mismatches`` keys cells by ``(var, field, position)``."""
+    assert level_mismatches({("xw", "value", 0): 1.0}, {("xw", "value", 0): 1.0}) == []
+    assert level_mismatches({("xw", "value", 0): 1.0}, {("xw", "value", 0): 1.1})
+    w = ("walras", "value", 2)
+    assert level_mismatches({w: 3e-11}, {w: 3e-12}) == []
