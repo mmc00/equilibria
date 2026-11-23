@@ -1,10 +1,11 @@
-"""The core route solves GTAP to the same point as ``solve_multiperiod``.
+"""The core route solves GTAP to the same point as the old multiperiod driver.
 
 Real PATH solves on gtap7_3x3 (gtap and altertax, ifSUB 0 and 1, the shock in
 steps and Johansen) and on nus333 TBL65B (an ``@overwrite`` closure): each case
-runs through the old driver and through ``Exercise(GTAP, gtap_static)`` in the
-same process, and every Var cell must be equal (``==``; the same operations in
-the same order give the same floats), with the same convergence per period.
+runs through ``Exercise(GTAP, gtap_static)`` and every Var cell must equal what
+the old driver gave (``tests/_old_route_golden.py``, recorded on main before PR 4
+of gtap-on-core deleted it, case ``on_core_<name>``), with the same convergence
+per period.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import math
 from typing import Any
 
 import pytest
+from tests import _old_route_golden as golden
 from tests.templates.gtap import _period_snapshot as snap
 from tests.templates.gtap._routes import solve
 
@@ -36,28 +38,23 @@ def _closure(if_sub: bool) -> Any:
     )
 
 
-def _levels(m: Any) -> dict[tuple[str, Any], float]:
-    from pyomo.environ import Var
-
-    out = {}
-    for v in m.component_objects(Var):
-        for k in v:
-            x = v[k].value
-            out[v.name, k] = math.nan if x is None else float(x)
-    return out
-
-
-def _same(a: float, b: float) -> bool:
-    return a == b or (math.isnan(a) and math.isnan(b))
-
-
-def _run_both(p: Any, closure: Any, rr: str, *, mode: str = "gtap", **kw: Any) -> None:
-    old = solve("old", p, closure, rr, mode=mode, skip_base_solve=True, **kw)
+def _run_both(
+    name: str,
+    p: Any,
+    closure: Any,
+    rr: str,
+    *,
+    mode: str = "gtap",
+    rel: float = golden.REL,
+    **kw: Any,
+) -> None:
+    """The core run against the old driver's, recorded as case ``on_core_<name>``."""
+    old = golden.case(f"on_core_{name}")
     core = solve("core", p, closure, rr, mode=mode, skip_base_solve=True, **kw)
-    assert old.codes == core.codes
-    a, b = _levels(old.model), _levels(core.model)
-    assert a.keys() == b.keys()
-    bad = [(k, a[k], b[k]) for k in a if not _same(a[k], b[k])]
+    assert core.codes == old["codes"]
+    bad = golden.level_mismatches(
+        golden.pyomo_levels(core.model), old["levels"], rel=rel
+    )
     assert not bad, f"{len(bad)} cells differ, first: {bad[:20]}"
 
 
@@ -80,13 +77,20 @@ needs_3x3 = pytest.mark.skipif(
 @pytest.mark.parametrize("if_sub", [False, True])
 def test_static_3x3(mode: str, if_sub: bool) -> None:
     p = snap._load_params()
-    _run_both(p, _closure(if_sub), list(p.sets.r)[-1], mode=mode)
+    _run_both(
+        f"static_{mode}_ifsub{int(if_sub)}",
+        p,
+        _closure(if_sub),
+        list(p.sets.r)[-1],
+        mode=mode,
+    )
 
 
 @needs_3x3
 def test_shock_in_steps_3x3() -> None:
     p = snap._load_params()
     _run_both(
+        "steps",
         p,
         _closure(False),
         list(p.sets.r)[-1],
@@ -98,10 +102,14 @@ def test_shock_in_steps_3x3() -> None:
 def test_johansen_3x3() -> None:
     p = snap._load_params()
     _run_both(
+        "johansen",
         p,
         _closure(False),
         list(p.sets.r)[-1],
         shock_method="johansen",
+        # one linear step from the check amplifies the CPU's noise: the Linux CI
+        # lands 1.0e-8 relative from the Mac recording on 13 trade cells
+        rel=1e-7,
     )
 
 
@@ -118,6 +126,7 @@ def test_overwrite_unemployment_nus333() -> None:
     register_unemployment_hooks()
     try:
         _run_both(
+            "overwrite_nus333",
             p,
             closure(),
             "ROW",

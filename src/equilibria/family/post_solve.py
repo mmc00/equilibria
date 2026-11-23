@@ -1,6 +1,6 @@
 """What the multiperiod driver does around a solve, on arrays (no Pyomo model).
 
-``_solve_multiperiod_inner`` leaves each period in a state the next ``prepare`` reads.
+The post-solve leaves each period in a state the next period's steps read.
 After the Newton solve of a period (or, for the base, in place of it) it runs, in order:
 
 * the writeback of the solution into the squared columns (``path_capi``: ``set_value``
@@ -34,8 +34,8 @@ from typing import Any
 import numpy as np
 
 from equilibria.family.mp_arrays import MPArrays, Squared
-from equilibria.family.prep_recipe import _table
 from equilibria.family.recorder import Node
+from equilibria.family.sp_arrays import period_table
 
 _log = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ def pin_pabs(mp: MPArrays, period: str, regions: list[str]) -> None:
     pabs = mp.vars.get("pabs")
     if pabs is None:
         return
-    tab = _table(pabs, period)
+    tab = period_table(pabs, period)
     for r in regions:
         i = tab.get((r,))
         if i is None or pabs.fixed[i]:
@@ -374,8 +374,8 @@ def solve_welfare_tail(
         if row is None or var is None:
             continue
         recs = _records(backend, eqn)
-        vtab = _table(var, period)
-        for key, ir in _table(row, period).items():
+        vtab = period_table(var, period)
+        for key, ir in period_table(row, period).items():
             j = vtab.get(key)
             if row.active[ir] or j is None or not var.fixed[j]:
                 continue
@@ -484,9 +484,7 @@ def recompute_ifsub_report_vars(
     The formulas are the driver's (``pp_rai = p_rai``; the factor wedge from the
     benchmark), which are not the ``M_*`` macros of the closure. Returns the cells
     written."""
-    from equilibria.templates.gtap.gtap_multiperiod_driver import (
-        _benchmark_factor_wedge,
-    )
+    from equilibria.templates.gtap.pyomo_ops import benchmark_factor_wedge
 
     sets = state.sets
     R, A, I, F = (list(sets[k]) for k in ("r", "a", "i", "f"))
@@ -497,7 +495,7 @@ def recompute_ifsub_report_vars(
     def tab(comp: str):
         if comp not in tabs:
             v = mp.vars.get(comp)
-            tabs[comp] = None if v is None else _table(v, period)
+            tabs[comp] = None if v is None else period_table(v, period)
         return tabs[comp]
 
     def _pv(comp, key, default=0.0):
@@ -528,7 +526,7 @@ def recompute_ifsub_report_vars(
         n += 1
         return True
 
-    _pfa_wedge = _benchmark_factor_wedge(params)
+    _pfa_wedge = benchmark_factor_wedge(params)
 
     # --- factor prices: pfa, pfy ---
     if tab("pf") is not None:
@@ -611,9 +609,9 @@ def shocked_cells(mp: MPArrays, name: str) -> list[tuple]:
         return []
     v = mp.vars[name]
     libres = mp.endogenous_instrument_cells.get(name)
-    chk = _table(v, "check")
+    chk = period_table(v, "check")
     out = []
-    for cell, i in _table(v, "shock").items():
+    for cell, i in period_table(v, "shock").items():
         key = (*cell, "shock")
         if libres and is_free_cell(key, libres):
             continue
@@ -630,7 +628,7 @@ def check_endowment_shock_entered(mp: MPArrays, backend: Any, state: Any) -> Non
     moved the shock's factor"."""
     if "eq_xfteq" not in mp.rows:
         return
-    eq = _table(mp.rows["eq_xfteq"], "shock")
+    eq = period_table(mp.rows["eq_xfteq"], "shock")
     recs = _records(backend, "eq_xfteq")
     lv = Levels(mp, backend, state, "shock")
     for k in shocked_cells(mp, "aft"):

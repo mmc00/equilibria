@@ -1,20 +1,16 @@
-"""One GTAP case through the old driver or through the core, for the parity gates.
+"""One GTAP case through the core, for the parity gates.
 
-``solve(route, ...)`` takes the old driver's options (``solve_multiperiod``'s
-names and defaults) and runs them either way:
+``solve(route, ...)`` takes the options the parity gates pass (the names and
+defaults of the old multiperiod driver they were written against) and runs
+``Exercise(GTAP(...), gtap_static(...), shock=...)`` on the backend.
 
-- ``"old"``: ``build_block_model`` + ``apply_shock`` + ``solve_multiperiod`` on
-  Pyomo; ``solve_gtap_family`` on family.
-- ``"core"``: ``Exercise(GTAP(...), gtap_static(...), shock=...)`` on the backend.
+It gives a ``Solved``: the solved model (the Pyomo model, or the family
+``MPArrays``) and the codes as ints (``{period: int}``, the skipped base as 1).
+Each parity gate is parametrized over ``ROUTES``; the core is the only route
+since PR 4 of gtap-on-core deleted the old drivers.
 
-Both give a ``Solved``: the solved model (the Pyomo model, or the family
-``MPArrays``) and the codes in the old driver's form (``{period: int}``, the
-skipped base as 1). Each parity gate is parametrized over ``ROUTES``, the core
-only since PR 3a of the gtap-on-core design; ``"old"`` stays callable
-(``KNOWN_ROUTES``) for the old-vs-core equality tests until PR 4 deletes it.
-
-``@overwrite`` hooks are the global registry on both routes (the core build reads
-it too); the caller registers and clears them, as before.
+``@overwrite`` hooks are the global registry (the core build reads it); the
+caller registers and clears them.
 """
 
 from __future__ import annotations
@@ -26,7 +22,6 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 ROUTES = ("core",)
-KNOWN_ROUTES = ("old", "core")
 BACKENDS = ("pyomo", "family")
 _BACKEND_ENV = "EQUILIBRIA_GTAP_BACKEND"
 
@@ -43,9 +38,8 @@ class Solved:
 def core_codes(
     res: Mapping[str, Mapping[str, Any]], *, skip_base_solve: bool
 ) -> dict[str, int]:
-    """The core driver's statuses in the old driver's form: ``"optimal"`` -> 1,
-    ``"code N"`` -> N; a period not solved is left out, but for the skipped base,
-    which the old driver reports as 1."""
+    """The core driver's statuses as ints: ``"optimal"`` -> 1, ``"code N"`` -> N; a
+    period not solved is left out, but for the skipped base, reported as 1."""
     from equilibria.core.driver import NOT_SOLVED
 
     out: dict[str, int] = {}
@@ -108,12 +102,12 @@ def solve(
     starts from that GAMS solution (``seed_all_periods``), as the GAMS gates seed
     it. ``edit_model`` (core, pyomo): called once with the built Pyomo model before
     the recipe flies (``Exercise.run`` in its two parts), e.g. to fix an instrument
-    by hand (``fix_instrument_shock``). ``template_kw`` goes to the family run on both routes (``cache_root``,
-    ``jax_cache``...)."""
-    if route not in KNOWN_ROUTES:
-        raise ValueError(f"route must be one of {KNOWN_ROUTES}, got {route!r}")
-    if edit_model is not None and (route, backend) != ("core", "pyomo"):
-        raise ValueError("edit_model runs on the core route, pyomo backend only")
+    by hand (``fix_instrument_shock``). ``template_kw`` goes to the family template
+    (``cache_root``, ``jax_cache``...)."""
+    if route not in ROUTES:
+        raise ValueError(f"route must be one of {ROUTES}, got {route!r}")
+    if edit_model is not None and backend != "pyomo":
+        raise ValueError("edit_model runs on the pyomo backend only")
     if backend not in BACKENDS:
         raise ValueError(f"backend must be one of {BACKENDS}, got {backend!r}")
     if backend == "family":
@@ -143,41 +137,6 @@ def solve(
         "shock_method": shock_method,
     }
     with _backend_env(None):
-        if route == "old":
-            from equilibria.templates.gtap.gtap_block_model import build_block_model
-            from equilibria.templates.gtap.gtap_multiperiod_driver import (
-                solve_multiperiod,
-            )
-            from equilibria.templates.gtap.shocks import apply_shock
-
-            m, mp = build_block_model(
-                params,
-                params.sets,
-                closure,
-                residual_region,
-                base_calibrated=base_calibrated,
-                ref_gdx=ref_gdx,
-            )
-            if seed_gdx is not None:
-                mp.seed_all_periods(m, seed_gdx)
-            if shock:
-                apply_shock(m, shock)
-            res = solve_multiperiod(
-                m,
-                params,
-                closure,
-                ref_gdx=ref_gdx,
-                skip_base_solve=skip_base_solve,
-                mode=mode,
-                **opts,
-            )
-            return Solved(
-                model=m,
-                codes={k: int(r["code"]) for k, r in res.items()},
-                route=route,
-                backend=backend,
-                residuals={k: r.get("residual") for k, r in res.items()},
-            )
         from equilibria.core.exercise import Exercise
         from equilibria.templates.gtap.recipe import gtap_static
         from equilibria.templates.gtap.template import GTAP
@@ -228,33 +187,9 @@ def _family(
     mode: str = "gtap",
     **template_kw: Any,
 ) -> Solved:
-    """The family route runs what ``solve_gtap_family`` runs: base not solved
-    (calibrated), check solved. ``mode`` reaches the recipe, which refuses
-    anything but ``"gtap"`` on family; the old driver is gtap-only."""
+    """The family route: base not solved (calibrated), check solved. ``mode``
+    reaches the recipe, which refuses anything but ``"gtap"`` on family."""
     with _backend_env(None):
-        if route == "old":
-            if mode != "gtap":
-                raise NotImplementedError(
-                    f"family backend: mode={mode!r} is not supported (old driver)"
-                )
-            from equilibria.family.driver import solve_gtap_family
-
-            out = solve_gtap_family(
-                params,
-                closure,
-                residual_region,
-                ref_gdx=ref_gdx,
-                shock=shock,
-                nominal_trade_balance=trade_balance or False,
-                **template_kw,
-            )
-            return Solved(
-                model=out.mp,
-                codes={k: int(r["code"]) for k, r in out.results.items()},
-                route=route,
-                backend="family",
-                residuals={k: r.get("residual") for k, r in out.results.items()},
-            )
         from equilibria.core.exercise import Exercise
         from equilibria.templates.gtap.recipe import gtap_static
         from equilibria.templates.gtap.template import GTAP

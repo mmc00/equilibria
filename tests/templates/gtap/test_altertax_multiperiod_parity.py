@@ -1,7 +1,7 @@
 """GTAP altertax multi-period SOLVING parity gate (both ifSUB modes).
 
 For each (dataset, ifSUB) this builds the multi-period model, seeds it from the
-committed GAMS GDX fixture, solves base->check->shock via solve_multiperiod, and
+committed GAMS GDX fixture, solves base->check->shock on the core, and
 asserts:
   1. all 3 periods converge (termination code == 1), and
   2. the shock-period real-cell match vs the GDX is >= the per-row gap_min from
@@ -118,10 +118,7 @@ def _solve_and_match(dataset: str, if_sub: bool, route: str = "core"):
 
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
-    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     ref = _reference_gdx(dataset, if_sub)
     d = dataset_dir(dataset)

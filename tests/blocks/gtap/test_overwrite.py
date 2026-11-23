@@ -133,13 +133,13 @@ def test_cache_de_modelos_se_salta_con_hooks():
 def test_monolito_con_hooks_falla(monkeypatch):
     """El monolito no ve los hooks: con hooks activos pedirlo es un error, no un
     silencio (el SP de referencia volveria a fijar aft[USA,LABOR])."""
-    from equilibria.templates.gtap.gtap_multiperiod_driver import _build_sp_reference
+    from equilibria.templates.gtap.sp_reference import build_sp_reference
 
     p = nus333_params()
     register_unemployment_hooks()
     monkeypatch.setenv("EQUILIBRIA_GTAP_REF_MODEL", "monolith")
     with pytest.raises(RuntimeError, match="overwrite"):
-        _build_sp_reference(p.sets, p, closure(), "ROW")
+        build_sp_reference(p.sets, p, closure(), "ROW")
 
 
 # ------------------------------------------------------------------------ modelo
@@ -147,11 +147,11 @@ def test_monolito_con_hooks_falla(monkeypatch):
 
 def test_sp_de_referencia_del_driver_con_hooks():
     """El SP que lee el driver tiene la celda libre y la fila."""
-    from equilibria.templates.gtap.gtap_multiperiod_driver import _build_sp_reference
+    from equilibria.templates.gtap.sp_reference import build_sp_reference
 
     p = nus333_params()
     register_unemployment_hooks()
-    sp = cast(Any, _build_sp_reference(p.sets, p, closure(), "ROW"))
+    sp = cast(Any, build_sp_reference(p.sets, p, closure(), "ROW"))
 
     assert not sp.aft["USA", "LABOR"].fixed
     assert sp.aft["ROW", "LABOR"].fixed
@@ -206,51 +206,53 @@ def test_is_exogenous_por_celda(mp_unemployment):
     assert not is_exogenous(m, "pft", ("USA", "LABOR", "shock"))
 
 
-# ------------------------------------------------------------------------ driver
+# ------------------------------------------------------------------------ recipe steps
 
 
-def test_freeze_inactive_periods_libera_la_celda_endogena(mp_unemployment):
+def test_freeze_inactive_libera_la_celda_endogena(mp_unemployment):
     """Periodo activo: la celda endogena se libera como cualquier variable; en los
     inactivos se fija. Las celdas exogenas de aft quedan fijas en los 3."""
-    from equilibria.templates.gtap.gtap_multiperiod_driver import (
-        freeze_inactive_periods,
-    )
+    from tests.templates.gtap._core_step import run_step
+
+    from equilibria.templates.gtap.steps import freeze_inactive
 
     m = mp_unemployment
     m.aft["USA", "LABOR", "shock"].fix()
-    freeze_inactive_periods(m, "shock")
+    run_step(freeze_inactive, m, "shock")
     assert not m.aft["USA", "LABOR", "shock"].fixed
     assert m.aft["USA", "LABOR", "check"].fixed
     for t in ("base", "check", "shock"):
         assert m.aft["ROW", "LABOR", t].fixed, t
     # Activo el check: la celda sigue fija (exogena fuera del shock).
-    freeze_inactive_periods(m, "check")
+    run_step(freeze_inactive, m, "check")
     assert m.aft["USA", "LABOR", "check"].fixed
 
 
 def test_seed_desde_el_periodo_previo_incluye_la_celda_endogena(mp_unemployment):
-    from equilibria.templates.gtap.gtap_multiperiod_driver import (
-        _seed_period_from_prior,
-    )
+    from tests.templates.gtap._core_step import run_step
+
+    from equilibria.templates.gtap.steps import seed_from
 
     m = mp_unemployment
     m.aft["USA", "LABOR", "check"].set_value(7.0)
     m.aft["ROW", "LABOR", "check"].set_value(7.0)
     row_shock = m.aft["ROW", "LABOR", "shock"].value
-    _seed_period_from_prior(m, "check", "shock")
+    run_step(seed_from("check"), m, "shock")
     assert m.aft["USA", "LABOR", "shock"].value == 7.0
     assert m.aft["ROW", "LABOR", "shock"].value == row_shock
 
 
 def test_cotas_de_gams_sueltan_la_celda_endogena(mp_unemployment):
-    """_apply_gams_bounds deja libre (Reals, sin cotas) a la celda endogena; a las
-    exogenas no las toca."""
-    from equilibria.templates.gtap.gtap_multiperiod_driver import _apply_gams_bounds
+    """Las cotas de GAMS (``steps.gams_bounds``) dejan libre (Reals, sin cotas) a la
+    celda endogena; a las exogenas no las toca."""
+    from tests.templates.gtap._core_step import run_step
+
+    from equilibria.templates.gtap.steps import gams_bounds
 
     m = mp_unemployment
     m.aft["USA", "LABOR", "shock"].setlb(0.0)
     m.aft["ROW", "LABOR", "shock"].setlb(0.0)
-    _apply_gams_bounds(m, "shock")
+    run_step(gams_bounds, m, "shock")
     assert m.aft["USA", "LABOR", "shock"].lb is None
     assert m.aft["ROW", "LABOR", "shock"].lb == 0.0
 

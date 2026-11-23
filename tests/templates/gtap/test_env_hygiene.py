@@ -4,8 +4,9 @@
 # que la importa. Antes, un solve dejaba PATH_CAPI_OPTIONS puesta (y la rama de
 # debug NLP-via-GAMS anteponia GAMS al PATH para siempre).
 #
-# Los tests de aqui NO resuelven: verifican el contrato del context manager y la
-# restauracion, asi que corren en segundos y sin PATH C-API.
+# Los de _env_override no resuelven. Los de PATH_CAPI_OPTIONS corren un settle
+# 3x3 del core (un solve de PATH, segundos) con la llamada a PATH ensuciando el
+# entorno: lo que se prueba es que el run lo deja como estaba.
 import os
 import pathlib
 import sys
@@ -50,39 +51,55 @@ def test_env_override_restores_on_exception():
         os.environ.pop("EQ_TEST_VAR", None)
 
 
-def test_solve_does_not_leak_path_capi_options(monkeypatch):
-    """El wrapper publico restaura PATH_CAPI_OPTIONS aunque el solve falle.
+def _settle_3x3() -> dict:
+    """A core run with one PATH solve: the 3x3 settle (``gtap_static(settle_only)``:
+    the base calibrated, the check solved) on the Pyomo backend."""
+    from tests.family._data import load_params
+    from tests.family.test_sp_arrays import _closure
 
-    Se mockea el solve: lo que se prueba es la higiene del entorno, no el
-    modelo — asi el test no necesita PATH C-API ni datasets.
-    """
-    from equilibria.templates.gtap import gtap_multiperiod_driver as driver
+    from equilibria.core.exercise import Exercise
+    from equilibria.templates.gtap.recipe import gtap_static
+    from equilibria.templates.gtap.template import GTAP
 
-    def _fake(*a, **k):
+    p = load_params("gtap7_3x3")
+    return Exercise(GTAP(p, _closure()), gtap_static(settle_only=True)).run()
+
+
+@pytest.fixture
+def dirty_solve(monkeypatch):
+    """The PATH call dirties PATH_CAPI_OPTIONS, then solves (``fail``: raises)."""
+    capi = pytest.importorskip("path_capi_python")
+    real = capi.solve_nonlinear_mcp
+    state = {"fail": False}
+
+    def dirty(*a, **k):
         os.environ["PATH_CAPI_OPTIONS"] = "* ensuciado por el solve\n"
-        return {"base": {"code": 1}}
+        if state["fail"]:
+            raise RuntimeError("solve fallido")
+        return real(*a, **k)
 
-    monkeypatch.setattr(driver, "_solve_multiperiod_inner", _fake)
+    monkeypatch.setattr(capi, "solve_nonlinear_mcp", dirty)
+    return state
 
-    monkeypatch.setenv("PATH_CAPI_OPTIONS", "del usuario")
-    driver.solve_multiperiod(None, None, None)
-    assert os.environ["PATH_CAPI_OPTIONS"] == "del usuario"
+
+def test_solve_does_not_leak_path_capi_options(monkeypatch, dirty_solve):
+    """Un run del core restaura PATH_CAPI_OPTIONS: el valor del usuario vuelve, y
+    si no habia ninguno no queda ninguno."""
+    monkeypatch.setenv("PATH_CAPI_OPTIONS", "major_iteration_limit 500")
+    _settle_3x3()
+    assert os.environ["PATH_CAPI_OPTIONS"] == "major_iteration_limit 500"
 
     monkeypatch.delenv("PATH_CAPI_OPTIONS", raising=False)
-    driver.solve_multiperiod(None, None, None)
+    _settle_3x3()
     assert "PATH_CAPI_OPTIONS" not in os.environ
 
 
-def test_solve_restores_path_capi_options_on_exception(monkeypatch):
-    from equilibria.templates.gtap import gtap_multiperiod_driver as driver
+def test_solve_restores_path_capi_options_on_exception(monkeypatch, dirty_solve):
+    """El solve revienta: el core lo registra como un check no resuelto, y el
+    entorno queda como estaba."""
+    dirty_solve["fail"] = True
+    monkeypatch.setenv("PATH_CAPI_OPTIONS", "major_iteration_limit 500")
 
-    def _boom(*a, **k):
-        os.environ["PATH_CAPI_OPTIONS"] = "* ensuciado antes de reventar\n"
-        raise RuntimeError("solve fallido")
-
-    monkeypatch.setattr(driver, "_solve_multiperiod_inner", _boom)
-    monkeypatch.setenv("PATH_CAPI_OPTIONS", "del usuario")
-
-    with pytest.raises(RuntimeError):
-        driver.solve_multiperiod(None, None, None)
-    assert os.environ["PATH_CAPI_OPTIONS"] == "del usuario"
+    res = _settle_3x3()
+    assert res["check"]["code"] != "optimal"
+    assert os.environ["PATH_CAPI_OPTIONS"] == "major_iteration_limit 500"

@@ -1,11 +1,10 @@
 """``MPArrays.build`` (the multiperiod state from the composed state) equals the Pyomo model's.
 
-Oracle: photo ``001_A_base`` of the saved Pyomo run, the whole multiperiod state at entry
-of the first ``PeriodPreparer.prepare``. ``calibrate_base`` runs the settle on the model
-``build_block_model`` just built, and its first ``prepare`` is that call: nothing touches
-the state between the reflection (plus the Fisher rows) and the photo except
-``solve_multiperiod`` stamping ``_residual_region`` / ``_gtap_mode`` (attributes, not
-cells).
+Oracle: photo ``001_A_base`` of the saved Pyomo run (frozen), the whole multiperiod state
+at entry of the first period prepare. ``calibrate_base`` runs the settle on the model
+``build_block_model`` just built, and its first prepare is that call: nothing touched
+the state between the reflection (plus the Fisher rows) and the photo except the old
+driver stamping ``_residual_region`` / ``_gtap_mode`` (attributes, not cells).
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ import pytest
 
 from tests.family._data import load_params
 from tests.family._prep import capture_dir
-from tests.family.test_prep_recipe import _params
+from tests.family.test_sp_arrays import _params
 from tests.family.test_squared_system import _route_closure
 
 RTOL = 1e-9
@@ -189,7 +188,7 @@ def test_build_refuses_overwrite_hooks(case, monkeypatch):
 
 
 def test_sp_reference_from_composed_state_is_bitwise_todays(case):
-    from equilibria.family.prep_recipe import sp_reference_arrays
+    from equilibria.family.sp_arrays import sp_reference_arrays
 
     p, closure, rr = case["params"], case["closure"], case["rr"]
     want = sp_reference_arrays(p, closure, rr)

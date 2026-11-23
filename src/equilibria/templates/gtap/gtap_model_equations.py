@@ -1111,7 +1111,7 @@ class GTAPModelEquations:
         }
         # mutable=True: GAMS's iterloop.gms recalibrates and(r,a,t)/ava(r,a,t) EVERY
         # period from that period's OWN solved nd.l/va.l/xp.l (not the benchmark) —
-        # gtap_multiperiod_driver._recalibrate_and_ava replicates this between
+        # pyomo_ops.recalibrate_and_ava replicates this between
         # periods. Needs mutable=True to support that in-place update.
         create_indexed_param(
             "and_param", ["r", "a"], adjusted_and_param, 0.0, mutable=True

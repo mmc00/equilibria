@@ -4,9 +4,9 @@ Vocabulary lives in `docs/glossary.md`, not here.
 
 ## Dangerous files
 
-- `src/equilibria/templates/gtap/gtap_multiperiod_driver.py`: orchestrates the
-  three periods; the shock phase decides which rows are live and which values
-  are patched after the solve.
+- `src/equilibria/templates/gtap/steps.py` and `recipe.py`: the steps of each
+  period and their order; the shock steps decide which rows are live and which
+  values are patched after the solve.
 - `src/equilibria/templates/gtap/instruments.py`: which rows read each
   instrument; a wrong entry lets a shock be lost with code=1.
 

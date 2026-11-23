@@ -26,13 +26,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 from tests._printed import GOLDEN, mismatches
-from tests.scripts.test_no_old_driver_in_scripts import OLD
+from tests.test_no_old_driver_names import OLD
 
 ROOT = Path(__file__).resolve().parents[2]
 NB_DIR = ROOT / "examples" / "notebooks" / "gtap7" / "burfisher"
@@ -96,11 +97,13 @@ def test_notebooks_are_what_the_generator_writes(tmp_path: Path) -> None:
 
 def test_notebooks_use_only_the_core_driver() -> None:
     """Code and markdown: no notebook builds, shocks or solves with the old driver."""
-    old = (*OLD, "build_block_model", "apply_shock")
     for nb in sorted(NB_DIR.glob("*.ipynb")):
         text = nb.read_text(encoding="utf-8")
         assert "Exercise(" in text, nb.name
-        assert not [n for n in old if n in text], nb.name
+        assert not [n for n in OLD if re.search(n, text)], nb.name
+        assert not [n for n in ("build_block_model", "apply_shock") if n in text], (
+            nb.name
+        )
 
 
 def test_notebooks_name_the_prm_files_as_they_are() -> None:

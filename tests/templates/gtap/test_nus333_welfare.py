@@ -48,7 +48,7 @@ def solved(request) -> tuple[str, Any]:
     from equilibria._local_refs import nus333_dir, path_capi_src
 
     sys.path.insert(0, str(path_capi_src()))
-    m, _, codes = rb.solve_exercise(exp, nus333_dir(), route=route)
+    m, _, codes = rb.solve_exercise(exp, nus333_dir())
     assert codes == {"base": 1, "check": 1, "shock": 1}, codes
     return exp, m
 

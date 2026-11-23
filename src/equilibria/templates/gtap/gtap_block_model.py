@@ -5,7 +5,7 @@ units onto a single ``equilibria.model.Model``, translates that to Pyomo via the
 repaired ``PyomoBackend``, applies the monolith's benchmark scaling (so the
 warm-start point matches GAMS ``cal.gms``), and hands the result to the EXISTING
 multi-period + PATH/IPOPT solve stack (``GTAPMultiPeriodModel`` /
-``solve_multiperiod``) unchanged.
+the core driver) unchanged.
 
 Design (mirrors the monolith's ``build_model`` ordering, gtap_model_equations.py:434):
 
@@ -27,7 +27,7 @@ sobrescribe; antes habia que hacerle monkey-patch a
 :class:`GTAPBlockMultiPeriodModel` subclasses ``GTAPMultiPeriodModel`` and swaps the
 single-period model source to the block-composed SP model by overriding
 ``_build_sp()``, so ``build_vars`` / ``build_equations_intra`` /
-``build_equations_fisher`` / ``seed_all_periods`` and the whole ``solve_multiperiod``
+``build_equations_fisher`` / ``seed_all_periods`` and the whole solve
 path are reused verbatim.
 
 FIDELITY: the monolith ``gtap_model_equations.py`` stays the parity ORACLE and is
@@ -695,7 +695,7 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
     into the multi-period structure is the block-composed one
     (:func:`build_block_single_period`) rather than
     ``GTAPModelEquations().build_model()``. All downstream machinery (var reflection,
-    constraint substitution, Fisher rows, seeding, and the ``solve_multiperiod``
+    constraint substitution, Fisher rows, seeding, and the
     driver) is inherited unchanged — the block SP model is form-identical to the
     monolith SP (Task 4), so the reflection produces an identical multi-period model.
     """
@@ -799,8 +799,8 @@ class GTAPBlockMultiPeriodModel(GTAPMultiPeriodModel):
         # no copia el .fixed. Se fijan aca, en los 3 periodos, en su valor de
         # benchmark, para que TODO camino de construccion (build_block_model o los
         # gates, que arman el modelo paso a paso) los tenga fijos y registrados. Si
-        # quedaran libres, _replicate_sp_fixing los fijaria con el valor del SP del
-        # shock y el arancel +10% entraria vivo en todas las ecuaciones.
+        # were left free, replicate_reference would fix them at the shock SP's value
+        # and the +10% tariff would enter every equation live.
         m._endogenous_instrument_cells = dict(
             getattr(sp_model, "_endogenous_instrument_cells", {}) or {}
         )

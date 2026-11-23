@@ -1,4 +1,4 @@
-"""The solve freezes the permanent object graph, and always releases it.
+"""A GTAP run freezes the permanent object graph, and always releases it.
 
 Why this matters: the GC's full passes walk the whole built model (56.2M
 tracked objects on gtap7_20x41) even though that graph never holds garbage.
@@ -13,7 +13,19 @@ import gc
 
 import pytest
 
-from equilibria.templates.gtap import gtap_multiperiod_driver as driver
+from equilibria.solver import gc_tuning
+
+
+def _solve(seen: dict, key: str, read, *, boom: bool = False) -> dict:
+    """A run of the core (``GTAP.run_scope``, the GC setup over base, check and
+    shock) whose body records ``read()`` under ``key``."""
+    from equilibria.templates.gtap.template import GTAP
+
+    with GTAP(None, None).run_scope():
+        seen[key] = read()
+        if boom:
+            raise RuntimeError("solve exploded")
+    return {"base": {"code": 1}}
 
 
 @pytest.fixture
@@ -24,7 +36,7 @@ def _no_frozen_state():
     (measured: 375 after a plain gc.collect() under pytest). Every assertion
     below therefore compares against a baseline captured here, never against 0.
     An earlier version of this file asserted `get_freeze_count() > 0` and
-    PASSED with gc.freeze() deleted from the driver, because pytest's own
+    PASSED with gc.freeze() deleted from the solve, because pytest's own
     frozen objects satisfied it.
     """
     gc.unfreeze()
@@ -36,37 +48,19 @@ def _no_frozen_state():
 @pytest.fixture
 def spy_inner_threshold(monkeypatch):
     """Records the gen-0 threshold as seen from INSIDE the solve."""
-    seen = {}
-
-    def _fake(m, params, closure, **kw):
-        seen["thr"] = gc.get_threshold()
-        if kw.get("mode") == "boom":
-            raise RuntimeError("solve exploded")
-        return {"base": {"code": 1}}
-
-    monkeypatch.setattr(driver, "_solve_multiperiod_inner", _fake)
-    return seen
+    return {}
 
 
 @pytest.fixture
 def spy_inner(monkeypatch):
     """Replace the solve body with a spy that records the freeze count."""
-    seen = {}
-
-    def _fake(m, params, closure, **kw):
-        seen["frozen"] = gc.get_freeze_count()
-        if kw.get("mode") == "boom":
-            raise RuntimeError("solve exploded")
-        return {"base": {"code": 1}}
-
-    monkeypatch.setattr(driver, "_solve_multiperiod_inner", _fake)
-    return seen
+    return {}
 
 
 def test_freezes_the_graph_during_the_solve(spy_inner, _no_frozen_state):
     _junk = [[i] for i in range(10_000)]
     baseline = gc.get_freeze_count()
-    result = driver.solve_multiperiod(None, None, None)
+    result = _solve(spy_inner, "frozen", gc.get_freeze_count)
     # The 10k objects above must have been added to the frozen set.
     assert spy_inner["frozen"] >= baseline + 10_000, (
         f"the permanent graph was not frozen: {spy_inner['frozen']} vs "
@@ -78,7 +72,7 @@ def test_freezes_the_graph_during_the_solve(spy_inner, _no_frozen_state):
 
 def test_unfreezes_on_normal_return(spy_inner, _no_frozen_state):
     _junk = [[i] for i in range(10_000)]
-    driver.solve_multiperiod(None, None, None)
+    _solve(spy_inner, "frozen", gc.get_freeze_count)
     assert gc.get_freeze_count() == 0, "the frozen set outlived the solve"
     assert _junk
 
@@ -91,7 +85,7 @@ def test_unfreezes_when_the_solve_raises(spy_inner, _no_frozen_state):
     """
     _junk = [[i] for i in range(10_000)]
     with pytest.raises(RuntimeError, match="solve exploded"):
-        driver.solve_multiperiod(None, None, None, mode="boom")
+        _solve(spy_inner, "frozen", gc.get_freeze_count, boom=True)
     assert gc.get_freeze_count() == 0, "a failed solve leaked the frozen set"
     assert _junk
 
@@ -100,48 +94,9 @@ def test_env_var_disables_the_freeze(spy_inner, monkeypatch, _no_frozen_state):
     monkeypatch.setenv("EQUILIBRIA_GTAP_GC_FREEZE", "0")
     _junk = [[i] for i in range(10_000)]
     baseline = gc.get_freeze_count()
-    driver.solve_multiperiod(None, None, None)
+    _solve(spy_inner, "frozen", gc.get_freeze_count)
     assert spy_inner["frozen"] == baseline, "freeze ran despite being switched off"
     assert _junk
-
-
-def test_wrapper_forwards_every_argument(monkeypatch, _no_frozen_state):
-    """A dropped kwarg here would silently change the SOLVE, not just its speed."""
-    got = {}
-
-    def _fake(m, params, closure, **kw):
-        got.update(kw)
-        got["positional"] = (m, params, closure)
-        return {}
-
-    monkeypatch.setattr(driver, "_solve_multiperiod_inner", _fake)
-    driver.solve_multiperiod(
-        "MODEL",
-        "PARAMS",
-        "CLOSURE",
-        ref_gdx="g.gdx",
-        skip_base_solve=True,
-        mute_welfare=False,
-        seed_from_prior=True,
-        mode="gtap",
-        solve_check=True,
-        settle_only=True,
-        shock_steps=(0.5, 1.0),
-        shock_method="johansen",
-    )
-    assert got["positional"] == ("MODEL", "PARAMS", "CLOSURE")
-    assert got == {
-        "positional": ("MODEL", "PARAMS", "CLOSURE"),
-        "ref_gdx": "g.gdx",
-        "skip_base_solve": True,
-        "mute_welfare": False,
-        "seed_from_prior": True,
-        "mode": "gtap",
-        "solve_check": True,
-        "settle_only": True,
-        "shock_steps": (0.5, 1.0),
-        "shock_method": "johansen",
-    }
 
 
 def test_cyclic_garbage_is_still_collected_while_frozen(_no_frozen_state):
@@ -179,15 +134,15 @@ def _restore_threshold():
 
 
 def test_threshold_is_raised_during_the_solve(spy_inner_threshold, _restore_threshold):
-    driver.solve_multiperiod(None, None, None)
-    assert spy_inner_threshold["thr"][0] == driver._GC_THRESHOLD0
+    _solve(spy_inner_threshold, "thr", gc.get_threshold)
+    assert spy_inner_threshold["thr"][0] == gc_tuning._GC_THRESHOLD0
 
 
 def test_threshold_is_restored_on_normal_return(
     spy_inner_threshold, _restore_threshold
 ):
     before = gc.get_threshold()
-    driver.solve_multiperiod(None, None, None)
+    _solve(spy_inner_threshold, "thr", gc.get_threshold)
     assert gc.get_threshold() == before
 
 
@@ -197,7 +152,7 @@ def test_threshold_is_restored_when_the_solve_raises(
     """Leaving it raised would silently change the GC of everything after us."""
     before = gc.get_threshold()
     with pytest.raises(RuntimeError, match="solve exploded"):
-        driver.solve_multiperiod(None, None, None, mode="boom")
+        _solve(spy_inner_threshold, "thr", gc.get_threshold, boom=True)
     assert gc.get_threshold() == before
 
 
@@ -205,7 +160,7 @@ def test_only_gen0_threshold_moves(spy_inner_threshold, _restore_threshold):
     """gen-1/gen-2 multipliers are CPython's; this lever has no measurement
     behind changing them, so it must not."""
     before = gc.get_threshold()
-    driver.solve_multiperiod(None, None, None)
+    _solve(spy_inner_threshold, "thr", gc.get_threshold)
     assert spy_inner_threshold["thr"][1:] == before[1:]
 
 
@@ -226,6 +181,6 @@ def test_env_var_controls_the_threshold(
     else:
         monkeypatch.setenv("EQUILIBRIA_GTAP_GC_THRESHOLD", env)
     default = gc.get_threshold()[0]
-    driver.solve_multiperiod(None, None, None)
+    _solve(spy_inner_threshold, "thr", gc.get_threshold)
     got = spy_inner_threshold["thr"][0]
     assert got == (default if expected is None else expected)

@@ -8,7 +8,7 @@ inlinea esas sumas y no los declara.
 La maquinaria MULTIPERIODO ya los borra —gtap_model_multiperiod
 build_equations_fisher, 733-758, con el diagnostico completo escrito ahi— y
 por eso el modelo multiperiodo de bloques esta bien.  Pero el driver pide un
-SP (`_build_sp_reference`), que nunca pasa por ese borrado.
+SP (`sp_reference.build_sp_reference`), que nunca pasa por ese borrado.
 
 Por que importa: el driver solo le lee `.fixed`/`lb`/`ub`, pero esas 33 filas
 sobredeterminan el sistema, `_closure_patches.py:439` lo cuadra desactivando
@@ -46,7 +46,7 @@ _DUP_VARS = ("mfr_bs", "mfr_sb", "mfr_ss", "mfw_bs", "mfw_sb", "mfw_ss")
 def test_sp_reference_has_no_duplicate_fisher_aggregates(dataset, if_sub, monkeypatch):
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_multiperiod_driver import _build_sp_reference
+    from equilibria.templates.gtap.sp_reference import build_sp_reference
 
     d = dataset_dir(dataset)
     p = GTAPParameters()
@@ -73,7 +73,7 @@ def test_sp_reference_has_no_duplicate_fisher_aggregates(dataset, if_sub, monkey
     # creia pedir (medido: con "BASURA_XYZ" pasaba igual).  Ahora el valor se
     # valida y "blocks" significa bloques, asi que la intencion queda expresada.
     monkeypatch.setenv("EQUILIBRIA_GTAP_REF_MODEL", "blocks")
-    sp = _build_sp_reference(p.sets, p, gc, rr)
+    sp = build_sp_reference(p.sets, p, gc, rr)
 
     sobran = [n for n in _DUP_EQS if getattr(sp, n, None) is not None]
     assert not sobran, (

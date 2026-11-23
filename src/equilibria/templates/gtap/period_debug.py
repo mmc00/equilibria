@@ -53,8 +53,8 @@ def _walras_as_objective(m, period: str, attr: str):
         wvd = walras[period]
     except Exception:
         wvd = walras
-    # _mute_welfare_tail (gtap) FIJA walras=0; como objetivo debe quedar libre o
-    # el objetivo es una constante sin gradiente.
+    # steps.mute_welfare (gtap) FIXES walras=0; as the objective it must be free, or
+    # the objective is a constant with no gradient.
     if wvd.fixed:
         wvd.unfix()
     setattr(m, attr, Objective(expr=wvd, sense=maximize))

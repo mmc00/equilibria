@@ -58,7 +58,7 @@ def test_una_corrida_construye_cada_modelo_lo_justo(monkeypatch):
     from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
 
     import equilibria.templates.gtap.gtap_block_model as gbm
-    import equilibria.templates.gtap.gtap_multiperiod_driver as drv
+    import equilibria.templates.gtap.sp_reference as spr
 
     # Con el seed cache, la calibracion no corre y el conteo no mide nada.
     monkeypatch.setenv("EQUILIBRIA_SEED_CACHE_DISABLE", "1")
@@ -71,7 +71,7 @@ def test_una_corrida_construye_cada_modelo_lo_justo(monkeypatch):
         cuenta,
         "multiperiodo",
     )
-    _contar(monkeypatch, drv, "_build_sp_reference", cuenta, "referencia")
+    _contar(monkeypatch, spr, "build_sp_reference", cuenta, "referencia")
     _contar(monkeypatch, gbm, "build_block_single_period", cuenta, "sp")
 
     _, code = _quieto(_solve_shock, "gtap7_3x3", 1, "capFix", solve_nlp=True)

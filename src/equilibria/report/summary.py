@@ -124,7 +124,7 @@ def summary(
 ) -> SolveSummary:
     """Print the end-of-solve panel for ``period`` and return its numbers.
 
-    ``results`` is what ``solve_multiperiod`` returns (its ``code`` for the
+    ``results`` is what the run returns (its ``code`` for the
     period goes in the header). ``period=None`` takes every active equation,
     for models without periods. Equations whose value cannot be evaluated are
     counted in ``unevaluated``, not dropped silently.

@@ -1,17 +1,18 @@
 """Closure, squaring and matching on arrays give the system Pyomo hands to the solver.
 
 Oracle: photo B, the squared system right before PyomoNLP is built (active rows, free
-columns in paired order, every cell of the active period). The input is the recipe's
-output on photo A (Task 3), so the two ports are checked end to end.
+columns in paired order, every cell of the active period). The input is the core's
+prepare of photo A's period (``core_prep``), so the core and the squaring are checked
+end to end.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from tests.family._data import load_params
-from tests.family._prep import capture_dir, recording
-from tests.family.test_prep_recipe import ROUTE, _closure, _params
+from tests.family._core import core_prep
+from tests.family._prep import capture_dir, core_template
+from tests.family.test_sp_arrays import _closure, _params
 
 
 class _DS(str):
@@ -48,7 +49,7 @@ def _closure_of(ds):
 @pytest.fixture(scope="module", params=DATASETS, ids=_ids)
 def case(request):
     from equilibria.family.prep_capture import pairs
-    from equilibria.family.prep_recipe import sp_reference_arrays
+    from equilibria.family.sp_arrays import sp_reference_arrays
 
     ds = request.param
     p = _params(ds)
@@ -66,19 +67,12 @@ def _masks(p, calls):
 
 
 def _recipe(a, p, ref, ds):
+    """Photo A's period prepared by the core's steps (``p``, ``ref``: the case's,
+    the core reads its own)."""
     from equilibria.family.mp_arrays import MPArrays
-    from equilibria.family.prep_recipe import run_recipe
 
-    return run_recipe(
-        MPArrays.from_photo(a),
-        a.period,
-        params=p,
-        closure=_closure_of(ds),
-        sp_ref=ref,
-        mode="gtap",
-        backend=recording(ds, ifsub=getattr(ds, "ifsub", 1)),
-        **ROUTE,
-    )
+    built = core_template(str(ds), ifsub=getattr(ds, "ifsub", 1))
+    return core_prep(built, MPArrays.from_photo(a), a.period)
 
 
 def _square(mp, a, p, b, ref, masks, ds):

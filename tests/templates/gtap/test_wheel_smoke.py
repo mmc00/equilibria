@@ -3,7 +3,7 @@
 # Contrato de distribucion: lo que se publica en PyPI tiene que RESOLVER, no
 # solo importar.
 #
-# Historia: `gtap_multiperiod_driver` cargaba el solver PATH por ruta desde
+# Historia: el driver viejo de GTAP cargaba el solver PATH por ruta desde
 # `scripts/`, que no viaja en el wheel — instalado con pip reventaba con
 # FileNotFoundError en la primera linea del solve (#72). Ningun test lo vio
 # porque todos corren desde el checkout, donde `scripts/` SIEMPRE existe.
@@ -43,11 +43,11 @@ def test_solver_ships_inside_the_package():
     assert pathlib.Path(patches.__file__).resolve().is_relative_to(pkg_root)
 
 
-def test_driver_loads_the_packaged_solver():
-    """`_load_run_gtap()` resuelve al modulo del paquete, no a scripts/run_gtap.py."""
-    from equilibria.templates.gtap import gtap_multiperiod_driver as driver
+def test_path_solver_loads_the_packaged_module():
+    """El solver PATH del core resuelve al modulo del paquete, no a scripts/run_gtap.py."""
+    from equilibria.solver import path_gtap
 
-    assert driver._load_run_gtap().__name__ == "equilibria.solver.path_capi"
+    assert path_gtap._load_path_capi().__name__ == "equilibria.solver.path_capi"
 
 
 def test_pynumero_imports_with_declared_deps_only():
@@ -68,9 +68,9 @@ def test_pynumero_imports_with_declared_deps_only():
 def test_full_multiperiod_solve_end_to_end(monkeypatch):
     """Solve completo 3x3 base->check->shock, medido en las filas Fisher de `m`.
 
-    Mismo criterio que test_multiperiod_driver: el "code" del solver NO es el
-    contrato — lo es que las ecuaciones evaluen sobre `m`. Exige
-    reverse_numeric por lo mismo que aquel (ASL aborta bajo ifSUB).
+    Same criterion as the old multiperiod driver test: the solver's "code" is NOT
+    the contract, the equations evaluating on `m` is. It needs reverse_numeric for
+    the same reason (ASL aborts under ifSUB).
     """
     monkeypatch.setenv("EQUILIBRIA_GTAP_JAC_MODE", "reverse_numeric")
 
@@ -90,7 +90,7 @@ def test_full_multiperiod_solve_end_to_end(monkeypatch):
     res = ex.run()
     m = ex.model.pyomo  # type: ignore[union-attr]
     assert set(res) == {"base", "check", "shock"}
-    # the old call solved the base too (solve_multiperiod's skip_base_solve=False)
+    # the base is solved too (solve_base=True), as the old call solved it
     assert res["base"]["code"] == "optimal", res["base"]
 
     tol = 5e-2

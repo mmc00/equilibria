@@ -1,4 +1,4 @@
-"""The core route prepares every GTAP period as ``solve_multiperiod`` does.
+"""The core route prepares every GTAP period as the old multiperiod driver did.
 
 Each case of ``_period_snapshot.CASES`` runs through ``Exercise(GTAP, gtap_static)``
 with a fake solver that photographs the model, and the photos must equal the ones
@@ -21,7 +21,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.mark.parametrize("case", sorted(snap.CASES))
 def test_exercise_prepares_like_the_driver(case: str, monkeypatch) -> None:
-    got = snap.take(case, monkeypatch, route="exercise")
+    got = snap.take(case, monkeypatch)
     data = snap.load_fixture()
     assert case in data, f"no saved photo for {case}"
     problems = snap.diff(data[case], got)

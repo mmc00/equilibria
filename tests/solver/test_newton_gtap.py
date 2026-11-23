@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 from tests.family._data import load_params
 from tests.family._prep import _newton_mumps
-from tests.family.test_prep_recipe import _params
+from tests.family.test_sp_arrays import _params
 from tests.family.test_squared_system import _route_closure
 
 DS = "gtap7_3x3"
@@ -24,17 +24,29 @@ def env(monkeypatch):
 
 
 def _check_ready(tmp_path):
-    """The run and the arrays the old route hands its check solve (base not solved,
-    check recipe applied)."""
-    from equilibria.family import driver as fd
+    """The run and the arrays the core hands the check solve: the base flown, then
+    the check's steps without its solve."""
+    import dataclasses
 
-    p = _params(DS)
-    run, mp = fd.prepare_run(
-        p, _route_closure(), list(p.sets.r)[-1], cache_root=tmp_path, jax_cache=False
+    from equilibria.core.driver import fly_period
+    from equilibria.templates.gtap.recipe import gtap_static
+    from equilibria.templates.gtap.template import GTAP
+
+    t = GTAP(
+        _params(DS),
+        _route_closure(),
+        backend="family",
+        cache_root=tmp_path,
+        jax_cache=False,
     )
-    mp, _ = fd._solve_period(run, mp, "base", base_calibrated=False, solve_check=True)
-    mp1 = fd._period_recipe(run, mp, "check", base_calibrated=False, solve_check=True)
-    return run, mp1
+    recipe = gtap_static(base_calibrated=False, solve_check=True)
+    model = t.build(recipe.names)
+    fly_period(model, recipe, "base", template=t)
+    check = next(p for p in recipe.periods if p.name == "check")
+    plans = dict(recipe.plans)
+    plans[check.kind] = dataclasses.replace(plans[check.kind], solver=None, after=())
+    fly_period(model, dataclasses.replace(recipe, plans=plans), "check", template=t)
+    return t._family_run, model.mp
 
 
 def _model(run, mp):
@@ -55,8 +67,8 @@ def _same_arrays(a, b) -> None:
         assert np.array_equal(r.active, b.rows[name].active), name
 
 
-def test_solves_the_check_like_solve_period(env, tmp_path) -> None:
-    from equilibria.family import driver as fd
+def test_solves_the_check_like_the_family_newton(env, tmp_path) -> None:
+    from equilibria.family import period_newton as fd
     from equilibria.family.post_solve import writeback
     from equilibria.solver.newton_gtap import newton_tr
 

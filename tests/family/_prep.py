@@ -19,12 +19,9 @@ def _newton_mumps() -> dict:
 
 
 def _closure_tag(ifsub: int, savf: str, mode: str) -> str:
-    path = ROOT / "scripts" / "family" / "capture_prep.py"
-    spec = importlib.util.spec_from_file_location("capture_prep", path)
-    assert spec is not None and spec.loader is not None
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod.closure_tag(ifsub, savf, mode)
+    from equilibria.family.photos import closure_tag
+
+    return closure_tag(ifsub, savf, mode)
 
 
 def reference_dir(
@@ -63,8 +60,7 @@ def capture_dir(
         return ref
     raise photos.PhotoError(
         f"{dataset} ifsub={ifsub} {savf}: no committed photo and no saved reference "
-        f"at {ref}; add the variant to photos.VARIANTS and run {photos.REGEN} "
-        f"--dataset {dataset}"
+        f"at {ref}; {photos.FROZEN}"
     )
 
 
@@ -73,25 +69,48 @@ def recording(dataset: str = "gtap7_3x3", ifsub: int = 1):
     """The single-period recording of the route (``FamilyBackend``) the shock recipe asks
     which instrument cells a live row reads: from the family disk cache, 3x3 in a temp
     dir removed at exit."""
+    from equilibria.family.disk_cache import load_or_build
+    from tests.family.test_sp_arrays import _params
+
+    p = _params(dataset)
+    backend, _ = load_or_build(
+        p, _route_closure_at(ifsub), list(p.sets.r)[-1], _records_root(dataset)
+    )
+    return backend
+
+
+@cache
+def core_template(dataset: str = "gtap7_3x3", ifsub: int = 1):
+    """The route's built family ``GTAP`` and its arrays
+    (``tests.family._core.family_template``), whose run ``core_prep`` prepares a
+    photo's period with; records as ``recording``."""
+    from tests.family._core import family_template
+    from tests.family.test_sp_arrays import _params
+
+    p = _params(dataset)
+    return family_template(
+        p, _route_closure_at(ifsub), list(p.sets.r)[-1], _records_root(dataset)
+    )
+
+
+def _route_closure_at(ifsub: int):
+    from tests.family.test_sp_arrays import _route_closure
+
+    return _route_closure().model_copy(update={"if_sub": bool(ifsub)})
+
+
+@cache
+def _records_root(dataset: str) -> Path:
+    """The family disk cache; 3x3 in a temp dir removed at exit."""
     import atexit
     import shutil
     import tempfile
 
-    from equilibria.family.disk_cache import load_or_build
-    from tests.family.test_prep_recipe import _params
-    from tests.family.test_squared_system import _route_closure
-
-    p = _params(dataset)
-    if dataset == "gtap7_3x3":
-        root = Path(tempfile.mkdtemp(prefix="records_3x3_"))
-        atexit.register(shutil.rmtree, root, True)
-    else:
-        root = Path.home() / ".cache" / "equilibria" / "family"
-    closure = _route_closure()
-    if ifsub == 0:
-        closure = closure.model_copy(update={"if_sub": False})
-    backend, _ = load_or_build(p, closure, list(p.sets.r)[-1], root)
-    return backend
+    if dataset != "gtap7_3x3":
+        return Path.home() / ".cache" / "equilibria" / "family"
+    root = Path(tempfile.mkdtemp(prefix="records_3x3_"))
+    atexit.register(shutil.rmtree, root, True)
+    return root
 
 
 @cache

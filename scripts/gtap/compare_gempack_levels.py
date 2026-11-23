@@ -209,13 +209,9 @@ def dataset_xscale(dataset: str, va_subsidy_basis: str = "gempack") -> dict:
     return dict(xscale_data(p, p.sets))
 
 
-def solve(
-    dataset: str, closure: str, solver: str, route: str = "exercise"
-) -> tuple[dict, dict]:
-    """Resuelve equilibria (base -> check -> shock, tm uniforme 10) con el cierre del
-    fixture de GEMPACK y devuelve (levels, xscale). ``route``: "exercise"
-    (the core driver) or "driver" (the old Pyomo driver, until PR 4 of
-    gtap-on-core deletes it)."""
+def solve(dataset: str, closure: str, solver: str) -> tuple[dict, dict]:
+    """Solve equilibria (base -> check -> shock, uniform tm 10, on the core) with the
+    GEMPACK fixture's closure and return (levels, xscale)."""
     import os
     import sys
 
@@ -227,9 +223,7 @@ def solve(
     sys.path.insert(0, str(ROOT))
     from tests.templates.gtap.test_gtap7_gempack_parity import _solve_shock
 
-    m, code = _solve_shock(
-        dataset, 0, closure, solve_nlp=solver in ("newton", "ipopt"), route=route
-    )
+    m, code = _solve_shock(dataset, 0, closure, solve_nlp=solver in ("newton", "ipopt"))
     if code != 1:
         raise SystemExit(f"{dataset}: el solve termino con code={code}")
     return model_levels(m), dataset_xscale(dataset)

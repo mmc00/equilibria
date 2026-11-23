@@ -4,9 +4,10 @@ GAMS sets and/ava, gx/ax and the alphaa shares in cal.gms ("Calibration of
 parameters"), included before the tsim loop; iterloop.gms does not touch them,
 and the reference GDXs hold them identical in base, check and shock. Python used
 to rebuild their rows every period from the previous period's solved levels
-(the ``_recalibrate_*`` of the driver). Step 0 of the driver recipe deletes each
-rebuild only when no cell of the altertax gates leaves the gates' tolerance
-(``scripts/gtap/measure_altertax_cells.py``); ``_recalibrate_and_ava`` stays.
+(the ``_recalibrate_*`` of the old driver). Step 0 of the driver recipe deleted each
+rebuild only when no cell of the altertax gates left the gates' tolerance
+(``scripts/gtap/measure_altertax_cells.py``); ``recalibrate_and_ava`` stays
+(``pyomo_ops.recalibrate_and_ava``, run by the ``recalibrate_shares`` step).
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ HELD = [
 @pytest.mark.parametrize("prefix", HELD)
 @pytest.mark.parametrize("case", ["altertax_ifsub0", "altertax_ifsub1"])
 def test_altertax_does_not_rebuild(case, prefix, monkeypatch):
-    shots = snap.take(case, monkeypatch, route="exercise")
+    shots = snap.take(case, monkeypatch)
 
     rebuilt = sorted(
         {

@@ -225,8 +225,8 @@ def test_updated_replicates_with_default_prm(solved, tmp_path, monkeypatch):
     from equilibria.family.altertax.compare import load_compare_script
     from equilibria.family.altertax.levels import family_levels
     from equilibria.family.altertax.run import apply_unit_stand_in
-    from equilibria.family.driver import solve_gtap_family
     from equilibria.templates.gtap import GTAPParameters
+    from tests.family._core import family_exercise
 
     out, p = solved
     assert p.returncode == 0, p.stderr[-2000:]
@@ -241,20 +241,20 @@ def test_updated_replicates_with_default_prm(solved, tmp_path, monkeypatch):
         baserate_path=d / "baserate.har",
     )
     apply_unit_stand_in(params)  # the 1.01 stand-in of the route, recalibrated
-    res = solve_gtap_family(
+    model, res = family_exercise(
         params,
         altertax_closure(),
         ALTAX_RESIDUAL_REGION,
-        # the driver refuses an exactly-zero shock (it would apply its default +10 %
-        # tariff), so the shock is a negligible 1e-6 % one: only the check period is read
+        # an exactly-zero shock would leave the recipe its default +10 % tariff, so the
+        # shock is a negligible 1e-6 % one: only the check period is read
         shock={"prdtx_rai": {("USA", "AGR", "AGR"): 1e-6}},
         cache_root=tmp_path / "c",
     )
-    assert {k: int(res.results[k]["code"]) for k in ("check", "shock")} == {
-        "check": 1,
-        "shock": 1,
+    assert {k: res[k]["code"] for k in ("check", "shock")} == {
+        "check": "optimal",
+        "shock": "optimal",
     }
-    lv = family_levels(res.mp, load_compare_script().EQ_VARS)
+    lv = family_levels(model.mp, load_compare_script().EQ_VARS)
     bad, n = [], 0
     for name, cells in lv.items():
         for key, chk in cells.items():

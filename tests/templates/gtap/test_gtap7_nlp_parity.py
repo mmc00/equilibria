@@ -163,12 +163,8 @@ def _solve_and_measure(
     # El gate mide el modelo de BLOQUES (la implementacion viva) contra GAMS.
     # El monolito ya no se ejercita aqui: queda como referencia manual, ver
     # docs/notes/architecture/monolith_vs_blocks.md.
-    from equilibria.templates.gtap.gtap_block_model import (
-        GTAPBlockMultiPeriodModel,
-    )
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
     from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     d = dataset_dir(dataset)
     p = GTAPParameters()

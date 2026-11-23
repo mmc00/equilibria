@@ -3,7 +3,7 @@
 This is the Task 2 fidelity gate.  It builds the pure-gtap (NON-altertax)
 multi-period model, seeds it from the recorded GAMS MCP reference
 (data/gtap7/<ds>/gams_mcp_gtap_ifsub{0,1}_fbep-header/out.gdx — solved Variables
-with the base/check/shock t-axis), solves base->check->shock via solve_multiperiod in gtap-mode, and
+with the base/check/shock t-axis), solves base->check->shock on the core in gtap-mode, and
 asserts:
   1. all 3 periods converge (termination code == 1), and
   2. the SHOCK-period real-cell match vs the GAMS GDX is >= a MEASURED floor.
@@ -155,9 +155,6 @@ def _solve_and_match(
     from pyomo.environ import value as V
 
     from equilibria.templates.gtap import GTAPParameters
-    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
-    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
 
     ref = _reference_gdx(dataset, if_sub)
     d = dataset_dir(dataset)

@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 from tests.templates.gtap import _period_snapshot as snap
-from tests.templates.gtap._routes import KNOWN_ROUTES, ROUTES, core_codes, solve
+from tests.templates.gtap._routes import ROUTES, core_codes, solve
 
 from equilibria.sources import dataset_dir
 
@@ -78,10 +78,8 @@ def _diff(a: dict, b: dict) -> list:
 
 
 def test_routes() -> None:
-    """The gates run on the core only (PR 3a); the old route stays callable for
-    the old-vs-core equality tests until PR 4 deletes the old drivers."""
+    """The gates run on the core only (the old drivers are gone, PR 4)."""
     assert ROUTES == ("core",)
-    assert KNOWN_ROUTES == ("old", "core")
 
 
 @needs_3x3
@@ -98,9 +96,9 @@ def test_edit_model_runs_on_the_built_model_before_the_recipe() -> None:
     assert seen[0][1] == pytest.approx(1.0)
 
 
-def test_edit_model_is_core_only() -> None:
+def test_edit_model_is_pyomo_only() -> None:
     with pytest.raises(ValueError, match="edit_model"):
-        solve("old", None, None, "ROW", edit_model=lambda m: None)
+        solve("core", None, None, "ROW", backend="family", edit_model=lambda m: None)
 
 
 def test_core_codes_maps_every_status() -> None:
@@ -121,37 +119,16 @@ def test_unknown_route_raises() -> None:
 
 
 @needs_3x3
-def test_both_routes_give_the_same_cells_3x3() -> None:
-    old, core = _case("old"), _case("core")
-    assert (old.route, core.route) == ("old", "core")
-    assert old.codes == core.codes == {"base": 1, "check": 1, "shock": 1}
-    bad = _diff(_levels(old.model), _levels(core.model))
+def test_the_core_gives_the_cells_the_old_driver_gave_3x3() -> None:
+    """Every Var level of the 3x3 run equals the old driver's, recorded on main
+    before PR 4 deleted it (``tests/_old_route_golden.py``)."""
+    from tests._old_route_golden import case, level_mismatches, pyomo_levels
+
+    want = case("routes_3x3")
+    core = _case("core")
+    assert core.codes == want["codes"] == {"base": 1, "check": 1, "shock": 1}
+    bad = level_mismatches(pyomo_levels(core.model), want["levels"])
     assert not bad, f"{len(bad)} cells differ, first: {bad[:10]}"
-
-
-@needs_3x3
-def test_core_route_never_calls_the_old_driver(monkeypatch) -> None:
-    from equilibria.family import driver as fam
-    from equilibria.templates.gtap import gtap_multiperiod_driver as drv
-
-    def boom(*a, **k):
-        raise AssertionError("the old driver was called")
-
-    monkeypatch.setattr(drv, "solve_multiperiod", boom)
-    monkeypatch.setattr(fam, "solve_gtap_family", boom)
-    assert _case("core").codes == {"base": 1, "check": 1, "shock": 1}
-
-
-@needs_3x3
-def test_old_route_never_flies_the_recipe(monkeypatch) -> None:
-    from equilibria.core import driver, exercise
-
-    def boom(*a, **k):
-        raise AssertionError("the core driver was called")
-
-    monkeypatch.setattr(driver, "fly", boom)
-    monkeypatch.setattr(exercise, "fly", boom)
-    assert _case("old").codes == {"base": 1, "check": 1, "shock": 1}
 
 
 @needs_3x3

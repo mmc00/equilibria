@@ -20,7 +20,7 @@ pytest.importorskip("jax")
 pytest.importorskip("pyomo.environ")
 
 from tests.family._data import load_params  # noqa: E402
-from tests.family.test_prep_recipe import _params  # noqa: E402
+from tests.family.test_sp_arrays import _params  # noqa: E402
 from tests.family.test_squared_system import _route_closure  # noqa: E402
 
 DATASETS = ("gtap7_3x3", "gtap7_10x7")

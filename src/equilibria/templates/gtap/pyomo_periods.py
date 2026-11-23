@@ -14,22 +14,21 @@ from typing import Any
 from equilibria.backends.pyomo_periods import PyomoPeriodModel
 from equilibria.templates.gtap.instruments import exogenous_test
 from equilibria.templates.gtap.period_model import Reference, Staged
-
-
-def _drv() -> Any:
-    from equilibria.templates.gtap import gtap_multiperiod_driver
-
-    return gtap_multiperiod_driver
+from equilibria.templates.gtap.pyomo_ops import (
+    mp_index,
+    recalibrate_and_ava,
+    recompute_ifsub_report_vars,
+    solve_welfare_tail,
+)
 
 
 def _as_reference(snap: Any, period: str) -> Reference:
-    d = _drv()
     fixed = {
-        name: {d._mp_index(ix, k, period)[:-1]: v for k, v in cells}
+        name: {mp_index(ix, k, period)[:-1]: v for k, v in cells}
         for name, (ix, cells) in snap.fixed.items()
     }
     bounds = {
-        name: {d._mp_index(ix, k, period)[:-1]: (lb, ub) for k, lb, ub in cells}
+        name: {mp_index(ix, k, period)[:-1]: (lb, ub) for k, lb, ub in cells}
         for name, (ix, cells) in snap.bounds.items()
     }
     return Reference(fixed, bounds)
@@ -104,9 +103,9 @@ class GTAPPyomoPeriodModel(PyomoPeriodModel):
     ) -> Reference:
         prep = self._reference_cache()
         if fresh:
-            snap = prep._build_reference_model(self.pyomo, params, closure)
+            snap = prep.build(self.pyomo, params, closure)
         else:
-            snap = prep._reference_model(self.pyomo, params, closure, period)
+            snap = prep.cached(self.pyomo, params, closure, period)
         return _as_reference(snap, period)
 
     def replicate_reference(
@@ -119,23 +118,18 @@ class GTAPPyomoPeriodModel(PyomoPeriodModel):
         )
 
     def _reference_cache(self) -> Any:
-        """The reference models of this run, cached as ``PeriodPreparer`` caches
-        them (and shared with other runs on the same ``params``)."""
+        """The reference models of this run (``SPReferenceCache``, shared with other
+        runs on the same ``params``)."""
         if self._preparer is None:
-            from equilibria.templates.gtap.period_prep import PeriodPreparer
+            from equilibria.templates.gtap.sp_reference import SPReferenceCache
 
-            self._preparer = PeriodPreparer(
-                mode="gtap",
-                base_closure=None,
-                alt_closure=None,
-                residual_region=self.residual_region,
-            )
+            self._preparer = SPReferenceCache(residual_region=self.residual_region)
         return self._preparer
 
     # ── GTAP operations that are not cell edits ────────────────────────────
 
     def recalibrate_and_ava(self, period: str, prior: str, params: Any) -> int:
-        return _drv()._recalibrate_and_ava(self.pyomo, params, period, prior)
+        return recalibrate_and_ava(self.pyomo, params, period, prior)
 
     def refresh_fisher_aggregates(self) -> None:
         from equilibria.templates.gtap.gtap_model_multiperiod import (
@@ -145,10 +139,10 @@ class GTAPPyomoPeriodModel(PyomoPeriodModel):
         GTAPMultiPeriodModel.refresh_fisher_aggregates(self.pyomo)
 
     def solve_welfare_tail(self, period: str) -> int:
-        return _drv()._solve_welfare_tail(self.pyomo, period)
+        return solve_welfare_tail(self.pyomo, period)
 
     def recompute_ifsub_report_vars(self, period: str, params: Any) -> int:
-        return _drv()._recompute_ifsub_report_vars(self.pyomo, params, period)
+        return recompute_ifsub_report_vars(self.pyomo, params, period)
 
     def write_shock(self, shock: Mapping[str, Mapping[tuple, float]]) -> None:
         from equilibria.templates.gtap.shocks import apply_shock

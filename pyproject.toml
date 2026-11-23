@@ -263,7 +263,7 @@ markers = [
     "slow: marks tests as slow",
     "integration: marks integration tests",
     "gams: marks tests that require local GAMS installation and external solver tools",
-    "pyomo_solve: Pyomo solve case with a family (JAX) twin; out of PR CI, run by scripts/family/regen_photos.py",
+    "pyomo_solve: Pyomo solve case with a family (JAX) twin; out of PR CI, run locally with pytest -m pyomo_solve (its photos are frozen, MAR-218)",
 ]
 
 [tool.coverage.run]

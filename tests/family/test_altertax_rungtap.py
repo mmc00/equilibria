@@ -99,12 +99,12 @@ def test_levels_from_pct_is_exact_on_identical_changes():
     assert gates.level_gap(110.011, 100.0, 10.0) == pytest.approx(0.011 / 110.0)
 
 
-def test_driver_rejects_unknown_trade_balance():
-    from equilibria.family.driver import solve_gtap_family
-
-    with pytest.raises(ValueError, match="nominal_trade_balance"):
-        solve_gtap_family(object(), object(), "ROW", nominal_trade_balance="real")
+def test_unknown_trade_balance_is_refused():
     from equilibria.family.altertax.run import solve_altertax
+    from equilibria.templates.gtap.recipe import gtap_static
+
+    with pytest.raises(ValueError, match="trade_balance"):
+        gtap_static(trade_balance="real")
 
     with pytest.raises(ValueError, match="trade_balance"):
         solve_altertax(DATA / "nus333", trade_balance="real")

@@ -242,7 +242,7 @@ Assemble the 7 blocks via the registry into a model the repaired bridge emits to
 - Test: `tests/templates/gtap/test_gtap_blocks_solve.py`
 
 **Interfaces:**
-- Consumes: the 7 blocks + `GTAP_BLOCK_ORDER` (Task 4); the repaired bridge (Task 1); `blocks_diag` (Task 2); the seeding + solve path from `gtap_multiperiod_driver`.
+- Consumes: the 7 blocks + `GTAP_BLOCK_ORDER` (Task 4); the repaired bridge (Task 1); `blocks_diag` (Task 2); the seeding + solve path from the old Pyomo multiperiod driver.
 - Produces: `build_block_model(dataset, ifsub) -> pyomo_model` and a solve returning code + values comparable to the monolith/GAMS.
 
 - [ ] **Step 1: Write the failing test (north-star)**

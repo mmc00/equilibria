@@ -29,6 +29,12 @@ def cache(tmp_path_factory):
 
 
 def _solve(ds, cache):
+    """The RunGTAP ALTERTAX run of ``ds`` with ``trade_balance="ratio"`` on the core,
+    flown period by period as ``solve_altertax`` flies it: ``(results, solves, mp
+    after the shock, the shock session of a plain run, shock)``. The session is the
+    run's (template, records, arrays after the check) with the nominal recipe: its
+    shock holds savf where it is put, no border."""
+    from equilibria.core.driver import fly_period
     from equilibria.family.altertax.closure import (
         ALTAX_RESIDUAL_REGION,
         altertax_closure,
@@ -36,33 +42,66 @@ def _solve(ds, cache):
     )
     from equilibria.family.altertax.run import ALTAX_NEWTON_TOL, load_altertax_params
     from equilibria.family.altertax.shocks import load_tms_shock
-    from equilibria.family.driver import solve_gtap_family
+    from equilibria.family.shock_session import ShockSession
+    from equilibria.templates.gtap.recipe import gtap_static
+    from equilibria.templates.gtap.template import GTAP
 
     d = ROOT / "data/gtap7" / ds
     ref = d / REF
     cmf = ref / "run.cmf"
     rres = residual_region_from_exp(cmf) if cmf.exists() else ALTAX_RESIDUAL_REGION
     shock = load_tms_shock(ref / "tms_rate10.shk")
-    res = solve_gtap_family(
+    template = GTAP(
         load_altertax_params(d, ref / "parameters.prm"),
         altertax_closure(),
-        rres,
-        shock=shock,
+        residual_region=rres,
+        base_calibrated=True,
+        backend="family",
         cache_root=cache,
-        nominal_trade_balance="ratio",
-        keep_session=True,
         newton_tol=ALTAX_NEWTON_TOL,
     )
-    return res, shock
+    recipe = gtap_static(
+        "gtap", trade_balance="ratio", base_calibrated=True, solve_check=True
+    )
+    model = template.build(recipe.names)
+    run = model.run
+    run.nominal_savf = tuple(r for r in run.regions if r != run.residual_region)
+    results, after_check = {}, None
+    with template.run_scope():
+        for period in recipe.names:
+            if period == "shock":
+                after_check = model.mp.copy()
+            results[period] = fly_period(
+                model, recipe, period, template=template, shock=shock
+            )
+    assert after_check is not None
+    plain = ShockSession(
+        template,
+        gtap_static(
+            "gtap", trade_balance="nominal", base_calibrated=True, solve_check=True
+        ),
+        run,
+        after_check,
+        ratio=False,
+    )
+    return results, [dict(r) for r in run.solves], model.mp, plain, shock
 
 
 @pytest.mark.parametrize("ds", ["gtap7_3x3", "nus333"])
 def test_ratio_shock_is_one_bordered_solve(ds, cache):
-    res, _ = _solve(ds, cache)
-    shock = [r for r in res.solves if r["solve"].startswith("shock")]
+    import inspect
+
+    from equilibria.templates.gtap.recipe import gtap_static
+
+    results, solves, _, _, _ = _solve(ds, cache)
+    shock = [r for r in solves if r["solve"].startswith("shock")]
     assert [r["solve"] for r in shock] == ["shock"]
-    assert shock[0]["code"] == 1 and shock[0]["ratio"] == "bordered"
-    assert res.results["shock"]["code"] == 1
+    assert shock[0]["code"] == 1
+    assert results["shock"]["code"] == "optimal"
+    # the shock's solver is Newton-TR bordered with the world income
+    solver = gtap_static(trade_balance="ratio").plans["shock"].solver
+    assert solver is not None
+    assert inspect.getclosurevars(solver).nonlocals["border"] == "ratio"
 
 
 @pytest.mark.parametrize("ds", ["gtap7_3x3", "nus333"])
@@ -70,29 +109,28 @@ def test_bordered_solution_is_the_ratio_fixed_point(ds, cache):
     """A plain shock solve with savf held at the bordered solution's targets (what the
     last outer iteration solved) lands on the same point, and its own W is the
     bordered W: the fixed point of the outer iterations."""
-    from equilibria.family.driver import _solve_period, _world_income
+    from equilibria.family import period_newton as pn
+    from equilibria.family.period_newton import world_income
 
-    res, shock = _solve(ds, cache)
-    mp = res.mp
-    run = res.session.run
-    w_chk, w = _world_income(mp, "check"), _world_income(mp, "shock")
+    _, _, mp, session, shock = _solve(ds, cache)
+    w_chk, w = world_income(mp, "check"), world_income(mp, "shock")
     sv = mp.vars["savf"]
-    run.savf_targets = {
-        r: float(sv.value[sv.pos((r, "check"))]) * w / w_chk for r in run.nominal_savf
+    targets = {
+        r: float(sv.value[sv.pos((r, "check"))]) * w / w_chk
+        for r in session.run.nominal_savf
     }
+    ss, sq, mp_sq = session.shock_system(shock, savf_targets=targets)
+    # the run's tolerance and MUMPS state, as the core's solver sets them
+    tol = pn._NEWTON_TOL.set(session.run.newton_tol)
+    keep = pn._MUMPS_KEEP.set(session.run.mumps)
     try:
-        plain, stats = _solve_period(
-            run,
-            res.session.after_check,
-            "shock",
-            base_calibrated=True,
-            solve_check=True,
-            shock=shock,
-        )
+        res, _, code = pn._newton(ss, sq)
     finally:
-        run.savf_targets = None
-    assert stats["code"] == 1
-    assert _world_income(plain, "shock") == pytest.approx(w, rel=1e-12)
+        pn._NEWTON_TOL.reset(tol)
+        pn._MUMPS_KEEP.reset(keep)
+    assert code == 1
+    plain = session.finish_shock(mp_sq, sq, res.x)
+    assert world_income(plain, "shock") == pytest.approx(w, rel=1e-12)
     for name, v in mp.vars.items():
         sel = np.flatnonzero(v.period == "shock")
         a = np.asarray(v.value, dtype=float)[sel]

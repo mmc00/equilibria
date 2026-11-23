@@ -61,15 +61,16 @@ def test_el_solver_acepta_el_modo_por_firma():
     )
 
 
-def test_el_driver_pasa_el_modo_en_TODAS_sus_llamadas():
+def test_el_solver_del_core_pasa_el_modo_en_TODAS_sus_llamadas():
     """El invariante que sustituye al marcador.
 
-    No enumera lineas: recorre el AST y exige que cada llamada del driver al
-    solver lleve `gtap_mode=`. Si alguien añade una quinta llamada y se olvida,
+    No enumera lineas: recorre el AST y exige que cada llamada del core al
+    solver lleve `gtap_mode=` (``solver/path_gtap.py``, el PATH del core). Si
+    alguien añade otra llamada y se olvida,
     esto salta — que es justo el fallo que el `getattr` con default hacia mudo.
     """
     raiz = pathlib.Path(__file__).resolve().parents[2]
-    f = raiz / "src/equilibria/templates/gtap/gtap_multiperiod_driver.py"
+    f = raiz / "src/equilibria/solver/path_gtap.py"
     arbol = ast.parse(f.read_text(encoding="utf-8"))
 
     sin_modo = []
@@ -89,15 +90,15 @@ def test_el_driver_pasa_el_modo_en_TODAS_sus_llamadas():
     )
 
 
-def test_hay_al_menos_las_tres_llamadas_conocidas():
-    """Contraparte del anterior: que no pase por vacio si desaparecen.
+def test_hay_al_menos_la_llamada_conocida():
+    """Contraparte del anterior: que no pase por vacio si desaparece.
 
-    Si el driver deja de llamar al solver, el test de arriba pasaria trivialmente.
-    Tres: base, check y shock (el shock era tres llamadas -continuacion, pasos y
-    directa- hasta tariff-to-shock-block; ahora los pasos y la directa son una).
+    Si el solver del core deja de llamar a PATH, el test de arriba pasaria
+    trivialmente. Una: ``path()`` resuelve cualquier periodo (el driver viejo
+    tenia una por periodo).
     """
     raiz = pathlib.Path(__file__).resolve().parents[2]
-    f = raiz / "src/equilibria/templates/gtap/gtap_multiperiod_driver.py"
+    f = raiz / "src/equilibria/solver/path_gtap.py"
     arbol = ast.parse(f.read_text(encoding="utf-8"))
     n_llamadas = sum(
         1
@@ -110,4 +111,4 @@ def test_hay_al_menos_las_tres_llamadas_conocidas():
         )
         == "_run_path_capi_nonlinear_full"
     )
-    assert n_llamadas >= 3, f"esperadas >=3 llamadas al solver, hay {n_llamadas}"
+    assert n_llamadas >= 1, f"esperada >=1 llamada al solver, hay {n_llamadas}"

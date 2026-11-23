@@ -410,7 +410,7 @@ not any single equation or closure flag.
 
 - `src/equilibria/blocks/gtap/factor.py` — `FactorBlock.calibrate_base()`
 - `src/equilibria/templates/gtap/gtap_block_model.py` — `build_block_model(base_calibrated=)`
-- `src/equilibria/templates/gtap/gtap_multiperiod_driver.py` — seed base from settled + skip check
+- the old Pyomo multiperiod driver — seed base from settled + skip check
 - `scripts/gtap/measure_gempack_blocks.py` — against-GEMPACK land-response measurement
 - `tests/templates/gtap/test_f3_5_base_calib.py` — 5 tests (spike oracle + calibrate + composer + end-to-end + against-GEMPACK)
 

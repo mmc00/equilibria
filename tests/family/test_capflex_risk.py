@@ -84,7 +84,7 @@ def test_risk_needs_rore_in_the_gdx(tmp_path, monkeypatch):
 
 def test_prepare_run_raises_before_load_or_build(monkeypatch, tmp_path):
     from equilibria.family import disk_cache
-    from equilibria.family.driver import prepare_run
+    from equilibria.family.run_setup import prepare_run
 
     def boom(*a, **k):
         raise AssertionError("load_or_build ran")

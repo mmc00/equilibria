@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from tests.family._prep import capture_dir, recording
-from tests.family.test_prep_recipe import ROUTE, _closure, _params
+from tests.family._core import core_prep
+from tests.family._prep import capture_dir, core_template
 from tests.family.test_prep_square import _recipe
+from tests.family.test_sp_arrays import _closure, _params, _route_closure
 
 DATASET = "gtap7_3x3"
 
@@ -42,26 +43,9 @@ class _Incidence:
         return self._cache[period]
 
 
-def _script(name: str):
-    import importlib.util
-    from pathlib import Path
-
-    path = Path(__file__).resolve().parents[2] / "scripts" / "family" / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None and spec.loader is not None
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def _route_closure():
-    """The capture route's closure (``_solve_shock``), as newton_cost_20x41 uses."""
-    return _script("budget_20x41")._closure()
-
-
 @pytest.fixture(scope="module")
 def inc():
-    """The backend as scripts/family/newton_cost_20x41.py builds it: the run's params
+    """The backend as the 20x41 Newton-cost measurement built it: the run's params
     (gempack basis), the route's closure, ifSUB-skipped families left out."""
     from equilibria.backends.family_backend import FamilyBackend
     from equilibria.templates.gtap.gtap_block_model import compose_block_state
@@ -174,8 +158,8 @@ def test_incidence_keeps_structural_zeros(inc):
 
 def test_square_with_pattern_incidence(inc):
     from equilibria.family.mp_arrays import MPArrays, compare, squared_from_photo
-    from equilibria.family.prep_recipe import sp_reference_arrays
     from equilibria.family.prep_square import ConditionalMasks, square
+    from equilibria.family.sp_arrays import sp_reference_arrays
 
     p = _params(DATASET)
     ref = sp_reference_arrays(p, _closure(), list(p.sets.r)[-1])
@@ -218,8 +202,8 @@ FOLDED_BY_FIXED_ZERO = {"eq_ytax"}
 def systems(inc):
     """(call, SquaredSystem, incidence used, sq) for every 3x3 solve call."""
     from equilibria.family.mp_arrays import MPArrays
-    from equilibria.family.prep_recipe import sp_reference_arrays
     from equilibria.family.prep_square import ConditionalMasks, square
+    from equilibria.family.sp_arrays import sp_reference_arrays
     from equilibria.family.squared_system import SquaredSystem
 
     p = _params(DATASET)
@@ -367,7 +351,7 @@ def pyomo_mp():
     from equilibria.sources import find_reference
     from equilibria.templates.gtap.gtap_block_model import build_block_model
 
-    p = _script("prep_cost_20x41")._params(DATASET)
+    p = _params(DATASET)
     ref = find_reference(
         DATASET, "gams", form="mcp", mode="gtap", ifsub=1, fbep="header"
     ) or find_reference(
@@ -537,23 +521,12 @@ def cross(inc):
 
 
 def _real_square(a, p, ref, masks, backend, state, cross):
-    """Recipe, family incidence (cross rows included) and squaring of one call."""
+    """Core prepare, family incidence (cross rows included) and squaring of one call."""
     from equilibria.family.mp_arrays import MPArrays
-    from equilibria.family.prep_recipe import run_recipe
     from equilibria.family.prep_square import square
     from equilibria.family.squared_system import SquaredSystem, period_incidence
 
-    mp = run_recipe(
-        MPArrays.from_photo(a),
-        a.period,
-        params=p,
-        closure=_closure(),
-        sp_ref=ref,
-        mode="gtap",
-        cross=cross,
-        backend=backend,
-        **ROUTE,
-    )
+    mp = core_prep(core_template(DATASET), MPArrays.from_photo(a), a.period)
     sq, mp_sq = square(
         mp,
         a.period,
@@ -570,7 +543,7 @@ def _real_square(a, p, ref, masks, backend, state, cross):
 
 @pytest.fixture(scope="module")
 def real_systems(inc, cross):
-    from equilibria.family.prep_recipe import sp_reference_arrays
+    from equilibria.family.sp_arrays import sp_reference_arrays
 
     p = _params(DATASET)
     ref = sp_reference_arrays(p, _closure(), list(p.sets.r)[-1])
@@ -605,8 +578,8 @@ def test_real_system_matches_pyomo_3x3(real_systems, pyomo_mp):
 
 def test_cross_rows_missing_raise_without_proxies(inc):
     """Without the cross recording an active cross-period row is an error."""
-    from equilibria.family.prep_recipe import sp_reference_arrays
     from equilibria.family.prep_square import square
+    from equilibria.family.sp_arrays import sp_reference_arrays
     from equilibria.family.squared_system import SquaredSystem
 
     p = _params(DATASET)
@@ -686,26 +659,15 @@ def test_column_outside_backend_needs_a_proxy_row(inc, systems):
 def test_pairs_equal_pyomo_with_period_incidence(inc):
     """The real path's incidence (``period_incidence`` over B's for cross-period rows)
     gives Pyomo's pairs: 0 differing rows per call."""
-    from equilibria.family.mp_arrays import MPArrays
-    from equilibria.family.prep_recipe import run_recipe, sp_reference_arrays
     from equilibria.family.prep_square import ConditionalMasks, square
-    from tests.family.test_prep_recipe import ROUTE
+    from equilibria.family.sp_arrays import sp_reference_arrays
 
     p = _params(DATASET)
     closure = _closure()
     ref = sp_reference_arrays(p, closure, list(p.sets.r)[-1])
     masks = None
     for a, b in _calls():
-        mp = run_recipe(
-            MPArrays.from_photo(a),
-            a.period,
-            params=p,
-            closure=closure,
-            sp_ref=ref,
-            mode="gtap",
-            backend=recording(DATASET),
-            **ROUTE,
-        )
+        mp = _recipe(a, p, ref, DATASET)
         masks = masks or ConditionalMasks.from_params(p, mp)
         merged = {r: list(c) for r, c in zip(b.con_names, b.incidence, strict=True)}
         merged.update(inc(a.period))
@@ -758,8 +720,8 @@ def test_square_matches_photo_b_with_family_cross_rows(dataset):
     Pyomo's (reported)."""
     from equilibria.family.mp_arrays import MPArrays, compare, squared_from_photo
     from equilibria.family.prep_capture import pairs
-    from equilibria.family.prep_recipe import run_recipe, sp_reference_arrays
     from equilibria.family.prep_square import ConditionalMasks, square
+    from equilibria.family.sp_arrays import sp_reference_arrays
     from equilibria.family.squared_system import period_incidence
 
     p, backend, state, cross = _backends(dataset)
@@ -767,17 +729,7 @@ def test_square_matches_photo_b_with_family_cross_rows(dataset):
     calls = pairs(capture_dir(dataset))
     masks = ConditionalMasks.from_params(p, MPArrays.from_photo(calls[0][0]))
     for a, b in calls:
-        mp = run_recipe(
-            MPArrays.from_photo(a),
-            a.period,
-            params=p,
-            closure=_closure(),
-            sp_ref=ref,
-            mode="gtap",
-            cross=cross,
-            backend=backend,
-            **ROUTE,
-        )
+        mp = core_prep(core_template(dataset), MPArrays.from_photo(a), a.period)
         inc = period_incidence(backend, state, a.period, cross)
         got = square(
             mp,

@@ -27,7 +27,7 @@ import numpy as np
 from equilibria.blocks.gtap.periods import CHECK, SHOCK
 from equilibria.family.fscale import row_leaves
 from equilibria.family.mp_arrays import MPArrays, RowArr, VarArr
-from equilibria.family.prep_recipe import _table
+from equilibria.family.sp_arrays import period_table
 from equilibria.templates.gtap.instruments import (
     INLINE_EQS as PYOMO_INLINE_EQS,
 )
@@ -88,7 +88,7 @@ def _live(mp: MPArrays, eq_name: str, cell: tuple) -> bool:
     eq = mp.rows.get(eq_name)
     if eq is None:
         return False
-    i = _table(eq, SHOCK).get(tuple(cell))
+    i = period_table(eq, SHOCK).get(tuple(cell))
     return i is not None and bool(eq.active[i])
 
 
@@ -125,7 +125,7 @@ def check_instrument_cell(mp: MPArrays, sys: Any, name: str, cell: tuple) -> Non
     var = mp.vars.get(name)
     idx = period_key(cell, SHOCK)
     region = cell[0] if cell else None
-    i = None if var is None else _table(var, SHOCK).get(tuple(cell))
+    i = None if var is None else period_table(var, SHOCK).get(tuple(cell))
     if i is None:
         raise ValueError(
             f"{name}{idx} does not exist. Valid for {region}: "
@@ -234,7 +234,7 @@ def apply_default_tariff(mp: MPArrays, sys: Any) -> dict[str, dict[tuple, float]
 
     cells = {
         cell: DEFAULT_TARIFF_PCT
-        for cell in _table(mp.var("imptx"), SHOCK)
+        for cell in period_table(mp.var("imptx"), SHOCK)
         if can_take_shock(mp, sys, "imptx", cell)
     }
     if not cells:

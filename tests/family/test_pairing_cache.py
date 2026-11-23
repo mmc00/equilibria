@@ -10,8 +10,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from tests.family._prep import capture_dir
-from tests.family.test_prep_recipe import ROUTE, _closure
+from tests.family._core import core_prep
+from tests.family._prep import capture_dir, core_template
+from tests.family.test_sp_arrays import _closure
 from tests.family.test_squared_system import _backends
 
 DS = "gtap7_3x3"
@@ -21,24 +22,14 @@ DS = "gtap7_3x3"
 def route():
     from equilibria.family.mp_arrays import MPArrays
     from equilibria.family.prep_capture import pairs
-    from equilibria.family.prep_recipe import run_recipe, sp_reference_arrays
     from equilibria.family.prep_square import ConditionalMasks
+    from equilibria.family.sp_arrays import sp_reference_arrays
 
     p, backend, state, cross = _backends(DS)
     ref = sp_reference_arrays(p, _closure(), list(p.sets.r)[-1])
     a, _ = pairs(capture_dir(DS))[0]
     masks = ConditionalMasks.from_params(p, MPArrays.from_photo(a))
-    mp = run_recipe(
-        MPArrays.from_photo(a),
-        a.period,
-        params=p,
-        closure=_closure(),
-        sp_ref=ref,
-        mode="gtap",
-        cross=cross,
-        backend=backend,
-        **ROUTE,
-    )
+    mp = core_prep(core_template(DS), MPArrays.from_photo(a), a.period)
     return p, backend, state, cross, ref, masks, mp, a.period
 
 

@@ -42,14 +42,14 @@ def solved(request):
     nus333_params("default.prm")  # SKIP sin el dataset
     cb = _cb()
     from equilibria._local_refs import nus333_dir, path_capi_src
-    from equilibria.templates.gtap.gtap_multiperiod_driver import _load_run_gtap
+    from equilibria.solver.path_gtap import _load_path_capi
 
     sys.path.insert(0, str(path_capi_src()))
     # Las celdas del shock que estan fijas cuando PATH lo resuelve no son resultados:
     # el instrumento (pnum) y las que no existen en la economia (pa de margenes sin
     # uso, pf de tierra fuera de AGR, p_rai sin produccion), que el modelo deja
-    # fijas. Despues del solve el driver fija todo el periodo: se miran ANTES.
-    run_gtap = _load_run_gtap()
+    # fijas. Despues del solve la receta fija todo el periodo: se miran ANTES.
+    run_gtap = _load_path_capi()
     orig = run_gtap._run_path_capi_nonlinear_full
     fijas: set = set()
 
@@ -66,7 +66,7 @@ def solved(request):
 
     run_gtap._run_path_capi_nonlinear_full = espia
     try:
-        m, p, codes = cb.rb.solve_exercise("GTAPV7", nus333_dir(), route=request.param)
+        m, p, codes = cb.rb.solve_exercise("GTAPV7", nus333_dir())
     finally:
         run_gtap._run_path_capi_nonlinear_full = orig
     m._fijas_en_el_shock = frozenset(fijas)

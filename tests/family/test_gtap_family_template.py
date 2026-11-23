@@ -12,7 +12,7 @@ import pytest
 
 from tests.family._data import load_params
 from tests.family._prep import _newton_mumps
-from tests.family.test_prep_recipe import _params
+from tests.family.test_sp_arrays import _params
 from tests.family.test_squared_system import _route_closure
 
 DS = "gtap7_3x3"
@@ -51,24 +51,29 @@ def _same_arrays(a, b) -> None:
         assert np.array_equal(r.active, b.rows[name].active), name
 
 
-def test_family_build_matches_prepare_run(env) -> None:
-    from equilibria.family.driver import calibrate_base_cached, prepare_run
+def test_family_build_matches_the_old_settle(env) -> None:
+    """The family build (``prepare_run`` + the core's settle) leaves the arrays and
+    the settled point the old family driver's settle left, recorded on main before
+    PR 4 deleted it (``tests/_old_route_golden.py``)."""
+    from tests._old_route_golden import case, mp_mismatches
 
     _, tmp_path = env
     model = _gtap(tmp_path, base_calibrated=True).build(("base", "check", "shock"))
-    p = _params(DS)
-    run, mp = prepare_run(
-        p,
-        _route_closure(),
-        list(p.sets.r)[-1],
-        cache_root=tmp_path / "records",
-        jax_cache=False,
-    )
-    settled, _ = calibrate_base_cached(mp, run)
-    want = dataclasses.replace(mp, settled_seed=settled, base_calibrated=True)
-    _same_arrays(model.mp, want)
-    assert model.settled_seed == settled and model.base_calibrated
+    want = case("template_build")
+    assert mp_mismatches(model.mp, want["mp"]) == []
+    assert _settled_mismatches(model.settled_seed, want["settled"]) == []
+    assert model.base_calibrated
     assert model.backend == "family"
+
+
+def _settled_mismatches(got: dict, want: dict) -> list[str]:
+    from tests._golden import mismatches
+    from tests._old_route_golden import ABS, REL
+
+    as_repr = {
+        repr(v): {repr(k): x for k, x in cells.items()} for v, cells in got.items()
+    }
+    return mismatches(as_repr, want, rel=REL, abs_tol=ABS)
 
 
 _UNSUPPORTED = [
@@ -159,30 +164,6 @@ def test_two_backends_in_one_process(env) -> None:
     py = Exercise(GTAP(p, _route_closure()), gtap_static()).run()
     assert py["shock"]["code"] == "optimal"
     assert gc.get_freeze_count() == 0
-
-
-def test_settle_through_core_equals_calibrate_base_arrays(env) -> None:
-    """The settled seed comes from the core recipe (settle_only), never from the
-    old array recipe, and equals what calibrate_base_arrays gives, key by key."""
-    from equilibria.family import driver as fd
-
-    monkeypatch, tmp_path = env
-    p = _params(DS)
-    run, mp = fd.prepare_run(
-        p,
-        _route_closure(),
-        list(p.sets.r)[-1],
-        cache_root=tmp_path / "records",
-        jax_cache=False,
-    )
-    want, _ = fd.calibrate_base_arrays(mp, run)
-
-    def old_route(*a: Any, **k: Any) -> Any:
-        raise AssertionError("the build settled through the old array recipe")
-
-    monkeypatch.setattr(fd, "calibrate_base_arrays", old_route)
-    model = _gtap(tmp_path, base_calibrated=True).build(("base", "check", "shock"))
-    assert model.settled_seed == want
 
 
 def test_settle_cache_hit_skips_the_solves(env) -> None:

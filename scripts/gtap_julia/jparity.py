@@ -1,6 +1,6 @@
 """jparity — Julia-vs-equilibria NLP-vs-NLP parity for the gtap_julia port.
 
-The symmetric analogue of the GAMS measure_nlp_vs_nlp gate. Three checks:
+The symmetric analogue of the GAMS NLP-vs-NLP level gate. Three checks:
 
   1. DIRECT   — equilibria solve vs Julia solve (base or shock), cell-by-cell.
   2. FORWARD  — is the JULIA point a root of the equilibria system? (seed

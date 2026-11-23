@@ -137,13 +137,11 @@ def _measure_within_pp(dataset: str, sl4: Path) -> str:
 
 
 def _solve_shock_10(dataset: str):
+    from equilibria.core.exercise import Exercise
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    from equilibria.templates.gtap.gtap_model_multiperiod import (
-        PERIODS,
-        GTAPMultiPeriodModel,
-    )
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+    from equilibria.templates.gtap.recipe import gtap_static
+    from equilibria.templates.gtap.template import GTAP
 
     d = dataset_dir(dataset)
     p = GTAPParameters()
@@ -160,22 +158,16 @@ def _solve_shock_10(dataset: str):
     ac = GTAPClosureConfig(
         name="base", closure_type="MCP", capital_mobility="sluggish",
         fix_endowments=False, fix_taxes=False, fix_technology=False,
-        if_sub=True, numeraire="pnum",
+        if_sub=True, numeraire="pnum", va_subsidy_basis="gempack",
     )
     gdx = _seed_gdx(dataset)
-    mp = GTAPMultiPeriodModel(p.sets, p, ac, residual_region=rr)
-    m = mp.build_sets()
-    mp.build_vars(m)
-    for per in PERIODS:
-        mp.build_equations_intra(m, per)
-    mp.build_equations_fisher(m)
-    m._residual_region = rr
-    mp.seed_all_periods(m, gdx)
-    solve_multiperiod(
-        m, p, ac, ref_gdx=gdx, skip_base_solve=True, mute_welfare=True,
-        seed_from_prior=False, mode="gtap",
+    # every period starts from the GAMS shock solution; the base is not solved
+    ex = Exercise(
+        GTAP(p, ac, residual_region=rr, ref_gdx=gdx, seed_gdx=gdx),
+        gtap_static("gtap", mute_welfare=True, seed_from_prior=False),
     )
-    return m
+    ex.run()
+    return ex.model.pyomo
 
 
 def build_page(data_root: Path, out_md: Path) -> str:

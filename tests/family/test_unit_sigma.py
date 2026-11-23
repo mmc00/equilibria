@@ -82,7 +82,7 @@ def _default_closure():
 
 def _record(params, closure, residual_region: str):
     """``(backend, layout, system)`` of the single-period family, built the way
-    ``family.driver.prepare_run`` builds it (the closure's switches on params first)."""
+    ``family.run_setup.prepare_run`` builds it (the closure's switches on params first)."""
     from equilibria.backends.family_backend import FamilyBackend
     from equilibria.templates.gtap.gtap_block_model import compose_block_state
 

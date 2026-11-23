@@ -1,4 +1,5 @@
-"""``calibrate_base_arrays``: the settle solve on a copy of the arrays gives the dict
+"""The core's family settle (``GTAP._settle_family``, what ``base_calibrated=True``
+runs): the settle solve on a copy of the arrays gives the dict
 ``FactorBlock.calibrate_base`` returns.
 
 The oracle is the saved Pyomo run's ``settled.pkl`` (``tests/family/_prep.capture_dir``;
@@ -11,7 +12,6 @@ unchanged. The iteration count is reported, never asserted.
 from __future__ import annotations
 
 import importlib.util
-import os
 import pickle
 
 import numpy as np
@@ -19,7 +19,7 @@ import pytest
 
 from tests.family._data import load_params
 from tests.family._prep import _newton_mumps, capture_dir
-from tests.family.test_prep_recipe import _params
+from tests.family.test_sp_arrays import _params
 from tests.family.test_squared_system import _route_closure
 
 RTOL = 1e-9
@@ -67,7 +67,7 @@ def diff_settled(got: dict, want: dict, rtol: float = RTOL) -> list[str]:
 
 @pytest.fixture(scope="module", params=DATASETS)
 def case(request, monkeypatch_module, tmp_path_factory):
-    from equilibria.family.driver import prepare_run
+    from equilibria.templates.gtap.template import GTAP
 
     ds = request.param
     load_params(ds)  # skip when the dataset is missing
@@ -81,13 +81,20 @@ def case(request, monkeypatch_module, tmp_path_factory):
         else None  # the user's cache: 10x7 records take minutes to build
     )
     p = _params(ds)
-    run, mp = prepare_run(
-        p, _route_closure(), list(p.sets.r)[-1], cache_root=root, jax_cache=False
+    t = GTAP(
+        p,
+        _route_closure(),
+        residual_region=list(p.sets.r)[-1],
+        backend="family",
+        cache_root=root,
+        jax_cache=False,
     )
+    model = t.build(("base", "check", "shock"))  # not calibrated: no settle yet
     return {
         "ds": ds,
-        "run": run,
-        "mp": mp,
+        "template": t,
+        "run": t._family_run,
+        "mp": model.mp,
         "want": pickle.loads((d / "settled.pkl").read_bytes()),
     }
 
@@ -112,17 +119,18 @@ def _snapshot(mp):
 
 @pytest.fixture(scope="module")
 def calibrated(case):
-    from equilibria.family.driver import calibrate_base_arrays
-
     before = _snapshot(case["mp"])
-    settled, results = calibrate_base_arrays(case["mp"], case["run"])
-    return settled, results, before
+    run = case["run"]
+    n0 = len(run.solves)
+    settled = case["template"]._settle_family(run, case["mp"])
+    return settled, run.solves[n0:], before
 
 
 def test_settled_equals_pyomo(case, calibrated):
-    settled, results, _ = calibrated
-    print(f"{case['ds']} settle: {results}")
-    assert results["check"]["code"] == 1
+    settled, solves, _ = calibrated
+    print(f"{case['ds']} settle: {solves}")
+    assert [r["solve"] for r in solves] == ["settle_check"]
+    assert solves[-1]["code"] == 1
     assert diff_settled(settled, case["want"]) == []
 
 

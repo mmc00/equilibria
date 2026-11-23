@@ -1,5 +1,6 @@
-"""``run_burfisher.solve_exercise(route=...)``: a Burfisher exercise solves to the
-same point through the old driver and through the core (``Exercise``)."""
+"""``run_burfisher.solve_exercise``: a Burfisher exercise solves on the core
+(``Exercise``) to the point the old Pyomo driver reached, recorded on main before
+PR 4 of gtap-on-core deleted it (``tests/_old_route_golden.py``)."""
 
 from __future__ import annotations
 
@@ -35,30 +36,15 @@ def _levels(m: Any) -> dict:
 
 
 @pytest.mark.parametrize("shock_method", ["nonlinear", "johansen"])
-def test_solve_exercise_core_route_matches_old(shock_method: str) -> None:
+def test_solve_exercise_gives_what_the_old_driver_gave(shock_method: str) -> None:
+    from tests._old_route_golden import case, level_mismatches, pyomo_levels
+
     from equilibria._local_refs import nus333_dir
 
     rb = _rb()
     exp = "TBL45A" if shock_method == "johansen" else "TBL46A"
-    m_old, _, c_old = rb.solve_exercise(
-        exp, nus333_dir(), shock_method=shock_method, route="old"
-    )
-    m_new, _, c_new = rb.solve_exercise(
-        exp, nus333_dir(), shock_method=shock_method, route="core"
-    )
-    assert c_old == c_new == {"base": 1, "check": 1, "shock": 1}
-    a, b = _levels(m_old), _levels(m_new)
-    assert a.keys() == b.keys()
-    bad = [
-        (k, a[k], b[k])
-        for k in a
-        if not (a[k] == b[k] or (math.isnan(a[k]) and math.isnan(b[k])))
-    ]
+    m, _, codes = rb.solve_exercise(exp, nus333_dir(), shock_method=shock_method)
+    want = case(f"burfisher_{shock_method}")
+    assert codes == want["codes"] == {"base": 1, "check": 1, "shock": 1}
+    bad = level_mismatches(pyomo_levels(m), want["levels"])
     assert not bad, f"{len(bad)} cells differ, first: {bad[:10]}"
-
-
-def test_solve_exercise_refuses_an_unknown_route() -> None:
-    from equilibria._local_refs import nus333_dir
-
-    with pytest.raises(ValueError, match="route"):
-        _rb().solve_exercise("TBL46A", nus333_dir(), route="new")

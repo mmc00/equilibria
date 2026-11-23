@@ -64,10 +64,6 @@ def _reference_gdx(dataset: str, ifsub: int) -> Path | None:
     return None if ref is None else ref / "out.gdx"
 
 
-# the parametrized route (tests.templates.gtap._routes) -> _solve_shock's name
-_SHOCK_ROUTE = {"old": "driver", "core": "exercise"}
-
-
 def _solve_shock(
     dataset: str,
     ifsub: int,
@@ -76,7 +72,6 @@ def _solve_shock(
     residual_region: str | None = None,
     backend: str | None = None,
     unit_sigma: str = "gams",
-    route: str = "driver",
 ):
     """Build + seed + solve base→check→shock (gtap pure MCP) and return the model.
 
@@ -94,15 +89,11 @@ def _solve_shock(
     ``residual_region`` defaults to the last region; "auto" (capFix only) lets the model
     pick the one with the largest base investment (see resolve_residual_region).
 
-    ``backend`` "pyomo" (the default) builds the Pyomo model; "family" runs the array
-    driver (equilibria.family.driver) and returns ``(FamilyResult, code)`` instead of
-    ``(m, code)``. ``EQUILIBRIA_GTAP_BACKEND=family`` sets the default; an unsupported
-    configuration raises before any work.
-
-    ``route`` "driver" (the default) solves with ``solve_multiperiod``; "exercise"
-    with ``Exercise(GTAP, gtap_static)`` on the core driver, and returns
-    ``(model.pyomo, 1 or 0)`` on Pyomo, ``(the family period model, 1 or 0)`` on
-    family.
+    It solves with ``Exercise(GTAP, gtap_static)`` on the core driver and returns
+    ``(model.pyomo, code)`` on the ``backend`` "pyomo" (the default) and ``(the
+    family period model, code)`` on "family" (the array route); ``code`` is 1 when
+    the shock solved, else 0. ``EQUILIBRIA_GTAP_BACKEND=family`` sets the default;
+    an unsupported configuration raises before any work.
 
     ``unit_sigma`` "gams" (the default) keeps the 1.01 stand-in for a unit elasticity,
     as the recorded oracles (paper Table 1, the example-15 gaps) were solved; "gempack"
@@ -114,8 +105,8 @@ def _solve_shock(
     if backend not in ("pyomo", "family"):
         raise ValueError(f"backend must be 'pyomo' or 'family', got {backend!r}")
 
-    # NLP mode (maximize walras, IPOPT — read per-call inside run_gtap._run_path_capi_
-    # nonlinear_full, which solve_multiperiod lazy-loads) is toggled by this env var. Set it
+    # NLP mode (maximize walras, IPOPT — read per-call inside the PATH C-API solve) is
+    # toggled by this env var. Set it
     # for the WHOLE _solve_shock (build + solve), mirroring test_gtap7_nlp_parity, and restore
     # it after — setting it only around the solve left the 10x7 build in a mismatched mode and
     # gave a nondeterministic code=2.
@@ -135,9 +126,9 @@ def _solve_shock(
         gdx = _reference_gdx(dataset, ifsub)
         if backend == "family":
             from equilibria.family.capflex import require_ref_gdx
-            from equilibria.family.driver import check_supported, solve_gtap_family
+            from equilibria.family.run_setup import check_supported
 
-            # The solve_multiperiod arguments below are the ones this function passes.
+            # the recipe options this function runs
             check_supported(
                 if_sub=bool(ifsub),
                 savf_flag=savf_flag,
@@ -152,10 +143,11 @@ def _solve_shock(
             if savf_flag == "capFlex":
                 # capFlex reads rore/rorg from the GDX: refuse before any work
                 require_ref_gdx(gdx)
+        from equilibria.core.exercise import Exercise
         from equilibria.family.photos import photo_closure
         from equilibria.templates.gtap import GTAPParameters
-        from equilibria.templates.gtap.gtap_block_model import build_block_model
-        from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+        from equilibria.templates.gtap.recipe import gtap_static
+        from equilibria.templates.gtap.template import GTAP
 
         d = dataset_dir(dataset)
         p = GTAPParameters()
@@ -168,64 +160,32 @@ def _solve_shock(
         # None = the last region, the residual the GEMPACK fixtures declare.
         rr = residual_region or list(p.sets.r)[-1]
         ac = photo_closure(ifsub, savf_flag, unit_sigma)
-        if backend == "family" and route == "exercise":
-            from equilibria.core.exercise import Exercise
-            from equilibria.templates.gtap.recipe import gtap_static
-            from equilibria.templates.gtap.template import GTAP
-
-            ex = Exercise(
-                template=GTAP(
-                    p,
-                    ac,
-                    residual_region=rr,
-                    base_calibrated=True,
-                    ref_gdx=gdx,
-                    backend="family",
-                ),
-                recipe=gtap_static(base_calibrated=True, solve_check=True),
-            )
-            out = ex.run()
-            return ex.model, int(out["shock"]["code"] == "optimal")
-        if backend == "family":
-            fres = solve_gtap_family(p, ac, rr, ref_gdx=gdx)
-            return fres, int(fres.results["shock"]["code"])
-        if route == "exercise":
-            from equilibria.core.exercise import Exercise
-            from equilibria.templates.gtap.recipe import gtap_static
-            from equilibria.templates.gtap.template import GTAP
-
-            ex = Exercise(
-                template=GTAP(
-                    p, ac, residual_region=rr, base_calibrated=True, ref_gdx=gdx
-                ),
-                recipe=gtap_static(base_calibrated=True, solve_check=True),
-            )
-            out = ex.run()
-            assert ex.model is not None
-            return ex.model.pyomo, int(out["shock"]["code"] == "optimal")
-        m, mp = build_block_model(p, p.sets, ac, rr, base_calibrated=True, ref_gdx=gdx)
-        res = solve_multiperiod(
-            m,
-            p,
-            ac,
-            ref_gdx=gdx,
-            skip_base_solve=True,
-            mute_welfare=True,
-            seed_from_prior=False,
-            mode="gtap",
-            # Solve the CHECK period so %-changes can be measured shock/check —
-            # the denominator RunGTAP/GEMPACK uses.  base_calibrated's base is the
-            # RAW benchmark, and base→check re-settles income ~+0.8%; on near-zero
-            # gov-demand cells the tariff on top is ±1%, so shock/base overstates
-            # the move (qga 66.7% within-1pp) while shock/check matches (100%).
-            solve_check=True,
+        # Solve the CHECK period so %-changes can be measured shock/check, the
+        # denominator RunGTAP/GEMPACK uses. base_calibrated's base is the RAW
+        # benchmark, and base->check re-settles income ~+0.8%; on near-zero gov-demand
+        # cells the tariff on top is +-1%, so shock/base overstates the move (qga
+        # 66.7% within-1pp) while shock/check matches (100%).
+        ex = Exercise(
+            template=GTAP(
+                p,
+                ac,
+                residual_region=rr,
+                base_calibrated=True,
+                ref_gdx=gdx,
+                backend=backend,
+            ),
+            recipe=gtap_static(base_calibrated=True, solve_check=True),
         )
+        out = ex.run()
+        assert ex.model is not None
+        model = ex.model if backend == "family" else ex.model.pyomo  # type: ignore[union-attr]
+        code = int(out["shock"]["code"] == "optimal")
     finally:
         if _prev_nlp is None:
             _os.environ.pop("EQUILIBRIA_GTAP_SOLVE_NLP", None)
         else:
             _os.environ["EQUILIBRIA_GTAP_SOLVE_NLP"] = _prev_nlp
-    return m, int(res["shock"]["code"])
+    return model, code
 
 
 def _measure_pp(m, sl4dump: Path):
@@ -366,7 +326,6 @@ def test_gtap7_gempack_parity(row, route):
         savf_flag=savf_flag,
         solve_nlp=solve_nlp,
         unit_sigma="gempack",
-        route=_SHOCK_ROUTE[route],
     )
     assert code == 1, (
         f"[{row.dataset}/{savf_flag}/{'NLP' if solve_nlp else 'MCP'}] shock did not "

@@ -55,7 +55,7 @@ def solved(request) -> tuple[str, Any]:
     from equilibria._local_refs import nus333_dir, path_capi_src
 
     sys.path.insert(0, str(path_capi_src()))
-    m, _, codes = rb.solve_exercise(exp, nus333_dir(), route=route)
+    m, _, codes = rb.solve_exercise(exp, nus333_dir())
     assert codes == {"base": 1, "check": 1, "shock": 1}, codes
     return exp, m
 
@@ -101,7 +101,7 @@ def test_ev_regional_es_cero_con_el_numerario(route: str) -> None:
     from equilibria._local_refs import nus333_dir, path_capi_src
 
     sys.path.insert(0, str(path_capi_src()))
-    m, _, _ = rb.solve_exercise("GTAPV7", nus333_dir(), route=route)
+    m, _, _ = rb.solve_exercise("GTAPV7", nus333_dir())
     ev = regional_ev(m)
     for r in m.r:
         assert abs(ev[r]) <= 1e-7 * value(m.regy[r, "check"]), (r, ev[r])

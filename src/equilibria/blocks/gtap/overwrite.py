@@ -1,8 +1,9 @@
 """``@overwrite``: modificar un bloque GTAP desde el notebook de un ejercicio.
 
-Un notebook es un ejercicio. Sus hooks se registran en la CLASE del bloque y duran
-todo el proceso, asi que los ve todo lo que construye bloques: ``build_block_model``,
-el modelo de un periodo que arma el driver (``_build_sp_reference``) y la calibracion.
+A notebook is an exercise. Its hooks are registered on the block's CLASS and last
+the whole process, so everything that builds blocks sees them: ``build_block_model``,
+the single-period reference model (``sp_reference.build_sp_reference``) and the
+calibration.
 El hook corre despues del ``setup`` original del bloque y recibe un ``BlockEdit``::
 
     @overwrite(ShockBlock, period="shock")

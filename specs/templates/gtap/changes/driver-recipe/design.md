@@ -9,7 +9,7 @@ What the driver file holds today (measured 2026-11-11, `0d02b205`):
 
 | Content | ~Lines | Belongs in the driver? |
 |---|---|---|
-| Period orchestration (`_solve_multiperiod_inner`, `solve_multiperiod`) | 430 | yes |
+| Period orchestration (the old Pyomo multiperiod driver and its inner loop) | 430 | yes |
 | Per-period equation rewrites (`_recalibrate_*`, altertax only) | 600 | no: four deleted in step 0 (#243); `_recalibrate_and_ava` stays for now |
 | GTAP squaring fixes (`_collapse_pft_pfteq`, `_holdfix_fnm_pf`, `_apply_gams_bounds`, `_recompute_ifsub_report_vars`, welfare tail, Fisher duplicates) | 545 | no: GTAP recipe steps or GTAP blocks |
 | Single-period reference model and its snapshot (`_build_sp_reference`, `SPSnapshot`, `_replicate_*`) | 280 | no: GTAP recipe step |
@@ -18,8 +18,8 @@ What the driver file holds today (measured 2026-11-11, `0d02b205`):
 | GC and PATH-option context managers | 140 | no: solver |
 
 A recipe already exists, privately: `_Recipe` and `_RECIPES` in
-`templates/gtap/period_prep.py`, a table of steps per `(period, mode)` run by
-`PeriodPreparer.prepare`. Its steps call back into the driver file (`_drv()`).
+the old Pyomo period recipe, a table of steps per `(period, mode)` run by
+the old Pyomo period recipe. Its steps call back into the driver file (`_drv()`).
 The multi-period model is built by reflecting a single-period (SP) model: every
 Var family gets a trailing `t` and every equation is copied per period
 (`GTAPMultiPeriodModel` in `templates/gtap/gtap_model_multiperiod.py`; ADR-0006).
@@ -117,7 +117,7 @@ results = ex.run()                                   # {period: {"code", "residu
 
 - The contract lives in the core: `Step` is a protocol, `step(ctx) -> None`,
   where `ctx` carries the model, the template (and through it the data), the
-  recipe, the current period and the prior one (as `_Ctx` in `period_prep.py`
+  recipe, the current period and the prior one (as the old Pyomo period recipe's context
   does today). A step mutates the model in place and returns nothing; a step
   that needs to report something logs it.
 - Generic steps live in `core/steps.py` (freeze the other periods, seed from the
@@ -139,7 +139,7 @@ results = ex.run()                                   # {period: {"code", "residu
 - Each exercise gets **its own copy** of the built model. The model is built
   once and kept in the existing content-keyed model cache (5.5x on 20x41); each
   exercise receives a fresh copy from it, never a shared object.
-- Returns what `solve_multiperiod` returns today, per period `{code, residual}`,
+- Returns what the old Pyomo multiperiod driver returns today, per period `{code, residual}`,
   so tests and notebooks do not change. The end-of-solve summary (`R-PROGRESS`)
   hooks in later as an "after solve" step.
 
@@ -229,12 +229,12 @@ dev-tools `equilibria-tools/plans/research/docs-lego-references/`).
    the surviving pieces of the old driver.
 7. **Compare** every GTAP gate through both drivers (same codes, same values
    within the gates' tolerances).
-8. **Switch** `solve_multiperiod` to the new driver in one PR (it keeps its
+8. **Switch** the old Pyomo multiperiod driver to the new driver in one PR (it keeps its
    signature during the transition **(builder's call: whether it becomes a thin
    wrapper)**), regenerate the Burfisher notebooks with their generator so they
    use `Exercise(...).run()` (same numbers against GEMPACK), and publish the
    docs pages.
-9. **Delete** the old driver and `period_prep.py`.
+9. **Delete** the old driver and the old Pyomo period recipe.
 
 ### Out of scope
 

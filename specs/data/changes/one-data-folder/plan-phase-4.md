@@ -33,7 +33,7 @@
 | `tests/fixtures/pyomo_sol/*.sol` (2) | `data/solver_tests/pyomo_sol/` | data | no (real solver output, `3c1bf35f`) |
 | `tests/sam_tools/fixtures/simple_mip.xlsx` | `data/sam_tests/simple_mip.xlsx` | data | no |
 | `tests/fixtures/gtap_logvalue/julia_3x3_calibrated.csv` | `data/gtap7/gtap7_3x3/julia_logvalue_calibrated/` | result, tool `julia`, `status: verified` with a note that Julia is not run here | no (`a9d981f3`) |
-| `tests/fixtures/{period_prep_snapshot.json, gtap7_10x7_settled_seed.json.gz, gtap7_3x3_*_sin_shock_3f3fe5f.json.gz}` | `data/gtap7/<dataset>/equilibria_<what>/` | result, tool `equilibria`, commit recorded | the script or test entry point that wrote it |
+| `tests/fixtures/{<the period snapshot JSON>, gtap7_10x7_settled_seed.json.gz, gtap7_3x3_*_sin_shock_3f3fe5f.json.gz}` | `data/gtap7/<dataset>/equilibria_<what>/` | result, tool `equilibria`, commit recorded | the script or test entry point that wrote it |
 | `tests/fixtures/nus333_{bienestar,desempleo,tbl94}_gams_levels.json.gz` | `data/gtap7/nus333/gams_levels_<exercise>/` | result, tool `gams` | `scripts/gtap/gams_welfare_fixture.py` and the equivalents found in Task 4 |
 | `tests/compare/fixtures/*` (6) | `data/gtap7/<dataset>/equilibria_levels_<exercise>/` + generators in `data/gtap7/tools/` | result, tool `equilibria` | `make_eq_gtap7_levels.py`, `make_eq_burfisher_levels.py` |
 
@@ -89,9 +89,9 @@ English names for the five Spanish files: `punto_sin_shock` → `no_shock_point`
 ### Task 3: equilibria snapshots
 
 **Files:**
-- Move: `period_prep_snapshot.json`, `gtap7_10x7_settled_seed.json.gz`, `gtap7_3x3_{punto,residuos}_sin_shock_3f3fe5f.json.gz` (renamed per the table)
+- Move: the period snapshot JSON (`period_snapshot.json` since gtap-on-core PR 4), `gtap7_10x7_settled_seed.json.gz`, `gtap7_3x3_{punto,residuos}_sin_shock_3f3fe5f.json.gz` (renamed per the table)
 - Create: `data/gtap7/tools/` copies of the entry points that write them (or `source.yaml` commands pointing at the test entry point, e.g. `python tests/templates/gtap/test_no_shock_identical_to_main.py <repo_root> <out>`)
-- Modify: `src/equilibria/templates/gtap/period_prep.py`, `tests/templates/gtap/{_period_snapshot,test_period_prep,test_period_prep_snapshot,test_no_shock_identical_to_main}.py`, `tests/blocks/gtap/test_calibrate_no_double_solve.py`, `scripts/dev/check_layout.py` (drop two `SPANISH_LEGACY` entries), `docs/adr/0002-driver-prepares-and-solves.md`
+- Modify: the old Pyomo period recipe and its two tests, `tests/templates/gtap/{_period_snapshot,test_no_shock_identical_to_main}.py`, `tests/blocks/gtap/test_calibrate_no_double_solve.py`, `scripts/dev/check_layout.py` (drop two `SPANISH_LEGACY` entries), `docs/adr/0002-driver-prepares-and-solves.md`
 
 - [ ] **Step 1:** Find each snapshot's writer (the `3f3fe5f` suffix names the commit for the two no-shock files; `f5300c15` and `ef799fe7` for the others).
 - [ ] **Step 2:** Regenerate each on today's main into scratch and diff (JSON, numeric tolerance 0). Identical: record `tool: equilibria` with today's commit. Different: stop and report (Review Focus 5).

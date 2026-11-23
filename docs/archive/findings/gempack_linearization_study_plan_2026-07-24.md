@@ -103,7 +103,7 @@ def _solve(dataset: str, ifsub: int):
     from equilibria.templates.gtap.gtap_model_multiperiod import (
         PERIODS, GTAPMultiPeriodModel,
     )
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+    # (the old Pyomo multiperiod driver's entry point; deleted by gtap-on-core PR 4)
 
     d = dataset_dir(dataset)
     p = GTAPParameters()
@@ -126,7 +126,7 @@ def _solve(dataset: str, ifsub: int):
     mp.build_equations_fisher(m)
     m._residual_region = rr
     mp.seed_all_periods(m, gdx)
-    res = solve_multiperiod(
+    res = old_multiperiod_solve(
         m, p, ac, ref_gdx=gdx, skip_base_solve=True, mute_welfare=True,
         seed_from_prior=False, holdfix_cd=True, mode="gtap",
     )

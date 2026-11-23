@@ -79,6 +79,66 @@ def test_strategy_follows_the_shock_method() -> None:
     )
 
 
+def _bound(step: Any, name: str) -> Any:
+    """What the step factory was called with (``stage_closure(which=...)``)."""
+    import inspect
+
+    return inspect.getclosurevars(step).nonlocals.get(name)
+
+
+def _made_by(plan: Any, factory: str) -> list[Any]:
+    """The steps of ``plan`` (before its solve) that ``steps.<factory>`` made."""
+    return [s for s in plan.before if s.__qualname__.startswith(f"{factory}.")]
+
+
+@pytest.mark.parametrize(
+    ("mode", "period", "closure"),
+    [
+        ("gtap", "calibrate", "base"),
+        ("gtap", "replicate", "base"),
+        ("gtap", "shock", "base"),
+        ("altertax", "calibrate", "base"),
+        ("altertax", "replicate", "altertax"),
+        ("altertax", "shock", "altertax"),
+    ],
+)
+def test_each_period_stages_the_closure_of_its_mode(mode, period, closure) -> None:
+    (stage,) = _made_by(gtap_static(mode).plans[period], "stage_closure")
+    assert _bound(stage, "which") == closure
+
+
+@pytest.mark.parametrize(
+    ("kw", "prior"), [({}, "check"), ({"base_calibrated": True}, "base")]
+)
+def test_shock_seeds_from_the_check_unless_it_was_copied(kw, prior) -> None:
+    r = gtap_static(**kw)
+    seeds = [getattr(s, "seeds_from", None) for s in r.plans["shock"].before]
+    assert prior in seeds
+    if not kw:
+        check = [getattr(s, "seeds_from", None) for s in r.plans["replicate"].before]
+        assert "base" in check
+
+
+def test_shock_always_builds_its_own_reference_model() -> None:
+    for mode in ("gtap", "altertax"):
+        plans = gtap_static(mode).plans
+        assert [
+            _bound(s, "fresh") for s in _made_by(plans["shock"], "replicate_reference")
+        ] == [True]
+        assert [
+            _bound(s, "fresh")
+            for s in _made_by(plans["replicate"], "replicate_reference")
+        ] == [False]
+
+
+def test_gtap_recipes_do_not_recalibrate_and_altertax_ones_do() -> None:
+    from equilibria.templates.gtap import steps
+
+    for kind in ("replicate", "shock"):
+        assert steps.recalibrate_shares not in gtap_static().plans[kind].before
+        assert steps.recalibrate_shares in gtap_static("altertax").plans[kind].before
+
+
 def test_johansen_refuses_steps() -> None:
     with pytest.raises(ValueError, match="takes no shock_steps"):
         gtap_static(shock_method="johansen", shock_steps=(0.5,))
@@ -97,6 +157,13 @@ def test_bad_shock_method() -> None:
 def test_bad_backend() -> None:
     with pytest.raises(ValueError, match="backend"):
         GTAP(None, None, backend="jax")
+
+
+def test_bad_builder() -> None:
+    """Only the ShockBlock builders: the monolith (no ShockBlock to write the shock
+    into) never reaches a recipe."""
+    with pytest.raises(ValueError, match="builder"):
+        GTAP(None, None, builder="monolith")
 
 
 def test_overwrite_argument_not_yet() -> None:
@@ -142,7 +209,7 @@ def test_recipe_refuses_mismatched_base_calibrated() -> None:
 
 def test_gtap_run_scope_freezes_once_for_the_run() -> None:
     """The old driver froze the built model once over base, check and shock
-    (``solve_multiperiod``); the core route does the same through the template."""
+    (the old multiperiod driver); the core route does the same through the template."""
     import gc
 
     from equilibria.templates.gtap.template import GTAP

@@ -81,7 +81,7 @@ ALTERTAX_BASIS = "gempack"
 # (non-leaf, non-ROW) is not buried.
 #
 # WELFARE LEAVES: eq_cv/eq_ev/eq_walras/eq_u/eq_ug/eq_us are inert report rows that the
-# driver mutes (_mute_welfare_tail) — no economic feedback into the equilibrium, so a
+# driver mutes (steps.mute_welfare) — no economic feedback into the equilibrium, so a
 # residual there at the GAMS point is benign and must not bury the real lead. (eq_uh is
 # NOT here: uh feeds eq_zcons = real CDE demand, so it has genuine blast radius.)
 _LEAF_EQS = {

@@ -1,9 +1,9 @@
 """GTAP's static recipe: base -> check -> shock on the core driver (ADR-0011).
 
-Each period's steps are those of the old Pyomo period recipe (``period_prep``),
-in the same order, followed by what ``solve_multiperiod`` did around each solve.
+Each period's steps are those of the old Pyomo period recipe,
+in the same order, followed by what the old Pyomo multiperiod driver did around each solve.
 ``mode`` picks the gtap or the altertax variant of the check and the shock; the
-options of ``solve_multiperiod`` are arguments here.
+options of that driver are arguments here.
 """
 
 from __future__ import annotations

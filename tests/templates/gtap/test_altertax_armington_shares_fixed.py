@@ -21,7 +21,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.mark.parametrize("case", ["altertax_ifsub0", "altertax_ifsub1"])
 def test_altertax_does_not_rebuild_eq_paa(case, monkeypatch):
-    shots = snap.take(case, monkeypatch, route="exercise")
+    shots = snap.take(case, monkeypatch)
 
     rebuilt = sorted(
         {

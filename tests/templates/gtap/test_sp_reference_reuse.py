@@ -1,9 +1,8 @@
-"""solve_multiperiod must not build the same reference model twice.
+"""A run must not build the same reference model twice.
 
-WHAT THE DRIVER DOES.  For each period it builds a COMPLETE single-period
-``GTAPModelEquations(...).build_model()`` — 3.4M vars on 20x41 — purely to read
-which variables it leaves fixed/bounded (``_replicate_sp_fixing`` /
-``_replicate_sp_bounds``), then throws the model away.
+WHAT THE RUN DOES.  For each period it builds a COMPLETE single-period reference
+model — 3.4M vars on 20x41 — purely to read which variables it leaves
+fixed/bounded (the replication of the reference), then throws the model away.
 
 WHY IT IS WASTE.  In gtap mode the check period passes ``base_closure`` — the
 SAME four arguments as the base period — so the second build is byte-identical
@@ -56,17 +55,17 @@ def _closure(
 
 def test_identical_closures_are_reusable():
     """Same closure object -> the built reference model is the same -> reuse."""
-    from equilibria.templates.gtap.gtap_multiperiod_driver import _sp_ref_reusable
+    from equilibria.templates.gtap.sp_reference import sp_ref_reusable
 
     c = _closure()
-    assert _sp_ref_reusable(c, c) is True
+    assert sp_ref_reusable(c, c) is True
 
 
 def test_equal_but_distinct_closures_are_reusable():
     """Equality, not identity: two configs with the same fields build the same model."""
-    from equilibria.templates.gtap.gtap_multiperiod_driver import _sp_ref_reusable
+    from equilibria.templates.gtap.sp_reference import sp_ref_reusable
 
-    assert _sp_ref_reusable(_closure(), _closure()) is True
+    assert sp_ref_reusable(_closure(), _closure()) is True
 
 
 @pytest.mark.parametrize(
@@ -89,22 +88,22 @@ def test_any_differing_field_blocks_reuse(field, value):
     The altertax case is not hypothetical: alt_closure differs from base_closure
     in name, capital_mobility, fix_taxes and fix_technology.
     """
-    from equilibria.templates.gtap.gtap_multiperiod_driver import _sp_ref_reusable
+    from equilibria.templates.gtap.sp_reference import sp_ref_reusable
 
-    assert _sp_ref_reusable(_closure(), _closure(**{field: value})) is False
+    assert sp_ref_reusable(_closure(), _closure(**{field: value})) is False
 
 
 def test_none_is_never_reusable():
     """No previous model to reuse -> build one."""
-    from equilibria.templates.gtap.gtap_multiperiod_driver import _sp_ref_reusable
+    from equilibria.templates.gtap.sp_reference import sp_ref_reusable
 
-    assert _sp_ref_reusable(None, _closure()) is False
-    assert _sp_ref_reusable(_closure(), None) is False
+    assert sp_ref_reusable(None, _closure()) is False
+    assert sp_ref_reusable(_closure(), None) is False
 
 
 def test_altertax_pair_is_not_reusable():
     """The exact pair the driver builds under altertax must not be reused."""
-    from equilibria.templates.gtap.gtap_multiperiod_driver import _sp_ref_reusable
+    from equilibria.templates.gtap.sp_reference import sp_ref_reusable
 
     base_closure = _closure()
     alt_closure = _closure(
@@ -113,4 +112,4 @@ def test_altertax_pair_is_not_reusable():
         fix_taxes=True,
         fix_technology=True,
     )
-    assert _sp_ref_reusable(base_closure, alt_closure) is False
+    assert sp_ref_reusable(base_closure, alt_closure) is False

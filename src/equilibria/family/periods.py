@@ -2,7 +2,7 @@
 
 Each operation is a masked write on the arrays of one variable (``VarArr``) or row
 family (``RowArr``) and one period. Positions come from a per-period table cached
-on the arrays (keys never change), the same ``_table`` the array recipe uses, so a
+on the arrays (keys never change, ``_table``), so a
 step pays one dict lookup per cell it names and no Python loop over the rest.
 
 Bounds: an infinite side is reported as ``None`` (Pyomo's "no bound"), and
@@ -25,7 +25,7 @@ _BODY = itemgetter(slice(None, -1))  # a cell's key without its period
 
 def positions(obj: VarArr | RowArr, period: str) -> dict[tuple, int]:
     """Position of each cell of ``period``, by its key without the period. Cached
-    on ``obj`` under the name ``prep_recipe._table`` uses, so both share it."""
+    on ``obj`` under the name ``_table``."""
     cache = obj.__dict__.setdefault("_table", {})
     if period not in cache:
         mask = obj.period == period

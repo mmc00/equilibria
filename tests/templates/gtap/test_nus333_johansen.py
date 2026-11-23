@@ -5,7 +5,7 @@ every variable moves by its first-order response to the shock, with no further
 iteration. Burfisher's ``.EXP`` files use it for TBL45A/B/C, TBL64, ME4A and ME4B,
 so the book's published numbers for them are Johansen results.
 
-``solve_multiperiod(..., shock_method="johansen")`` gives that solution: the
+``gtap_static(shock_method="johansen")`` gives that solution: the
 derivative of the solution path at the check point, times the full shock. Each
 variable then sits at ``check × (1 + %change)``, or at ``check + change`` when its
 level is not positive.
@@ -43,15 +43,13 @@ def _modules() -> tuple[Any, Any]:
     return cb, cb.rb
 
 
-def _solve(exp: str, shock_method: str, scale: float = 1.0, route: str = "old"):
+def _solve(exp: str, shock_method: str, scale: float = 1.0):
     cb, rb = _modules()
     from equilibria._local_refs import nus333_dir
 
     prm, rows = rb.EXERCISES[exp]
     rows = [(name, idx, pct * scale) for name, idx, pct in rows]
-    return rb.solve_exercise(
-        exp, nus333_dir(), shock_method=shock_method, rows=rows, route=route
-    )
+    return rb.solve_exercise(exp, nus333_dir(), shock_method=shock_method, rows=rows)
 
 
 def _report(exp: str, m, p, *, linear: bool):
@@ -67,7 +65,7 @@ def _report(exp: str, m, p, *, linear: bool):
 @pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize("exp", JOHANSEN_IN_THE_BOOK)
 def test_johansen_reproduces_the_books_result(exp: str, route: str) -> None:
-    m, p, codes = _solve(exp, "johansen", route=route)
+    m, p, codes = _solve(exp, "johansen")
     assert codes == {"base": 1, "check": 1, "shock": 1}
     r = _report(exp, m, p, linear=True)
     assert r.overall["cells"] == 414
@@ -88,7 +86,7 @@ def test_johansen_moves_the_global_investment_price(exp: str, route: str) -> Non
     from equilibria.babel.har.sl4 import read_sl4_changes
     from equilibria.sources import reference
 
-    m, _, codes = _solve(exp, "johansen", route=route)
+    m, _, codes = _solve(exp, "johansen")
     assert codes == {"base": 1, "check": 1, "shock": 1}
     pct = 100.0 * (m.pigbl["shock"].value / m.pigbl["check"].value - 1.0)
     run = reference("nus333", "gempack", experiment=exp.lower(), method="book")
@@ -101,7 +99,7 @@ def test_johansen_moves_the_global_investment_price(exp: str, route: str) -> Non
 @pytest.mark.parametrize("route", ROUTES)
 def test_the_nonlinear_solution_is_not_the_books_johansen(route: str) -> None:
     """The check above can fail: TBL45A solved exactly misses the book's numbers."""
-    m, p, codes = _solve("TBL45A", "nonlinear", route=route)
+    m, p, codes = _solve("TBL45A", "nonlinear")
     assert codes == {"base": 1, "check": 1, "shock": 1}
     r = _report("TBL45A", m, p, linear=False)
     bad = [c for c in r.cells if not c.passed and c.variable not in GOVERNMENT_DEMAND]
@@ -125,26 +123,10 @@ def test_johansen_is_linear_in_the_shock(route: str) -> None:
         return out
 
     full, half = (
-        pct(_solve("TBL55", "johansen", route=route)[0]),
-        pct(_solve("TBL55", "johansen", 0.5, route=route)[0]),
+        pct(_solve("TBL55", "johansen")[0]),
+        pct(_solve("TBL55", "johansen", 0.5)[0]),
     )
     moved = [k for k in full if abs(full[k]) > 1e-4]
     assert len(moved) > 100
     for k in moved:
         assert half[k] == pytest.approx(full[k] / 2, rel=1e-4, abs=1e-9), k
-
-
-def test_johansen_refuses_shock_steps() -> None:
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-
-    with pytest.raises(ValueError, match="johansen"):
-        solve_multiperiod(
-            None, None, None, shock_method="johansen", shock_steps=(0.5, 1.0)
-        )
-
-
-def test_shock_method_is_checked() -> None:
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
-
-    with pytest.raises(ValueError, match="shock_method"):
-        solve_multiperiod(None, None, None, shock_method="gragg")

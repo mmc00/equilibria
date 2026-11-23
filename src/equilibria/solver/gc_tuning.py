@@ -185,9 +185,9 @@ def _gc_family_scope(*, collect: bool = True):
     EQUILIBRIA_GTAP_GC_THRESHOLD).
 
     Reentrant: inside another family scope it changes nothing, so an inner exit (the
-    one of `solve_gtap_family`) neither unfreezes nor lowers the threshold. That lets
+    one of the template's run) neither unfreezes nor lowers the threshold. That lets
     an ALTERTAX entry point hold one setup over the solve, the decomposition path and
-    the outputs. MEASURED on warm 20x41: when `solve_gtap_family` lifted the freeze,
+    the outputs. MEASURED on warm 20x41: when the old family driver lifted the freeze,
     the next full collection (in `report_levels`) walked the ~10M records for 8.7 s.
 
     The GTAP core route holds it too (``GTAP.run_scope`` over the run, the PATH

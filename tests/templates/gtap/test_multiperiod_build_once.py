@@ -225,7 +225,10 @@ def _seed_and_solve(build_fn):
     from pyomo.environ import Var
     from pyomo.environ import value as V
 
-    from equilibria.templates.gtap.gtap_multiperiod_driver import solve_multiperiod
+    from equilibria.core.driver import fly
+    from equilibria.templates.gtap.pyomo_periods import GTAPPyomoPeriodModel
+    from equilibria.templates.gtap.recipe import gtap_static
+    from equilibria.templates.gtap.template import GTAP
 
     p = _load_params()
     mp = _make_block_mp(p)
@@ -233,16 +236,10 @@ def _seed_and_solve(build_fn):
     rr = list(p.sets.r)[-1]
     m._residual_region = rr
     mp.seed_all_periods(m, str(_GDX_10x7))
-    solve_multiperiod(
-        m,
-        p,
-        _closure(p),
-        ref_gdx=str(_GDX_10x7),
-        skip_base_solve=True,
-        mute_welfare=True,
-        seed_from_prior=False,
-        mode="gtap",
-    )
+    # the core recipe on the hand-built model (base not solved, welfare muted)
+    t = GTAP(p, _closure(p), residual_region=rr, ref_gdx=str(_GDX_10x7))
+    with t.run_scope():
+        fly(GTAPPyomoPeriodModel(m), gtap_static("gtap"), template=t)
     out = {}
     for v in m.component_objects(Var, active=True):
         for idx in v:

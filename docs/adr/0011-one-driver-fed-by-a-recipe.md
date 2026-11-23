@@ -16,7 +16,7 @@ knows no model, shock or closure. An **exercise** is one run: template, recipe,
 shock and its own `@overwrite` blocks, run with `Exercise(...).run()`.
 
 ADR-0002 already moved period preparation into a recipe, but the recipe was
-private to GTAP (`period_prep.py`), its steps reached back into the driver file,
+private to GTAP (the old Pyomo period recipe), its steps reached back into the driver file,
 and the driver still held about 1,700 lines of GTAP logic. One driver that only
 flies a recipe can run GTAP, `simple_open` and later PEP and a recursive dynamic
 GTAP, and an exercise that carries its own `@overwrite` blocks cannot leak them

@@ -230,8 +230,8 @@ def newton_tr(
     _lu_age_tr = 0  # iterations since last refactor
     _cudss_solver_tr = None  # persists cuDSS plan across Newton steps (reuse)
     _gmin_pattern_sig = None  # (nnz, hash) of the last gmin-applied pattern
-    # Bookkeeping for the opt-in reference capture (prep_capture.capture_solve);
-    # plain appends/counters, they never feed back into the iteration.
+    # Bookkeeping returned on the result (trace, nfact, cfg, null pivots); plain
+    # appends/counters, they never feed back into the iteration.
     _tr_trace: list = []  # (‖F‖∞, ‖F/fscale‖∞ or None) at each loop top
     _tr_nfact = 0  # numeric factorizations
     _tr_nullpiv: list = []  # MUMPS INFOG(28) after each numeric factor
