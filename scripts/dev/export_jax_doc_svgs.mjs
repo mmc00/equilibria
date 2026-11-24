@@ -8,7 +8,7 @@
 // colour is a CSS variable or a class from docs/site/_static/jax_backend.css, so
 // the inlined SVGs follow the site's light/dark toggle. One concept is always the
 // same piece and colour: see the "parts" figure.
-import { U, H, K, P, poly, top, side, T, svg, ARR, FLAMEDEFS, brick, plate, tile, sheet, flight, pilot, flame, nozzle, rocket, writeFigures } from "./lego_kit.mjs";
+import { U, H, K, P, poly, top, side, T, svg, ARR, FLAMEDEFS, brick, plate, tile, sheet, flight, pilot, flame, nozzle, rocket, tower, writeFigures } from "./lego_kit.mjs";
 
 /* ---------- new pieces for the JAX route ---------- */
 // clay: a soft slab with no studs
@@ -54,7 +54,7 @@ const PARTS=[
  ["Engine","Newton + MUMPS","Takes F and J from either route and solves",()=>svg("0 0 150 120",FLAMEDEFS+T(36,70,brick(0,0,0,3,2,22,"var(--c-engine)",{studs:true}))+nozzle(64,70,30,14)+flame(64,84,30,13)),1]
 ];
 const FIGS={
- stack:()=>{let o=plate(0,0,0,8,2,"var(--c-data)");const B=[["Production","--c-prod"],["Factors","--c-factor"],["Trade","--c-trade"],["Households","--c-hh"],["Government","--c-gov"]];B.forEach((b,i)=>{o+=brick((i%2)*U*.6,0,8+i*26,7,2,26,`var(${b[1]})`,{studs:false,label:b[0],fs:12});});o+=tile(U*.6,0,8+5*26,7,2,"var(--c-closure)",{h:16,label:"Closure",fs:11});return svg("0 0 290 230",T(14,212,o));},
+ stack:()=>svg("0 0 290 260",T(28,240,tower({nx:7,h:24,fs:11.5}))),
  parts:()=>{let o=FLAMEDEFS;PARTS.forEach((p,k)=>{const c=k%4,r=Math.floor(k/4),x=c*240,y=r*230;const inner=p[3]().replace(/<defs>.*?<\/defs>/g,"").replace(/^<svg /,`<svg x="${x+20}" y="${y+10}" width="200" height="140" `);
    o+=`<rect x="${x+4}" y="${y+2}" width="232" height="220" rx="12" class="box" ${p[4]?'style="stroke-dasharray:5 4"':''}/>`+inner+`<text x="${x+20}" y="${y+174}" class="disp" style="font-size:16px;font-weight:600">${p[0]}</text><text x="${x+20}" y="${y+194}" class="mono sm">${p[1]}</text>`;
    if(p[4])o+=`<text x="${x+222}" y="${y+24}" text-anchor="end" class="mono tj" style="font-size:10px">JAX ROUTE</text>`;});
@@ -126,7 +126,7 @@ const FIGS={
 };
 
 const TITLES = {
-  stack: "GTAP blocks stacked as Lego bricks on the data plate, closed by the closure tile",
+  stack: "GTAP as eight Lego bricks on the data plate, bottom to top: shock, export (CET), production, factors, imports, households, income and government, and the closure tile on top",
   parts: "The pieces: brick, plate, smooth tile, instruction sheet, flight plan, pilot, rocket, and the JAX pieces clay, mold, storage box, box photo and engine",
   big_picture: "The blocks feed two roads, Pyomo and JAX, that end in the same Newton engine with MUMPS",
   same_brick: "One brick, eq_xaa_activity, can go to a Pyomo model or to a RecordingModel",

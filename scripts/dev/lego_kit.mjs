@@ -87,3 +87,19 @@ export function writeFigures(out, figs, titles) {
     console.log(file);
   }
 }
+
+// GTAP as built: GTAP_BLOCK_ORDER (src/equilibria/blocks/gtap/__init__.py), bottom
+// to top. [label on the brick, class in the code, colour]. The closure is the
+// smooth tile: nothing goes on top of it.
+export const TOWER=[["Shock","ShockBlock","--c-shock"],["Export (CET)","TradeCETBlock","--c-trade"],["Production","ProductionSupplyBlock","--c-prod"],["Factors","FactorBlock","--c-factor"],["Imports","ArmingtonBilateralBlock","--c-trade"],["Households","DemandUtilityBlock","--c-hh"],["Income, gov.","IncomeBlock","--c-gov"],["Closure","ClosureBlock","--c-closure"]];
+// The tower on its data plate, drawn with its base at (0,0). o.nx: width in studs;
+// o.h: brick height; o.codeNames: the class name right of each brick; o.mark:
+// {index: colour} recolours bricks (a changed block); o.fs: label size.
+// o.labels=false: no text on the bricks (small towers); o.top: {label, colour}
+// replaces the closure tile; o.noTop: leaves it off.
+export function tower(o={}){const nx=o.nx||7,h=o.h||24,fs=o.fs||12,w=nx*U;let s=plate(-U*.5,0,0,nx+1,2,"var(--c-data)");
+  TOWER.forEach((b,i)=>{const z=8+i*h,last=i==TOWER.length-1;if(last&&o.noTop)return;
+    const c=(last&&o.top&&o.top.colour)||(o.mark&&o.mark[i])||`var(${b[2]})`,label=o.labels===false?undefined:((last&&o.top&&o.top.label)||b[0]);
+    s+=last?tile(0,0,z,nx,2,c,{h:h*.7,label,fs}):brick(0,0,z,nx,2,h,c,{studs:false,label,fs});
+    if(o.codeNames){const [fx,ly]=P(w,0,z+(last?h*.35:h/2)),lx=fx+K*2*U;s+=`<path d="M${lx+4},${ly} H${lx+22}" class="ln"/><text x="${lx+28}" y="${ly+4}" class="mono sm">${b[1]}</text>`;}});
+  return s;}
