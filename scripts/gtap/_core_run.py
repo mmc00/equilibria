@@ -37,7 +37,7 @@ def solve_on_core(
     closure: Any,
     residual_region: str,
     *,
-    mode: str = "gtap",
+    mode: str,
     ref_gdx: Any = None,
     seed_gdx: Any = None,
     base_calibrated: bool = False,

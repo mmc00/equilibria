@@ -48,7 +48,7 @@ outputs:
   005_p_shock.pkl.gz: 906f39a4d72cae2357799a6cc8db12c5973bf39f76ec7abc9927370ddba7a71c
   005_s_shock.json: 00f7f1e559b2cd6ae15a9d6ca46a9b54a84d837329812e7def2e69621980a315
   final.pkl.gz: 248fbd60ee808d61e316571082603022773502497e7ff78b00a743ba0c4970f5
-  model_print.json: 7fdb275f75f400e3b229ce8296038b2209285ed2fa909c957be02cebd1f7a696
+  model_print.json: f5501be4eea3ca3e54e1bef2f70627307c6421e8b64f90a56d329dce77451990
   settled.pkl.gz: 00d81c8a5f68ffdc1c0629264edea8b184837700ea66238f1a072ce8ff284903
 run:
   date: '2026-11-16T22:58:15-06:00'
@@ -59,4 +59,4 @@ run:
     cores: 11
     ram_gb: 18.0
 status: verified
-notes: 'FROZEN (MAR-218): its generator, scripts/family/regen_photos.py, ran inside the old Pyomo multiperiod driver and was deleted by PR 4 of gtap-on-core; it can be read with git show 2c0d882a:scripts/family/regen_photos.py. pyomo_code re-stamped by PR 4 of gtap-on-core (61ef31a1 -> 425a15e8): the Pyomo-only change was comments (identical AST in gtap_model_multiperiod.py and gtap_model_equations.py) and the removal of two no-op capture hooks in path_capi.py; the photo itself is unchanged. Re-stamped again 425a15e8 -> d78bbe8c: comments only (identical AST in path_capi.py, gtap_model_multiperiod.py, period_debug.py).'
+notes: 'FROZEN (MAR-218): its generator, scripts/family/regen_photos.py, ran inside the old Pyomo multiperiod driver and was deleted by PR 4 of gtap-on-core; it can be read with git show 2c0d882a:scripts/family/regen_photos.py. pyomo_code re-stamped by PR 4 of gtap-on-core (61ef31a1 -> 425a15e8): the Pyomo-only change was comments (identical AST in gtap_model_multiperiod.py and gtap_model_equations.py) and the removal of two no-op capture hooks in path_capi.py; the photo itself is unchanged. Re-stamped again 425a15e8 -> d78bbe8c: comments only (identical AST in path_capi.py, gtap_model_multiperiod.py, period_debug.py). Re-stamped again d78bbe8c -> 2bdcaebc (MAR-163): seed_all_periods in gtap_model_multiperiod.py now raises on a missing or unreadable seed GDX; with a readable GDX it seeds the same values, so the photo itself is unchanged.'

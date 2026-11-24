@@ -91,7 +91,7 @@ def _solve(dataset: str, ifsub: int):
         va_subsidy_basis="gempack",
     )
     gdx = ref_gdx(dataset, ifsub)
-    m, codes, _ = solve_on_core(p, ac, rr, ref_gdx=gdx, seed_gdx=gdx)
+    m, codes, _ = solve_on_core(p, ac, rr, mode="gtap", ref_gdx=gdx, seed_gdx=gdx)
     return m, codes
 
 
