@@ -9,7 +9,7 @@
 import { U, K, P, T, svg, ARR, FLAMEDEFS, brick, plate, tile, sheet, flight, pilot, rocket, tower, TOWER, writeFigures } from "./lego_kit.mjs";
 
 const arrow=(x1,y1,x2,y2)=>`<path d="M${x1},${y1} L${x2},${y2}" class="ln" marker-end="url(#ah)"/>`;
-const txt=(x,y,t,cls="lbl",a="start")=>`<text x="${x}" y="${y}" class="${cls}" text-anchor="${a}">${t}</text>`;
+const txt=(x,y,t,cls="lbl",a="start",fs)=>`<text x="${x}" y="${y}" class="${cls}" text-anchor="${a}"${fs?` style="font-size:${fs}px"`:""}>${t}</text>`;
 const chip=(x,y,w,h,title,sub)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" class="box"/>`+txt(x+w/2,y+22,title,"disp lbl","middle")+(sub?txt(x+w/2,y+40,sub,"mono sm","middle"):"");
 // a small tower: nx=4 studs, no text on the bricks
 const mini=(o={})=>tower({nx:4,h:15,labels:false,...o});
@@ -18,16 +18,16 @@ const FIGS={
  tower:()=>svg("0 20 560 245",T(40,250,tower({nx:7,h:26,fs:12.5,codeNames:true}))),
 
  periods:()=>{let o=ARR;
-  o+=T(40,215,mini())+txt(92,250,"one period","disp lbl","middle")+txt(92,266,"the SP model","mono sm","middle");
-  o+=arrow(190,140,262,140)+txt(226,128,"copy x3","sm","middle");
-  [["base","not solved"],["check","solved"],["shock","solved"]].forEach((p,i)=>{const x=280+i*180;
-    o+=T(x,215,mini())+txt(x+52,250,p[0],"disp lbl","middle")+txt(x+52,266,`t = '${p[0]}'`,"mono sm","middle");});
+  o+=T(20,215,mini())+txt(72,252,"one period","disp lbl","middle",17)+txt(72,272,"the SP model","mono sm","middle",15);
+  o+=arrow(160,140,212,140)+txt(186,126,"copy x3","sm","middle",15);
+  [["base","not solved"],["check","solved"],["shock","solved"]].forEach((p,i)=>{const x=230+i*150;
+    o+=T(x,215,mini())+txt(x+52,252,p[0],"disp lbl","middle",17)+txt(x+52,272,`t = '${p[0]}'`,"mono sm","middle",15);});
   // the shock: one instrument cell of the shock copy differs from check
   const [sx,sy]=P(4*U,2*U,8+15/2);
-  o+=`<circle cx="${640+sx+12}" cy="${215+sy}" r="7" style="fill:var(--c-shock);stroke:var(--jxb-surface);stroke-width:2"/>`;
-  o+=txt(640+sx+26,215+sy+4,"imptx +10 %","mono sm");
-  o+=txt(640+sx+26,215+sy+20,"the one cell","sm")+txt(640+sx+26,215+sy+34,"that differs","sm");
-  return svg("0 55 900 220",o);},
+  o+=`<circle cx="${530+sx+12}" cy="${215+sy}" r="7" style="fill:var(--c-shock);stroke:var(--jxb-surface);stroke-width:2"/>`;
+  o+=txt(530+sx+24,215+sy+5,"imptx +10 %","mono sm","start",15);
+  o+=txt(530+sx+24,215+sy+24,"the one cell","sm","start",15)+txt(530+sx+24,215+sy+42,"that differs","sm","start",15);
+  return svg("0 55 790 225",o);},
 
  overwrite:()=>{let o=ARR;const nx=5,h=19,fs=10.5;
   o+=T(40,240,tower({nx,h,fs}))+txt(110,268,"check","disp lbl","middle");
@@ -50,7 +50,7 @@ const FIGS={
   return svg("0 0 800 250",o);},
 
  pipeline:()=>{let o=ARR+FLAMEDEFS;const y=150,cx=i=>70+i*190;
-  const cap=(i,a,b)=>txt(cx(i),y+40,a,"disp lbl","middle")+txt(cx(i),y+57,b,"mono sm","middle");
+  const cap=(i,a,b)=>txt(cx(i),y+42,a,"disp lbl","middle",18)+txt(cx(i),y+64,b,"mono sm","middle",14);
   o+=T(cx(0)-64,y,plate(0,0,0,4,2,"var(--c-data)"))+cap(0,"Data","SAM, HAR, GDX, MIP");
   o+=T(cx(1)-60,y,plate(0,0,0,4,2,"var(--c-data)")+brick(U,0,8,2,2,20,"var(--c-prod)"))+cap(1,"Calibration","benchmark → params");
   o+=T(cx(2)-50,y,tower({nx:3,h:11,labels:false}))+cap(2,"Blocks → model","gtap, pep, simple_open");
@@ -59,7 +59,7 @@ const FIGS={
   o+=`<g transform="translate(${cx(4)-28},${y-16}) scale(.6)">${tower({nx:2,h:8,labels:false})}</g>`;
   o+=cap(4,"Validation","gates vs the reference");
   for(let i=0;i<4;i++)o+=arrow(cx(i)+70,y-40,cx(i+1)-62,y-40);
-  return svg("0 30 960 195",o);},
+  return svg("-20 30 980 205",o);},
 };
 
 const TITLES={
