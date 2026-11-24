@@ -37,7 +37,7 @@ from equilibria.templates.gtap.instruments import (
     is_free_cell,
     period_key,
 )
-from equilibria.templates.gtap.shocks import gempack_kind, shocked
+from equilibria.templates.gtap.shocks import Shock, gempack_kind, shocked
 
 # Family-local: rows that read an instrument inline under ifSUB=1. The Pyomo route's map
 # (``PYOMO_INLINE_EQS``) has only imptx and rejects prdtx_rai under ifSUB=1; the array
@@ -198,7 +198,7 @@ def level(mp: MPArrays, name: str, cell: tuple, pct: float) -> float:
 def apply_shock(
     mp: MPArrays,
     sys: Any,
-    shock: Mapping[str, Mapping[tuple, float]],
+    shock: Shock,
     *,
     levels: bool = False,
 ) -> dict[str, dict[tuple, float]]:

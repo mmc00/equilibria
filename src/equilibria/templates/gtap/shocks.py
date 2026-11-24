@@ -96,6 +96,10 @@ def expand_uniform(
     return cells
 
 
+# A shock: per instrument, ``{cell: %}`` or ``uniform(pct)``.
+Shock = Mapping[str, Mapping[tuple, float] | Uniform]
+
+
 def reject_uniform(shock: Mapping[str, Any], where: str) -> None:
     """TypeError if ``shock`` carries a ``uniform``: ``where`` reads explicit cells."""
     for name, spec in shock.items():
@@ -150,7 +154,7 @@ def _level(m: Any, name: str, cell: tuple, pct: float) -> float:
 
 
 def apply_shock(
-    m: Any, shock: Mapping[str, Mapping[tuple, float]], *, levels: bool = False
+    m: Any, shock: Shock, *, levels: bool = False
 ) -> dict[str, dict[tuple, float]]:
     """Escribe ``shock`` ({instrumento: {celda: %}}) en el periodo shock de ``m``.
 
