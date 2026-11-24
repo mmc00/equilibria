@@ -15,6 +15,7 @@ The GEMPACK solutions are the capFlex matrix records
 Usage:
     uv run python scripts/gtap/gen_linearization_study.py
 """
+
 from __future__ import annotations
 
 import sys
@@ -44,7 +45,9 @@ def _config_tag(shock_pct: str, steps: str) -> str:
     return f"tm{s}_s{st}"
 
 
-def _sl4_fixture(data_root: Path, dataset: str, shock_pct: str, steps: str) -> Path | None:
+def _sl4_fixture(
+    data_root: Path, dataset: str, shock_pct: str, steps: str
+) -> Path | None:
     """The capFlex SL4 dump recorded for (dataset, shock, steps), or None if absent."""
     shock = float(shock_pct)
     folder = find_reference(
@@ -71,18 +74,24 @@ def _var_list_rows() -> list[str]:
 
 def _seed_gdx(dataset: str) -> Path | None:
     """The GAMS MCP shock reference (ifSUB=1) that seeds the Python solve."""
-    folder = find_reference(dataset, "gams", form="mcp", mode="gtap", ifsub=1, fbep="header")
+    folder = find_reference(
+        dataset, "gams", form="mcp", mode="gtap", ifsub=1, fbep="header"
+    )
     return None if folder is None else folder / "out.gdx"
 
 
+def _scaled_tol(shock_pct: str) -> float:
+    """1 pp at the 10 % shock, scaled with the shock: at 0.1 % almost no cell moves
+    1 pp, so a fixed band would read ~100 % whatever Python does."""
+    return 0.01 * float(shock_pct) / 10.0
+
+
 def _match_cell(data_root: Path, dataset: str, shock_pct: str, steps: str) -> str:
-    """within-1pp match% for (dataset, shock, steps), or '—' if the record is absent.
+    """'<within 1pp> / <within the scaled band>' for (dataset, shock, steps), or
+    '—' if the record is absent.
 
     The Python solve is only invoked when the GEMPACK fixture exists (import-light
-    otherwise). Python is solved at the study's 10% baseline; non-10% shock columns
-    are marked '— (py-shock pending)' rather than fabricated, since driving the
-    multiperiod solve at an arbitrary shock magnitude is not yet wired.
-    """
+    otherwise). Python is solved at the same size as the GEMPACK record."""
     sl4 = _sl4_fixture(data_root, dataset, shock_pct, steps)
     if sl4 is None:
         return "—"
@@ -90,18 +99,17 @@ def _match_cell(data_root: Path, dataset: str, shock_pct: str, steps: str) -> st
     # solve runs unseeded and returns a spurious number — report "—" instead.
     if _seed_gdx(dataset) is None:
         return "— (no seed GDX)"
-    # A fixture exists; measure Python (10% baseline) vs this GEMPACK solution.
-    if not _config_tag(shock_pct, steps).startswith("tm10"):
-        return "— (py-shock pending)"
     try:
-        return _measure_within_pp(dataset, sl4)
+        within, scaled = _measure_within_pp(dataset, sl4, shock_pct)
     except Exception as exc:  # never crash the page on one dataset
         return f"— (err: {type(exc).__name__})"
+    return f"{within} / {scaled}"
 
 
-def _measure_within_pp(dataset: str, sl4: Path) -> str:
-    """Solve Python's 10% shock and return the within-1pp match% string vs the
-    GEMPACK sl4 dump. Imports Pyomo — only called when a fixture is present."""
+def _measure_within_pp(dataset: str, sl4: Path, shock_pct: str) -> tuple[str, str]:
+    """Solve Python at ``shock_pct`` and return the (within 1pp, within the scaled
+    band) match% strings vs the GEMPACK sl4 dump. Imports Pyomo — only called when
+    a fixture is present."""
     from gempack_reference import Q_TO_VAR, gempack_qty_pct
     from pyomo.environ import value as V
 
@@ -114,7 +122,7 @@ def _measure_within_pp(dataset: str, sl4: Path) -> str:
     except ImportError:
         pass
 
-    m = _solve_shock_10(dataset)
+    m = _solve_at(dataset, shock_pct)
     diffs = []
     for gvar, spec in Q_TO_VAR.items():
         try:
@@ -135,26 +143,44 @@ def _measure_within_pp(dataset: str, sl4: Path) -> str:
                 continue
             diffs.append(abs((s / b - 1.0) - gfrac))
     if not diffs:
-        return "—"
-    within = sum(1 for x in diffs if x <= 0.01) / len(diffs)
-    return f"{within * 100:.0f}%"
+        return "—", "—"
+    tol = _scaled_tol(shock_pct)
+
+    def pct(band: float) -> str:
+        return f"{sum(1 for x in diffs if x <= band) / len(diffs) * 100:.0f}%"
+
+    return pct(0.01), pct(tol)
 
 
 @cache
-def _solve_shock_10(dataset: str):
-    """The 10 % shock solved as the paper's against-GEMPACK comparator solves it
+def _solve_at(dataset: str, shock_pct: str):
+    """The shock solved as the paper's against-GEMPACK comparator solves it
     (``_solve_shock``: ifSUB=1, the fixture's closure, base calibrated, check
-    solved), so the page and the gate measure the same run. Cached: every 10 %
-    cell of a dataset reads the same run."""
+    solved). At 10 % it is the gate's run (the default tariff); every other size is
+    ``uniform(<size>)`` on ``imptx``, as GEMPACK's ``Shock tm = uniform <size>``.
+    Cached: every cell of a (dataset, size) reads the same run."""
     tests = str(ROOT / "tests")
     if tests not in sys.path:
         sys.path.insert(0, tests)
     from templates.gtap.test_gtap7_gempack_parity import _solve_shock
 
-    m, code = _solve_shock(dataset, 1, FIXTURE_CLOSURE)
+    kw = {} if shock_pct == "10" else {"tariff_pct": float(shock_pct)}
+    m, code = _solve_shock(dataset, 1, FIXTURE_CLOSURE, **kw)
     if code != 1:
-        raise RuntimeError(f"{dataset}: the 10 % shock did not solve (code {code})")
+        raise RuntimeError(
+            f"{dataset}: the {shock_pct} % shock did not solve (code {code})"
+        )
     return m
+
+
+def _nonlinearity(cells: list[str]) -> str:
+    """|scaled match(10 %) − scaled match(0.1 %)| when both are numbers."""
+    try:
+        hi = float(cells[0].split("/")[-1].strip().rstrip("%"))
+        lo = float(cells[-1].split("/")[-1].strip().rstrip("%"))
+    except ValueError:
+        return "—"
+    return f"{abs(hi - lo):.0f}pp"
 
 
 def build_page(data_root: Path, out_md: Path) -> str:
@@ -162,21 +188,16 @@ def build_page(data_root: Path, out_md: Path) -> str:
     data_root = Path(data_root)
 
     # --- shock-sweep table ---
-    sweep_header = "| dataset | " + " | ".join(f"{s}%" for s in SWEEP_SHOCKS) \
+    sweep_header = (
+        "| dataset | "
+        + " | ".join(f"{s}%" for s in SWEEP_SHOCKS)
         + " | non-linearity |"
+    )
     sweep_sep = "|" + "---|" * (len(SWEEP_SHOCKS) + 2)
     sweep_rows = []
     for ds in DATASETS:
-        cells = [_match_cell(data_root, ds, s, "8 16 32")
-                 for s in SWEEP_SHOCKS]
-        # non-linearity = |match(10%) − match(0.1%)| when both are numeric
-        nl = "—"
-        try:
-            hi = float(cells[0].rstrip("%"))
-            lo = float(cells[-1].rstrip("%"))
-            nl = f"{abs(hi - lo):.0f}pp"
-        except ValueError:
-            pass
+        cells = [_match_cell(data_root, ds, s, "8 16 32") for s in SWEEP_SHOCKS]
+        nl = _nonlinearity(cells)
         sweep_rows.append(f"| `{ds}` | " + " | ".join(cells) + f" | {nl} |")
 
     # --- Gragg-convergence table (10% shock, varying steps) ---
@@ -184,13 +205,13 @@ def build_page(data_root: Path, out_md: Path) -> str:
     gragg_sep = "|" + "---|" * (len(GRAGG_STEPS) + 1)
     gragg_rows = []
     for ds in DATASETS:
-        cells = [_match_cell(data_root, ds, "10", s)
-                 for s in GRAGG_STEPS]
+        cells = [_match_cell(data_root, ds, "10", s) for s in GRAGG_STEPS]
         gragg_rows.append(f"| `{ds}` | " + " | ".join(cells) + " |")
 
     var_rows = _var_list_rows()
 
-    md = f"""# GTAP7 vs GEMPACK — linearization study
+    md = (
+        f"""# GTAP7 vs GEMPACK — linearization study
 
 This page measures how close equilibria's levels solution of GTAP7 lands to
 GEMPACK's Gragg-linearized one at a +10% global bilateral tariff, across all five
@@ -218,14 +239,20 @@ Cells read **—** where the Windows-produced GEMPACK fixture is not yet present
 
 ## Evidence 1 — shock-size sweep (default Gragg steps)
 
-A uniform `tm` shock at decreasing magnitude. GEMPACK is recorded at every size;
-Python is solved at 10% only (driving the levels solve at another magnitude is not
-wired yet), so the smaller sizes read **— (py-shock pending)**. The
-**non-linearity** column is |match(10%) − match(0.1%)| once both exist.
+A uniform `tm` shock at decreasing magnitude. GEMPACK is recorded at every size
+(`Shock tm = uniform <size>`) and Python is solved at the same size
+(`{{"imptx": uniform(<size>)}}`; 10% is the default tariff, the gate's run).
+
+Each cell reads **within 1pp / within the scaled band**. The scaled band is 1pp at
+10% and shrinks with the shock (0.3pp at 3%, 0.01pp at 0.1%): at a small shock
+almost no cell moves 1pp, so the fixed band alone would read ~100% whatever Python
+does. The **non-linearity** column is |scaled match(10%) − scaled match(0.1%)|.
 
 {sweep_header}
 {sweep_sep}
-""" + "\n".join(sweep_rows) + f"""
+"""
+        + "\n".join(sweep_rows)
+        + f"""
 
 ## Evidence 2 — Gragg refinement (fixed 10% shock)
 
@@ -235,7 +262,9 @@ under the 1pp band, so what remains (one 3x3 cell) is not GEMPACK's method.
 
 {gragg_header}
 {gragg_sep}
-""" + "\n".join(gragg_rows) + """
+"""
+        + "\n".join(gragg_rows)
+        + """
 
 ## Variables compared
 
@@ -244,7 +273,9 @@ Var, verified empirically and by economic meaning:
 
 | GEMPACK | Python Var |
 |---|---|
-""" + "\n".join(var_rows) + """
+"""
+        + "\n".join(var_rows)
+        + """
 
 ## Welfare (diagnostic only)
 
@@ -270,6 +301,7 @@ modes on 16,424 cells). See
   solver, condensed by nature).
 - Horridge, *tpmh0103* SIMPLE model (the GAMS-vs-GEMPACK reference, PR #40).
 """
+    )
 
     out_md = Path(out_md)
     out_md.parent.mkdir(parents=True, exist_ok=True)

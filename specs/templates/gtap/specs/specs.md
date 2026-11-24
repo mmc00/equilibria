@@ -1,6 +1,6 @@
 # templates/gtap specification
 
-Last synced: 2026-10-27
+Last synced: 2026-11-23
 
 ## Purpose
 
@@ -33,6 +33,17 @@ the `shock` cells of `imptx` with `apply_shock`, as GAMS fixes `tm`: in
 `mode="gtap"` +10% on the power 1+t of every route, the domestic diagonal
 included; in `mode="altertax"` the rate times 1.1. No equation is rebuilt and no
 solved value is patched after the solve.
+
+### Requirement: A uniform shock on an instrument
+Source: change uniform-shock, MAR-227
+
+`shocks.uniform(pct)` may replace the cell map of an instrument in a shock
+(`{"imptx": uniform(3)}`). `apply_shock` and the family `apply_shock` must
+expand it, on the built model, to every `shock` cell of that instrument that
+can take a shock, each at `pct` with the instrument's GEMPACK kind, all or
+nothing, and must raise `ValueError` when no cell can take it. In
+`mode="gtap"`, `{"imptx": uniform(10)}` must write the same cells and values
+as the default tariff shock.
 
 ### Requirement: An imptx shock cell must be read by a live row
 Source: change tariff-to-shock-block

@@ -26,18 +26,22 @@ Cells read **—** where the Windows-produced GEMPACK fixture is not yet present
 
 ## Evidence 1 — shock-size sweep (default Gragg steps)
 
-A uniform `tm` shock at decreasing magnitude. GEMPACK is recorded at every size;
-Python is solved at 10% only (driving the levels solve at another magnitude is not
-wired yet), so the smaller sizes read **— (py-shock pending)**. The
-**non-linearity** column is |match(10%) − match(0.1%)| once both exist.
+A uniform `tm` shock at decreasing magnitude. GEMPACK is recorded at every size
+(`Shock tm = uniform <size>`) and Python is solved at the same size
+(`{"imptx": uniform(<size>)}`; 10% is the default tariff, the gate's run).
+
+Each cell reads **within 1pp / within the scaled band**. The scaled band is 1pp at
+10% and shrinks with the shock (0.3pp at 3%, 0.01pp at 0.1%): at a small shock
+almost no cell moves 1pp, so the fixed band alone would read ~100% whatever Python
+does. The **non-linearity** column is |scaled match(10%) − scaled match(0.1%)|.
 
 | dataset | 10% | 3% | 1% | 0.3% | 0.1% | non-linearity |
 |---|---|---|---|---|---|---|
-| `gtap7_3x3` | 99% | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — |
-| `gtap7_3x4` | 100% | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — |
-| `gtap7_5x5` | 100% | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — |
-| `gtap7_10x7` | 100% | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — |
-| `gtap7_15x10` | 100% | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — (py-shock pending) | — |
+| `gtap7_3x3` | 99% / 99% | 100% / 99% | 100% / 99% | 100% / 99% | 100% / 99% | 0pp |
+| `gtap7_3x4` | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% | 0pp |
+| `gtap7_5x5` | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% | 0pp |
+| `gtap7_10x7` | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% | 0pp |
+| `gtap7_15x10` | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% | 0pp |
 
 ## Evidence 2 — Gragg refinement (fixed 10% shock)
 
@@ -47,11 +51,11 @@ under the 1pp band, so what remains (one 3x3 cell) is not GEMPACK's method.
 
 | dataset | Steps 4 | Steps 8 | Steps 16 | Steps 32 | Steps 64 |
 |---|---|---|---|---|---|
-| `gtap7_3x3` | 99% | 99% | 99% | 99% | 99% |
-| `gtap7_3x4` | 100% | 100% | 100% | 100% | 100% |
-| `gtap7_5x5` | 100% | 100% | 100% | 100% | 100% |
-| `gtap7_10x7` | 100% | 100% | 100% | 100% | 100% |
-| `gtap7_15x10` | 100% | 100% | 100% | 100% | 100% |
+| `gtap7_3x3` | 99% / 99% | 99% / 99% | 99% / 99% | 99% / 99% | 99% / 99% |
+| `gtap7_3x4` | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% |
+| `gtap7_5x5` | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% |
+| `gtap7_10x7` | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% |
+| `gtap7_15x10` | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% | 100% / 100% |
 
 ## Variables compared
 

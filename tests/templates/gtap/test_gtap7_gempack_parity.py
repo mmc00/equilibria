@@ -72,6 +72,7 @@ def _solve_shock(
     residual_region: str | None = None,
     backend: str | None = None,
     unit_sigma: str = "gams",
+    tariff_pct: float | None = None,
 ):
     """Build + seed + solve base→check→shock (gtap pure MCP) and return the model.
 
@@ -98,6 +99,10 @@ def _solve_shock(
     ``unit_sigma`` "gams" (the default) keeps the 1.01 stand-in for a unit elasticity,
     as the recorded oracles (paper Table 1, the example-15 gaps) were solved; "gempack"
     solves it as exact sigma = 1 (log-form CD), which the gtap7_gempack gate uses.
+
+    ``tariff_pct`` None (the default) passes no shock, so the driver writes its +10 %
+    default tariff; a number passes ``{"imptx": uniform(tariff_pct)}``, the same cells
+    at that size (GEMPACK ``Shock tm = uniform <x>``, the linearization study).
     """
     import os as _os
 
@@ -147,6 +152,7 @@ def _solve_shock(
         from equilibria.family.photos import photo_closure
         from equilibria.templates.gtap import GTAPParameters
         from equilibria.templates.gtap.recipe import gtap_static
+        from equilibria.templates.gtap.shocks import uniform
         from equilibria.templates.gtap.template import GTAP
 
         d = dataset_dir(dataset)
@@ -175,6 +181,7 @@ def _solve_shock(
                 backend=backend,
             ),
             recipe=gtap_static(base_calibrated=True, solve_check=True),
+            shock=None if tariff_pct is None else {"imptx": uniform(tariff_pct)},
         )
         out = ex.run()
         assert ex.model is not None
@@ -342,3 +349,35 @@ def test_gtap7_gempack_parity(row, route):
         f"[{row.dataset}/gempack/{savf_flag}] {within * 100:.1f}% of quantity cells within "
         f"1pp < floor {floor * 100:.0f}% (median |Δ|={med * 100:.2f}pp) — regression"
     )
+
+
+@pytest.mark.needs_path
+def test_uniform_10_solves_like_default():
+    """The linearization study's shock sizes go through ``uniform``: at 10 % it must
+    solve the same shock as the default tariff (every shock-period Var, 1e-12 rel)."""
+    from pyomo.environ import Var, value
+
+    if not has_dataset("gtap7_3x3"):
+        pytest.skip("dataset HAR missing: gtap7_3x3")
+
+    def shock_vars(m) -> dict[str, float]:
+        out = {}
+        for v in m.component_data_objects(Var):
+            idx = v.index()
+            if (
+                isinstance(idx, tuple)
+                and idx
+                and idx[-1] == "shock"
+                and v.value is not None
+            ):
+                out[v.name] = float(value(v))
+        return out
+
+    m_def, code_def = _solve_shock("gtap7_3x3", 1, "capFlex")
+    want = shock_vars(m_def)
+    m_uni, code_uni = _solve_shock("gtap7_3x3", 1, "capFlex", tariff_pct=10.0)
+    got = shock_vars(m_uni)
+    assert code_def == 1 and code_uni == 1
+    assert got.keys() == want.keys() and want
+    bad = [n for n in want if got[n] != pytest.approx(want[n], rel=1e-12, abs=1e-14)]
+    assert not bad, f"{len(bad)} shock vars differ, e.g. {bad[:5]}"

@@ -18,6 +18,11 @@ instrumento (``GEMPACK_KIND``), sobre su valor del check:
   power_kappa  % de la potencia 1/(1-kappaf) (tinc)                1-(1-k)/(1+p)
   power_fct    % de 1+fctts+fcttx (tfe); fcttx absorbe el cambio
 
+``uniform(pct)`` en lugar del mapa de celdas pone ``pct`` en toda celda del
+instrumento que puede llevar un shock (GEMPACK ``Shock tm = uniform 3``):
+
+    apply_shock(m, {"imptx": uniform(3)})
+
 Con ``levels=True`` cada numero es el valor en niveles de la celda.  Aplicar el
 mismo shock dos veces da lo mismo que una: la conversion parte del check.
 
@@ -27,7 +32,8 @@ de la Tabla 1 del paper y de los gates contra GAMS, escrito igual que los demas.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from equilibria.blocks.gtap.periods import CHECK, SHOCK
@@ -57,6 +63,51 @@ GEMPACK_KIND: dict[str, str] = {
     "lambdamg": "pct",
     "pnum": "pct",
 }
+
+
+@dataclass(frozen=True)
+class Uniform:
+    """One GEMPACK percent for every shock cell of an instrument that can take a
+    shock (``uniform``)."""
+
+    pct: float
+
+    def __post_init__(self) -> None:
+        if isinstance(self.pct, bool) or not isinstance(self.pct, int | float):
+            raise TypeError(f"uniform() takes a number, got {self.pct!r}")
+
+
+def uniform(pct: float) -> Uniform:
+    """``pct`` % on every shock cell of the instrument that can take a shock, as
+    GEMPACK's ``Shock tm = uniform 3``: ``{"imptx": uniform(3)}``."""
+    return Uniform(pct)
+
+
+def expand_uniform(
+    name: str, spec: Any, cells_of: Callable[[str], Iterable[tuple]]
+) -> Any:
+    """``spec`` unchanged unless it is a ``Uniform``; then ``{cell: pct}`` over
+    ``cells_of(name)``. ValueError if no cell can take it."""
+    if not isinstance(spec, Uniform):
+        return spec
+    cells = dict.fromkeys(cells_of(name), spec.pct)
+    if not cells:
+        raise ValueError(f"uniform({spec.pct}) on {name}: no cell can take a shock")
+    return cells
+
+
+# A shock: per instrument, ``{cell: %}`` or ``uniform(pct)``.
+Shock = Mapping[str, Mapping[tuple, float] | Uniform]
+
+
+def reject_uniform(shock: Mapping[str, Any], where: str) -> None:
+    """TypeError if ``shock`` carries a ``uniform``: ``where`` reads explicit cells."""
+    for name, spec in shock.items():
+        if isinstance(spec, Uniform):
+            raise TypeError(
+                f"{where} needs explicit cells for {name}; expand uniform(...) "
+                "with apply_shock first"
+            )
 
 
 def gempack_kind(name: str) -> str:
@@ -103,7 +154,7 @@ def _level(m: Any, name: str, cell: tuple, pct: float) -> float:
 
 
 def apply_shock(
-    m: Any, shock: Mapping[str, Mapping[tuple, float]], *, levels: bool = False
+    m: Any, shock: Shock, *, levels: bool = False
 ) -> dict[str, dict[tuple, float]]:
     """Escribe ``shock`` ({instrumento: {celda: %}}) en el periodo shock de ``m``.
 
@@ -116,8 +167,19 @@ def apply_shock(
     """
     from pyomo.environ import value
 
+    def cells_of(name: str) -> Iterator[tuple]:
+        if name not in getattr(m, "_exogenous_instruments", frozenset()):
+            check_shock_cell(m, name, ())  # raises: not a registered instrument
+        for k in getattr(m, name):
+            kt = k if isinstance(k, tuple) else (k,)
+            if kt[-1] == SHOCK and _can_take_shock(m, name, kt[:-1]):
+                yield kt[:-1]
+
     out: dict[str, dict[tuple, float]] = {}
-    for name, cells in shock.items():
+    for name, spec in shock.items():
+        if levels and isinstance(spec, Uniform):
+            raise ValueError(f"uniform({spec.pct}) on {name} is a percent, not a level")
+        cells = expand_uniform(name, spec, cells_of)
         for cell, x in cells.items():
             cell = tuple(cell)
             check_shock_cell(m, name, cell)  # antes de leer su check
