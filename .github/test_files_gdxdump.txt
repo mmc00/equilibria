@@ -21,3 +21,4 @@ tests/templates/gtap/test_gtap_template_builders.py
 tests/templates/gtap/test_gtap_template_seed.py
 tests/templates/gtap/test_multiperiod_build_once.py
 tests/templates/gtap/test_multiperiod_fisher.py
+tests/templates/gtap/test_seed_gdx_must_exist.py
