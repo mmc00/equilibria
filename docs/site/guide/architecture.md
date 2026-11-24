@@ -1,5 +1,10 @@
 # Architecture overview
 
+```{raw} html
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../_static/jax_backend.css">
+```
+
 `equilibria` builds computable general equilibrium (CGE) models in Python from
 reusable **blocks**, and checks every model against its reference
 implementation in GAMS and GEMPACK. This page explains how the pieces fit,
@@ -16,50 +21,7 @@ says which variables it reads from the bricks below it.
 This is GTAP, as it is built today:
 
 ```{raw} html
-<svg viewBox="0 0 760 500" role="img" aria-label="GTAP as a tower of eight blocks, ShockBlock at the bottom and ClosureBlock on top"
-     style="max-width:100%;height:auto;font-family:sans-serif">
-  <rect x="0" y="0" width="760" height="500" rx="14" fill="#f7f6f2"/>
-  <g font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="15" font-weight="600" fill="#ffffff">
-    <g fill="#14213D"><rect x="110" y="20" width="36" height="10" rx="3"/><rect x="262" y="20" width="36" height="10" rx="3"/><rect x="414" y="20" width="36" height="10" rx="3"/><rect x="60" y="30" width="440" height="44" rx="5"/></g>
-    <text x="78" y="58">ClosureBlock</text>
-    <g fill="#1E40AF"><rect x="110" y="74" width="36" height="10" rx="3"/><rect x="262" y="74" width="36" height="10" rx="3"/><rect x="414" y="74" width="36" height="10" rx="3"/><rect x="60" y="84" width="440" height="44" rx="5"/></g>
-    <text x="78" y="112">IncomeBlock</text>
-    <g fill="#1D4ED8"><rect x="110" y="128" width="36" height="10" rx="3"/><rect x="262" y="128" width="36" height="10" rx="3"/><rect x="414" y="128" width="36" height="10" rx="3"/><rect x="60" y="138" width="440" height="44" rx="5"/></g>
-    <text x="78" y="166">DemandUtilityBlock</text>
-    <g fill="#1E40AF"><rect x="110" y="182" width="36" height="10" rx="3"/><rect x="262" y="182" width="36" height="10" rx="3"/><rect x="414" y="182" width="36" height="10" rx="3"/><rect x="60" y="192" width="440" height="44" rx="5"/></g>
-    <text x="78" y="220">ArmingtonBilateralBlock</text>
-    <g fill="#1D4ED8"><rect x="110" y="236" width="36" height="10" rx="3"/><rect x="262" y="236" width="36" height="10" rx="3"/><rect x="414" y="236" width="36" height="10" rx="3"/><rect x="60" y="246" width="440" height="44" rx="5"/></g>
-    <text x="78" y="274">FactorBlock</text>
-    <g fill="#1E40AF"><rect x="110" y="290" width="36" height="10" rx="3"/><rect x="262" y="290" width="36" height="10" rx="3"/><rect x="414" y="290" width="36" height="10" rx="3"/><rect x="60" y="300" width="440" height="44" rx="5"/></g>
-    <text x="78" y="328">ProductionSupplyBlock</text>
-    <g fill="#1D4ED8"><rect x="110" y="344" width="36" height="10" rx="3"/><rect x="262" y="344" width="36" height="10" rx="3"/><rect x="414" y="344" width="36" height="10" rx="3"/><rect x="60" y="354" width="440" height="44" rx="5"/></g>
-    <text x="78" y="382">TradeCETBlock</text>
-    <g fill="#C2410C"><rect x="110" y="398" width="36" height="10" rx="3"/><rect x="262" y="398" width="36" height="10" rx="3"/><rect x="414" y="398" width="36" height="10" rx="3"/><rect x="60" y="408" width="440" height="44" rx="5"/></g>
-    <text x="78" y="436">ShockBlock</text>
-  </g>
-  <g font-size="13" fill="#bfcbe0" text-anchor="end">
-    <text x="486" y="57">numeraire, market clearing, Walras</text>
-    <text x="486" y="111">regional income, taxes, GDP</text>
-    <text x="486" y="165">final demand (CDE), utility</text>
-    <text x="486" y="219">imports by origin</text>
-    <text x="486" y="273">factor markets</text>
-    <text x="486" y="327">production nests, supply</text>
-    <text x="486" y="381">domestic vs export (CET)</text>
-    <text x="486" y="435" fill="#ffe8d9">the instruments: imptx, lambdava…</text>
-  </g>
-  <rect x="40" y="452" width="480" height="8" rx="3" fill="#94a3b8"/>
-  <g font-size="14" fill="#18202e">
-    <text x="545" y="56" font-weight="700">Closes the model</text>
-    <text x="545" y="76" fill="#5b6577">the last brick</text>
-    <text x="545" y="420" font-weight="700">Goes first</text>
-    <text x="545" y="440" fill="#5b6577">every brick above reads</text>
-    <text x="545" y="458" fill="#5b6577">the instruments it declares</text>
-    <text x="545" y="230" font-weight="700">8 blocks</text>
-    <text x="545" y="250" fill="#5b6577">GTAP_BLOCK_ORDER</text>
-    <text x="545" y="270" fill="#5b6577">in blocks/gtap/__init__.py</text>
-  </g>
-  <text x="280" y="486" font-size="13" fill="#5b6577" text-anchor="middle">Model.add_block checks every snap</text>
-</svg>
+:file: ../../assets/architecture/tower.svg
 ```
 
 Three rules keep the tower standing:
@@ -98,45 +60,7 @@ rewrite the bricks for that: it photocopies the SP model once per period and
 adds the `t` index to every variable ([ADR-0006](#decisions)).
 
 ```{raw} html
-<svg viewBox="0 0 900 290" role="img" aria-label="One single-period model copied into base, check and shock; only the shock copy has a changed instrument"
-     style="max-width:100%;height:auto;font-family:sans-serif">
-  <defs>
-    <marker id="arch-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b96a3"/>
-    </marker>
-  </defs>
-  <rect x="0" y="0" width="900" height="290" rx="14" fill="#f7f6f2"/>
-  <g>
-    <rect x="40" y="70" width="150" height="34" rx="4" fill="#1E40AF"/>
-    <rect x="40" y="106" width="150" height="34" rx="4" fill="#1D4ED8"/>
-    <rect x="40" y="142" width="150" height="34" rx="4" fill="#1E40AF"/>
-    <rect x="40" y="178" width="150" height="34" rx="4" fill="#C2410C"/>
-  </g>
-  <text x="115" y="50" text-anchor="middle" font-size="16" font-weight="700" fill="#18202e">SP model</text>
-  <text x="115" y="240" text-anchor="middle" font-size="13" fill="#5b6577">written once</text>
-  <text x="115" y="258" text-anchor="middle" font-size="13" fill="#5b6577">no time index</text>
-  <g fill="none" stroke="#8b96a3" stroke-width="1.6" marker-end="url(#arch-arr)">
-    <line x1="205" y1="141" x2="300" y2="141"/>
-  </g>
-  <text x="252" y="128" text-anchor="middle" font-size="12" fill="#5b6577">copy per period</text>
-  <g font-size="16" font-weight="700" fill="#18202e" text-anchor="middle">
-    <text x="395" y="50">base</text><text x="595" y="50">check</text><text x="795" y="50">shock</text>
-  </g>
-  <g>
-    <rect x="320" y="70" width="150" height="34" rx="4" fill="#1E40AF"/><rect x="320" y="106" width="150" height="34" rx="4" fill="#1D4ED8"/><rect x="320" y="142" width="150" height="34" rx="4" fill="#1E40AF"/><rect x="320" y="178" width="150" height="34" rx="4" fill="#C2410C"/>
-    <rect x="520" y="70" width="150" height="34" rx="4" fill="#1E40AF"/><rect x="520" y="106" width="150" height="34" rx="4" fill="#1D4ED8"/><rect x="520" y="142" width="150" height="34" rx="4" fill="#1E40AF"/><rect x="520" y="178" width="150" height="34" rx="4" fill="#C2410C"/>
-    <rect x="720" y="70" width="150" height="34" rx="4" fill="#1E40AF"/><rect x="720" y="106" width="150" height="34" rx="4" fill="#1D4ED8"/><rect x="720" y="142" width="150" height="34" rx="4" fill="#1E40AF"/><rect x="720" y="178" width="150" height="34" rx="4" fill="#C2410C" stroke="#18202e" stroke-width="3"/>
-  </g>
-  <g font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13" fill="#ffffff" text-anchor="middle">
-    <text x="395" y="200">imptx = 1.00</text><text x="595" y="200">imptx = 1.00</text><text x="795" y="200" font-weight="700">imptx = 1.10</text>
-  </g>
-  <g font-size="13" fill="#5b6577" text-anchor="middle">
-    <text x="395" y="240">the benchmark data</text>
-    <text x="595" y="240">must replicate base</text>
-    <text x="795" y="240">one cell differs:</text>
-    <text x="795" y="258">that is the shock</text>
-  </g>
-</svg>
+:file: ../../assets/architecture/periods.svg
 ```
 
 Because the bricks never saw `t`, changing the time structure (for example,
@@ -171,6 +95,14 @@ target, a quantity target. Instead of copying the model, the exercise
 changes **one** block, and only in the shock period, with `@overwrite`
 ([ADR-0004](#decisions)):
 
+```{raw} html
+:file: ../../assets/architecture/overwrite.svg
+```
+
+The check and shock towers are the same set of bricks except the top one: in
+the shock period the closure tile is lifted off and a closure with one more
+equation goes in its place. In code:
+
 <!-- fragmento -->
 ```python
 from equilibria.blocks.gtap import ClosureBlock, ShockBlock
@@ -190,6 +122,10 @@ calls a `swap`. The hook is registered on the block class, so every builder
 that uses that block sees it.
 
 ## The driver follows a recipe
+
+```{raw} html
+:file: ../../assets/architecture/recipe.svg
+```
 
 The **driver** (`core/driver.py`) is the person assembling the kit: it does
 not design bricks, it follows the instructions ([ADR-0011](#decisions)).
@@ -233,38 +169,7 @@ GTAP written in log form; they are not the production path.
 ## The pipeline
 
 ```{raw} html
-<svg viewBox="0 0 920 150" role="img" aria-label="equilibria pipeline"
-     style="max-width:100%;height:auto;font-family:sans-serif;font-size:13px">
-  <defs>
-    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5"
-            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b96a3"/>
-    </marker>
-  </defs>
-  <g fill="none" stroke="#8b96a3" stroke-width="1.5" marker-end="url(#arr)">
-    <line x1="168" y1="75" x2="192" y2="75"/>
-    <line x1="352" y1="75" x2="376" y2="75"/>
-    <line x1="536" y1="75" x2="560" y2="75"/>
-    <line x1="720" y1="75" x2="744" y2="75"/>
-  </g>
-  <g text-anchor="middle">
-    <rect x="8" y="45" width="160" height="60" rx="10" fill="#e8f0f8" stroke="#2f6fb0"/>
-    <text x="88" y="70" fill="#1a2129" font-weight="600">Data I/O</text>
-    <text x="88" y="90" fill="#5a6673" font-size="11">SAM · HAR · GDX · MIP</text>
-    <rect x="192" y="45" width="160" height="60" rx="10" fill="#e8f0f8" stroke="#2f6fb0"/>
-    <text x="272" y="70" fill="#1a2129" font-weight="600">Calibration</text>
-    <text x="272" y="90" fill="#5a6673" font-size="11">benchmark → parameters</text>
-    <rect x="376" y="45" width="160" height="60" rx="10" fill="#e8f0f8" stroke="#2f6fb0"/>
-    <text x="456" y="70" fill="#1a2129" font-weight="600">Blocks → model</text>
-    <text x="456" y="90" fill="#5a6673" font-size="11">gtap · pep_pyomo · simple_open</text>
-    <rect x="560" y="45" width="160" height="60" rx="10" fill="#e8f0f8" stroke="#2f6fb0"/>
-    <text x="640" y="70" fill="#1a2129" font-weight="600">Driver + solver</text>
-    <text x="640" y="90" fill="#5a6673" font-size="11">PATH (MCP) · IPOPT (NLP)</text>
-    <rect x="744" y="45" width="168" height="60" rx="10" fill="#e6f3ec" stroke="#2f8f5b"/>
-    <text x="828" y="70" fill="#1a2129" font-weight="600">Validation</text>
-    <text x="828" y="90" fill="#5a6673" font-size="11">gates vs GAMS · GEMPACK</text>
-  </g>
-</svg>
+:file: ../../assets/architecture/pipeline.svg
 ```
 
 1. **Data I/O** (`equilibria.babel`, `equilibria.sam_tools`) reads and
