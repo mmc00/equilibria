@@ -25,6 +25,9 @@ from test_multiperiod_sets import _load_3x3_params
 from equilibria._local_refs import refs_dir
 
 REF = refs_dir() / "gtap7_3x3_altertax_cd" / "out_altertax_ifsub0.gdx"
+# Without the GDX the seed used to leave the model unseeded and these tests passed
+# on the init point (CI); since MAR-163 the seed refuses a missing GDX, so skip.
+pytestmark = pytest.mark.skipif(not REF.exists(), reason="durable ref GDX absent")
 
 
 def _build_and_seed(p):

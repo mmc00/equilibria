@@ -67,15 +67,6 @@ def _seed_and_solve():
     return m, {k: r["code"] for k, r in res.items()}
 
 
-def _dump_py():
-    from pyomo.environ import SolverFactory
-
-    if not SolverFactory("ipopt").available(exception_flag=False):  # its solve is NLP
-        pytest.skip("ipopt not available")
-    # as recorded: the script's own GDX path (absent here: an unseeded solve)
-    return _script("dump_py_solution_gdx").solve("gtap7_3x3")
-
-
 def _demo():
     spec = importlib.util.spec_from_file_location(
         "demo", ROOT / "examples/demo_gtap_pep.py"
@@ -93,7 +84,6 @@ RUN = {
     "ifsub_equivalence[gtap7_3x3-ifsub0]": lambda: _ifsub(0),
     "ifsub_equivalence[gtap7_3x3-ifsub1]": lambda: _ifsub(1),
     "seed_and_solve_gtap[gtap7_3x3-ifsub0-shock]": _seed_and_solve,
-    "dump_py[gtap7_3x3]": _dump_py,
     "demo_gtap[nus333]": _demo,
 }
 
@@ -150,3 +140,13 @@ def test_seed_and_solve_gtap_builds_twice(monkeypatch) -> None:
     )
     assert out["code"] == 1
     assert len(built) == 2
+
+
+@pytest.mark.needs_gdxdump
+def test_dump_py_refuses_its_missing_gdx() -> None:
+    """The script seeds from output/<dataset>_pure_local_bundle/, absent outside the
+    machine that made it. It was recorded solving unseeded (the golden's
+    "dump_py[gtap7_3x3]"); since MAR-163 the seed refuses a missing GDX."""
+    _needs_data()
+    with pytest.raises(FileNotFoundError, match="pure_local_bundle"):
+        _script("dump_py_solution_gdx").solve("gtap7_3x3")

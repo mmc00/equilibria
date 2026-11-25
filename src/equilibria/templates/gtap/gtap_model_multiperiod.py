@@ -1059,6 +1059,8 @@ class GTAPMultiPeriodModel:
           - Multi-period GDX has trailing 't' dimension matching PERIODS
 
         Only unfixed VarData entries are seeded (fixed vars keep their value).
+        FileNotFoundError if ``gdx_path`` does not exist and RuntimeError if
+        gdxdump cannot list it: an unseeded solve must not pass for a seeded one.
         """
         import csv as _csv
         import shutil as _shutil
@@ -1066,6 +1068,8 @@ class GTAPMultiPeriodModel:
         from pathlib import Path as _Path
 
         gdx_path = _Path(gdx_path)
+        if not gdx_path.is_file():
+            raise FileNotFoundError(f"seed GDX not found: {gdx_path}")
 
         # Era una busqueda propia con GAMS 48 y Current a mano, y ordenaba las
         # versiones de Windows como TEXTO ("9" por delante de "53"). El
@@ -1139,6 +1143,11 @@ class GTAPMultiPeriodModel:
                 text=True,
                 check=False,
             )
+            if res.returncode != 0:
+                raise RuntimeError(
+                    f"gdxdump cannot read the seed GDX {gdx_path}: "
+                    f"{(res.stderr or res.stdout).strip()[:200]}"
+                )
             names = []
             for line in res.stdout.splitlines():
                 parts = line.split()

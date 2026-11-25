@@ -50,7 +50,7 @@ def solve(dataset: str):
     rr = list(p.sets.r)[-1]
     gc = GTAPClosureConfig(name="base", closure_type="MCP", capital_mobility="sluggish", fix_endowments=False, fix_taxes=False, fix_technology=False, if_sub=True, numeraire="pnum")
     with _nlp_env():
-        m, codes, _ = solve_on_core(p, gc, rr, ref_gdx=gdx_ref, seed_gdx=gdx_ref)
+        m, codes, _ = solve_on_core(p, gc, rr, mode="gtap", ref_gdx=gdx_ref, seed_gdx=gdx_ref)
     return m, codes
 
 

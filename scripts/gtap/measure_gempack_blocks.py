@@ -69,6 +69,7 @@ def _solve(dataset: str, base_calibrated: bool, ref_gdx: Path):
             p,
             gc,
             rr,
+            mode="gtap",
             ref_gdx=ref_gdx,
             seed_gdx=None if base_calibrated else ref_gdx,
             base_calibrated=base_calibrated,
