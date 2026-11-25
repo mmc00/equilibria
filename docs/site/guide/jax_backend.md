@@ -426,6 +426,34 @@ the phase 3 work and PR #257 (2026-11-16) unless they give another date.
 | ALTERTAX against GEMPACK/RunGTAP: 8 datasets, 6 outputs | 8 of 8 pass | 20x41: 1.6 to 2.0 min, GEMPACK 1.9 min (2026-11-12) |
 | The whole CI, with the JAX tests in it | green | 6.4 min, was 8.2 (PR #257) |
 
+### Known issue: wrong results on macOS when memory runs short
+
+About 1 run in 150 of 20x41 on the Mac ended with a wrong group of values or a crash,
+with the same data and code. The cause is a bug in macOS, not in this code and not in
+MUMPS. It was reported to Apple as FB25730526 (2026-11-25).
+
+- *What happens:* when a block of memory is freed, the macOS allocator marks its
+  pages as "reusable" (`madvise(MADV_FREE_REUSABLE)`). Soon after, it hands the same
+  place to a new block, which is written. When memory runs short, macOS can still
+  take back one of those pages: the new block then reads one 16 KiB page of zeros.
+- *Who is affected:* programs on the older macOS allocator ("magazine"), which is
+  what the conda Python gets on macOS 26.2. Measured on an M3 Pro with 18 GB.
+- *Why MUMPS seemed guilty:* with scaling (ICNTL(8)=8) and null-pivot detection
+  (ICNTL(24)=1), every factorization frees and allocates four more blocks of 0.8 to
+  3.4 MB, so more pages go through this path. Turning either option off made the
+  damage rarer (0 in 20,000 factorizations), not impossible.
+- *Proof:* a plain C program that replays the same `malloc`/`free` sequence, with no
+  Python, NumPy or MUMPS, lost a page 3 times in 10 minutes under memory pressure.
+  The same run with `MADV_FREE_REUSABLE` turned into a no-op lost none. On Linux the
+  stress test showed no damage in 18,600 factorizations.
+
+How to avoid it until Apple fixes it:
+
+- Do not run 20x41 while other programs take most of the memory (swap filling up is
+  the warning sign).
+- To be sure of a 20x41 result, run it again or check it on Linux. On Linux, 20x41
+  ALTERTAX passed against RunGTAP in 8 min cold, with a peak of 11.4 GB (2026-11-25).
+
 ### What it does not do yet, in detail
 
 `check_supported` in `src/equilibria/family/driver.py` refuses these before it
