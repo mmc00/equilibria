@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 import math
+import weakref
 from collections.abc import Callable
 from typing import Any
 
@@ -423,51 +424,61 @@ def solve_welfare_tail(
 # ── ifSUB report variables ──────────────────────────────────────────────────
 
 
+_MARGIN_CACHE: dict[int, tuple[Any, dict[str, tuple[int, dict]]]] = {}
+
+
 def mp_margin_params(params: Any, sets: Any) -> dict[str, tuple[int, dict]]:
     """The ``tmarg`` and ``amgm`` Params of the multiperiod Pyomo model
     (``GTAPMultiPeriodModel.build_sets``): ``{name: (number of indices, {key: value})}``,
     0.0 where absent (the Param default). Same formulas as there, which fall back to
-    ``vxmd`` for the trade base where ``vxsb`` is 0 (``tmarg_data`` does not)."""
+    ``vxmd`` for the trade base where ``vxsb`` is 0 (``tmarg_data`` does not).
+
+    Benchmark data only, so it is built once per ``params.benchmark`` (and ``sets``)
+    and the same dicts are returned to every caller, who must not change them. The
+    cache assumes the benchmark is not edited after the first call (its only writer,
+    ``gtap_parity_pipeline``, fills it at load); it is dropped when the benchmark is
+    collected."""
     bm = params.benchmark
+    hit = _MARGIN_CACHE.get(id(bm))
+    if hit is not None and hit[0] is sets:
+        return hit[1]
+    out = _margin_params(bm, sets)
+    try:
+        weakref.finalize(bm, _MARGIN_CACHE.pop, id(bm), None)
+    except TypeError:  # not weak-referenceable: no cache
+        return out
+    _MARGIN_CACHE[id(bm)] = (sets, out)
+    return out
+
+
+def _margin_params(bm: Any, sets: Any) -> dict[str, tuple[int, dict]]:
+    def floats(name: str) -> dict:
+        d = getattr(bm, name, None)
+        return {} if d is None else {k: float(v or 0.0) for k, v in d.items()}
+
+    vtwr, vcif, vfob = floats("vtwr"), floats("vcif"), floats("vfob")
+    vxsb, vxmd = floats("vxsb"), floats("vxmd")
+    has_vxmd = hasattr(bm, "vxmd")
+    M = list(sets.m)
     tmarg: dict = {}
     amgm: dict = {}
     for r in sets.r:
         for i in sets.i:
             for rp in sets.rp if hasattr(sets, "rp") else sets.r:
-                vtwr_total = (
-                    sum(float(bm.vtwr.get((r, i, rp, mg), 0.0) or 0.0) for mg in sets.m)
-                    if hasattr(bm, "vtwr")
-                    else 0.0
-                )
-                vcif = (
-                    float(bm.vcif.get((r, i, rp), 0.0) or 0.0)
-                    if hasattr(bm, "vcif")
-                    else 0.0
-                )
-                vfob = (
-                    float(bm.vfob.get((r, i, rp), 0.0) or 0.0)
-                    if hasattr(bm, "vfob")
-                    else 0.0
-                )
-                xw_bench = (
-                    float(bm.vxsb.get((r, i, rp), 0.0) or 0.0)
-                    if hasattr(bm, "vxsb")
-                    else 0.0
-                )
-                if xw_bench <= 0.0 and hasattr(bm, "vxmd"):
-                    xw_bench = float(bm.vxmd.get((r, i, rp), 0.0) or 0.0)
-                tmarg[(r, i, rp)] = (
-                    max(vcif - vfob, 0.0) / max(xw_bench, 1e-12)
+                key = (r, i, rp)
+                flows = [vtwr.get((r, i, rp, mg), 0.0) for mg in M]
+                vtwr_total = sum(flows)
+                xw_bench = vxsb.get(key, 0.0)
+                if xw_bench <= 0.0 and has_vxmd:
+                    xw_bench = vxmd.get(key, 0.0)
+                tmarg[key] = (
+                    max(vcif.get(key, 0.0) - vfob.get(key, 0.0), 0.0)
+                    / max(xw_bench, 1e-12)
                     if xw_bench > 0.0
                     else 0.0
                 )
                 if vtwr_total > 0.0:
-                    for mg in sets.m:
-                        flow = (
-                            float(bm.vtwr.get((r, i, rp, mg), 0.0) or 0.0)
-                            if hasattr(bm, "vtwr")
-                            else 0.0
-                        )
+                    for mg, flow in zip(M, flows, strict=True):
                         amgm[(mg, r, i, rp)] = flow / vtwr_total
     return {"tmarg": (3, tmarg), "amgm": (4, amgm)}
 
