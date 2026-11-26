@@ -26,7 +26,7 @@ from equilibria.gtap import (
 
 # The model of the GTAP quickstart: +10 % on the tariff power of one route.
 params = load("nus333")
-closure = ClosureConfig.gtap_default(savf_flag="capFix")
+closure = ClosureConfig.gtap_default()  # the RunGTAP default closure
 ex = Exercise(
     GTAP(params, closure, residual_region="ROW"),
     gtap_static("gtap", solve_check=True),
@@ -36,7 +36,7 @@ ex.run()
 m = ex.model.pyomo
 
 print(regional_ev(m))  # in units of regy
-# {'USA': -0.1079..., 'ROW': 0.0885...}
+# {'USA': -0.1243..., 'ROW': 0.1059...}
 ```
 
 By default it reads `period="shock"` at the prices of `ref="check"`. The
