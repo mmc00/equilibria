@@ -75,6 +75,7 @@ tests/compare/test_sl4.py
 tests/compare/test_sources.py
 tests/contracts/test_base_contract.py
 tests/core/test_core.py
+tests/core/test_door_contract.py
 tests/core/test_driver.py
 tests/core/test_exercise.py
 tests/core/test_layering.py
@@ -182,6 +183,7 @@ tests/family/test_squared_system.py
 tests/family/test_state_model.py
 tests/family/test_structure_reuse.py
 tests/family/test_unit_sigma.py
+tests/gtap/test_door.py
 tests/gtap/test_load.py
 tests/gtap/test_results.py
 tests/paper/test_run_tables.py

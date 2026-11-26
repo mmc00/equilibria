@@ -10,26 +10,18 @@ Modules:
     gtap_model_equations: All GTAP Standard 7 model equations
     gtap_solver: Solver interface (IPOPT, PATH)
 
-Example:
-    >>> from equilibria.templates.gtap import GTAPSets, GTAPParameters, GTAPSolver
-    >>> from equilibria.templates.gtap import build_gtap_contract
-    >>>
-    >>> # Load data
-    >>> sets = GTAPSets()
-    >>> sets.load_from_gdx("asa7x5.gdx")
-    >>>
-    >>> # Load parameters
-    >>> params = GTAPParameters()
-    >>> params.load_from_gdx("asa7x5.gdx")
-    >>>
-    >>> # Build and solve model
-    >>>     >>> eq_builder = GTAPModelEquations(sets, params)
-    >>> model = eq_builder.build_model()
-    >>>
-    >>> # Solve
-    >>> solver = GTAPSolver(model)
-    >>> result = solver.solve()
-    >>> print(f"Status: {result.status}")
+To load, build, shock and read a GTAP exercise, use the public door
+:mod:`equilibria.gtap` (ADR-0012)::
+
+    from equilibria.gtap import ClosureConfig, Exercise, GTAP, gtap_static, load, results
+
+    ex = Exercise(
+        GTAP(load("nus333"), ClosureConfig.gtap_default(), residual_region="ROW"),
+        gtap_static("gtap", solve_check=True),
+        shock={"imptx": {("USA", "MFG", "ROW"): 10.0}},
+    )
+    ex.run()
+    results(ex)
 """
 
 from equilibria.templates.gtap.altertax import (
