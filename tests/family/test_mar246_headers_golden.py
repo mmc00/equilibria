@@ -5,9 +5,10 @@ The oracle (``tests/family/golden/mar246_headers_main.json.gz``) was recorded on
 case here runs that recorder on this checkout in a child process and must give the
 same codes, margin params, ifSUB report variables, value, percent, volume and
 decomposition headers, within 1e-12 relative + 1e-12 absolute (a run is bit-identical
-on one machine). The decomposition headers get the 1e-7 absolute floor of
-``test_altertax_on_core.py`` (sums of level differences that cancel move more on
-another CPU).
+on one machine). The decomposition and volume headers get the 1e-7 absolute floor of
+``test_altertax_on_core.py``: they are sums of level differences that cancel, so
+another CPU moves them more (Linux CI vs the Mac golden: volume up to 5e-9 absolute on
+values up to 4.2, every other section within 1e-12).
 """
 
 from __future__ import annotations
@@ -66,12 +67,13 @@ def test_outputs_match_main(case: str, recorder) -> None:
     want = GOLDEN[case]
     assert set(got) == set(want)
     assert got["codes"] == want["codes"]
-    for section in ("margins", "report_vars", "headers", "pct", "volume"):
+    for section in ("margins", "report_vars", "headers", "pct"):
         bad = mismatches(
             _as_dict(got[section]), _as_dict(want[section]), rel=1e-12, abs_tol=1e-12
         )
         assert bad == [], f"{section}: {len(bad)} cells, first: {bad[:5]}"
-    bad = mismatches(
-        _as_dict(got["decomp"]), _as_dict(want["decomp"]), rel=1e-12, abs_tol=1e-7
-    )
-    assert bad == [], f"decomp: {len(bad)} cells, first: {bad[:5]}"
+    for section in ("volume", "decomp"):
+        bad = mismatches(
+            _as_dict(got[section]), _as_dict(want[section]), rel=1e-12, abs_tol=1e-7
+        )
+        assert bad == [], f"{section}: {len(bad)} cells, first: {bad[:5]}"
