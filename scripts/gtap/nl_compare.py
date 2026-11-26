@@ -1105,6 +1105,7 @@ def diff_nl_models(
     tol_rel: float = 1e-4,
     py_period: str = "base",
     cell_cap: int = 50,
+    skip_coefficients: frozenset = frozenset(),
 ) -> dict:
     """Compare two NLModel objects. Returns structured diff result.
 
@@ -1252,6 +1253,7 @@ def diff_nl_models(
             family_stats[fam] = {
                 "n_pairs": 0,
                 "n_diff": 0,
+                "n_not_gams": 0,
                 "max_rel": 0.0,
                 "worst": None,
             }
@@ -1320,7 +1322,10 @@ def diff_nl_models(
             effective_gams_c = -gams_c if sign_flip else gams_c
             denom = max(abs(effective_gams_c), 1e-10)
             rel = abs(py_c - effective_gams_c) / denom
-            if rel > tol_rel:
+            if rel > tol_rel and (fam, _split_name(vname)[0]) in skip_coefficients:
+                # left out before the count and the cap (NOT_GAMS_COEFFICIENTS)
+                fs["n_not_gams"] += 1
+            elif rel > tol_rel:
                 fs["n_diff"] += 1
                 if rel > fs["max_rel"]:
                     fs["max_rel"] = rel
@@ -1559,16 +1564,6 @@ def drop_written_form(family_stats: dict, cell_diffs: list) -> tuple[list, dict]
 NOT_GAMS_COEFFICIENTS = frozenset({("eq_xmgm", "xwmg"), ("eq_pwmg", "ptmg")})
 
 
-def drop_not_gams(cell_diffs: list) -> tuple[list, int]:
-    """(cell diffs outside NOT_GAMS_COEFFICIENTS, how many were left out)."""
-    kept = [
-        c
-        for c in cell_diffs
-        if (_split_name(c[0])[0], _split_name(c[1])[0]) not in NOT_GAMS_COEFFICIENTS
-    ]
-    return kept, len(cell_diffs) - len(kept)
-
-
 def gate_references(dataset: str, mode: str, ifsub: int) -> dict | None:
     """The data/ references of the case the MCP gate builds (fbep=header): the GAMS
     .nl folder and the MCP folder whose out.gdx seeds the run; None if either is
@@ -1648,10 +1643,13 @@ def _run_nl_gate(args, refs: dict) -> dict:
             tol_rel=args.tol_rel,
             py_period=phase,
             cell_cap=args.cell_cap,
+            skip_coefficients=NOT_GAMS_COEFFICIENTS,
         )
         print_diff_report(result, phase, tol_rel=args.tol_rel)  # -> stderr
         kept, left_out = drop_written_form(result["family_stats"], result["cell_diffs"])
-        kept, n_not_gams = drop_not_gams(kept)
+        n_not_gams = sum(
+            st.get("n_not_gams", 0) for st in result["family_stats"].values()
+        )
         viols = _cells_to_violations({**result, "cell_diffs": kept})
         for v in viols:
             v["phase"] = phase
@@ -1663,8 +1661,7 @@ def _run_nl_gate(args, refs: dict) -> dict:
                 st["n_diff"]
                 for fam, st in result["family_stats"].items()
                 if fam not in WRITTEN_FORM_EQUIVALENT
-            )
-            - n_not_gams,
+            ),
             "written_form_left_out": left_out,
             "not_gams_left_out": n_not_gams,
             "structural": result["structural"],

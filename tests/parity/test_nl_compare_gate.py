@@ -30,31 +30,32 @@ def test_written_form_families_are_left_out_and_counted():
     assert kept == [] and left_out == {"eq_pf": 36}
 
 
-def test_the_amgm_coefficients_are_left_out_of_the_cascade_and_counted():
-    """GEMPACK's margin shares sum to 1 (VTFSD_MSH), as Python's amgm; GAMS's
-    amgm is VTWR/(VCIF-VFOB) and keeps the data's rounding (MAR-247)."""
-    cells = [
-        (
-            "eq_xmgm[Svces,EU_28,Rice,CHN]",
-            "xwmg[EU_28,Rice,CHN]",
-            -1.0,
-            -1.00015,
-            1.5e-4,
-            1.5e-4,
-        ),
-        ("eq_pwmg[EU_28,Rice,CHN]", "ptmg[Svces]", -1.0, -1.00015, 1.5e-4, 1.5e-4),
-        (
-            "eq_xmgm[Svces,EU_28,Rice,CHN]",
-            "xmgm[Svces,EU_28,Rice,CHN]",
-            1.0,
-            2.0,
-            1.0,
-            0.5,
-        ),
-    ]
-    kept, n_left_out = NC.drop_not_gams(cells)
-    assert n_left_out == 2
-    assert [c[1] for c in kept] == ["xmgm[Svces,EU_28,Rice,CHN]"]
+def test_not_gams_cells_are_dropped_before_the_per_family_cap():
+    """More amgm cells than cell_cap must not push a real diff of the same family
+    past the cap, and the family count must leave them out (review of #275)."""
+    from _nl_parser import NLModel  # ty: ignore[unresolved-import]
+
+    def model(gams: bool) -> NLModel:
+        m = NLModel()
+        for k in range(60):
+            m.con_names.append(f"eq_xmgm[Svces,R{k},Rice,CHN]")
+            m.var_names.append(f"xwmg[R{k},Rice,CHN]")
+            m.J[k] = {k: -1.00015 if gams else -1.0}
+        m.con_names.append("eq_xmgm[Svces,R60,Rice,CHN]")
+        m.var_names.append("xmgm[Svces,R60,Rice,CHN]")
+        m.J[60] = {60: 2.0 if gams else 1.0}
+        m.n_cons = m.n_vars = 61
+        return m
+
+    res = NC.diff_nl_models(
+        model(False),
+        model(True),
+        cell_cap=50,
+        skip_coefficients=NC.NOT_GAMS_COEFFICIENTS,
+    )
+    assert [c[1] for c in res["cell_diffs"]] == ["xmgm[Svces,R60,Rice,CHN]"]
+    assert res["family_stats"]["eq_xmgm"]["n_diff"] == 1
+    assert res["family_stats"]["eq_xmgm"]["n_not_gams"] == 60
 
 
 def test_the_gate_case_has_its_references_on_gtap7_3x3():
