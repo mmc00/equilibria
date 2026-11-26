@@ -70,8 +70,8 @@ def test_outputs_match_main(case: str, recorder) -> None:
         bad = mismatches(
             _as_dict(got[section]), _as_dict(want[section]), rel=1e-12, abs_tol=1e-12
         )
-        assert bad == [], section
+        assert bad == [], f"{section}: {len(bad)} cells, first: {bad[:5]}"
     bad = mismatches(
         _as_dict(got["decomp"]), _as_dict(want["decomp"]), rel=1e-12, abs_tol=1e-7
     )
-    assert bad == [], "decomp"
+    assert bad == [], f"decomp: {len(bad)} cells, first: {bad[:5]}"
