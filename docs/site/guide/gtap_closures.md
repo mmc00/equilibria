@@ -73,8 +73,12 @@ allowed, raises an error.
 
 Foreign savings (the capital account, and so the trade balance) stay at their
 base value in real terms, and investment adjusts to the savings available.
-It is the usual choice for a short-run trade policy study. In GEMPACK it is
-the swap `dpsave(r) = del_tbalry(r)` (or fixing `del_tbalr`).
+It is the usual choice for a short-run trade policy study. The household's
+saving share stays fixed, as in GEMPACK's standard closure (`dpsave`
+exogenous). Do not read it as the GEMPACK swap `dpsave(r) = del_tbalry(r)`:
+that swap frees the saving share and fixes the trade balance as a share of
+world income, a different closure that equilibria does not have yet
+(`docs/archive/findings/gempack_fixture_closure_mislabeled_2026-08-02.md`).
 
 ```python
 fixed = results(run(ClosureConfig.gtap_default(savf_flag="capFix")))
@@ -92,7 +96,7 @@ The savings closure is `savf_flag`:
 | `capFlex` (default of `gtap_default`) | Nothing in the capital account: expected rates of return move together across regions (`risk * rore = rorg`) |
 | `capFix` | Foreign savings in real terms (`savf = pigbl * savf_bar`), except in the residual region |
 | `capSFix` | Foreign savings as a share of regional income (`chif`), except in the residual region |
-| `capFixDp` | Foreign savings as with `capFix`, and the saving share of the household (`dpsave`, `betas`) becomes endogenous: the closure of the RunGTAP runs with the swap `dpsave(USA) = del_tbalry(USA)` |
+| `capFixDp` | Foreign savings as with `capFix`, and the household's saving share (`dpsave`, `betas`) becomes endogenous. Not validated: against the `dpsave = del_tbalry` GEMPACK run it matches 34 % (the saving share runs away), because that swap also fixes `del_tbalry`, which the model has no equation for. Do not use it for results |
 | `capShrFix` | Accepted by the closure, but the blocks do not have GAMS's `chiInv` (the share of investment it fixes): not validated, do not use it for results |
 
 ## Sluggish capital
