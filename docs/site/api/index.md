@@ -3,6 +3,7 @@
 ```{toctree}
 :maxdepth: 2
 
+gtap
 core
 blocks
 sam_tools

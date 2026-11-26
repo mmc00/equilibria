@@ -19,12 +19,20 @@ lookup order and the ``FileNotFoundError`` that names the folder and the file) a
 ``results`` (``RuntimeError`` before ``ex.run()``; ``tables`` and ``summary``) needs
 data and a solve, so each door's own tests check it: for GTAP,
 ``tests/gtap/test_load.py`` and ``tests/gtap/test_results.py``.
+
+:func:`coverage_problems` keeps every template behind a door: it finds the template
+classes in the source without importing it (:func:`find_templates`), and each one
+must be the template of a door in :data:`DOORS` or be listed in :data:`PENDING` with
+the reason it has none yet. ``tests/core/test_door_contract.py`` runs both checks in
+CI, and ``scripts/dev/check_doors.py`` before a commit that touches ``src/``.
 """
 
 from __future__ import annotations
 
+import ast
 import importlib
 from dataclasses import dataclass
+from pathlib import Path
 
 CONTRACT_NAMES = ("load", "ClosureConfig", "Exercise", "results")
 
@@ -43,6 +51,120 @@ class DoorSpec:
 DOORS: tuple[DoorSpec, ...] = (
     DoorSpec("equilibria.gtap", "GTAP", "gtap_static", "gtap_default"),
 )
+
+# template classes without a door yet -> why (and what unblocks it)
+PENDING: dict[str, str] = {
+    "equilibria.templates.simple_open.template.SimpleOpenEconomy": (
+        "no closure class of its own (no ModelClosureConfig subclass) yet; its "
+        "door equilibria.simple_open comes after MAR-249"
+    ),
+}
+
+
+def package_root() -> Path:
+    """The folder of the installed ``equilibria`` package."""
+    import equilibria
+
+    return Path(equilibria.__file__).resolve().parent
+
+
+def _names(nodes: list[ast.expr]) -> set[str]:
+    out = set()
+    for n in nodes:
+        if isinstance(n, ast.Subscript):
+            n = n.value
+        if isinstance(n, ast.Name):
+            out.add(n.id)
+        elif isinstance(n, ast.Attribute):
+            out.add(n.attr)
+    return out
+
+
+def _real_body(fn: ast.FunctionDef) -> bool:
+    """Not a stub: not only ``...`` or ``raise NotImplementedError`` (after a docstring)."""
+    body = list(fn.body)
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+    ):
+        body = body[1:]  # the docstring
+    if not body:
+        return False
+    if len(body) == 1:
+        only = body[0]
+        if isinstance(only, ast.Expr) and isinstance(only.value, ast.Constant):
+            return only.value.value is not Ellipsis
+        if isinstance(only, ast.Raise) and only.exc is not None:
+            exc = only.exc.func if isinstance(only.exc, ast.Call) else only.exc
+            return "NotImplementedError" not in _names([exc])
+    return True
+
+
+def find_templates(root: Path, package: str = "equilibria") -> set[str]:
+    """Qualified names of the template classes under ``root`` (the folder of
+    ``package``), read from the source, nothing imported. A template is a class with a
+    real ``default_recipe`` (not a ``Protocol`` stub nor an abstract one that raises
+    ``NotImplementedError``) or a subclass of ``ModelTemplate``."""
+    out: set[str] = set()
+    for path in sorted(root.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        rel = path.relative_to(root).with_suffix("")
+        parts = [p for p in rel.parts if p != "__init__"]
+        module = ".".join([package, *parts])
+        for node in ast.parse(path.read_text(encoding="utf-8")).body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            bases = _names(node.bases)
+            if "Protocol" in bases:
+                continue
+            recipe = next(
+                (
+                    f
+                    for f in node.body
+                    if isinstance(f, ast.FunctionDef) and f.name == "default_recipe"
+                ),
+                None,
+            )
+            if (recipe is not None and _real_body(recipe)) or (
+                recipe is None and "ModelTemplate" in bases
+            ):
+                out.add(f"{module}.{node.name}")
+    return out
+
+
+def coverage_problems(
+    root: Path | None = None,
+    package: str = "equilibria",
+    doors: tuple[DoorSpec, ...] = DOORS,
+    pending: dict[str, str] | None = None,
+) -> list[str]:
+    """One message per template class with no door and not in ``pending``, per
+    ``pending`` entry that names no template class, and per ``pending`` entry whose
+    template already has a door; an empty list passes."""
+    pending = PENDING if pending is None else pending
+    templates = find_templates(root or package_root(), package)
+    behind: dict[str, str] = {}
+    for spec in doors:
+        cls = getattr(importlib.import_module(spec.module), spec.template, None)
+        if cls is not None:
+            behind[f"{cls.__module__}.{cls.__qualname__}"] = spec.module
+    out: list[str] = []
+    for t in sorted(templates):
+        if t in behind and t in pending:
+            out.append(f"{t} is in PENDING but has a door ({behind[t]}): remove it")
+        elif t not in behind and t not in pending:
+            out.append(
+                f"{t} has no door: add a DoorSpec to core.door.DOORS (ADR-0012) "
+                "or list it in PENDING with the reason"
+            )
+    out += [
+        f"{p} is in PENDING but is not a template class"
+        for p in sorted(pending)
+        if p not in templates
+    ]
+    return out
 
 
 def check_door(spec: DoorSpec) -> list[str]:
