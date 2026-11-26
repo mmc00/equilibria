@@ -23,12 +23,15 @@ here so installed code does not load a repo script; the script re-exports these 
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from collections.abc import Mapping as AbcMapping
 from typing import Any
 
-from equilibria.compare import Solution, from_dict
+from equilibria.compare import Mapping, Solution, from_dict
+from equilibria.compare.mapping import VariableMap
 
 Levels = AbcMapping[str, AbcMapping[tuple[str, ...], float]]
+Pct = dict[str, dict[tuple[str, ...], float]]
 MARGIN_AGENT = "tmg"
 FINAL_AGENTS = ("hhd", "gov", "inv", "tmg")
 BASE = "check"  # the base period of the equilibria model (GEMPACK's pre)
@@ -122,3 +125,67 @@ def model_levels(m: Any) -> dict[str, dict[tuple[str, ...], float]]:
         }
         for v in EQ_VARS
     }
+
+
+# GEMPACK set name of each dimension label of gtap7.yaml
+_SET = {
+    "REG": "REG",
+    "SRC": "REG",
+    "DST": "REG",
+    "COMM": "COMM",
+    "ACT": "ACTS",
+    "ENDW": "ENDW",
+    "MARG": "MARG",
+}
+
+# gtap7.yaml rows that are not GEMPACK variables, with the reason
+NOT_VARIABLES = {
+    "vdfb": "VDFB is a data coefficient (basedata.har), not a variable of the .sl4"
+}
+
+
+def _ratio(pre: float, post: float) -> float:
+    return 0.0 if pre == 0.0 else 100.0 * (post / pre - 1.0)
+
+
+def gtap7_rows() -> dict[str, VariableMap]:
+    """The compared rows of ``gtap7.yaml`` by GEMPACK variable name."""
+    return {
+        v.b.var: v
+        for v in Mapping.builtin("gtap7").variables
+        if v.name not in NOT_VARIABLES
+    }
+
+
+def gempack_pct(
+    levels: Levels,
+    xscale: AbcMapping[Any, float],
+    pre: str = "check",
+    post: str = "shock",
+    *,
+    skip: Collection[str] = (),
+) -> tuple[Pct, dict[str, set]]:
+    """``(% changes, cells whose pre value is 0)`` of every compared row of
+    ``gtap7.yaml``: ``{GEMPACK variable: {cell: 100 * (post / pre - 1)}}`` with cells in
+    GEMPACK order, from the levels of :data:`EQ_VARS` (``model_levels`` or
+    ``family_levels``) through :func:`equilibria_side`. A cell whose ``pre`` is 0
+    reports 0 and is listed in the second dict (only variables that have one). Scales
+    cancel in a ratio, so ``divide_by`` is ignored. ``skip``: GEMPACK names left out
+    (AlterTax computes its fixed variables itself)."""
+    side = equilibria_side(levels, xscale)
+    out: Pct = {}
+    zero: dict[str, set] = {}
+    for name, row in gtap7_rows().items():
+        if name in skip:
+            continue
+        cells = side.levels[row.a.var]
+        perm = [row.a.dims.index(d) for d in row.b.dims]
+        out[name], zero[name] = {}, set()
+        for period, idx in cells:
+            if period != pre:
+                continue
+            key = tuple(idx[p] for p in perm)
+            out[name][key] = _ratio(cells[(pre, idx)], cells[(post, idx)])
+            if cells[(pre, idx)] == 0.0:
+                zero[name].add(key)
+    return out, {n: c for n, c in zero.items() if c}
