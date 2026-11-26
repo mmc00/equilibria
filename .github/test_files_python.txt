@@ -182,6 +182,7 @@ tests/family/test_squared_system.py
 tests/family/test_state_model.py
 tests/family/test_structure_reuse.py
 tests/family/test_unit_sigma.py
+tests/gtap/test_load.py
 tests/paper/test_run_tables.py
 tests/parity/test_cascade_classify.py
 tests/parity/test_cascade_config.py
