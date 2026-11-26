@@ -34,6 +34,7 @@ PAGINAS = sorted((ROOT / "docs" / "site" / "guide").glob("*.md")) + [ROOT / "REA
 
 # Lo que cada página necesita para correr; el resto corre en cualquier lado.
 REQUIERE: dict[str, tuple[str, ...]] = {
+    "gtap_closures.md": ("needs_path", "needs_asl"),
     "gtap_quickstart.md": ("needs_path", "needs_asl"),
     "welfare_decomposition.md": ("needs_path", "needs_asl"),
     "pep_quickstart.md": ("needs_path", "needs_asl", "needs_ipopt"),

@@ -9,6 +9,7 @@ overview, then the guide for your model.
 
 /guide/templates
 /guide/gtap_quickstart
+/guide/gtap_closures
 /guide/pep_quickstart
 /guide/welfare_decomposition
 ```
