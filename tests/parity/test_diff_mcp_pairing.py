@@ -88,3 +88,60 @@ def test_fixed_var_with_deactivated_eq_is_not_a_violation():
     res = _run_check()
     bad = {v["entity"] for v in res["violations"]} & {"dintxeq", "mintxeq"}
     assert not bad, f"fixed-var wedges wrongly flagged: {bad}"
+
+
+# MAR-219: the Python side is the case the MCP gate builds, read at the solve of
+# the period on the core driver, so only that period's rows and cells count.
+def _two_period_model():
+    import pyomo.environ as pyo
+
+    m = pyo.ConcreteModel()
+    m.t = pyo.Set(initialize=["check", "shock"])
+    m.pf = pyo.Var(m.t, initialize=1.0)
+    m.eq_pf = pyo.Constraint(m.t, rule=lambda m, t: m.pf[t] == 1.0)
+    m.eq_pf["shock"].deactivate()
+    m.pf["shock"].fix()
+    return m
+
+
+def test_family_state_counts_only_the_period():
+    from diff_mcp_pairing import _py_family_state
+
+    m = _two_period_model()
+    assert _py_family_state(m, "pfeq", "pf", "check") == ("eq_pf", 1, 1, (0, 1))
+    assert _py_family_state(m, "pfeq", "pf", "shock") == ("eq_pf", 0, 1, (1, 1))
+
+
+@needs_gms
+@pytest.mark.needs_path
+@pytest.mark.needs_gdxdump
+@pytest.mark.parametrize("period", ["check", "shock"])
+def test_the_gate_case_is_clean(period):
+    import argparse
+
+    from diff_mcp_pairing import _work
+
+    res = _work(
+        argparse.Namespace(
+            dataset="gtap7_3x3",
+            period=period,
+            ifsub=0,
+            model_name="gtap",
+            apply_closure=True,
+            mode="altertax",
+            gdx=None,
+        )
+    )
+    assert res["status"] == "clean", res["headline"]
+    assert res["meta"]["case"] == "mcp_gate"
+
+
+def test_a_gams_variable_is_read_under_its_python_name():
+    # GAMS peq.p: Python's p is p_rai; fixed with eq_peq off is a valid pairing.
+    import pyomo.environ as pyo
+    from diff_mcp_pairing import _var_fixed_frac
+
+    m = pyo.ConcreteModel()
+    m.p_rai = pyo.Var(["check"], initialize=1.0)
+    m.p_rai["check"].fix()
+    assert _var_fixed_frac(m, "p", "check") == (1, 1)
