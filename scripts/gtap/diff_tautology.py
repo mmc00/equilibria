@@ -11,17 +11,18 @@ to slide. Every static-compare tool is structurally blind to this:
 they all "pass" because there is no DIFFERENCE to find — the equation is equally vacuous
 in both. Comparison tools detect differences; they cannot detect an ABSENCE.
 
-WHAT THIS TOOL DOES (numerical, not symbolic): for each equation↔variable MCP pair, it
-PERTURBS the variable by a small δ and measures whether the equation's residual responds
-(∂residual/∂var ≈ |Δresid|/δ). If the sensitivity is ~0, the equation does NOT constrain
-its own paired variable → that variable is UNANCHORED (a tautology / free DOF). It then
-cross-checks with the drift test's symptom: an unanchored var is exactly the one that
-slides after a solve. This finds the CAUSE (vacuous equation) that tools 3/4/6 miss and
-tool 7 only sees the symptom of.
+WHAT THIS TOOL DOES (numerical, not symbolic): it builds the case as the MCP gate
+does, seeded at the data/ GAMS reference in every period (seed_and_solve.build_seeded),
+and for each equation<->variable MCP pair, over the requested period's cells, PERTURBS
+each free variable of the paired row by a small step and measures whether the row's
+residual responds. An MCP row need not hold its paired variable (a market clearing such
+as xds = sum xda is paired with its price pd), so the test is on the row as a whole: a
+row that responds to none of its variables constrains nothing, and its paired variable
+is UNANCHORED (a tautology / free DOF). This finds the CAUSE (vacuous equation) that
+tools 3/4/6 miss and tool 7 only sees the symptom of.
 
 USAGE:
-    uv run python scripts/gtap/diff_tautology.py --dataset gtap7_3x3 \\
-        --gdx /path/to/out_altertax_ifsub0.gdx --period shock
+    uv run python scripts/gtap/diff_tautology.py --dataset gtap7_3x3 --period shock
 
 INTERPRETATION:
   - A flagged pair (eq_X ↔ x, sensitivity≈0) = eq_X is a tautology for x → x is a free DOF.
@@ -30,9 +31,7 @@ INTERPRETATION:
     pva·va=Σ(pfa·xf).
 """
 from __future__ import annotations
-from equilibria.sources import dataset_dir
 import argparse
-import copy
 import sys
 from pathlib import Path
 
@@ -40,21 +39,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-from _diff_core import gams_levels, list_populated_vars  # type: ignore
 from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
-import diff_altertax as DA
-from equilibria._local_refs import refs_dir
-
-DEFAULT_REFS = str(refs_dir())
-
-
-def _build_run_gtap():
-    import importlib.util as _u
-    spec = _u.spec_from_file_location("run_gtap", str(ROOT / "scripts" / "gtap" / "run_gtap.py"))
-    mod = _u.module_from_spec(spec)
-    sys.modules["run_gtap"] = mod
-    spec.loader.exec_module(mod)
-    return mod
+from equilibria.sources import find_reference
 
 
 # GAMS model-statement MCP pairs (eq → its complementary var). Subset that matters for
@@ -73,89 +59,102 @@ _PAIRS = [
 ]
 
 
-def run_tautology_scan(dataset: str, gdx_path: Path, period: str, delta: float, tol: float):
-    import pyomo.environ as pyo
-    from pyomo.environ import value as V, Constraint
-    from equilibria.templates.gtap import GTAPParameters, GTAPModelEquations
-    from equilibria.templates.gtap.altertax import apply_altertax_elasticities
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+def _resid(con) -> float:
+    from pyomo.environ import value as V
 
-    data_dir = dataset_dir(dataset)
-    p = GTAPParameters()
-    p.load_from_har(basedata_path=data_dir / "basedata.har", sets_path=data_dir / "sets.har",
-                    default_path=data_dir / "default.prm", baserate_path=data_dir / "baserate.har")
-    p = apply_altertax_elasticities(p, in_place=False)
-    res = list(p.sets.r)[-1]
-    base_clo = GTAPClosureConfig(name="base", closure_type="MCP", capital_mobility="sluggish",
-        fix_endowments=False, fix_taxes=False, fix_technology=False, if_sub=False, numeraire="pnum")
-    alt_clo = GTAPClosureConfig(name="altertax", closure_type="MCP", capital_mobility="mobile",
-        fix_endowments=False, fix_taxes=True, fix_technology=True, if_sub=False, numeraire="pnum")
-    m_b = GTAPModelEquations(p.sets, p, base_clo, residual_region=res).build_model()
-    p_per = p
-    if period == "shock":
-        p_per = copy.deepcopy(p)
-        for k in list(p_per.taxes.imptx.keys()):
-            p_per.taxes.imptx[k] = float(p_per.taxes.imptx[k] or 0.0) * 1.10
-    m = GTAPModelEquations(p_per.sets, p_per, alt_clo, residual_region=res, t0_snapshot=m_b).build_model()
-    DA.warmstart_from_gams(m, gdx_path, period)  # seed at the GAMS point
+    body = V(con.body)
+    lo = V(con.lower) if con.lower is not None else 0.0
+    return body - lo
 
-    def _resid(con):
-        body = V(con.body); lo = V(con.lower) if con.lower is not None else 0.0
-        return body - lo
 
+def _in_period(idx, period: str) -> tuple | None:
+    """The cell without the period if ``idx`` (period last) is of ``period``."""
+    if isinstance(idx, tuple):
+        return idx[:-1] if idx and idx[-1] == period else None
+    return () if idx == period else None
+
+
+def _row_response(con, delta: float) -> float:
+    """The largest ``|d resid| / step`` of the row over its free variables (step
+    ``delta * max(|x|, 1)``): ~0 only for a row that constrains nothing."""
+    from pyomo.core.expr.visitor import identify_variables
+
+    r0 = _resid(con)
+    best = 0.0
+    for x in identify_variables(con.body, include_fixed=False):
+        if x.value is None:
+            continue
+        x0 = float(x.value)
+        h = delta * max(abs(x0), 1.0)
+        try:
+            x.set_value(x0 + h)
+            best = max(best, abs(_resid(con) - r0) / h)
+        finally:
+            x.set_value(x0)
+    return best
+
+
+def scan_pairs(m, period: str, pairs, delta: float):
+    """For each eq<->var pair, the least row response (``_row_response``) over the
+    free cells of ``period``: [(sensitivity, eq, var, cell without the period, cells
+    sampled)]. An MCP row need not hold its paired variable (a market clearing is
+    paired with its price), so the row is read against all its variables: the paired
+    variable is unanchored when its row responds to none of them."""
     rows = []
-    for eqn, vn in _PAIRS:
+    for eqn, vn in pairs:
         eq = getattr(m, eqn, None)
         v = getattr(m, vn, None)
         if eq is None or v is None:
             continue
-        # sample a few cells of the paired var; measure ∂resid_eq/∂var
         worst_sens = None
         worst_cell = None
         n = 0
         for idx in v:
-            if v[idx].fixed or v[idx].value is None:
-                continue
-            # find the eq cell with the SAME index (or a compatible prefix)
-            con = None
-            try:
-                con = eq[idx] if eq.is_indexed() else eq
-            except Exception:
-                # eq indexed differently (e.g. eq has (r,a), var has (r,f,a)); skip mismatch
-                continue
-            if con is None or not con.active:
+            cell = _in_period(idx, period)
+            if cell is None or v[idx].fixed or v[idx].value is None:
                 continue
             try:
-                r0 = _resid(con)
-                v0 = float(v[idx].value)
-                v[idx].set_value(v0 * (1.0 + delta))
-                r1 = _resid(con)
-                v[idx].set_value(v0)  # restore
-                sens = abs(r1 - r0) / (abs(v0) * delta + 1e-12)
-                n += 1
-                if worst_sens is None or sens < worst_sens:  # we want the LEAST sensitive
-                    worst_sens = sens
-                    worst_cell = idx
-            except Exception:
-                v[idx].set_value(v0)
+                con = eq[idx]
+            except KeyError:
+                continue  # eq indexed differently (e.g. eq (r,a), var (r,f,a))
+            if not con.active:
+                continue
+            sens = _row_response(con, delta)
+            n += 1
+            if worst_sens is None or sens < worst_sens:  # the LEAST sensitive
+                worst_sens, worst_cell = sens, cell
         if n > 0:
             rows.append((worst_sens, eqn, vn, worst_cell, n))
     return rows
 
 
-def _default_gdx(dataset: str) -> Path:
-    return Path(f"{DEFAULT_REFS}/{dataset}_altertax_cd/out_altertax_ifsub0.gdx")
+def run_tautology_scan(dataset: str, gdx_path: Path, period: str, delta: float,
+                       mode: str = "altertax", ifsub: int = 0):
+    """``scan_pairs`` on the case the MCP gate builds, seeded at the GAMS point in
+    every period (seed_and_solve.build_seeded)."""
+    from seed_and_solve import build_seeded
+
+    _p, _gc, m = build_seeded(dataset, gdx_path, period, mode, bool(ifsub))
+    return scan_pairs(m, period, _PAIRS, delta)
+
+
+def _default_gdx(dataset: str, mode: str = "altertax", ifsub: int = 0) -> Path | None:
+    """The data/ GAMS MCP reference the MCP gate compares against."""
+    folder = find_reference(dataset, "gams", form="mcp", mode=mode, ifsub=ifsub,
+                            fbep="header")
+    return None if folder is None else folder / "out.gdx"
 
 
 def _work(args) -> dict:
-    gdx = args.gdx or _default_gdx(args.dataset)
-    if not gdx.exists():
+    gdx = args.gdx or _default_gdx(args.dataset, args.mode, args.ifsub)
+    if gdx is None or not gdx.exists():
         return dict(status="error", period=args.period,
                     headline=f"reference GDX not found: {gdx}",
                     violations=[],
                     meta={"error_kind": "gdx_not_found", "gdx": str(gdx)})
 
-    rows = run_tautology_scan(args.dataset, gdx, args.period, args.delta, args.tol)
+    rows = run_tautology_scan(args.dataset, gdx, args.period, args.delta,
+                              args.mode, args.ifsub)
     rows.sort()  # lowest sensitivity first = most tautological
 
     # human-readable table → stderr (never contaminates the JSON stdout line)
@@ -199,7 +198,7 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dataset", default="gtap7_3x3")
     ap.add_argument("--gdx", type=Path, default=None,
-                    help="reference GDX (default: DEFAULT_REFS/<dataset>_altertax_cd/out_altertax_ifsub0.gdx)")
+                    help="reference GDX (default: the data/ GAMS MCP reference)")
     ap.add_argument("--period", default="shock", choices=["check", "shock"])
     ap.add_argument("--delta", type=float, default=1e-4, help="relative perturbation of the var")
     ap.add_argument("--tol", type=float, default=1e-6,
@@ -207,28 +206,8 @@ def main() -> int:
     ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
                     help="altertax CD (default) or pure-gtap real-CES")
     ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
-                    help="ifSUB mode (pure-gtap only)")
+                    help="ifSUB mode")
     args = ap.parse_args()
-
-    # mode=gtap UNSUPPORTED, honestly: diff_tautology perturbs vars in the SINGLE-period
-    # altertax model and measures ∂resid/∂var. The pure-gtap shock equations only exist
-    # after the multi-period exercise's in-place rebuilds; perturbing the single-
-    # period gtap build would probe the wrong (un-shocked) equations. seed_and_solve
-    # --mode gtap is the faithful pure-gtap path (its residual tail already surfaces an
-    # unanchored/tautological eq as a high resid-at-GAMS with a clean post-solve resid).
-    if args.mode == "gtap":
-        def _unsupported() -> dict:
-            return dict(
-                status="error", period=args.period,
-                headline=("diff_tautology does not support --mode gtap: it perturbs the "
-                          "single-period altertax model; the pure-gtap shock equations are "
-                          "built when the multi-period exercise runs (in-place rebuilds). "
-                          "Use seed_and_solve --mode gtap."),
-                violations=[],
-                meta={"error_kind": "mode_unsupported", "mode": "gtap",
-                      "ifsub": args.ifsub})
-        return run_tool("diff_tautology", args.dataset, _unsupported,
-                        period_hint=args.period)
 
     return run_tool("diff_tautology", args.dataset, lambda: _work(args),
                     period_hint=args.period)

@@ -232,6 +232,32 @@ def _solve_gtap(dataset: str, gdx_path: Path, if_sub: bool, mode: str = "gtap"):
     return m, res
 
 
+def build_seeded(dataset: str, gdx_path: Path, period: str, mode: str, if_sub: bool):
+    """(params, closure, model): the full multi-period Pyomo model of the case as the
+    MCP gate builds it (``_case``), not solved, seeded from the GAMS GDX in every
+    period; for the shock, with the default tariff the driver writes, so the rows
+    read are those of the actual shock system."""
+    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
+    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
+
+    p, gc, rr = _case(dataset, if_sub, mode)
+    mp = GTAPBlockMultiPeriodModel(p.sets, p, gc, residual_region=rr)
+    m = mp.build_sets()
+    mp.build_vars(m)
+    for per in PERIODS:
+        mp.build_equations_intra(m, per)
+    mp.build_equations_fisher(m)
+    m._residual_region = rr
+    mp.seed_all_periods(m, gdx_path)
+    _seed_household_vars(m, gdx_path)
+    m._gtap_mode = mode == "gtap"
+    if period == "shock":
+        from equilibria.templates.gtap.shocks import apply_default_tariff
+
+        apply_default_tariff(m, gtap_mode=mode == "gtap")
+    return p, gc, m
+
+
 def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
                             if_sub: bool, mode: str = "gtap"):
     """Seed-and-solve on the core driver, for both modes (gtap real-CES, altertax CD).
@@ -244,29 +270,9 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
     the SEED, not the post-solve state).
     """
     from pyomo.environ import value as V, Constraint
-    from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
-    from equilibria.templates.gtap.gtap_model_multiperiod import PERIODS
 
     def _build_seeded():
-        p, gc, rr = _case(dataset, if_sub, mode)
-        mp = GTAPBlockMultiPeriodModel(p.sets, p, gc, residual_region=rr)
-        m = mp.build_sets()
-        mp.build_vars(m)
-        for per in PERIODS:
-            mp.build_equations_intra(m, per)
-        mp.build_equations_fisher(m)
-        m._residual_region = rr
-        mp.seed_all_periods(m, gdx_path)
-        _seed_household_vars(m, gdx_path)
-        m._gtap_mode = mode == "gtap"
-        # The shock period reads the tariff from the ShockBlock: write the default
-        # tariff the driver would, so the residual at the shocked seed is the
-        # residual of the actual shock system.
-        if period == "shock":
-            from equilibria.templates.gtap.shocks import apply_default_tariff
-
-            apply_default_tariff(m, gtap_mode=mode == "gtap")
-        return p, gc, m
+        return build_seeded(dataset, gdx_path, period, mode, if_sub)
 
     # 1) One hand build holds the SEED: the sentinel before the solve here, the
     #    residual tail below (it is not solved). The SOLVE runs on the core driver.
