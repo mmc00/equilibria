@@ -130,7 +130,7 @@ def run_drift(
                 pass
         eq_resid[c.name] = mx
 
-    m, res = _solve_gtap(dataset, gdx_path, bool(ifsub), mode)
+    m, res = _solve_gtap(dataset, gdx_path, bool(ifsub), mode, seeded=m0)
     code = res.get(period, {}).get("code")
     resid = float(res.get(period, {}).get("residual") or 0.0)
     return code, resid, drift_rows(seeded, period_levels(m, period)), eq_resid

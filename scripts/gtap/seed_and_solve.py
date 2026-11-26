@@ -308,25 +308,31 @@ def period_levels(m, period: str) -> dict[tuple[str, tuple], float]:
 
 
 def seed_levels(
-    dataset: str, gdx_path: Path, mode: str, if_sub: bool, periods=("check", "shock")
+    m0, periods=("check", "shock")
 ) -> dict[str, dict[tuple[str, tuple], float]]:
-    """``{period: {(var, cell): level}}`` at the GAMS point: build_seeded plus each
-    period's derived aggregates, the levels drift_test compares against."""
+    """``{period: {(var, cell): level}}`` at the GAMS point of ``m0``, a build_seeded
+    model, plus each period's derived aggregates: the levels drift_test compares
+    against. ``m0`` is left as it came, so the residual tail read on it afterwards
+    sees only its own period's cascade."""
     from pyomo.environ import value as V
 
-    _p, _gc, m0 = build_seeded(dataset, gdx_path, "shock", mode, if_sub)
+    saved = []
 
     def _setv(comp, key, val):
         try:
+            old = comp[key].value
             comp[key].set_value(val)
-            return 1
         except Exception:
             return 0
+        saved.append((comp[key], old))
+        return 1
 
     out = {}
     for period in periods:
         _cascade_derived_seed_mp(m0, V, _setv, period)
         out[period] = period_levels(m0, period)
+    for cell, old in reversed(saved):
+        cell.set_value(old, skip_validation=True)
     return out
 
 
@@ -339,32 +345,50 @@ def start_at_seed(seeds: dict[str, dict[tuple[str, tuple], float]]):
 
     def solver(model):
         rows = model.row_names()
-        active = [t for t in model.periods
-                  if any(model.active_rows(r, t) for r in rows)]
+        active = [
+            t for t in model.periods if any(model.active_rows(r, t) for r in rows)
+        ]
         if len(active) == 1 and active[0] in seeds:
             period, seed = active[0], seeds[active[0]]
             for name in model.var_names():
-                held = model.fixed_cells(name, period) | model.exogenous_cells(name, period)
-                model.set_values(name, period, {
-                    k: seed[(name, k)] for k in model.var_cells(name, period)
-                    if k not in held and (name, k) in seed
-                })
+                held = model.fixed_cells(name, period) | model.exogenous_cells(
+                    name, period
+                )
+                model.set_values(
+                    name,
+                    period,
+                    {
+                        k: seed[(name, k)]
+                        for k in model.var_cells(name, period)
+                        if k not in held and (name, k) in seed
+                    },
+                )
         return recipe._by_backend(model)
 
     return solver
 
 
-def _solve_gtap(dataset: str, gdx_path: Path, if_sub: bool, mode: str = "gtap"):
+def _solve_gtap(
+    dataset: str, gdx_path: Path, if_sub: bool, mode: str = "gtap", seeded=None
+):
     """The full multi-period model seeded from ``gdx_path`` in every period, solved
     base (skipped) -> check -> shock on the core driver, each solve starting at the
-    GAMS point (``start_at_seed``). Returns
+    GAMS point (``start_at_seed``) read from ``seeded``, a build_seeded model of the
+    case (built here when None). Returns
     (model, ``{period: {"code": old-form int, "residual": float}}``)."""
     from _core_run import solve_on_core
 
+    if seeded is None:
+        _p, _gc, seeded = build_seeded(dataset, gdx_path, "shock", mode, if_sub)
     p, gc, rr = _case(dataset, if_sub, mode)
     m, codes, core = solve_on_core(
-        p, gc, rr, mode=mode, ref_gdx=gdx_path, seed_gdx=gdx_path,
-        solver=start_at_seed(seed_levels(dataset, gdx_path, mode, if_sub)),
+        p,
+        gc,
+        rr,
+        mode=mode,
+        ref_gdx=gdx_path,
+        seed_gdx=gdx_path,
+        solver=start_at_seed(seed_levels(seeded)),
     )
     res = {k: {"code": codes[k], "residual": core[k]["residual"]} for k in codes}
     return m, res
@@ -447,7 +471,7 @@ def run_seed_and_solve_gtap(
 
     sent_name, sent_before = _sentinel()
 
-    m, res = _solve_gtap(dataset, gdx_path, if_sub, mode)
+    m, res = _solve_gtap(dataset, gdx_path, if_sub, mode, seeded=m2)
     code = res.get(period, {}).get("code")
     resid = float(res.get(period, {}).get("residual") or 0.0)
     _, sent_after = _sentinel()
