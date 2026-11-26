@@ -54,6 +54,24 @@ def test_a_solve_that_ran_and_drifted_is_still_dirty(monkeypatch):
     assert out["status"] == "dirty"
 
 
+@pytest.mark.parametrize(
+    "row",
+    [
+        # 3x3 gtap shock: GTAP v7's chiSave, not GAMS's square root (6cf5909e).
+        (4.45e-4, "eq_chisave", ()),
+        # 10x7 altertax shock: GAMS keeps the VTWR vs VCIF-VFOB rounding in amgm.
+        (1.53e-4, "eq_pwmg", ("EU_28", "Rice", "CHN")),
+    ],
+)
+def test_a_row_that_follows_gempack_on_purpose_does_not_dirty(monkeypatch, row):
+    out_fake = _fake_out(1)
+    out_fake["eq_resid"] = [row]
+    monkeypatch.setattr(SS, "run_seed_and_solve_gtap", lambda *a, **k: out_fake)
+    out = SS._work("gtap7_3x3", Path("/ref/out.gdx"), "shock", 3)
+    assert out["status"] == "clean"
+    assert [v["class"] for v in out["violations"]] == ["not_gams"]
+
+
 @pytest.mark.skipif(
     REF is None or not REF.exists(), reason="GAMS MCP altertax ref absent"
 )

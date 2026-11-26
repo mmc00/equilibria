@@ -95,6 +95,14 @@ _LEAF_EQS = {
     "eq_ug",
     "eq_us",
 }
+# Rows where Python follows GTAP v7 / GEMPACK, not GAMS, by decision: the GAMS point
+# cannot satisfy them exactly, so a residual there is reported but is not a lead.
+# eq_chisave: GTAP v7's E_psave (full adjustment, Tornqvist weights), not GAMS's
+#   chiSaveeq, which divides by psave and so applies the square root (6cf5909e).
+# eq_pwmg: Python's amgm shares sum to 1 (VTWR over its own total); GAMS's amgm is
+#   VTWR / (VCIF - VFOB), whose sum carries the data's rounding (10x7 1.5e-4, 15x10
+#   6.5e-4). pwmg is one of the 14 variables the MCP gate does not compare (RF).
+_NOT_GAMS_EQS = {"eq_chisave", "eq_pwmg"}
 
 
 def _cascade_derived_seed_mp(m, V, setv, period: str) -> int:
@@ -420,7 +428,10 @@ def run_seed_and_solve_gtap(
 
 
 def _classify_eq(family: str, idx) -> str:
-    """benign | real — leaf (rgdpmp/pgdpmp) and ROW-region rows are benign-known."""
+    """not_gams | benign | real — rows that follow GEMPACK on purpose are not_gams;
+    leaf (rgdpmp/pgdpmp) and ROW-region rows are benign-known."""
+    if family in _NOT_GAMS_EQS:
+        return "not_gams"
     if family in _LEAF_EQS:
         return "benign"
     idx_str = " ".join(
@@ -468,12 +479,15 @@ def _work(
     benign = [
         (r_, fam, idx) for r_, fam, idx in tail if _classify_eq(fam, idx) == "benign"
     ]
+    not_gams = [
+        (r_, fam, idx) for r_, fam, idx in tail if _classify_eq(fam, idx) == "not_gams"
+    ]
 
     # STAYS iff solve converged AND no REAL equation carries residual at the seed.
     stays = code == 1 and resid < 1e-6 and not real
 
     violations = []
-    for r_, fam, idx in (real + benign)[:top]:
+    for r_, fam, idx in (real + benign + not_gams)[:top]:
         v = make_violation(fam, idx, "resid_at_gams", r_)
         v["class"] = _classify_eq(fam, idx)
         violations.append(v)
@@ -515,7 +529,7 @@ def _work(
         detection = make_detection(
             what=f"an equation differs from GAMS (GAMS point not a fixed point); top real residual {worst_str}",
             evidence=f"seeded GAMS {period}, solved code={code} resid={resid:.1e}; "
-            f"{len(real)} real + {len(benign)} benign(leaf/ROW) eqs with resid>{RESID_TOL:g}",
+            f"{len(real)} real + {len(benign)} benign(leaf/ROW) + {len(not_gams)} not_gams eqs with resid>{RESID_TOL:g}",
             confidence="firm",
         )
         status = "dirty"
@@ -535,6 +549,7 @@ def _work(
             "n_cascaded": out["n_cascade"],
             "n_real_resid": len(real),
             "n_benign_resid": len(benign),
+            "n_not_gams_resid": len(not_gams),
             "sentinel": out["sent_name"],
             "sentinel_before": sb,
             "sentinel_after": sa,
@@ -542,7 +557,8 @@ def _work(
             "detection": detection,
             "note": (
                 "median masks the signal — the tail (worst eqs) is the lead; "
-                "benign = rgdpmp/pgdpmp report leaves + ROW corrupt-ref rows"
+                "benign = rgdpmp/pgdpmp report leaves + ROW corrupt-ref rows; "
+                "not_gams = rows that follow GEMPACK on purpose (_NOT_GAMS_EQS)"
             ),
         },
     }
