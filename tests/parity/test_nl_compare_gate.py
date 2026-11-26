@@ -90,3 +90,39 @@ def test_gtap7_3x3_altertax_is_clean(phase, tmp_path):
     per = out["meta"]["per_phase"][phase]
     assert per["n_common_cons"] > 500
     assert per["written_form_left_out"] == {"eq_pf": 36}
+
+
+def _nl_args(**kw):
+    import argparse
+
+    base = {
+        "dataset": "gtap7_20x41",
+        "mode": "altertax",
+        "ifsub": 0,
+        "skip_python": False,
+        "phase": ["shock"],
+        "gate_only": True,
+        "gdx": None,
+    }
+    return argparse.Namespace(**{**base, **kw})
+
+
+def test_the_cascade_case_never_falls_back_to_the_monolith(monkeypatch):
+    """Without the data/ references of the gate case, --gate-only is an error, not a
+    silent diff of the old single-period model (review of #275)."""
+    monkeypatch.setattr(NC, "gate_references", lambda *a: None)
+    out = NC._run_nl(_nl_args())
+    assert out["status"] == "error"
+    assert out["meta"]["error_kind"] == "gate_case_missing"
+
+
+def test_the_cascade_case_seeds_from_the_cascade_gdx(monkeypatch, tmp_path):
+    gdx = tmp_path / "other.gdx"
+    gdx.write_bytes(b"x")
+    monkeypatch.setattr(
+        NC, "gate_references", lambda *a: {"nl": tmp_path, "gdx": Path("data.gdx")}
+    )
+    seen = {}
+    monkeypatch.setattr(NC, "_run_nl_gate", lambda args, refs: seen.update(refs))
+    NC._run_nl(_nl_args(gdx=gdx))
+    assert seen["gdx"] == gdx

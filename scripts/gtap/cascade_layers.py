@@ -46,7 +46,8 @@ def _c_pairing(ds, period, gdx, mode, ifsub):
 
 def _c_nl(ds, period, gdx, mode, ifsub):
     return [PY, f"{GTAP}/nl_compare.py", "--dataset", ds,
-            "--phase", period, "--skip-gams"] + _mode_flags(mode, ifsub)
+            "--phase", period, "--skip-gams", "--gate-only",
+            "--gdx", str(gdx)] + _mode_flags(mode, ifsub)
 
 
 def _c_calibration(ds, period, gdx, mode, ifsub):

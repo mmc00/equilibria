@@ -1727,7 +1727,23 @@ def _run_nl(args) -> dict:
         else gate_references(args.dataset, args.mode, args.ifsub)
     )
     if refs is not None:
+        gdx = getattr(args, "gdx", None)
+        if gdx is not None:
+            refs = {**refs, "gdx": Path(gdx)}  # the cascade's own seed, as every layer
         return _run_nl_gate(args, refs)
+    if getattr(args, "gate_only", False):
+        # the cascade: a diff of the old monolith is not the gate case's answer
+        phase = args.phase[0] if len(args.phase) == 1 else None
+        return dict(
+            status="error",
+            period=None if phase is None else _phase_to_period(phase),
+            violations=[],
+            headline=(
+                f"no data/ GAMS .nl and MCP reference of the gate case for "
+                f"{args.dataset} {args.mode} ifSUB={args.ifsub} (fbep=header)"
+            ),
+            meta={"error_kind": "gate_case_missing", "case": "mcp_gate"},
+        )
     from run_gtap import _build_gtap_contract_with_calibration  # noqa: F401
     from _parity_datasets import DATASETS
     from _nl_parser import parse_nl
@@ -1957,6 +1973,18 @@ def main() -> int:
     )
     ap.add_argument("--neos-email", default="dracomarmol@gmail.com")
     ap.add_argument("--out-dir", type=Path, default=Path("/tmp/gtap_nl"))
+    ap.add_argument(
+        "--gate-only",
+        action="store_true",
+        help="the cascade's call: the gate case or an error, never the old "
+        "monolith route",
+    )
+    ap.add_argument(
+        "--gdx",
+        type=Path,
+        default=None,
+        help="GDX the gate case is seeded from (default: the data/ MCP reference)",
+    )
     ap.add_argument(
         "--skip-gams",
         action="store_true",
