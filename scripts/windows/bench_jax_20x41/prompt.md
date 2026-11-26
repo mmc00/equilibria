@@ -14,6 +14,8 @@ We only have GEMPACK and equilibria timed on different machines:
 | GEMPACK, AlterTax 20x41 | this laptop | 1.93 | `data/gtap7/gtap7_20x41/gempack_altertax-rungtap_tms-rate10_s8-16-32/solve_console.txt` (2026-11-09) |
 | equilibria JAX, same exercise, cold cache | Windows Server VM, i7-7700HQ | 11.22 | homelab, 2026-11-25, commit 5ddde12d |
 | equilibria JAX, same exercise, warm cache | same VM | 4.70 | same |
+| equilibria JAX, same, MUMPS `ifx` build, cold / warm | same VM | 10.12 / 3.44 | same day |
+| equilibria JAX, same, MUMPS `ifx` build, cold / warm | same VM | 10.12 / 3.44 | same day |
 | equilibria JAX, warm cache | Mac M3 Pro | ~0.8 | MAR-21 hunt runs, 2026-11-23 |
 
 The goal is one table with both tools on **this** laptop, same exercise, same session.
@@ -48,13 +50,15 @@ git log --oneline -3
 ### 2. Build the JAX env (conda-forge MUMPS + pip JAX)
 
 Use Miniforge (install it to `C:\miniforge3` if it is not there). This is the recipe
-that worked on the Windows VM:
+that worked on the Windows VM. **Pick the Intel Fortran (`ifx`) build of MUMPS**: the
+default `flang` build is about 4.5x slower (see the table below).
 
 ```powershell
 C:\miniforge3\Scripts\conda.exe create -y -p C:\eq-jax\env -c conda-forge `
-    python=3.12 "mumps-seq=5.8.2" pymumps mpi4py psutil "libblas=*=*openblas"
+    python=3.12 "mumps-seq=5.8.2=ifx*" intel-fortran-rt pymumps mpi4py psutil
 $env:PATH = "C:\eq-jax\env;C:\eq-jax\env\Library\bin;C:\eq-jax\env\Scripts;$env:PATH"
 $env:CONDA_PREFIX = "C:\eq-jax\env"
+$env:MKL_NUM_THREADS = "1"
 python -m pip install -e ".[dev]" "jax==0.12.1" "jaxlib==0.12.1"
 ```
 
@@ -65,11 +69,21 @@ Pitfalls already met:
   20x41 (MAR-235). `time_cold_warm.py` sets it for you.
 - pymumps needs `mpi4py` (conda-forge brings `msmpi`). Without it every factorization
   fails with `cannot load MPI library`.
-- The win-64 build of `mumps-seq` on conda-forge has **no METIS and no SCOTCH** (Linux
-  and macOS have both). This is the main suspect for Windows being slow: on the VM the
-  MUMPS symbolic factorization took 17 s and the numeric one 4.1 s, against 2.2 s and
-  0.9 s on the Mac. Do not try to fix it in this task. Just record the times (the script
-  does).
+- The `ifx` build of `mumps-seq` does not pull the Intel Fortran runtime. Without
+  `intel-fortran-rt`, `import mumps` fails with `DLL load failed while importing _dmumps`.
+- Why `ifx`: one real 20x41 Jacobian (n = 210,134, 1.3 M nonzeros), MUMPS alone with
+  equilibria's settings (`ICNTL(7)=0`, AMD ordering on every platform, so METIS plays
+  no role), on the Windows VM (i7-7700HQ):
+
+  | MUMPS build | first factorization | refactorization |
+  |---|---|---|
+  | `flang` (conda-forge default), OpenBLAS or MKL | 20.3 s | 4.1 s |
+  | `ifx` + MKL | 4.5 s | 1.3 s |
+  | for reference: Linux Xeon E5-1680 v2, gfortran | 5.4 s | 1.7 s |
+  | for reference: Mac M3 Pro, gfortran | 2.6 s | 0.7 s |
+
+  If you have time after step 6, repeat step 5 once with the `flang` build (an env
+  without `=ifx*` and without `intel-fortran-rt`) and add it as a second equilibria row.
 
 Check the env before timing:
 
@@ -122,7 +136,8 @@ Create `scripts\windows\bench_jax_20x41\results.md` with:
 1. The machine (CPU, RAM, Windows version, power mode, McAfee on or off).
 2. One table, in minutes: GEMPACK run 1, GEMPACK run 2, equilibria cold, warm 1, warm 2.
 3. The MUMPS times (symbolic and numeric, first values of each run) next to the VM's
-   (17 s and 4.1 s) and the Mac's (2.2 s and 0.9 s).
+   with the `ifx` build (symbolic 3.5-4.0 s, numeric 1.3 s; whole run 10.12 min cold,
+   3.44 min warm) and the Mac's (symbolic 2.2 s, numeric 0.9 s).
 4. The versions block from `results.json`.
 
 Commit only `results.md` and `out\results.json` (the `.gitignore` in this folder keeps
