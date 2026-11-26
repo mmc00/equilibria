@@ -22,23 +22,31 @@ The model is solved as an MCP with PATH through its C API. equilibria finds
 the `path-capi-python` checkout and the PATH libraries as described in
 {doc}`path_capi`.
 
+Everything this guide uses comes from one place, the GTAP door
+`equilibria.gtap` (`load`, `GTAP`, `ClosureConfig`, `gtap_static`, `Exercise`,
+`results`, ...). Each name is the same object as in its own module, so nothing
+is hidden: you still build every piece and see it.
+
 `equilibria` ships two GTAP datasets as native HAR/PRM files inside the
-wheel, loaded with `load_bundled("gtap", ...)`:
+wheel, loaded with `load(...)`:
 
 - `"9x10"`: the canonical GAMS Standard 7 aggregation, 10 regions × 10
   commodities.
 - `"nus333"`: the Burfisher NUS333 database (GTAPv7/GEMPACK), 2 regions
   (`USA`, `ROW`) × 3 commodities.
 
-To work with your own aggregation, point `GTAPParameters.load_from_har` at
-your files (Step 4 shows it).
+`load` also takes the name of a dataset in the repository's `data/` folder
+(in a checkout) or the path of any folder with `basedata.har`, `sets.har` and
+`default.prm` (and `baserate.har` if it has one): your own aggregation loads
+the same way (Step 5 shows it). `load(source, prm="3x3ces.prm")` picks another
+elasticities file of the folder.
 
 ## Step 1 — Inspect the dataset
 
 ```python
-from equilibria import load_bundled
+from equilibria.gtap import load
 
-params = load_bundled("gtap", "nus333")  # or "9x10"
+params = load("nus333")  # or "9x10"
 sets = params.sets
 
 print("Regions:    ", sets.r)
@@ -51,7 +59,7 @@ print("Factors:    ", sets.f)
 # Factors:     ['LAND', 'LABOR', 'CAPITAL']
 ```
 
-`load_bundled` reads `basedata.har`, `sets.har`, `default.prm` and, when the
+`load` reads `basedata.har`, `sets.har`, `default.prm` and, when the
 dataset has one, `baserate.har`, and returns a calibrated `GTAPParameters`.
 
 ## Step 2 — Build the model and run a tariff shock
@@ -66,21 +74,9 @@ period, and a shock is its `shock`-period cell differing from the `check` one.
 ```python
 from pyomo.environ import value
 
-from equilibria.core.exercise import Exercise
-from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-from equilibria.templates.gtap.recipe import gtap_static
-from equilibria.templates.gtap.template import GTAP
+from equilibria.gtap import GTAP, ClosureConfig, Exercise, gtap_static
 
-closure = GTAPClosureConfig(
-    name="base",
-    closure_type="MCP",
-    capital_mobility="sluggish",
-    fix_endowments=False,
-    fix_taxes=False,
-    fix_technology=False,
-    if_sub=False,
-    numeraire="pnum",
-)
+closure = ClosureConfig.gtap_default(savf_flag="capFix")
 # +10% on the tariff power (1 + tms) of one route, as in a GEMPACK .EXP:
 route = ("USA", "MFG", "ROW")  # (exporter, commodity, importer)
 
@@ -112,7 +108,7 @@ solve with a price there is a corner the model does not mean (`s.on_floor` lists
 returns the same numbers.
 
 ```python
-from equilibria.report import summary
+from equilibria.gtap import summary
 
 s = summary(m, results, period="shock")
 print(s.max_residual < 1e-6, s.worst[0].equation)
@@ -166,7 +162,7 @@ the shock, reaches the utility after it, minus the income before. It works on
 the solved model and leaves it as it was.
 
 ```python
-from equilibria.templates.gtap.welfare_regional import regional_ev
+from equilibria.gtap import regional_ev
 
 print(regional_ev(m))  # in units of regy
 # {'USA': -0.1079..., 'ROW': 0.0885...}
@@ -189,20 +185,10 @@ equilibria name. The GAMS run keeps the data's sign for the factor subsidies
 (`va_subsidy_basis="gempack"` on the closure).
 
 ```python
-from pathlib import Path
-
 from equilibria.compare import Mapping, compare, from_gdx, from_pyomo
 from equilibria.sources import reference
-from equilibria.templates.gtap import GTAPParameters
 
-data = Path("data/gtap7/gtap7_3x3")
-params3 = GTAPParameters()
-params3.load_from_har(
-    basedata_path=data / "basedata.har",
-    sets_path=data / "sets.har",
-    default_path=data / "default.prm",
-    baserate_path=data / "baserate.har",
-)
+params3 = load("gtap7_3x3")  # the dataset in data/gtap7/gtap7_3x3
 closure3 = closure.model_copy(update={"va_subsidy_basis": "gempack"})
 ex3 = Exercise(
     GTAP(params3, closure3, residual_region="ROW"), gtap_static("gtap", solve_check=True)

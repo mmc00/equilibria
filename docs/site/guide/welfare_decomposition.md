@@ -20,20 +20,13 @@ prices of the `check` period, utility fixed at its `shock` value and income
 free. `regional_ev` does exactly that and leaves the model as it was:
 
 ```python
-from equilibria import load_bundled
-from equilibria.core.exercise import Exercise
-from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-from equilibria.templates.gtap.recipe import gtap_static
-from equilibria.templates.gtap.template import GTAP
-from equilibria.templates.gtap.welfare_regional import regional_ev
+from equilibria.gtap import (
+    GTAP, ClosureConfig, Exercise, gtap_static, load, regional_ev,
+)
 
 # The model of the GTAP quickstart: +10 % on the tariff power of one route.
-params = load_bundled("gtap", "nus333")
-closure = GTAPClosureConfig(
-    name="base", closure_type="MCP", capital_mobility="sluggish",
-    fix_endowments=False, fix_taxes=False, fix_technology=False,
-    if_sub=False, numeraire="pnum",
-)
+params = load("nus333")
+closure = ClosureConfig.gtap_default(savf_flag="capFix")
 ex = Exercise(
     GTAP(params, closure, residual_region="ROW"),
     gtap_static("gtap", solve_check=True),
