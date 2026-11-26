@@ -14,6 +14,7 @@ but with its own shape under meta.mode (it is not forced into `violations`).
 
 Input flags are UNCHANGED from the pre-JSON version.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,15 +32,25 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 from _adapter_protocol import AdapterRegistry  # noqa: E402
 from _probe_cache import (  # noqa: E402
-    compute_cache_key, load_solution, store_solution, clear_cache,
+    compute_cache_key,
+    load_solution,
+    store_solution,
+    clear_cache,
 )
 from _probe_queries import (  # noqa: E402
-    extract_solution, inject_solution, query_show, query_residuals,
+    extract_solution,
+    inject_solution,
+    query_show,
+    query_residuals,
     seed_gams_point,
 )
 from _probe_params import diff_params_vs_gams, diff_param_builds  # noqa: E402
 from _parity_json import (  # noqa: E402
-    make_violation, build_payload, emit, run_tool, normalize_period,
+    make_violation,
+    build_payload,
+    emit,
+    run_tool,
+    normalize_period,
 )
 
 # Closure name per scenario (matches GTAPParityAdapter altertax closures).
@@ -73,7 +84,7 @@ def _build_and_value(adapter, dataset, scenario, cache_dir, no_cache):
     model = adapter.build_solved_model(dataset, scenario)
     sol = extract_solution(model)
     store_solution(key, sol, cache_dir=cache_dir)
-    print(f"[solved + cached {time.time()-t0:.0f}s] key={key}")  # -> stderr
+    print(f"[solved + cached {time.time() - t0:.0f}s] key={key}")  # -> stderr
     return model, key
 
 
@@ -90,16 +101,19 @@ def _debug_print_show(rows):
 
 def _debug_print_residuals(rows):
     for r in rows:
-        print(f"  {r['eq']:<28s} idx={str(r['idx']):<28s} "
-              f"resid={r['resid']:.4e}", file=sys.stderr)
+        print(
+            f"  {r['eq']:<28s} idx={str(r['idx']):<28s} resid={r['resid']:.4e}",
+            file=sys.stderr,
+        )
 
 
 def _query_to_dict(model, args):
     """Run the requested read-only query and return {label: value}."""
     out = {}
     if args.show:
-        for r in query_show(model, args.show.split(","), region=args.region,
-                            index_filter=args.index):
+        for r in query_show(
+            model, args.show.split(","), region=args.region, index_filter=args.index
+        ):
             out[f"{r['var']}{r['idx']}"] = r["value"]
     if args.residuals:
         for r in query_residuals(model, top_n=args.top, family=args.family):
@@ -115,17 +129,25 @@ def _query_to_dict(model, args):
 def _run_seed_gams(adapter, args) -> dict:
     """Canonical cascade mode: seed Python at the GAMS point, scan residuals."""
     if not args.gdx_ref:
-        return dict(status="error", period=args.seed_gams,
-                    headline="--seed-gams requires --gdx-ref",
-                    violations=[], meta={"mode": "seed_gams"})
+        return dict(
+            status="error",
+            period=args.seed_gams,
+            headline="--seed-gams requires --gdx-ref",
+            violations=[],
+            meta={"mode": "seed_gams"},
+        )
     model = adapter.build_warmstarted_model(args.dataset, args.scenario)
     print("[seed-gams] fresh warm-started build (no cache)")  # -> stderr
-    res = seed_gams_point(model, Path(args.gdx_ref), args.seed_gams,
-                          threshold=args.seed_threshold)
+    res = seed_gams_point(
+        model, Path(args.gdx_ref), args.seed_gams, threshold=args.seed_threshold
+    )
     rows = query_residuals(model, top_n=args.top, family=args.family)
     tol = args.tol_rel
-    viols = [make_violation(r["eq"], r["idx"], "residual", r["resid"])
-             for r in rows if abs(r["resid"]) > tol]
+    viols = [
+        make_violation(r["eq"], r["idx"], "residual", r["resid"])
+        for r in rows
+        if abs(r["resid"]) > tol
+    ]
     top_resid = max((abs(r["resid"]) for r in rows), default=0.0)
     status = "dirty" if viols else "clean"
     if viols:
@@ -134,23 +156,110 @@ def _run_seed_gams(adapter, args) -> dict:
             f"seed-at-GAMS {args.seed_gams}: coverage {res['coverage']:.0%}, "
             f"{len(viols)} eq residual(s) > {tol:g}; worst "
             f"{worst['entity']}{worst['index']}={worst['value']:.3e} — "
-            f"the GAMS point violates Python equations at this layer")
+            f"the GAMS point violates Python equations at this layer"
+        )
     else:
         headline = (
             f"seed-at-GAMS {args.seed_gams}: coverage {res['coverage']:.0%}, "
             f"all residuals <= {tol:g} (max {top_resid:.3e}) — "
-            f"this layer does not explain the gap")
+            f"this layer does not explain the gap"
+        )
     return dict(
-        status=status, period=args.seed_gams, headline=headline,
+        status=status,
+        period=args.seed_gams,
+        headline=headline,
         violations=viols,
         meta={
-            "mode": "seed_gams", "coverage": res["coverage"],
+            "mode": "seed_gams",
+            "coverage": res["coverage"],
             "cells_set": res["cells_set"],
             "exportable_cells": res["exportable_cells"],
             "total_free_cells": res["total_free_cells"],
             "below_threshold": res["below_threshold"],
             "seed_threshold": args.seed_threshold,
-            "residual_tol": tol, "scenario": args.scenario,
+            "residual_tol": tol,
+            "scenario": args.scenario,
+            "gdx_ref": str(args.gdx_ref),
+            "n_residuals_scanned": len(rows),
+        },
+    )
+
+
+def _run_seed_gams_gate(args) -> dict:
+    """The canonical mode on GTAP: the case the MCP gate builds (seed_and_solve's
+    ``_case``), seeded at the GAMS point in every period with the period's derived
+    aggregates recomputed, and the residuals of that period's rows."""
+    from pyomo.environ import Var
+    from pyomo.environ import value as V
+    from seed_and_solve import _cascade_derived_seed_mp, build_seeded
+
+    if not args.gdx_ref:
+        return dict(
+            status="error",
+            period=args.seed_gams,
+            headline="--seed-gams requires --gdx-ref",
+            violations=[],
+            meta={"mode": "seed_gams"},
+        )
+    period = args.seed_gams
+    _p, _gc, model = build_seeded(
+        args.dataset, Path(args.gdx_ref), period, args.mode, bool(args.ifsub)
+    )
+
+    def _setv(comp, key, val):
+        try:
+            comp[key].set_value(val)
+            return 1
+        except Exception:
+            return 0
+
+    _cascade_derived_seed_mp(model, V, _setv, period)
+    exported, placed = model._seed_counts.get(period, (0, 0))
+    coverage = placed / exported if exported else 0.0
+    total_free = sum(
+        1
+        for v in model.component_objects(Var, active=True)
+        for idx in v
+        if isinstance(idx, tuple) and idx and idx[-1] == period and not v[idx].fixed
+    )
+    rows = query_residuals(model, top_n=args.top, family=args.family, period=period)
+    tol = args.tol_rel
+    viols = [
+        make_violation(r["eq"], r["idx"], "residual", r["resid"])
+        for r in rows
+        if abs(r["resid"]) > tol
+    ]
+    top_resid = max((abs(r["resid"]) for r in rows), default=0.0)
+    if viols:
+        worst = viols[0]
+        headline = (
+            f"seed-at-GAMS {period}: coverage {coverage:.0%}, "
+            f"{len(viols)} eq residual(s) > {tol:g}; worst "
+            f"{worst['entity']}{worst['index']}={worst['value']:.3e} — "
+            f"the GAMS point violates Python equations at this layer"
+        )
+    else:
+        headline = (
+            f"seed-at-GAMS {period}: coverage {coverage:.0%}, "
+            f"all residuals <= {tol:g} (max {top_resid:.3e}) — "
+            f"this layer does not explain the gap"
+        )
+    return dict(
+        status="dirty" if viols else "clean",
+        period=period,
+        headline=headline,
+        violations=viols,
+        meta={
+            "mode": "seed_gams",
+            "case": "mcp_gate",
+            "coverage": coverage,
+            "cells_set": placed,
+            "exportable_cells": exported,
+            "total_free_cells": total_free,
+            "below_threshold": coverage < args.seed_threshold,
+            "seed_threshold": args.seed_threshold,
+            "residual_tol": tol,
+            "scenario": args.scenario,
             "gdx_ref": str(args.gdx_ref),
             "n_residuals_scanned": len(rows),
         },
@@ -160,13 +269,16 @@ def _run_seed_gams(adapter, args) -> dict:
 def _run_params(adapter, args) -> dict:
     """--params: diff Pyomo Params vs the GAMS GDX."""
     if not args.gdx_ref:
-        return dict(status="error", period=None,
-                    headline="--params requires --gdx-ref",
-                    violations=[], meta={"mode": "params"})
+        return dict(
+            status="error",
+            period=None,
+            headline="--params requires --gdx-ref",
+            violations=[],
+            meta={"mode": "params"},
+        )
     model = adapter.build_warmstarted_model(args.dataset, args.scenario)
     period = args.params_period or _PARAMS_PERIOD.get(args.scenario, "base")
-    res = diff_params_vs_gams(model, Path(args.gdx_ref), period,
-                              tol_rel=args.tol_rel)
+    res = diff_params_vs_gams(model, Path(args.gdx_ref), period, tol_rel=args.tol_rel)
     viols = []
     for r in res["diverge"]:
         w = r["worst"]
@@ -176,32 +288,45 @@ def _run_params(adapter, args) -> dict:
     status = "dirty" if res["diverge"] else "clean"
     headline = (
         f"param diff vs GAMS (period={period}): {len(res['diverge'])} diverge / "
-        f"{n_verifiable} verifiable, {len(res['no_match'])} no GAMS counterpart")
+        f"{n_verifiable} verifiable, {len(res['no_match'])} no GAMS counterpart"
+    )
     return dict(
-        status=status, period=normalize_period(period), headline=headline,
+        status=status,
+        period=normalize_period(period),
+        headline=headline,
         violations=viols,
-        meta={"mode": "params", "gams_period": period,
-              "n_verifiable": n_verifiable,
-              "n_no_match": len(res["no_match"]),
-              "tol_rel": args.tol_rel, "scenario": args.scenario,
-              "gdx_ref": str(args.gdx_ref)},
+        meta={
+            "mode": "params",
+            "gams_period": period,
+            "n_verifiable": n_verifiable,
+            "n_no_match": len(res["no_match"]),
+            "tol_rel": args.tol_rel,
+            "scenario": args.scenario,
+            "gdx_ref": str(args.gdx_ref),
+        },
     )
 
 
 def _run_params_compare_builds(args) -> dict:
     """--params-compare-builds: Params that change with/without t0_snapshot."""
     changed = diff_param_builds(args.dataset, tol_rel=args.tol_rel)
-    viols = [make_violation(r["param"], [], "build_rel", r["max_rel"])
-             for r in changed]
+    viols = [make_violation(r["param"], [], "build_rel", r["max_rel"]) for r in changed]
     status = "dirty" if changed else "clean"
     headline = (
-        f"{len(changed)} build-dependent Param(s) change with/without "
-        f"t0_snapshot" if changed
-        else "no build-dependent Params; calibration is consistent")
+        f"{len(changed)} build-dependent Param(s) change with/without t0_snapshot"
+        if changed
+        else "no build-dependent Params; calibration is consistent"
+    )
     return dict(
-        status=status, period=None, headline=headline, violations=viols,
-        meta={"mode": "params_compare_builds", "tol_rel": args.tol_rel,
-              "detail": changed[:args.top]},
+        status=status,
+        period=None,
+        headline=headline,
+        violations=viols,
+        meta={
+            "mode": "params_compare_builds",
+            "tol_rel": args.tol_rel,
+            "detail": changed[: args.top],
+        },
     )
 
 
@@ -211,37 +336,57 @@ def _run_query(adapter, args) -> dict:
     Not part of the cascade signal — status is always 'clean' (a read query
     does not 'violate' anything). Values go to meta.values for debug.
     """
-    model, _ = _build_and_value(adapter, args.dataset, args.scenario,
-                                args.cache_dir, args.no_cache)
+    model, _ = _build_and_value(
+        adapter, args.dataset, args.scenario, args.cache_dir, args.no_cache
+    )
     vals = _query_to_dict(model, args)
     return dict(
-        status="clean", period=None,
+        status="clean",
+        period=None,
         headline=f"read query: {len(vals)} value(s)",
         violations=[],
-        meta={"mode": "query", "values": vals,
-              "show": args.show, "residuals": bool(args.residuals),
-              "scenario": args.scenario},
+        meta={
+            "mode": "query",
+            "values": vals,
+            "show": args.show,
+            "residuals": bool(args.residuals),
+            "scenario": args.scenario,
+        },
     )
 
 
 def _run_compare_ref(adapter, args) -> dict:
     """--compare-ref: A/B the read query HEAD vs a git ref, side-by-side."""
-    model, _ = _build_and_value(adapter, args.dataset, args.scenario,
-                                args.cache_dir, args.no_cache)
+    model, _ = _build_and_value(
+        adapter, args.dataset, args.scenario, args.cache_dir, args.no_cache
+    )
     head_vals = _query_to_dict(model, args)
 
     tmp = Path(tempfile.mkdtemp(prefix="probe_compare_"))
     wt = tmp / "wt"
     ref_vals = {}
     try:
-        subprocess.run(["git", "worktree", "add", "--detach", str(wt),
-                        args.compare_ref], cwd=ROOT, check=True,
-                       capture_output=True, text=True)
+        subprocess.run(
+            ["git", "worktree", "add", "--detach", str(wt), args.compare_ref],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
         sub_cmd = [
-            "uv", "run", "python", "scripts/parity/probe.py",
-            "--template", args.template, "--dataset", args.dataset,
-            "--scenario", args.scenario, "--emit-json",
-            "--cache-dir", str(tmp / "refcache"),
+            "uv",
+            "run",
+            "python",
+            "scripts/parity/probe.py",
+            "--template",
+            args.template,
+            "--dataset",
+            args.dataset,
+            "--scenario",
+            args.scenario,
+            "--emit-json",
+            "--cache-dir",
+            str(tmp / "refcache"),
         ]
         if args.show:
             sub_cmd += ["--show", args.show]
@@ -249,15 +394,20 @@ def _run_compare_ref(adapter, args) -> dict:
                 sub_cmd += ["--region", args.region]
         if args.residuals:
             sub_cmd += ["--residuals", "--top", str(args.top)]
-        sub = subprocess.run(sub_cmd, cwd=wt, capture_output=True, text=True,
-                             timeout=600)
+        sub = subprocess.run(
+            sub_cmd, cwd=wt, capture_output=True, text=True, timeout=600
+        )
         for line in sub.stdout.splitlines():
             if line.startswith("__JSON__"):
-                ref_vals = json.loads(line[len("__JSON__"):])
+                ref_vals = json.loads(line[len("__JSON__") :])
                 break
     finally:
-        subprocess.run(["git", "worktree", "remove", "--force", str(wt)],
-                       cwd=ROOT, capture_output=True, text=True)
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", str(wt)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
 
     keys = sorted(set(head_vals) | set(ref_vals))
     deltas = {}
@@ -271,13 +421,22 @@ def _run_compare_ref(adapter, args) -> dict:
             if abs(d) > 0:
                 viols.append(make_violation(k, [], "head_minus_ref", d))
     status = "dirty" if viols else "clean"
-    headline = (f"compare-ref {args.compare_ref[:12]}: {len(viols)} of "
-                f"{len(keys)} keys differ")
+    headline = (
+        f"compare-ref {args.compare_ref[:12]}: {len(viols)} of {len(keys)} keys differ"
+    )
     return dict(
-        status=status, period=None, headline=headline, violations=viols,
-        meta={"mode": "compare_ref", "ref": args.compare_ref,
-              "head_values": head_vals, "ref_values": ref_vals,
-              "deltas": deltas, "scenario": args.scenario},
+        status=status,
+        period=None,
+        headline=headline,
+        violations=viols,
+        meta={
+            "mode": "compare_ref",
+            "ref": args.compare_ref,
+            "head_values": head_vals,
+            "ref_values": ref_vals,
+            "deltas": deltas,
+            "scenario": args.scenario,
+        },
     )
 
 
@@ -296,40 +455,80 @@ def main() -> int:
     ap.add_argument("--seed-threshold", type=float, default=0.95)
     ap.add_argument("--gdx-ref")
     ap.add_argument("--compare-ref", dest="compare_ref")
-    ap.add_argument("--emit-json", action="store_true",
-                    help="emit query result as __JSON__-prefixed line (for --compare-ref subprocess)")
-    ap.add_argument("--params", action="store_true",
-                    help="diff all Pyomo Params vs the GAMS GDX (3 groups)")
-    ap.add_argument("--params-compare-builds", dest="params_compare_builds",
-                    action="store_true",
-                    help="report Params that change with/without t0_snapshot (no GAMS needed)")
-    ap.add_argument("--params-period", dest="params_period", default=None,
-                    help="GAMS period for --params (default: derived from scenario)")
+    ap.add_argument(
+        "--emit-json",
+        action="store_true",
+        help="emit query result as __JSON__-prefixed line (for --compare-ref subprocess)",
+    )
+    ap.add_argument(
+        "--params",
+        action="store_true",
+        help="diff all Pyomo Params vs the GAMS GDX (3 groups)",
+    )
+    ap.add_argument(
+        "--params-compare-builds",
+        dest="params_compare_builds",
+        action="store_true",
+        help="report Params that change with/without t0_snapshot (no GAMS needed)",
+    )
+    ap.add_argument(
+        "--params-period",
+        dest="params_period",
+        default=None,
+        help="GAMS period for --params (default: derived from scenario)",
+    )
     ap.add_argument("--tol-rel", type=float, default=1e-3)
     ap.add_argument("--no-cache", action="store_true")
     ap.add_argument("--clear-cache", action="store_true")
     ap.add_argument("--cache-dir", type=Path, default=None)
-    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
-                    help="altertax CD (default) or pure-gtap real-CES")
-    ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
-                    help="ifSUB mode (pure-gtap only)")
+    ap.add_argument(
+        "--mode",
+        default="altertax",
+        choices=["altertax", "gtap"],
+        help="altertax CD (default) or pure-gtap real-CES",
+    )
+    ap.add_argument(
+        "--ifsub",
+        type=int,
+        default=0,
+        choices=[0, 1],
+        help="ifSUB mode (pure-gtap only)",
+    )
     args = ap.parse_args()
 
     # mode=gtap UNSUPPORTED: probe drives the parity ADAPTER (altertax scenarios);
     # the pure-gtap MP solve is not an adapter scenario. Accept the flag (the
     # orchestrator passes it) but emit an honest mode_unsupported. seed_and_solve
     # --mode gtap is the faithful pure-gtap seed-and-solve path.
+    # The seed-at-GAMS scan on GTAP reads the case the MCP gate builds, in both
+    # modes (MAR-219); the other modes still drive the parity adapter.
+    if args.template == "gtap" and args.seed_gams and not args.emit_json:
+        return run_tool(
+            "probe",
+            args.dataset,
+            lambda: _run_seed_gams_gate(args),
+            period_hint=args.seed_gams,
+        )
+
     if args.mode == "gtap" and not args.emit_json:
+
         def _unsupported() -> dict:
             return dict(
-                status="error", period=args.seed_gams,
-                headline=("probe does not support --mode gtap (drives the altertax "
-                          "parity adapter); use seed_and_solve --mode gtap."),
+                status="error",
+                period=args.seed_gams,
+                headline=(
+                    "probe does not support --mode gtap (drives the altertax "
+                    "parity adapter); use seed_and_solve --mode gtap."
+                ),
                 violations=[],
-                meta={"error_kind": "mode_unsupported", "mode": "gtap",
-                      "ifsub": args.ifsub})
-        return run_tool("probe", args.dataset, _unsupported,
-                        period_hint=args.seed_gams)
+                meta={
+                    "error_kind": "mode_unsupported",
+                    "mode": "gtap",
+                    "ifsub": args.ifsub,
+                },
+            )
+
+        return run_tool("probe", args.dataset, _unsupported, period_hint=args.seed_gams)
 
     # --emit-json is the LEGACY internal channel used by --compare-ref's
     # subprocess. It must stay a __JSON__-prefixed line (NOT the common schema)
@@ -337,18 +536,26 @@ def main() -> int:
     # stdout clean for the parent, capture build/solve chatter to stderr.
     if args.emit_json:
         from _parity_json import stdout_to_stderr, _REAL_STDOUT
+
         try:
             with stdout_to_stderr():
                 adapter = AdapterRegistry.get(args.template)()
                 if args.seed_gams:
-                    model = adapter.build_warmstarted_model(args.dataset,
-                                                            args.scenario)
-                    seed_gams_point(model, Path(args.gdx_ref), args.seed_gams,
-                                    threshold=args.seed_threshold)
+                    model = adapter.build_warmstarted_model(args.dataset, args.scenario)
+                    seed_gams_point(
+                        model,
+                        Path(args.gdx_ref),
+                        args.seed_gams,
+                        threshold=args.seed_threshold,
+                    )
                 else:
-                    model, _ = _build_and_value(adapter, args.dataset,
-                                                args.scenario, args.cache_dir,
-                                                args.no_cache)
+                    model, _ = _build_and_value(
+                        adapter,
+                        args.dataset,
+                        args.scenario,
+                        args.cache_dir,
+                        args.no_cache,
+                    )
                 payload = _query_to_dict(model, args)
             _REAL_STDOUT.write("__JSON__" + json.dumps(payload) + "\n")
             _REAL_STDOUT.flush()
@@ -361,27 +568,41 @@ def main() -> int:
     if args.clear_cache:
         # No model build; emit directly (still pure JSON).
         n = clear_cache(cache_dir=args.cache_dir)
-        emit(build_payload(tool="probe", dataset=args.dataset, period=None,
-                           status="clean", headline=f"cleared {n} cache file(s)",
-                           violations=[], meta={"mode": "clear_cache",
-                                                "cleared": n}))
+        emit(
+            build_payload(
+                tool="probe",
+                dataset=args.dataset,
+                period=None,
+                status="clean",
+                headline=f"cleared {n} cache file(s)",
+                violations=[],
+                meta={"mode": "clear_cache", "cleared": n},
+            )
+        )
         return 0
 
     def _work() -> dict:
         try:
             adapter = AdapterRegistry.get(args.template)()
         except KeyError as e:
-            return dict(status="error", period=None,
-                        headline=f"unknown template: {e}", violations=[],
-                        meta={"mode": "init"})
+            return dict(
+                status="error",
+                period=None,
+                headline=f"unknown template: {e}",
+                violations=[],
+                meta={"mode": "init"},
+            )
         if (args.dataset, args.scenario) not in adapter.enumerate_combinations():
             return dict(
-                status="error", period=None,
+                status="error",
+                period=None,
                 headline=(f"({args.dataset!r}, {args.scenario!r}) not available"),
                 violations=[],
-                meta={"mode": "init",
-                      "available": [list(c) for c in
-                                    adapter.enumerate_combinations()]})
+                meta={
+                    "mode": "init",
+                    "available": [list(c) for c in adapter.enumerate_combinations()],
+                },
+            )
 
         if args.params_compare_builds:
             return _run_params_compare_builds(args)

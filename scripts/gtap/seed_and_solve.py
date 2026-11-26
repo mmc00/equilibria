@@ -52,6 +52,7 @@ JSON contract (shared _parity_json schema): status=clean (STAYS = equilibrium se
 nothing to fix) | dirty (GOES = a differing equation, see violations = residual tail) |
 error (solve crash). exit 0/1/2.
 """
+
 from __future__ import annotations
 from equilibria.sources import dataset_dir
 import argparse
@@ -85,8 +86,14 @@ ALTERTAX_BASIS = "gempack"
 # residual there at the GAMS point is benign and must not bury the real lead. (eq_uh is
 # NOT here: uh feeds eq_zcons = real CDE demand, so it has genuine blast radius.)
 _LEAF_EQS = {
-    "eq_rgdpmp", "eq_pgdpmp",
-    "eq_cv", "eq_ev", "eq_walras", "eq_u", "eq_ug", "eq_us",
+    "eq_rgdpmp",
+    "eq_pgdpmp",
+    "eq_cv",
+    "eq_ev",
+    "eq_walras",
+    "eq_u",
+    "eq_ug",
+    "eq_us",
 }
 
 
@@ -107,18 +114,26 @@ def _cascade_derived_seed_mp(m, V, setv, period: str) -> int:
     # eq_xd_agg/eq_xmt_agg bodies use — without it `xd`/`xmt` stay at init (phantom
     # eq_xd_agg residual ~1.45).
     _xsf = getattr(m, "_xscale_floats", {}) or {}
+
     def _xs(r, aa):
         return _xsf.get((r, aa), 1.0)
+
     for r in m.r:
         for i in m.i:
             try:
-                n += setv(m.xd, (r, i, t), sum(V(m.xda[r, i, aa, t]) / _xs(r, aa)
-                          for aa in m.aa))
+                n += setv(
+                    m.xd,
+                    (r, i, t),
+                    sum(V(m.xda[r, i, aa, t]) / _xs(r, aa) for aa in m.aa),
+                )
             except Exception:
                 pass
             try:
-                n += setv(m.xmt, (r, i, t), sum(V(m.xma[r, i, aa, t]) / _xs(r, aa)
-                          for aa in m.aa))
+                n += setv(
+                    m.xmt,
+                    (r, i, t),
+                    sum(V(m.xma[r, i, aa, t]) / _xs(r, aa) for aa in m.aa),
+                )
             except Exception:
                 pass
             # DERIVE xc/xg/xi from the QUANTITY identity xc=xaa[hhd], xg=xaa[gov],
@@ -146,15 +161,26 @@ def _cascade_derived_seed_mp(m, V, setv, period: str) -> int:
         except Exception:
             pass
         try:
-            n += setv(m.kapEnd, (r, t), (1 - V(m.depr[r])) * V(m.kstock[r, t]) + V(m.xiagg[r, t]))
+            n += setv(
+                m.kapEnd,
+                (r, t),
+                (1 - V(m.depr[r])) * V(m.kstock[r, t]) + V(m.xiagg[r, t]),
+            )
         except Exception:
             pass
     try:
-        n += setv(m.xigbl, (t,), sum(V(m.xiagg[r, t]) - V(m.depr[r]) * V(m.kstock[r, t]) for r in m.r))
+        n += setv(
+            m.xigbl,
+            (t,),
+            sum(V(m.xiagg[r, t]) - V(m.depr[r]) * V(m.kstock[r, t]) for r in m.r),
+        )
     except Exception:
         pass
     try:
-        num = sum(V(m.pi[r, t]) * (V(m.xiagg[r, t]) - V(m.depr[r]) * V(m.kstock[r, t])) for r in m.r)
+        num = sum(
+            V(m.pi[r, t]) * (V(m.xiagg[r, t]) - V(m.depr[r]) * V(m.kstock[r, t]))
+            for r in m.r
+        )
         n += setv(m.pigbl, (t,), num / max(V(m.xigbl[t]), 1e-9))
     except Exception:
         pass
@@ -172,7 +198,11 @@ def _seed_household_vars(m, gdx_path: Path) -> int:
     from _diff_core import gams_levels  # type: ignore
 
     def _strip(x):
-        return x[2:] if isinstance(x, str) and len(x) > 2 and x[1] == "_" and x[0] in "acfr" else x
+        return (
+            x[2:]
+            if isinstance(x, str) and len(x) > 2 and x[1] == "_" and x[0] in "acfr"
+            else x
+        )
 
     n = 0
     for vn in _HOUSEHOLD_VARS:
@@ -200,23 +230,40 @@ def _case(dataset: str, if_sub: bool, mode: str):
 
     d = dataset_dir(dataset)
     p = GTAPParameters()
-    p.load_from_har(basedata_path=d / "basedata.har", sets_path=d / "sets.har",
-                    default_path=d / "default.prm", baserate_path=d / "baserate.har")
+    p.load_from_har(
+        basedata_path=d / "basedata.har",
+        sets_path=d / "sets.har",
+        default_path=d / "default.prm",
+        baserate_path=d / "baserate.har",
+    )
     rr = list(p.sets.r)[-1]
     if mode == "gtap":
         gc = GTAPClosureConfig(
-            name="base", closure_type="MCP", capital_mobility="sluggish",
-            fix_endowments=False, fix_taxes=False, fix_technology=False,
-            if_sub=if_sub, numeraire="pnum")
+            name="base",
+            closure_type="MCP",
+            capital_mobility="sluggish",
+            fix_endowments=False,
+            fix_taxes=False,
+            fix_technology=False,
+            if_sub=if_sub,
+            numeraire="pnum",
+        )
         return p, gc, rr
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
 
     p.set_va_subsidy_basis(ALTERTAX_BASIS)
     pa = apply_altertax_elasticities(p, in_place=False)
     gc = GTAPClosureConfig(
-        name="altertax", closure_type="MCP", capital_mobility="mobile",
-        fix_endowments=False, fix_taxes=True, fix_technology=True,
-        if_sub=if_sub, numeraire="pnum", va_subsidy_basis=ALTERTAX_BASIS)
+        name="altertax",
+        closure_type="MCP",
+        capital_mobility="mobile",
+        fix_endowments=False,
+        fix_taxes=True,
+        fix_technology=True,
+        if_sub=if_sub,
+        numeraire="pnum",
+        va_subsidy_basis=ALTERTAX_BASIS,
+    )
     return pa, gc, rr
 
 
@@ -227,16 +274,20 @@ def _solve_gtap(dataset: str, gdx_path: Path, if_sub: bool, mode: str = "gtap"):
     from _core_run import solve_on_core
 
     p, gc, rr = _case(dataset, if_sub, mode)
-    m, codes, core = solve_on_core(p, gc, rr, mode=mode, ref_gdx=gdx_path, seed_gdx=gdx_path)
+    m, codes, core = solve_on_core(
+        p, gc, rr, mode=mode, ref_gdx=gdx_path, seed_gdx=gdx_path
+    )
     res = {k: {"code": codes[k], "residual": core[k]["residual"]} for k in codes}
     return m, res
 
 
-def build_seeded(dataset: str, gdx_path: Path | None, period: str, mode: str,
-                 if_sub: bool):
+def build_seeded(
+    dataset: str, gdx_path: Path | None, period: str, mode: str, if_sub: bool
+):
     """(params, closure, model): the full multi-period Pyomo model of the case as the
     MCP gate builds it (``_case``), not solved, seeded from the GAMS GDX in every
-    period (``gdx_path=None``: left at Python's own calibration); for the shock, with
+    period (``gdx_path=None``: left at Python's own calibration; the seed's
+    ``{period: (exported, placed)}`` cells are ``m._seed_counts``); for the shock, with
     the default tariff the driver writes, so the rows read are those of the actual
     shock system."""
     from equilibria.templates.gtap.gtap_block_model import GTAPBlockMultiPeriodModel
@@ -251,7 +302,7 @@ def build_seeded(dataset: str, gdx_path: Path | None, period: str, mode: str,
     mp.build_equations_fisher(m)
     m._residual_region = rr
     if gdx_path is not None:
-        mp.seed_all_periods(m, gdx_path)
+        m._seed_counts = mp.seed_all_periods(m, gdx_path)
         _seed_household_vars(m, gdx_path)
     m._gtap_mode = mode == "gtap"
     if period == "shock":
@@ -261,8 +312,14 @@ def build_seeded(dataset: str, gdx_path: Path | None, period: str, mode: str,
     return p, gc, m
 
 
-def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
-                            if_sub: bool, mode: str = "gtap"):
+def run_seed_and_solve_gtap(
+    dataset: str,
+    gdx_path: Path,
+    period: str,
+    top: int,
+    if_sub: bool,
+    mode: str = "gtap",
+):
     """Seed-and-solve on the core driver, for both modes (gtap real-CES, altertax CD).
 
     The shock is MULTI-PERIOD: the tariff is the 'shock' cell of imptx in the
@@ -351,9 +408,15 @@ def run_seed_and_solve_gtap(dataset: str, gdx_path: Path, period: str, top: int,
     median = statistics.median([r_ for r_, _, _ in eq_resid]) if eq_resid else 0.0
 
     return {
-        "code": code, "resid": resid, "median": median, "eq_resid": eq_resid,
-        "n_seed": None, "n_cascade": n_cascade,
-        "sent_name": sent_name, "sent_before": sent_before, "sent_after": sent_after,
+        "code": code,
+        "resid": resid,
+        "median": median,
+        "eq_resid": eq_resid,
+        "n_seed": None,
+        "n_cascade": n_cascade,
+        "sent_name": sent_name,
+        "sent_before": sent_before,
+        "sent_after": sent_after,
     }
 
 
@@ -361,14 +424,22 @@ def _classify_eq(family: str, idx) -> str:
     """benign | real — leaf (rgdpmp/pgdpmp) and ROW-region rows are benign-known."""
     if family in _LEAF_EQS:
         return "benign"
-    idx_str = " ".join(str(x) for x in (idx if isinstance(idx, (tuple, list)) else (idx,)))
+    idx_str = " ".join(
+        str(x) for x in (idx if isinstance(idx, (tuple, list)) else (idx,))
+    )
     if "ROW" in idx_str:
         return "benign"
     return "real"
 
 
-def _work(dataset: str, gdx_path: Path, period: str, top: int,
-          mode: str = "altertax", if_sub: bool = False) -> dict:
+def _work(
+    dataset: str,
+    gdx_path: Path,
+    period: str,
+    top: int,
+    mode: str = "altertax",
+    if_sub: bool = False,
+) -> dict:
     out = run_seed_and_solve_gtap(dataset, gdx_path, period, top, if_sub, mode)
     code, resid = out["code"], out["resid"]
     if code is None:
@@ -377,11 +448,17 @@ def _work(dataset: str, gdx_path: Path, period: str, top: int,
         # not tested. Never read it as "an equation differs".
         return {
             "status": "error",
-            "headline": (f"the solve did not run at the GAMS {period} point "
-                         f"(code=None, resid={resid:.1e}); see the solver log on stderr"),
+            "headline": (
+                f"the solve did not run at the GAMS {period} point "
+                f"(code=None, resid={resid:.1e}); see the solver log on stderr"
+            ),
             "violations": [],
             "period": period,
-            "meta": {"error_kind": "solve_not_run", "mode": mode, "if_sub": int(if_sub)},
+            "meta": {
+                "error_kind": "solve_not_run",
+                "mode": mode,
+                "if_sub": int(if_sub),
+            },
         }
     sb, sa = out["sent_before"], out["sent_after"]
     drift = (abs(sa - sb) / abs(sb)) if (sb and sa and abs(sb) > 1e-9) else None
@@ -389,10 +466,12 @@ def _work(dataset: str, gdx_path: Path, period: str, top: int,
     # Tail above tol, split benign vs real.
     tail = [(r_, fam, idx) for r_, fam, idx in out["eq_resid"] if r_ > RESID_TOL]
     real = [(r_, fam, idx) for r_, fam, idx in tail if _classify_eq(fam, idx) == "real"]
-    benign = [(r_, fam, idx) for r_, fam, idx in tail if _classify_eq(fam, idx) == "benign"]
+    benign = [
+        (r_, fam, idx) for r_, fam, idx in tail if _classify_eq(fam, idx) == "benign"
+    ]
 
     # STAYS iff solve converged AND no REAL equation carries residual at the seed.
-    stays = (code == 1 and resid < 1e-6 and not real)
+    stays = code == 1 and resid < 1e-6 and not real
 
     violations = []
     for r_, fam, idx in (real + benign)[:top]:
@@ -401,29 +480,45 @@ def _work(dataset: str, gdx_path: Path, period: str, top: int,
         violations.append(v)
 
     if stays:
-        headline = (f"STAYS: GAMS point is a fixed point of equilibria "
-                    f"(solve code={code}, resid={resid:.1e}, no real eq residual) "
-                    f"→ EQUILIBRIUM SELECTION, no differing equation to chase")
+        headline = (
+            f"STAYS: GAMS point is a fixed point of equilibria "
+            f"(solve code={code}, resid={resid:.1e}, no real eq residual) "
+            f"→ EQUILIBRIUM SELECTION, no differing equation to chase"
+        )
         detection = make_detection(
             what="GAMS point is a stable fixed point",
             evidence=f"seeded GAMS {period}, solved code={code} resid={resid:.1e}, "
-                     f"residual tail has 0 real (non-leaf/non-ROW) equations",
-            confidence="firm")
+            f"residual tail has 0 real (non-leaf/non-ROW) equations",
+            confidence="firm",
+        )
         status = "clean"
     else:
         worst = real[0] if real else (tail[0] if tail else None)
-        worst_str = (f"{worst[1]}{tuple(str(x) for x in (worst[2] if isinstance(worst[2], (tuple, list)) else (worst[2],)))}"
-                     f"={worst[0]:.3g}") if worst else "(solve failed)"
-        drift_str = f", sentinel {out['sent_name']} {sb:.4f}→{sa:.4f} ({100*drift:+.2f}%)" if drift else ""
-        headline = (f"GOES: GAMS point is NOT a fixed point (solve code={code}, resid={resid:.1e}"
-                    f"{drift_str}) → an equation DIFFERS. Worst REAL residual: {worst_str}. "
-                    f"Read the TAIL (below), not the median ({out['median']:.1e}). "
-                    f"Next: CONVERT-diff that equation vs GAMS.")
+        worst_str = (
+            (
+                f"{worst[1]}{tuple(str(x) for x in (worst[2] if isinstance(worst[2], (tuple, list)) else (worst[2],)))}"
+                f"={worst[0]:.3g}"
+            )
+            if worst
+            else "(solve failed)"
+        )
+        drift_str = (
+            f", sentinel {out['sent_name']} {sb:.4f}→{sa:.4f} ({100 * drift:+.2f}%)"
+            if drift
+            else ""
+        )
+        headline = (
+            f"GOES: GAMS point is NOT a fixed point (solve code={code}, resid={resid:.1e}"
+            f"{drift_str}) → an equation DIFFERS. Worst REAL residual: {worst_str}. "
+            f"Read the TAIL (below), not the median ({out['median']:.1e}). "
+            f"Next: CONVERT-diff that equation vs GAMS."
+        )
         detection = make_detection(
             what=f"an equation differs from GAMS (GAMS point not a fixed point); top real residual {worst_str}",
             evidence=f"seeded GAMS {period}, solved code={code} resid={resid:.1e}; "
-                     f"{len(real)} real + {len(benign)} benign(leaf/ROW) eqs with resid>{RESID_TOL:g}",
-            confidence="firm")
+            f"{len(real)} real + {len(benign)} benign(leaf/ROW) eqs with resid>{RESID_TOL:g}",
+            confidence="firm",
+        )
         status = "dirty"
 
     return {
@@ -432,34 +527,59 @@ def _work(dataset: str, gdx_path: Path, period: str, top: int,
         "violations": violations,
         "period": period,
         "meta": {
-            "mode": mode, "if_sub": int(if_sub),
-            "solve_code": code, "solve_resid": resid, "residual_median": out["median"],
-            "n_seeded": out["n_seed"], "n_cascaded": out["n_cascade"],
-            "n_real_resid": len(real), "n_benign_resid": len(benign),
-            "sentinel": out["sent_name"], "sentinel_before": sb, "sentinel_after": sa,
+            "mode": mode,
+            "if_sub": int(if_sub),
+            "solve_code": code,
+            "solve_resid": resid,
+            "residual_median": out["median"],
+            "n_seeded": out["n_seed"],
+            "n_cascaded": out["n_cascade"],
+            "n_real_resid": len(real),
+            "n_benign_resid": len(benign),
+            "sentinel": out["sent_name"],
+            "sentinel_before": sb,
+            "sentinel_after": sa,
             "sentinel_drift_pct": (100 * drift) if drift else None,
             "detection": detection,
-            "note": ("median masks the signal — the tail (worst eqs) is the lead; "
-                     "benign = rgdpmp/pgdpmp report leaves + ROW corrupt-ref rows"),
+            "note": (
+                "median masks the signal — the tail (worst eqs) is the lead; "
+                "benign = rgdpmp/pgdpmp report leaves + ROW corrupt-ref rows"
+            ),
         },
     }
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Cascade tool 11: seed-and-solve (selection vs differing-eq).")
+    ap = argparse.ArgumentParser(
+        description="Cascade tool 11: seed-and-solve (selection vs differing-eq)."
+    )
     ap.add_argument("--dataset", required=True)
     ap.add_argument("--gdx", required=True, type=Path)
     ap.add_argument("--period", default="shock", choices=["base", "check", "shock"])
-    ap.add_argument("--top", type=int, default=20, help="how many residual-tail eqs to report")
-    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
-                    help="altertax CD (default) or pure-gtap real-CES")
-    ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
-                    help="ifSUB mode")
+    ap.add_argument(
+        "--top", type=int, default=20, help="how many residual-tail eqs to report"
+    )
+    ap.add_argument(
+        "--mode",
+        default="altertax",
+        choices=["altertax", "gtap"],
+        help="altertax CD (default) or pure-gtap real-CES",
+    )
+    ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1], help="ifSUB mode")
     args = ap.parse_args()
-    return run_tool("seed_and_solve", args.dataset,
-                    lambda: _work(args.dataset, args.gdx, args.period, args.top,
-                                  mode=args.mode, if_sub=bool(args.ifsub)),
-                    period_hint=args.period)
+    return run_tool(
+        "seed_and_solve",
+        args.dataset,
+        lambda: _work(
+            args.dataset,
+            args.gdx,
+            args.period,
+            args.top,
+            mode=args.mode,
+            if_sub=bool(args.ifsub),
+        ),
+        period_hint=args.period,
+    )
 
 
 if __name__ == "__main__":

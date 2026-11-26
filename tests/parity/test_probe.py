@@ -363,3 +363,56 @@ def test_cli_params_runs(tmp_path):
     assert out.returncode == 0, out.stderr
     assert "coverage:" in out.stdout
     assert "param" in out.stdout.lower()
+
+
+# MAR-219: the cascade's seed-at-GAMS layer reads the case the MCP gate builds,
+# seeded at the data/ reference, over the requested period's rows.
+from equilibria.sources import find_reference as _find_reference
+
+_GATE_REF = _find_reference(
+    "gtap7_3x3", "gams", form="mcp", mode="altertax", ifsub=0, fbep="header"
+)
+
+
+def test_query_residuals_reads_only_the_requested_period():
+    import pyomo.environ as pyo
+
+    m = pyo.ConcreteModel()
+    m.t = pyo.Set(initialize=["check", "shock"])
+    m.x = pyo.Var(m.t, initialize=1.0)
+    m.eq_x = pyo.Constraint(
+        m.t, rule=lambda m, t: m.x[t] == (1.0 if t == "check" else 3.0)
+    )
+    rows = query_residuals(m, top_n=5, period="check")
+    assert rows == [{"eq": "eq_x", "idx": (), "resid": 0.0}]
+
+
+@pytest.mark.skipif(_GATE_REF is None, reason="GAMS MCP altertax ref absent")
+@pytest.mark.needs_gdxdump
+@pytest.mark.parametrize("period", ["check", "shock"])
+def test_seed_gams_on_the_gate_case_is_clean_on_gtap7_3x3(period):
+    assert _GATE_REF is not None
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "scripts/parity/probe.py",
+            "--template",
+            "gtap",
+            "--dataset",
+            "gtap7_3x3",
+            "--scenario",
+            f"altertax_{period}",
+            "--seed-gams",
+            period,
+            "--gdx-ref",
+            str(_GATE_REF / "out.gdx"),
+            "--residuals",
+        ],
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+        timeout=1800,
+    )
+    out = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert out["status"] == "clean", out["headline"]
+    assert out["meta"]["coverage"] > 0.9
