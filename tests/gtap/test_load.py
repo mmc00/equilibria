@@ -15,9 +15,12 @@ from equilibria.templates.gtap import GTAPParameters
 FILES = ("basedata.har", "sets.har", "default.prm", "baserate.har")
 
 
+PARTS = ("benchmark", "elasticities", "taxes", "shares", "shifts", "calibrated")
+
+
 def _same(a: GTAPParameters, b: GTAPParameters) -> None:
-    assert vars(a.benchmark) == vars(b.benchmark)
-    assert vars(a.elasticities) == vars(b.elasticities)
+    for part in PARTS:
+        assert vars(getattr(a, part)) == vars(getattr(b, part)), part
 
 
 def _copy(dst: Path, files=FILES) -> Path:
@@ -85,3 +88,12 @@ def test_bundled_name_wins_over_folder(
     (tmp_path / "nus333").mkdir()  # an empty folder: loading it would fail
     monkeypatch.chdir(tmp_path)
     _same(load("nus333"), load_bundled("gtap", "nus333"))
+
+
+def test_folder_without_baserate_differs(tmp_path: Path) -> None:
+    """``baserate.har`` is read when the folder has it: without it the tax rates differ,
+    so the equality tests above would see a load that drops it."""
+    without = load(
+        _copy(tmp_path / "base", ("basedata.har", "sets.har", "default.prm"))
+    )
+    assert vars(without.taxes) != vars(load("nus333").taxes)
