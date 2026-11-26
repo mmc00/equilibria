@@ -273,10 +273,66 @@ def _resolve_gms_path(dataset: str, ifsub: int) -> tuple[Path | None, bool]:
 _GMS_FALLBACK_DATASETS = ("gtap7_3x3", "gtap7_10x7", "gtap7_15x10")
 
 
+class _Cell:
+    __slots__ = ("active", "fixed")
+
+    def __init__(self, active: bool = False, fixed: bool = False):
+        self.active, self.fixed = active, fixed
+
+
+class _Frozen(dict):
+    """One component's ``{index: _Cell}`` with its Pyomo ``ctype``."""
+
+    def __init__(self, ctype):
+        super().__init__()
+        self.ctype = ctype
+
+
+# In check and shock the driver swaps eq_nd/eq_va for the same demand row with its
+# share recalibrated from the prior period (pyomo_ops, one scalar Constraint per
+# cell named _eq_<nd|va>_recal_<r>_<a>_<period>); the cell's row is that one.
+_RECAL_ROWS = frozenset({"eq_nd", "eq_va"})
+
+
+def _recal_name(family: str, idx) -> str:
+    return "_" + family + "_recal_" + "_".join(str(x) for x in idx)
+
+
+def _freeze_state(model, period: str):
+    """A copy of ``period``'s row activity and cell fixings, readable as the model
+    is (``getattr(m, name)``, iteration, ``[idx].active``/``.fixed``, ``ctype``).
+    The Pyomo model is shared: after the solve the driver fixes the period's cells
+    (freeze_period) and the next period switches its rows off (freeze_inactive),
+    so the model read later no longer shows what the solver was handed."""
+    from types import SimpleNamespace
+
+    from pyomo.environ import Constraint, Var
+
+    state = SimpleNamespace()
+    for c in model.component_objects(Constraint):
+        comp = _Frozen(Constraint)
+        for idx in c:
+            if _of_period(idx, period):
+                active = c[idx].active
+                if not active and c.local_name in _RECAL_ROWS:
+                    recal = getattr(model, _recal_name(c.local_name, idx), None)
+                    active = recal is not None and recal.active
+                comp[idx] = _Cell(active=active)
+        setattr(state, c.local_name, comp)
+    for v in model.component_objects(Var):
+        comp = _Frozen(Var)
+        for idx in v:
+            if _of_period(idx, period):
+                comp[idx] = _Cell(fixed=v[idx].fixed)
+        setattr(state, v.local_name, comp)
+    return state
+
+
 def gate_model_at_solve(dataset: str, period: str, mode: str, ifsub: int, gdx: Path):
-    """The Pyomo model of the case the MCP gate builds, on the core driver seeded at
+    """The state of the case the MCP gate builds, on the core driver seeded at
     ``gdx``, as it stands right after the solve of ``period`` (the solver's own free
-    rows and fixings applied, the other periods fixed); None if no solve of it ran."""
+    rows and fixings applied, the other periods fixed), copied there
+    (``_freeze_state``); None if no solve of it ran."""
     from _core_run import solve_on_core
     from seed_and_solve import _case
 
@@ -288,7 +344,7 @@ def gate_model_at_solve(dataset: str, period: str, mode: str, ifsub: int, gdx: P
         status = _by_backend(model)
         staged = model.staged
         if staged is not None and staged.period == period and "m" not in seen:
-            seen["m"] = model.pyomo
+            seen["m"] = _freeze_state(model.pyomo, period)
         return status
 
     p, gc, rr = _case(dataset, bool(ifsub), mode)
