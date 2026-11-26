@@ -416,3 +416,40 @@ def test_seed_gams_on_the_gate_case_is_clean_on_gtap7_3x3(period):
     out = json.loads(proc.stdout.strip().splitlines()[-1])
     assert out["status"] == "clean", out["headline"]
     assert out["meta"]["coverage"] > 0.9
+
+
+_GATE_REF_GTAP = _find_reference(
+    "gtap7_3x3", "gams", form="mcp", mode="gtap", ifsub=0, fbep="header"
+)
+
+
+@pytest.mark.skipif(_GATE_REF_GTAP is None, reason="GAMS MCP gtap ref absent")
+@pytest.mark.needs_gdxdump
+def test_seed_gams_gtap_shock_reads_no_muted_welfare_row():
+    """cv/ev are muted by the driver and move with psave (GTAP v7, not GAMS)."""
+    assert _GATE_REF_GTAP is not None
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "scripts/parity/probe.py",
+            "--template",
+            "gtap",
+            "--dataset",
+            "gtap7_3x3",
+            "--scenario",
+            "gtap_shock",
+            "--seed-gams",
+            "shock",
+            "--gdx-ref",
+            str(_GATE_REF_GTAP / "out.gdx"),
+            "--residuals",
+            "--mode",
+            "gtap",
+        ],
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+        timeout=1800,
+    )
+    out = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert out["status"] == "clean", out["headline"]

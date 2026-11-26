@@ -225,6 +225,19 @@ def _seed_household_vars(m, gdx_path: Path) -> int:
     return n
 
 
+def muted_welfare_rows(mode: str) -> frozenset[str]:
+    """The welfare-leaf rows the driver switches off before every solve
+    (steps.mute_welfare): cv/ev/u/ug/us, and walras outside the gtap mode. They are
+    not in the system the solver is handed, and u/us/cv/ev move with psave, which
+    follows GTAP v7, not GAMS (see _NOT_GAMS_EQS), so a layer that reads residuals
+    at the GAMS point skips them."""
+    from equilibria.templates.gtap.period_rules import WELFARE_LEAVES
+
+    return frozenset(
+        eqn for eqn, vn in WELFARE_LEAVES if not (mode == "gtap" and vn == "walras")
+    )
+
+
 def _case(dataset: str, if_sub: bool, mode: str):
     """(params, closure, residual region) of one case, as the MCP gate builds it
     (``test_gtap7_mcp_parity._solve_and_measure``), in both modes with the data's

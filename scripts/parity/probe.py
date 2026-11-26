@@ -191,7 +191,11 @@ def _run_seed_gams_gate(args) -> dict:
     aggregates recomputed, and the residuals of that period's rows."""
     from pyomo.environ import Var
     from pyomo.environ import value as V
-    from seed_and_solve import _cascade_derived_seed_mp, build_seeded
+    from seed_and_solve import (
+        _cascade_derived_seed_mp,
+        build_seeded,
+        muted_welfare_rows,
+    )
 
     if not args.gdx_ref:
         return dict(
@@ -222,7 +226,12 @@ def _run_seed_gams_gate(args) -> dict:
         for idx in v
         if isinstance(idx, tuple) and idx and idx[-1] == period and not v[idx].fixed
     )
-    rows = query_residuals(model, top_n=args.top, family=args.family, period=period)
+    muted = muted_welfare_rows(args.mode)
+    rows = [
+        r
+        for r in query_residuals(model, top_n=None, family=args.family, period=period)
+        if r["eq"] not in muted
+    ][: args.top]
     tol = args.tol_rel
     viols = [
         make_violation(r["eq"], r["idx"], "residual", r["resid"])

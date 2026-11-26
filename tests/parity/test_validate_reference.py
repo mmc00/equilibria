@@ -70,3 +70,33 @@ def test_gtap7_3x3_altertax_is_clean(period):
     )
     out = json.loads(proc.stdout.strip().splitlines()[-1])
     assert out["status"] == "clean", out["headline"]
+
+
+_GTAP_FOLDER = find_reference(
+    "gtap7_3x3", "gams", form="mcp", mode="gtap", ifsub=0, fbep="header"
+)
+
+
+@pytest.mark.skipif(_GTAP_FOLDER is None, reason="GAMS MCP gtap ref absent")
+@pytest.mark.needs_gdxdump
+def test_gtap7_3x3_gtap_shock_reads_no_muted_welfare_row():
+    """The driver mutes cv/ev/u/ug/us (steps.mute_welfare); their rows move with
+    psave, which follows GTAP v7, not GAMS, so they are not read at the GAMS point."""
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "scripts/gtap/validate_reference.py",
+            "--dataset",
+            "gtap7_3x3",
+            "--period",
+            "shock",
+            "--mode",
+            "gtap",
+        ],
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+        timeout=1800,
+    )
+    out = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert out["status"] == "clean", out["headline"]

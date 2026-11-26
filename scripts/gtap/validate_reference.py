@@ -162,7 +162,7 @@ def _in_period(idx, period: str):
     return () if idx == period else None
 
 
-def _equation_residuals(model, period: str):
+def _equation_residuals(model, period: str, skip: frozenset[str] = frozenset()):
     """Per-equation-family max residual at the seeded point, over ``period``'s rows
     (the cell is reported without the period).
 
@@ -173,7 +173,7 @@ def _equation_residuals(model, period: str):
     an unseedable var). `by_family[fam]["n_incomplete"]` counts the skipped cells so
     a partially-checked family is visible, and `fully_incomplete` lists families
     with ZERO checkable cells (cannot be validated at all — must be named, not
-    silently passed)."""
+    silently passed). ``skip``: families not read (the muted welfare rows)."""
     from pyomo.environ import value as V, Constraint
     from pyomo.core.expr import identify_variables
 
@@ -183,6 +183,8 @@ def _equation_residuals(model, period: str):
 
     for c in model.component_objects(Constraint, active=True):
         fam = c.name
+        if fam in skip:
+            continue
         rec = by_family[fam]
         for idx in c:
             cell = _in_period(idx, period)
@@ -260,8 +262,12 @@ def _work(args) -> dict:
             meta={"error_kind": "gdx_not_found", "gdx": str(gdx_path)},
         )
 
+    from seed_and_solve import muted_welfare_rows
+
     model = _seeded_case(args.dataset, gdx_path, args.period, args.mode, args.ifsub)
-    fams, fully_incomplete = _equation_residuals(model, args.period)
+    fams, fully_incomplete = _equation_residuals(
+        model, args.period, skip=muted_welfare_rows(args.mode)
+    )
 
     violating = sorted(
         (
