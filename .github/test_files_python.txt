@@ -190,9 +190,18 @@ tests/parity/test_cascade_report.py
 tests/parity/test_cascade_run.py
 tests/parity/test_correlate_region.py
 tests/parity/test_detection_prescription.py
+tests/parity/test_diff_calibration.py
+tests/parity/test_diff_causal_propagation.py
+tests/parity/test_diff_equation_form.py
+tests/parity/test_diff_holdfixed.py
 tests/parity/test_diff_mcp_pairing.py
+tests/parity/test_diff_tautology.py
+tests/parity/test_drift_test.py
+tests/parity/test_inheritance_table.py
+tests/parity/test_nl_compare_gate.py
 tests/parity/test_probe.py
 tests/parity/test_seed_and_solve.py
+tests/parity/test_validate_reference.py
 tests/qa/test_baseline_manifest.py
 tests/qa/test_gams_nlp_reference_manifest.py
 tests/qa/test_sam_qa.py
@@ -210,6 +219,7 @@ tests/sam_tools/test_ras_balancer.py
 tests/sam_tools/test_sam_class.py
 tests/sam_tools/test_transforms.py
 tests/scripts/test_altertax_job.py
+tests/scripts/test_bench.py
 tests/scripts/test_block_push_hook.py
 tests/scripts/test_build_pure_bundle_model.py
 tests/scripts/test_burfisher_job.py

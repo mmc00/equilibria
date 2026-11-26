@@ -1,38 +1,22 @@
 """Tool #8 of the parity-debug cascade: HOLDFIXED / SEQUENCE diff.
 
-THE BLIND SPOT this covers: tools 0-7 all look at ONE solve in isolation — equation
-forms, coefficients, calibration, MCP pairing, drift. NONE of them sees how GAMS
-SEQUENCES its periods. GAMS solves base→check→shock in a `loop(tsim)` and, before
-solving period `tsim`, HARD-FIXES the entire PREVIOUS period via `var.fx(tsim-1) =
-var.l(tsim-1)` (combined with `gtap.holdfixed=1`). That frozen prior period is what
-keeps a free/degenerate variable (pva/pnd under CD) from sliding to another branch —
-the prior period's pf/xf/pa/pe levels anchor the current period's prices, hence pva.
-
-Python's diff_altertax DOES solve in 3 stages (betaCal/base → check → shock) and warm-
-starts each from the previous — BUT it does NOT FREEZE the previous stage; it only uses
-it as a starting point and leaves everything free to re-solve. So the anchor GAMS gets
-from `holdfixed(tsim-1)` is absent, and the free DOF slides. This difference is invisible
-to every other tool because it lives in the SOLVE SEQUENCE (the `loop(tsim)` / `.fx(tsim-1)`
-block of the .gms), not in the model equations, coefficients, calibration, or pairing.
+GAMS solves base -> check -> shock in a `loop(tsim)` and, before solving period
+`tsim`, fixes the previous one: `var.fx(tsim-1) = var.l(tsim-1)` (with
+`gtap.holdfixed=1`). This tool checks that Python does the same, by measuring it.
 
 WHAT THIS TOOL DOES:
-  1. parses the GAMS `var.fx(...tsim-1) = var.l(...tsim-1)` block → the list of variables
-     GAMS freezes from the previous period (the holdfix set);
-  2. reports which of those Python's stage chain freezes (currently: NONE — Python warm-
-     starts but never fixes the prior stage), i.e. the exact gap;
-  3. prints the holdfix variable list as the RECIPE for a faithful fix: to replicate
-     GAMS, freeze these vars at the PYTHON-computed previous-stage values (NOT GAMS
-     values — that would be hardcoding) before the next stage's solve.
+  1. parses the `var.fx(...tsim-1) = var.l(...tsim-1)` lines of the reference's
+     model.gms -> the variables GAMS holds fixed from the previous period;
+  2. runs the case on the core driver as the MCP gate builds it (seed_and_solve's
+     `_case`, seeded from the reference GDX) and, at every solve, counts the cells
+     of those variables left free in any period but the one being solved;
+  3. is dirty only if a solve of the requested period left one free.
+
+The core's `freeze_inactive` step fixes every period but the solved one, which
+covers GAMS's holdfix of `tsim-1` (MAR-219). Base has no previous period.
 
 USAGE:
-    uv run python scripts/gtap/diff_holdfixed.py \\
-        --gms /Users/.../model_altertax_ifsub0.gms
-
-INTERPRETATION:
-  - The printed holdfix set is what GAMS pins between periods. If Python freezes none of
-    them (the current state), that IS the root of a free-DOF/basin gap that tool 7 sees
-    the symptom of. The faithful fix is to freeze the same set at Python's own prior-stage
-    levels in diff_altertax's [3/3] shock (and [2/3] check) — not the GAMS-seeded values.
+    uv run python scripts/gtap/diff_holdfixed.py --dataset gtap7_3x3 --period shock
 """
 from __future__ import annotations
 import argparse
@@ -47,9 +31,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 from _parity_json import (  # noqa: E402 — shared JSON contract
     make_violation, run_tool, make_detection, make_prescription, with_diagnosis,
 )
-from equilibria._local_refs import refs_dir
-
-DEFAULT_REFS = str(refs_dir())
+from equilibria.sources import find_reference
 
 # GAMS var name → Python Var attribute (same convention as diff_altertax.GAMS_TO_PY_NAME).
 _GAMS_TO_PY = {
@@ -71,22 +53,6 @@ def parse_holdfix_set(gms_path: Path):
     return out
 
 
-def python_stage_freezes_anything() -> tuple[bool, str]:
-    """Does diff_altertax freeze the previous stage before the next solve? Inspect the
-    source for a `.fix(` applied to m_chk/m_alt outside the opt-in --holdfix-pva block."""
-    src = (ROOT / "scripts" / "gtap" / "diff_altertax.py").read_text()
-    # The only .fix on stage models is inside the `if args.holdfix_pva:` blocks (pva/pnd
-    # at GAMS-seeded values) — NOT a faithful prior-stage holdfix. Detect a general
-    # prior-stage freeze (would be e.g. a loop fixing m_chk vars from a snapshot).
-    has_holdfix_pva = "args.holdfix_pva" in src
-    # crude: any `.fix(` on m_chk/m_alt that is NOT in the holdfix_pva block
-    return (False, "Python warm-starts each stage but does NOT .fix() the previous stage "
-            "(only the opt-in --holdfix-pva block fixes pva/pnd, and at GAMS-seeded values, "
-            "which is hardcoding — not a prior-stage holdfix).") if not has_holdfix_pva else \
-           (False, "only --holdfix-pva (opt-in, GAMS-seeded) fixes pva/pnd; no faithful "
-            "prior-stage holdfix of the full GAMS set.")
-
-
 # rough role tags so the price anchors that pin pva stand out
 _ROLE = {
     "pf": "factor price  ← anchors pva (VA nest)",
@@ -102,106 +68,144 @@ _ROLE = {
     "axp": "tech (fixed param-like)", "lambdand": "tech", "lambdava": "tech",
     "lambdaio": "tech", "lambdaf": "tech",
 }
-# the price/qty anchors that indirectly pin the CD free DOFs (pva/pnd)
-_ANCHOR_VARS = ("pf", "xf", "pa", "pe", "pmcif", "pm", "pabs", "pfact", "pwfact")
 
 
-def _default_gms(dataset: str) -> Path:
-    return Path(f"{DEFAULT_REFS}/{dataset}_altertax_cd/model_altertax_ifsub0.gms")
+def _reference(dataset: str, mode: str, ifsub: int):
+    """The data/ GAMS MCP reference folder the MCP gate compares against."""
+    return find_reference(dataset, "gams", form="mcp", mode=mode, ifsub=ifsub,
+                          fbep="header")
 
 
-# The holdfix block (loop(tsim) + var.fx(tsim-1)) is the SAME GAMS model for every
-# dataset — only the sets/data differ. So if a dataset's own .gms is absent we may
-# fall back to any sibling dataset's .gms for the sequence-holdfix parse.
-_FALLBACK_DATASETS = ("gtap7_3x3", "gtap7_10x7", "9x10", "gtap7_15x10")
-
-
-def _resolve_gms(dataset: str, explicit) -> tuple[Path | None, bool]:
-    """Return (gms_path_or_None, used_fallback)."""
+def _resolve_gms(dataset: str, explicit, mode: str = "altertax",
+                 ifsub: int = 0) -> tuple[Path | None, bool]:
+    """Return (gms_path_or_None, used_fallback): the reference's own model.gms."""
     if explicit is not None:
         return (explicit, False)
-    own = _default_gms(dataset)
-    if own.exists():
-        return (own, False)
-    for fb in _FALLBACK_DATASETS:
-        cand = _default_gms(fb)
-        if cand.exists():
-            return (cand, True)
-    return (None, False)
+    folder = _reference(dataset, mode, ifsub)
+    return (None if folder is None else folder / "model.gms", False)
+
+
+def unfrozen_outside(model, names) -> tuple[str | None, dict[str, dict[str, int]]]:
+    """At a solve: (the solved period, {other period: {var: free cells}}). The solved
+    period is the one whose rows are on; names Python lacks are skipped."""
+    rows = model.row_names()
+    active = [t for t in model.periods
+              if any(model.active_rows(r, t) for r in rows)]
+    solved = active[0] if len(active) == 1 else None
+    free: dict[str, dict[str, int]] = {}
+    for t in model.periods:
+        if t == solved:
+            continue
+        for n in names:
+            if not model.has_var(n):
+                continue
+            k = len(model.var_cells(n, t)) - len(model.fixed_cells(n, t))
+            if k:
+                free.setdefault(t, {})[n] = k
+    return solved, free
+
+
+def measure_holdfix(dataset: str, gdx: Path, mode: str, ifsub: int,
+                    gams_names) -> dict:
+    """Run the case on the core driver and record ``unfrozen_outside`` at every
+    solve: ``{"solves": [(period, free)], "absent": [python names not in the
+    model]}``."""
+    from _core_run import solve_on_core
+    from seed_and_solve import _case
+    from equilibria.templates.gtap.recipe import _by_backend
+
+    names = [_GAMS_TO_PY.get(g, g) for g in gams_names]
+    solves: list = []
+    absent: set[str] = set()
+
+    def spy(model):
+        absent.update(n for n in names if not model.has_var(n))
+        solves.append(unfrozen_outside(model, names))
+        return _by_backend(model)
+
+    p, gc, rr = _case(dataset, bool(ifsub), mode)
+    solve_on_core(p, gc, rr, mode=mode, ref_gdx=gdx, seed_gdx=gdx, solver=spy)
+    return {"solves": solves, "absent": sorted(absent)}
 
 
 def _work(args) -> dict:
-    gms, used_fallback = _resolve_gms(args.dataset, args.gms)
+    gms, used_fallback = _resolve_gms(args.dataset, args.gms, args.mode, args.ifsub)
     if gms is None or not gms.exists():
         return dict(status="error", period=args.period,
-                    headline=f"GAMS model source not found for {args.dataset} "
-                             f"(no own .gms, no fallback)",
+                    headline=f"GAMS model source not found for {args.dataset}",
                     violations=[],
                     meta={"error_kind": "gams_source_missing",
                           "dataset": args.dataset})
+    hf = [gv for gv, _ in parse_holdfix_set(gms)]
+    meta = {"gms_path": str(gms), "gms_is_fallback": used_fallback,
+            "n_gams_holdfix": len(hf), "holdfix_set": hf}
+    if args.period == "base":
+        return dict(status="clean", period="base", violations=[], meta=meta,
+                    headline="holdfix/sequence diff: base has no previous period "
+                             "to hold fixed")
+    gdx = args.gdx
+    if gdx is None:
+        folder = _reference(args.dataset, args.mode, args.ifsub)
+        gdx = None if folder is None else folder / "out.gdx"
+    if gdx is None or not Path(gdx).exists():
+        return dict(status="error", period=args.period,
+                    headline=f"reference GDX not found for {args.dataset}",
+                    violations=[], meta={**meta, "error_kind": "gdx_not_found"})
 
-    hf = parse_holdfix_set(gms)
-    frozen, note = python_stage_freezes_anything()
-    anchors = [gv for gv, _ in hf if gv in _ANCHOR_VARS]
+    measured = measure_holdfix(args.dataset, Path(gdx), args.mode, args.ifsub, hf)
+    mine = [free for solved, free in measured["solves"] if solved == args.period]
+    meta.update(absent_in_python=measured["absent"], n_solves=len(mine))
+    if not mine:
+        return dict(status="error", period=args.period, violations=[],
+                    headline=f"holdfix/sequence diff: no solve of {args.period} "
+                             f"was observed, nothing measured",
+                    meta={**meta, "error_kind": "solve_not_observed"})
 
-    # human-readable summary → stderr
-    print(f"=== HOLDFIXED / SEQUENCE diff (GAMS {gms.name}) ===", file=sys.stderr)
-    print(f"GAMS freezes {len(hf)} prior-period vars; Python freezes "
-          f"{'some' if frozen else 'NONE'}.", file=sys.stderr)
-    for gv, _raw in hf:
-        pv = _GAMS_TO_PY.get(gv, gv)
-        print(f"  {gv:<12} {pv:<14} {_ROLE.get(gv, '')}", file=sys.stderr)
-
-    # Violation model: GAMS freezes a prior-period holdfix set; Python freezes none of
-    # it between stages → the sequence anchor is absent → free CD DOFs re-slide. Each
-    # GAMS-frozen var that Python does NOT freeze is a missing anchor. Anchors that
-    # pin pva/pnd are the dangerous ones; flag the set as dirty when Python freezes 0.
+    worst: dict[str, int] = {}
+    for free in mine:
+        for cells in free.values():
+            for n, k in cells.items():
+                worst[n] = max(worst.get(n, 0), k)
+    py_to_gams = {_GAMS_TO_PY.get(g, g): g for g in hf}
     violations = []
-    if not frozen and hf:
-        for gv, _raw in hf:
-            pv = _GAMS_TO_PY.get(gv, gv)
-            is_anchor = gv in _ANCHOR_VARS
-            v = make_violation(gv, [], "holdfix_missing", 1.0 if is_anchor else 0.5)
-            v["kind"] = "missing_prior_period_holdfix"
-            v["python_var"] = pv
-            v["is_pva_anchor"] = is_anchor
-            v["role"] = _ROLE.get(gv, "")
-            # DETECTION is firm (we parsed the .gms and saw the var.fx(tsim-1) entry +
-            # that Python freezes none). PRESCRIPTION is a HYPOTHESIS: this tool is
-            # STATIC — it never ran a solve, so it cannot know that "freeze it in Python"
-            # works. (It does NOT: var.fx(tsim-1) means inherit-from-prior-and-free, not
-            # anchor-intra-period; measured pf[check]≠pf[base] proves the recipe wrong.)
-            with_diagnosis(
-                v,
-                detection=make_detection(
-                    what=f"GAMS freezes prior-period {gv} (var.fx(tsim-1)); Python freezes none",
-                    evidence=f"var.fx({gv}...tsim-1) in {gms.name}; Python stage chain freezes 0",
-                    confidence="firm",
-                ),
-                prescription=make_prescription(
-                    how=f"freeze {pv} at the Python prior-stage value before the next solve",
-                    validated_by=None,  # static tool — never measured the effect → hypothesis
-                ),
-            )
-            violations.append(v)
+    for n, k in sorted(worst.items()):
+        gv = py_to_gams.get(n, n)
+        v = make_violation(n, [], "free_cells_outside_solved_period", float(k))
+        v["kind"] = "missing_prior_period_holdfix"
+        v["gams_var"] = gv
+        v["role"] = _ROLE.get(gv, "")
+        with_diagnosis(
+            v,
+            detection=make_detection(
+                what=f"{n} has {k} free cell(s) outside {args.period} while "
+                     f"{args.period} is solved; GAMS holds {gv}(tsim-1) fixed",
+                evidence=f"measured at the solve; var.fx({gv}...tsim-1) in {gms.name}",
+                confidence="firm",
+            ),
+            prescription=make_prescription(
+                how=f"freeze {n} in every period but the solved one "
+                    f"(freeze_inactive)",
+                validated_by=None,
+            ),
+        )
+        violations.append(v)
 
-    status = "dirty" if violations else "clean"
+    meta["python_freezes_prior_stage"] = not violations
+    print(f"=== HOLDFIXED / SEQUENCE diff (GAMS {gms.name}) ===", file=sys.stderr)
+    print(f"GAMS holds {len(hf)} prior-period vars; {len(mine)} solve(s) of "
+          f"{args.period} measured; free outside it: {worst or 'none'}; "
+          f"absent in Python: {measured['absent']}", file=sys.stderr)
     if violations:
-        headline = (f"holdfix/sequence diff: GAMS freezes {len(hf)} prior-period vars "
-                    f"({len(anchors)} pva/pnd anchors: {anchors}); Python freezes NONE "
-                    f"between stages → missing sequence anchor, free CD DOFs re-slide "
-                    f"(root-selection cause)")
+        headline = (f"holdfix/sequence diff: {len(violations)} of GAMS's {len(hf)} "
+                    f"holdfix vars left free outside {args.period} while it is solved")
     else:
-        headline = (f"holdfix/sequence diff: Python replicates GAMS's prior-period "
-                    f"holdfix — sequence anchor present; this layer does not explain the gap")
-    return dict(status=status, period=args.period, headline=headline,
-                violations=violations,
-                meta={"gms_path": str(gms), "gms_is_fallback": used_fallback,
-                      "n_gams_holdfix": len(hf),
-                      "n_anchors": len(anchors), "anchors": anchors,
-                      "python_freezes_prior_stage": frozen,
-                      "python_note": note,
-                      "holdfix_set": [gv for gv, _ in hf]})
+        absent = measured["absent"]
+        headline = (f"holdfix/sequence diff: Python holds every other period fixed "
+                    f"while {args.period} is solved ({len(hf) - len(absent)} of GAMS's "
+                    f"{len(hf)} holdfix vars are Python variables; not variables: "
+                    f"{absent or 'none'}); this layer does not explain the gap")
+    return dict(status="dirty" if violations else "clean", period=args.period,
+                headline=headline, violations=violations, meta=meta)
 
 
 def main() -> int:
@@ -209,34 +213,17 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dataset", default="gtap7_3x3")
     ap.add_argument("--gms", type=Path, default=None,
-                    help="GAMS model .gms (default: DEFAULT_REFS/<dataset>_altertax_cd/"
-                         "model_altertax_ifsub0.gms)")
+                    help="GAMS model .gms (default: the data/ reference's model.gms)")
     ap.add_argument("--period", default="check", choices=["base", "check", "shock"],
-                    help="period label for the JSON (the holdfix set is sequence-wide)")
+                    help="the period whose solves are measured")
     ap.add_argument("--gdx", type=Path, default=None,
-                    help="unused (accepted for orchestrator builder uniformity)")
+                    help="reference GDX the case is seeded from (default: the data/ reference)")
     ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
                     help="altertax CD (default) or pure-gtap real-CES")
     ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
-                    help="ifSUB mode (pure-gtap only)")
+                    help="ifSUB mode")
     args = ap.parse_args()
 
-    # mode=gtap UNSUPPORTED: this tool targets the altertax CD model; the
-    # pure-gtap shock is built in place when the multi-period exercise runs (the
-    # core recipe gtap_static). Accept the flag (the orchestrator passes it) but emit an
-    # honest mode_unsupported rather than diff the wrong model. Use
-    # seed_and_solve --mode gtap for the pure-gtap diagnostic.
-    if args.mode == "gtap":
-        def _unsupported() -> dict:
-            return dict(
-                status="error", period=getattr(args, "period", None),
-                headline=("diff_holdfixed does not support --mode gtap (altertax-only tool); "
-                          "use seed_and_solve --mode gtap for the pure-gtap diagnostic."),
-                violations=[],
-                meta={"error_kind": "mode_unsupported", "mode": "gtap",
-                      "ifsub": args.ifsub})
-        return run_tool("diff_holdfixed", args.dataset, _unsupported,
-                        period_hint=getattr(args, "period", None))
     return run_tool("diff_holdfixed", args.dataset, lambda: _work(args),
                     period_hint=args.period)
 

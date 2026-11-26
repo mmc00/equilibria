@@ -10,7 +10,14 @@ from pathlib import Path
 
 from cascade_config import resolve_ref_gdx, resolve_periods, scenario_for
 from cascade_run import sweep_period
-from cascade_classify import EXPLAIN_STOP
+from cascade_classify import (
+    BLOCKING_STOP,
+    EXPLAIN_STOP,
+    TOOL_BROKEN_CONTINUE,
+    UPSTREAM_STOP,
+)
+
+_NOT_MEASURED = (BLOCKING_STOP, UPSTREAM_STOP, TOOL_BROKEN_CONTINUE)
 
 _SOURCE_LABEL = {"explicit": "explicit", "gams_reference": "gams-reference",
                  "durable": "durable", "adapter_output": "adapter-fallback",
@@ -127,8 +134,18 @@ def build_report(dataset, requested_periods, *, ref, period_results, kkt_reader,
         }
     explained = {p: d["first_dirty_layer"] for p, d in periods.items()
                  if d["first_dirty_layer"]}
+    # Layers that could not measure (blocked, upstream-stopped, broken): with any of
+    # them the cascade did not show the gap is unexplained, so the verdict says so.
+    not_measured = {
+        p: names for p, results in period_results.items()
+        if (names := [r.name for r in results if r.action in _NOT_MEASURED])
+    }
     verdict = ("gap explained: " + ", ".join(f"{p}->{l}" for p, l in explained.items())
                if explained else "no layer explained the gap")
+    if not_measured:
+        missing = "; ".join(f"{p}: {', '.join(n)}" for p, n in not_measured.items())
+        verdict = (f"{verdict}; not measured: {missing}" if explained
+                   else f"inconclusive: not measured: {missing}")
     return {
         "dataset": dataset,
         "mode": mode,
@@ -139,6 +156,7 @@ def build_report(dataset, requested_periods, *, ref, period_results, kkt_reader,
         "dropped_periods": dropped,
         "periods": periods,
         "verdict": verdict,
+        "not_measured": not_measured,
     }
 
 
@@ -224,7 +242,7 @@ def main() -> int:
                           mode=args.mode, ifsub=args.ifsub)
     print(json.dumps(report))
     print(render_tree(report), file=sys.stderr)
-    return 0
+    return 2 if report["not_measured"] else 0
 
 
 if __name__ == "__main__":

@@ -54,19 +54,20 @@ def test_tautology_has_no_base():
 
 def test_mcp_pairing_argv():
     argv = _argv("mcp_pairing", "gtap7_3x3", "shock")
-    assert (
-        argv[-4:]
-        == ["--dataset", "gtap7_3x3", "--period", "shock"][:0]
-        + ["--dataset", "gtap7_3x3", "--period", "shock", "--apply-closure"][-4:]
-    )
     assert "diff_mcp_pairing.py" in argv[1]
+    assert argv[argv.index("--period") + 1] == "shock"
     assert "--apply-closure" in argv
+    # seeded from the cascade's reference, as every other layer
+    assert argv[argv.index("--gdx") + 1] == str(GDX)
 
 
 def test_nl_compare_uses_phase_and_skip_gams():
     argv = _argv("nl_compare", "gtap7_3x3", "shock")
     assert "--phase" in argv and "shock" in argv and "--skip-gams" in argv
     assert "--period" not in argv  # nl_compare takes --phase, not --period
+    # the gate case or an error, seeded from the cascade's reference
+    assert "--gate-only" in argv
+    assert argv[argv.index("--gdx") + 1] == str(GDX)
 
 
 def test_calibration_pins_benchmark_period_check():

@@ -1,4 +1,5 @@
 """Query implementations operating on a built+valued Pyomo GTAP model."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -40,8 +41,11 @@ def inject_solution(model: Any, solution: dict) -> int:
         if comp is None:
             continue
         for idx, val in cells.items():
-            pyidx = (idx[0] if (isinstance(idx, tuple) and len(idx) == 1
-                                and idx[0] is None) else idx)
+            pyidx = (
+                idx[0]
+                if (isinstance(idx, tuple) and len(idx) == 1 and idx[0] is None)
+                else idx
+            )
             try:
                 item = comp[pyidx]
                 if hasattr(item, "fixed") and item.fixed:
@@ -82,22 +86,37 @@ def _family(name: str) -> str:
     return name
 
 
-def query_residuals(model, top_n=15, family=None):
-    """Return [{eq, idx, resid}] = |body - target|, sorted desc."""
+def query_residuals(model, top_n=15, family=None, period=None):
+    """Return [{eq, idx, resid}] = |body - target|, sorted desc. With ``period``,
+    only that period's active rows of a multi-period model (period last in the
+    index), ``idx`` without the period."""
     rows = []
     for c in model.component_objects(Constraint, active=True):
         if family is not None and c.local_name != family:
             continue
         for idx in c:
             con = c[idx]
+            if period is not None:
+                if isinstance(idx, tuple):
+                    if not idx or idx[-1] != period:
+                        continue
+                    idx = idx[:-1]
+                elif idx == period:
+                    idx = ()
+                else:
+                    continue
+                if not con.active:
+                    continue
             try:
                 body = value(con.body)
                 lo = con.lower
                 up = con.upper
-                tgt = (value(lo) if lo is not None
-                       else (value(up) if up is not None else 0.0))
-                rows.append({"eq": c.local_name, "idx": idx,
-                             "resid": abs(body - tgt)})
+                tgt = (
+                    value(lo)
+                    if lo is not None
+                    else (value(up) if up is not None else 0.0)
+                )
+                rows.append({"eq": c.local_name, "idx": idx, "resid": abs(body - tgt)})
             except Exception:
                 pass
     rows.sort(key=lambda r: r["resid"], reverse=True)
@@ -152,8 +171,11 @@ def _count_snapshot_cells(snap, model) -> int:
     import dataclasses
 
     n = 0
-    fields = (dataclasses.fields(snap) if dataclasses.is_dataclass(snap)
-              else [type("F", (), {"name": k})() for k in vars(snap)])
+    fields = (
+        dataclasses.fields(snap)
+        if dataclasses.is_dataclass(snap)
+        else [type("F", (), {"name": k})() for k in vars(snap)]
+    )
     for f in fields:
         val = getattr(snap, f.name, None)
         if val is None:

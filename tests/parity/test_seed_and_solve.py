@@ -54,6 +54,24 @@ def test_a_solve_that_ran_and_drifted_is_still_dirty(monkeypatch):
     assert out["status"] == "dirty"
 
 
+@pytest.mark.parametrize(
+    "row",
+    [
+        # 3x3 gtap shock: GTAP v7's chiSave, not GAMS's square root (6cf5909e).
+        (4.45e-4, "eq_chisave", ()),
+        # 10x7 altertax shock: GAMS keeps the VTWR vs VCIF-VFOB rounding in amgm.
+        (1.53e-4, "eq_pwmg", ("EU_28", "Rice", "CHN")),
+    ],
+)
+def test_a_row_that_follows_gempack_on_purpose_does_not_dirty(monkeypatch, row):
+    out_fake = _fake_out(1)
+    out_fake["eq_resid"] = [row]
+    monkeypatch.setattr(SS, "run_seed_and_solve_gtap", lambda *a, **k: out_fake)
+    out = SS._work("gtap7_3x3", Path("/ref/out.gdx"), "shock", 3)
+    assert out["status"] == "clean"
+    assert [v["class"] for v in out["violations"]] == ["not_gams"]
+
+
 @pytest.mark.skipif(
     REF is None or not REF.exists(), reason="GAMS MCP altertax ref absent"
 )
@@ -83,3 +101,13 @@ def test_gams_altertax_point_stays_on_gtap7_3x3(period):
     assert lines, f"no JSON on stdout (exit {proc.returncode}):\n{proc.stderr[-2000:]}"
     payload = json.loads(lines[-1])
     assert payload["status"] == "clean", payload["headline"]
+
+
+@pytest.mark.parametrize("mode", ["altertax", "gtap"])
+def test_case_has_the_gate_fbep_basis_in_both_modes(mode):
+    # The MCP gate builds both modes with the gempack basis of the fbep=header
+    # reference (test_gtap7_mcp_parity._solve_and_measure); the gtap mode lacked it
+    # and showed a false DIFFERS on eq_ytax(EU_28,ft) (MAR-219).
+    p, gc, _rr = SS._case("gtap7_3x3", False, mode)
+    assert p.va_subsidy_basis == "gempack"
+    assert gc.va_subsidy_basis == "gempack"
