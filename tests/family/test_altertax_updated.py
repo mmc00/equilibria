@@ -3,6 +3,8 @@ and, at the check period (which reproduces the base), against the input ``baseda
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pytest
 
@@ -183,3 +185,32 @@ def test_rebase_keeps_the_shock_value_where_the_check_or_stored_base_is_zero():
     out = rebase(shock, check, stored)
     assert out[0] == 4.0 and out[1] == 9.0
     assert out[2] == pytest.approx(7.0 * 3.0 / 2.0)
+
+
+class _StubPeriod:
+    """The two things ``decomp._require_unchanged`` reads of a ``_Period``."""
+
+    def __init__(self, levels: dict[str, dict[tuple, float]]) -> None:
+        self._vars = levels
+        self._levels = levels
+
+    def __getitem__(self, name: str) -> dict[tuple, float]:
+        return self._levels[name]
+
+
+def _p(levels: dict[str, dict[tuple, float]]) -> Any:
+    return _StubPeriod(levels)
+
+
+def test_require_unchanged_names_the_moved_cell() -> None:
+    from equilibria.family.altertax.decomp import _UNCHANGED, _require_unchanged
+
+    base = {v: {("USA", "x"): 1.0, ("ROW", "x"): 2.0} for v in _UNCHANGED}
+    _require_unchanged(_p(base), _p(base))
+    missing = {**base, "pop": {("USA", "x"): 1.0}}  # a key of A missing in B
+    _require_unchanged(_p(base), _p(missing))
+    moved = {**base, "pop": {("USA", "x"): 1.0, ("ROW", "x"): 2.0 + 1e-6}}
+    with pytest.raises(NotImplementedError, match=r"pop\('ROW', 'x'\) moved"):
+        _require_unchanged(_p(base), _p(moved))
+    tiny = {**base, "pop": {("USA", "x"): 1.0, ("ROW", "x"): 2.0 + 1e-13}}
+    _require_unchanged(_p(base), _p(tiny))
