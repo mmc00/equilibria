@@ -183,6 +183,18 @@ def _work(args) -> dict:
     results, n_o = run_propagation_scan(
         args.dataset, gdx, args.period, args.delta, args.mode, args.ifsub
     )
+    if n_o == 0 or not results:
+        # no bucket-O row, or no free bucket-A cell: nothing was measured
+        return dict(
+            status="error",
+            period=args.period,
+            headline=(
+                f"causal-propagation ({args.period}): nothing scanned "
+                f"({n_o} bucket-O cells, {len(results)} bucket-A cells perturbed)"
+            ),
+            violations=[],
+            meta={"error_kind": "nothing_scanned", "gdx": str(gdx), "n_o": n_o},
+        )
     max_overall = results[0][0] if results else 0.0
     is_symptom = max_overall > SYMPTOM_THRESHOLD
 

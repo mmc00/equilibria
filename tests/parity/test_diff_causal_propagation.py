@@ -45,3 +45,25 @@ def test_scan_reads_only_the_requested_period():
 def test_the_default_gdx_is_the_data_reference():
     assert _FOLDER is not None
     assert CP._default_gdx("gtap7_3x3", "altertax", 0) == _FOLDER / "out.gdx"
+
+
+def test_an_empty_scan_is_an_error_not_independent(monkeypatch, tmp_path):
+    """No bucket-O row or no free bucket-A cell measured nothing: never "clean"
+    (review of #275)."""
+    import argparse
+
+    gdx = tmp_path / "out.gdx"
+    gdx.write_bytes(b"x")
+    monkeypatch.setattr(CP, "run_propagation_scan", lambda *a: ([], 0))
+    out = CP._work(
+        argparse.Namespace(
+            dataset="gtap7_3x3",
+            gdx=gdx,
+            period="check",
+            delta=1e-4,
+            mode="altertax",
+            ifsub=0,
+        )
+    )
+    assert out["status"] == "error"
+    assert out["meta"]["error_kind"] == "nothing_scanned"
