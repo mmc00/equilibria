@@ -40,3 +40,14 @@ def test_a_broken_door_fails(
     monkeypatch.setattr(mod.door, "check_door", lambda spec: [f"{spec.module}: bad"])
     assert mod.main() == 1
     assert "equilibria.gtap: bad" in capsys.readouterr().err
+
+
+def test_a_missing_api_page_fails(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    mod = _module()
+    monkeypatch.setattr(
+        mod.door, "api_page_problems", lambda api: ["x has no API page"]
+    )
+    assert mod.main() == 1
+    assert "x has no API page" in capsys.readouterr().err

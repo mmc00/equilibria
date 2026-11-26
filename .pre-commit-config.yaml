@@ -79,7 +79,7 @@ repos:
         name: every template has a door (ADR-0012)
         entry: uv run python scripts/dev/check_doors.py
         language: system
-        files: ^src/equilibria/
+        files: ^(src/equilibria/|docs/site/api/|scripts/dev/check_doors\.py$)
         pass_filenames: false
         require_serial: true
 

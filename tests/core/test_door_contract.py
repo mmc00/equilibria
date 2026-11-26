@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
 from equilibria.core.door import DOORS, DoorSpec, check_door
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.parametrize("spec", DOORS, ids=lambda s: s.module)
@@ -74,13 +77,40 @@ def _fake_tree(root):
         '        raise NotImplementedError("no recipe")\n',
     )
     _write(root, "pkg/sub.py", "class Child(ModelTemplate):\n    pass\n")
+    # the ways a template can hide (MAR-249 review)
+    _write(
+        root,
+        "pkg/hidden.py",
+        "from pkg.real import Real\n"
+        "from equilibria.templates.base import ModelTemplate as Base\n"
+        "from . import real as r\n"
+        "class FromTemplate(Real):\n    pass\n"
+        "class ViaModule(r.Real):\n    pass\n"
+        "class Aliased(Base):\n    pass\n"
+        "class Grandchild(FromTemplate):\n    pass\n"
+        "class Async:\n    async def default_recipe(self):\n        return 1\n"
+        "class Assigned:\n    default_recipe = staticmethod(lambda: 1)\n"
+        "try:\n    class InTry:\n        def default_recipe(self):\n            return 1\n"
+        "except ImportError:\n    pass\n"
+        "class NotOne(Exception):\n    pass\n",
+    )
 
 
 def test_find_templates_sees_real_templates_only(tmp_path) -> None:
     from equilibria.core.door import find_templates
 
     _fake_tree(tmp_path)
-    assert find_templates(tmp_path / "pkg", "pkg") == {"pkg.real.Real", "pkg.sub.Child"}
+    assert find_templates(tmp_path / "pkg", "pkg") == {
+        "pkg.real.Real",
+        "pkg.sub.Child",
+        "pkg.hidden.FromTemplate",
+        "pkg.hidden.ViaModule",
+        "pkg.hidden.Aliased",
+        "pkg.hidden.Grandchild",
+        "pkg.hidden.Async",
+        "pkg.hidden.Assigned",
+        "pkg.hidden.InTry",
+    }
 
 
 def test_find_templates_in_the_package() -> None:
@@ -105,13 +135,15 @@ def test_a_template_without_a_door_fails(tmp_path) -> None:
     msgs = coverage_problems(root=tmp_path / "pkg", package="pkg", doors=(), pending={})
     assert any("pkg.real.Real" in m and "no door" in m for m in msgs), msgs
     assert any("pkg.sub.Child" in m for m in msgs), msgs
+    assert any("pkg.hidden.FromTemplate" in m for m in msgs), msgs
 
 
 def test_a_stale_pending_entry_fails(tmp_path) -> None:
-    from equilibria.core.door import coverage_problems
+    from equilibria.core.door import coverage_problems, find_templates
 
     _fake_tree(tmp_path)
-    pending = {"pkg.real.Real": "x", "pkg.sub.Child": "x", "pkg.gone.Gone": "x"}
+    pending = dict.fromkeys(find_templates(tmp_path / "pkg", "pkg"), "x")
+    pending["pkg.gone.Gone"] = "x"
     msgs = coverage_problems(
         root=tmp_path / "pkg", package="pkg", doors=(), pending=pending
     )
@@ -134,11 +166,17 @@ def test_every_pending_entry_says_why() -> None:
 
 def test_every_door_has_an_api_page() -> None:
     """A door is the public surface: the API reference documents each one."""
-    from pathlib import Path
+    from equilibria.core.door import api_page_problems
 
-    from equilibria.core.door import DOORS
+    assert api_page_problems(ROOT / "docs" / "site" / "api") == []
 
-    api = Path(__file__).resolve().parents[2] / "docs" / "site" / "api"
-    pages = "\n".join(p.read_text(encoding="utf-8") for p in api.glob("*.md"))
-    for spec in DOORS:
-        assert f".. automodule:: {spec.module}\n" in pages, spec.module
+
+def test_a_door_without_an_api_page_fails(tmp_path) -> None:
+    from equilibria.core.door import DOORS, api_page_problems
+
+    (tmp_path / "other.md").write_text(".. automodule:: equilibria.core\n")
+    msgs = api_page_problems(tmp_path, DOORS)
+    assert msgs == [
+        f"{DOORS[0].module} has no API page (an `.. automodule:: {DOORS[0].module}` "
+        f"in {tmp_path})"
+    ], msgs

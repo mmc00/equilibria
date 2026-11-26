@@ -68,6 +68,9 @@ def package_root() -> Path:
     return Path(equilibria.__file__).resolve().parent
 
 
+MODEL_TEMPLATE = "ModelTemplate"  # equilibria.templates.base.ModelTemplate
+
+
 def _names(nodes: list[ast.expr]) -> set[str]:
     out = set()
     for n in nodes:
@@ -80,7 +83,7 @@ def _names(nodes: list[ast.expr]) -> set[str]:
     return out
 
 
-def _real_body(fn: ast.FunctionDef) -> bool:
+def _real_body(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """Not a stub: not only ``...`` or ``raise NotImplementedError`` (after a docstring)."""
     body = list(fn.body)
     if (
@@ -101,37 +104,135 @@ def _real_body(fn: ast.FunctionDef) -> bool:
     return True
 
 
+def _imports(tree: ast.Module, module: str, is_pkg: bool) -> dict[str, str]:
+    """Local name -> the qualified name it refers to, from the module's imports."""
+    here = module.split(".") if is_pkg else module.split(".")[:-1]
+    out: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for a in node.names:
+                if a.asname:
+                    out[a.asname] = a.name
+                else:
+                    top = a.name.split(".")[0]
+                    out[top] = top
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                base = here[: len(here) - (node.level - 1)]
+                base = base + (node.module.split(".") if node.module else [])
+            else:
+                base = (node.module or "").split(".")
+            for a in node.names:
+                out[a.asname or a.name] = ".".join([*base, a.name])
+    return out
+
+
+def _resolve(expr: ast.expr, imports: dict[str, str], module: str) -> str | None:
+    if isinstance(expr, ast.Subscript):
+        return _resolve(expr.value, imports, module)
+    if isinstance(expr, ast.Name):
+        return imports.get(expr.id, f"{module}.{expr.id}")
+    if isinstance(expr, ast.Attribute):
+        head = _resolve(expr.value, imports, module)
+        return f"{head}.{expr.attr}" if head else None
+    return None
+
+
+def _classes(body: list[ast.stmt]):
+    """The module-level classes, also inside ``if``/``try``/``with`` blocks."""
+    for node in body:
+        if isinstance(node, ast.ClassDef):
+            yield node
+        elif isinstance(node, ast.If | ast.For | ast.While):
+            yield from _classes([*node.body, *node.orelse])
+        elif isinstance(node, ast.With):
+            yield from _classes(node.body)
+        elif isinstance(node, ast.Try):
+            blocks = node.body + node.orelse + node.finalbody
+            for h in node.handlers:
+                blocks = blocks + h.body
+            yield from _classes(blocks)
+
+
+def _own_recipe(node: ast.ClassDef) -> bool | None:
+    """``True``: the class defines a real ``default_recipe`` (a method or an
+    assignment); ``False``: only a stub; ``None``: it defines none."""
+    for f in node.body:
+        if (
+            isinstance(f, ast.FunctionDef | ast.AsyncFunctionDef)
+            and f.name == "default_recipe"
+        ):
+            return _real_body(f)
+        targets = (
+            f.targets
+            if isinstance(f, ast.Assign)
+            else [f.target]
+            if isinstance(f, ast.AnnAssign)
+            else []
+        )
+        if any(isinstance(t, ast.Name) and t.id == "default_recipe" for t in targets):
+            return True
+    return None
+
+
 def find_templates(root: Path, package: str = "equilibria") -> set[str]:
     """Qualified names of the template classes under ``root`` (the folder of
     ``package``), read from the source, nothing imported. A template is a class with a
-    real ``default_recipe`` (not a ``Protocol`` stub nor an abstract one that raises
-    ``NotImplementedError``) or a subclass of ``ModelTemplate``."""
-    out: set[str] = set()
+    real ``default_recipe`` (a method, ``async`` or not, or an assignment; not a
+    ``Protocol`` stub nor an abstract one that only raises ``NotImplementedError``), a
+    subclass of ``ModelTemplate``, or a subclass of another template (imports, aliases
+    and re-exports are followed). Classes nested in a function or a class are not
+    seen."""
+    imports: dict[str, dict[str, str]] = {}
+    classes: dict[str, tuple[bool | None, list[str]]] = {}
     for path in sorted(root.rglob("*.py")):
         if "__pycache__" in path.parts:
             continue
         rel = path.relative_to(root).with_suffix("")
         parts = [p for p in rel.parts if p != "__init__"]
         module = ".".join([package, *parts])
-        for node in ast.parse(path.read_text(encoding="utf-8")).body:
-            if not isinstance(node, ast.ClassDef):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        imports[module] = _imports(tree, module, path.name == "__init__.py")
+        for node in _classes(tree.body):
+            bases = [_resolve(b, imports[module], module) or "" for b in node.bases]
+            classes[f"{module}.{node.name}"] = (_own_recipe(node), bases)
+
+    def canonical(name: str) -> str:
+        for _ in range(10):  # follow re-exports (from .template import GTAP)
+            mod, _, attr = name.rpartition(".")
+            target = imports.get(mod, {}).get(attr)
+            if target is None or target == name:
+                return name
+            name = target
+        return name
+
+    found = {q for q, (own, _) in classes.items() if own}
+    changed = True
+    while changed:
+        changed = False
+        for q, (own, bases) in classes.items():
+            if q in found or own is False:
                 continue
-            bases = _names(node.bases)
-            if "Protocol" in bases:
+            canon = [canonical(b) for b in bases]
+            if any(b.rpartition(".")[2] == "Protocol" for b in canon):
                 continue
-            recipe = next(
-                (
-                    f
-                    for f in node.body
-                    if isinstance(f, ast.FunctionDef) and f.name == "default_recipe"
-                ),
-                None,
-            )
-            if (recipe is not None and _real_body(recipe)) or (
-                recipe is None and "ModelTemplate" in bases
-            ):
-                out.add(f"{module}.{node.name}")
-    return out
+            if any(b.rpartition(".")[2] == MODEL_TEMPLATE or b in found for b in canon):
+                found.add(q)
+                changed = True
+    return found
+
+
+def api_page_problems(api_dir: Path, doors: tuple[DoorSpec, ...] = DOORS) -> list[str]:
+    """One message per door with no page in the API reference ``api_dir`` (a
+    ``.. automodule:: <door>`` line in one of its ``.md`` files)."""
+    pages = "\n".join(
+        p.read_text(encoding="utf-8") for p in sorted(api_dir.glob("*.md"))
+    )
+    return [
+        f"{spec.module} has no API page (an `.. automodule:: {spec.module}` in {api_dir})"
+        for spec in doors
+        if f".. automodule:: {spec.module}\n" not in pages
+    ]
 
 
 def coverage_problems(
