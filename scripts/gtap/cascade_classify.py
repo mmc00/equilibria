@@ -29,6 +29,13 @@ def classify(name: str, payload: dict, exit_code: int) -> LayerResult:
     status = payload.get("status", "error")
     kind = (payload.get("meta") or {}).get("error_kind")
     headline = payload.get("headline", "")
+    if status == "clean" and exit_code != 0:
+        # run_tool exits 0 only on clean: the tool printed clean, then failed
+        status, kind = "error", f"clean_but_exit_{exit_code}"
+        headline = f"{headline} [but the tool exited {exit_code}]"
+        return LayerResult(
+            name, status, kind, headline, TOOL_BROKEN_CONTINUE, exit_code, payload
+        )
     if status == "clean":
         action = CONTINUE
     elif status == "dirty":
