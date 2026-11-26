@@ -6,6 +6,7 @@ tests/family/test_family_gams_parity.py
 tests/family/test_gate1_all_families.py
 tests/family/test_gtap_family_on_core.py
 tests/parity/test_diff_calibration.py
+tests/parity/test_diff_holdfixed.py
 tests/parity/test_diff_mcp_pairing.py
 tests/parity/test_diff_tautology.py
 tests/parity/test_drift_test.py

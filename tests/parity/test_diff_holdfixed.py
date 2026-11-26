@@ -108,6 +108,7 @@ def test_the_default_gms_is_the_data_reference():
 
 @pytest.mark.skipif(_FOLDER is None, reason="GAMS MCP altertax ref absent")
 @pytest.mark.needs_path
+@pytest.mark.needs_gdxdump  # the seed reads the GAMS GDX through it
 @pytest.mark.parametrize("period", ["check", "shock"])
 def test_gtap7_3x3_altertax_is_clean(period):
     import json

@@ -64,6 +64,7 @@ def test_the_gms_is_the_cascade_reference_model():
 
 
 @needs_gms
+@pytest.mark.needs_gdxdump  # the gate case seeds from the GAMS GDX through it
 def test_check_is_clean():
     res = _run_check()
     entities = sorted(v["entity"] for v in res["violations"])
@@ -75,6 +76,7 @@ def test_check_is_clean():
 
 
 @needs_gms
+@pytest.mark.needs_gdxdump  # the gate case seeds from the GAMS GDX through it
 def test_pseq_resolves_to_active_homolog_not_legacy_eq_ps():
     """pseq must resolve to eq_xs (active), not eq_ps (deactivated legacy)."""
     res = _run_check()
@@ -83,6 +85,7 @@ def test_pseq_resolves_to_active_homolog_not_legacy_eq_ps():
 
 
 @needs_gms
+@pytest.mark.needs_gdxdump  # the gate case seeds from the GAMS GDX through it
 def test_fixed_var_with_deactivated_eq_is_not_a_violation():
     """dintxeq/mintxeq: eq deactivated but var fixed -> valid exogenous pairing."""
     res = _run_check()
