@@ -457,9 +457,13 @@ class GTAPClosureConfig(ModelClosureConfig):
         on the Burfisher exercises): the Burfisher ``.cmf``
         (``data/gtap7/nus333/gempack_burfisher/gtapv7/run.cmf``) has no swap, so the
         trade balance is free and investment follows the rate of return
-        (``savf_flag="capFlex"``); capital is sluggish; endowments, taxes and
-        technology are not fixed by the flags (the shock and the closure decide);
-        MCP form; ``pnum`` numeraire. Every other field keeps its default.
+        (``savf_flag="capFlex"``); endowments, taxes and technology are not fixed
+        by the flags (the shock and the closure decide); MCP form; ``pnum``
+        numeraire. Every other field keeps its default. ``capital_mobility`` is
+        ``"sluggish"`` as in that script, but the block model does not read it: how
+        mobile each endowment is comes from the elasticities file (``ETRAE`` of the
+        ``.prm``; nus333's ``default.prm`` makes all three mobile, ``sluggishk.prm``
+        makes capital sluggish).
 
         ``changes`` set any field and go through the normal validation (an unknown
         field or a bad value raises). ``savf_flag="capFix"`` is the fixed trade
@@ -467,8 +471,8 @@ class GTAPClosureConfig(ModelClosureConfig):
         closure and stay as they are.
 
         Example:
-            >>> GTAPClosureConfig.gtap_default(capital_mobility="mobile").savf_flag
-            'capFlex'
+            >>> GTAPClosureConfig.gtap_default(savf_flag="capFix").closure_type
+            'MCP'
         """
         base: dict[str, Any] = {
             "name": "gtap_default",
