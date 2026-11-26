@@ -160,4 +160,5 @@ def johansen(after: Callable[[Any], None] | None = None) -> Strategy:
         )
         return "optimal"
 
+    strategy.linear = True  # type: ignore[attr-defined]  # read by equilibria.gtap.results
     return strategy

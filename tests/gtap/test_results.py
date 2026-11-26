@@ -110,9 +110,66 @@ def test_repr_prints_the_summary(res) -> None:
 
 
 def test_before_run_raises() -> None:
-    ex = SimpleNamespace(model=None, template=SimpleNamespace(backend="pyomo"))
+    ex = SimpleNamespace(
+        model=None, codes=None, template=SimpleNamespace(backend="pyomo")
+    )
     with pytest.raises(RuntimeError, match="run the exercise first"):
         results(ex)
+
+
+def test_run_that_raised_midway_raises(ex) -> None:
+    """``run()`` leaves the model on ``ex`` before it solves: a run that raised has a
+    model but no codes, and its levels are not a solution."""
+    broken = SimpleNamespace(
+        model=ex.model, codes=None, template=ex.template, recipe=ex.recipe
+    )
+    with pytest.raises(RuntimeError, match="did not finish"):
+        results(broken)
+
+
+def test_exercise_keeps_its_codes(ex) -> None:
+    assert ex.codes["shock"]["code"] == "optimal"
+
+
+def test_post_not_optimal_warns(ex, caplog) -> None:
+    codes = {**ex.codes, "shock": {"code": "infeasible", "residual": 1.0}}
+    bad = SimpleNamespace(
+        model=ex.model, codes=codes, template=ex.template, recipe=ex.recipe
+    )
+    with caplog.at_level(logging.WARNING, logger="equilibria.gtap._results"):
+        results(bad)
+    assert any("infeasible" in r.getMessage() for r in caplog.records)
+
+
+@pytest.fixture(scope="module")
+def johansen_ex():
+    from equilibria.core.exercise import Exercise
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from equilibria.templates.gtap.recipe import gtap_static
+    from equilibria.templates.gtap.template import GTAP
+
+    e = Exercise(
+        GTAP(load("nus333"), GTAPClosureConfig.gtap_default(), residual_region="ROW"),
+        gtap_static("gtap", solve_check=True, shock_method="johansen"),
+        shock={"imptx": {ROUTE: 10.0}},
+    )
+    e.run()
+    return e
+
+
+def test_johansen_uses_the_linear_translation(johansen_ex) -> None:
+    """A Johansen solution is compared with GEMPACK through ``equilibria_side(...,
+    linear=True)`` (``compare_gempack_levels.run``); ``results`` reads the method from
+    the recipe and uses the same translation."""
+    p = johansen_ex.template.params
+    levels = model_levels(johansen_ex.model.pyomo)
+    xs = dict(xscale_data(p, p.sets))
+    want = gempack_pct(levels, xs, linear=True)[0]
+    assert (
+        want["pr"] != gempack_pct(levels, xs)[0]["pr"]
+    )  # the test can tell them apart
+    got = results(johansen_ex).tables["pr"]["pct"].to_dict()
+    assert got == want["pr"]
 
 
 def test_family_tables_without_ev_warn(ex, res, caplog) -> None:
@@ -127,6 +184,8 @@ def test_family_tables_without_ev_warn(ex, res, caplog) -> None:
     )
     fam = SimpleNamespace(
         model=SimpleNamespace(mp=mp),
+        codes=ex.codes,
+        recipe=ex.recipe,
         template=SimpleNamespace(backend="family", params=ex.template.params),
     )
     with caplog.at_level(logging.WARNING, logger="equilibria.gtap._results"):

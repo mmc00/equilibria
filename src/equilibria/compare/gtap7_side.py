@@ -164,6 +164,7 @@ def gempack_pct(
     post: str = "shock",
     *,
     skip: Collection[str] = (),
+    linear: bool = False,
 ) -> tuple[Pct, dict[str, set]]:
     """``(% changes, cells whose pre value is 0)`` of every compared row of
     ``gtap7.yaml``: ``{GEMPACK variable: {cell: 100 * (post / pre - 1)}}`` with cells in
@@ -171,8 +172,9 @@ def gempack_pct(
     ``family_levels``) through :func:`equilibria_side`. A cell whose ``pre`` is 0
     reports 0 and is listed in the second dict (only variables that have one). Scales
     cancel in a ratio, so ``divide_by`` is ignored. ``skip``: GEMPACK names left out
-    (AlterTax computes its fixed variables itself)."""
-    side = equilibria_side(levels, xscale)
+    (AlterTax computes its fixed variables itself). ``linear``: the levels are a
+    Johansen solution (see :func:`equilibria_side`)."""
+    side = equilibria_side(levels, xscale, linear=linear)
     out: Pct = {}
     zero: dict[str, set] = {}
     for name, row in gtap7_rows().items():

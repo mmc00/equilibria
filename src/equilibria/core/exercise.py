@@ -46,6 +46,8 @@ class Exercise:
                 f"(periods: {', '.join(self.recipe.names)})"
             )
         self.model: PeriodModel | None = None
+        # the last run's {period: {"code", "residual"}}; None until a run finishes
+        self.codes: dict[str, dict[str, Any]] | None = None
 
     def run(self) -> dict[str, dict[str, Any]]:
         """Build a fresh model and fly the recipe on it; returns
@@ -53,9 +55,13 @@ class Exercise:
 
         A template may define ``run_scope()``, a context manager entered after
         the build and held over every period (GTAP freezes its built model for
-        the garbage collector there, once per run)."""
+        the garbage collector there, once per run). The codes stay on
+        ``self.codes`` once the run finishes (``None`` while it runs or if it raised)."""
+        self.codes = None
         model = self.template.build(self.recipe.names, self.overwrite)
         self.model = model
         scope = getattr(self.template, "run_scope", None)
         with scope() if scope is not None else contextlib.nullcontext():
-            return fly(model, self.recipe, template=self.template, shock=self.shock)
+            codes = fly(model, self.recipe, template=self.template, shock=self.shock)
+        self.codes = codes
+        return codes

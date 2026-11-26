@@ -76,7 +76,19 @@ def _trade(levels, regions, pre: str, post: str) -> tuple[dict, dict]:
     return pct(out), pct(inn)
 
 
-def results(ex: Any, pre: str = "check", post: str = "shock") -> GTAPResults:
+def _linear(ex: Any, post: str) -> bool:
+    """Whether the recipe solves ``post`` with a linear (Johansen) strategy."""
+    recipe = getattr(ex, "recipe", None)
+    if recipe is None:
+        return False
+    kind = next((p.kind for p in recipe.periods if p.name == post), None)
+    plan = recipe.plans.get(kind) if kind is not None else None
+    return bool(getattr(getattr(plan, "strategy", None), "linear", False))
+
+
+def results(
+    ex: Any, pre: str = "check", post: str = "shock", *, linear: bool | None = None
+) -> GTAPResults:
     """The % changes from ``pre`` to ``post`` of a solved exercise ``ex``.
 
     The tables are the GEMPACK translation of ``compare/maps/gtap7.yaml``
@@ -85,10 +97,30 @@ def results(ex: Any, pre: str = "check", post: str = "shock") -> GTAPResults:
     model, or from the family arrays when ``ex.template.backend == "family"``. The EV
     is :func:`~equilibria.templates.gtap.welfare_regional.regional_ev` on Pyomo; the
     family backend has no EV yet (MAR-251): ``ev`` is empty and a WARNING says so.
-    Raises ``RuntimeError`` before ``ex.run()``.
+
+    ``linear``: the levels are a Johansen solution, translated as the GEMPACK gates
+    translate one (``equilibria_side(..., linear=True)``); ``None`` reads it from the
+    recipe (``gtap_static(shock_method="johansen")``). Raises ``RuntimeError`` before
+    ``ex.run()`` or after a run that raised; a WARNING when ``post`` did not solve to
+    ``"optimal"`` (its levels are then not a solution).
     """
     if ex.model is None:
         raise RuntimeError("results: run the exercise first (ex.run())")
+    codes = getattr(ex, "codes", None)
+    if codes is None:
+        raise RuntimeError(
+            "results: the exercise's run did not finish (it raised); run it again"
+        )
+    code = codes.get(post, {}).get("code")
+    if code != "optimal":
+        _log.warning(
+            "results: period %r solved with code %r, not 'optimal': "
+            "its levels may not be a solution",
+            post,
+            code,
+        )
+    if linear is None:
+        linear = _linear(ex, post)
     p = ex.template.params
     regions = list(p.sets.r)
     if ex.template.backend == "family":
@@ -105,7 +137,7 @@ def results(ex: Any, pre: str = "check", post: str = "shock") -> GTAPResults:
         ev = pd.Series(regional_ev(m, post, pre), name="EV", dtype=float)
     from equilibria.blocks.gtap._derived_params import xscale_data
 
-    pct, _ = gempack_pct(levels, dict(xscale_data(p, p.sets)), pre, post)
+    pct, _ = gempack_pct(levels, dict(xscale_data(p, p.sets)), pre, post, linear=linear)
     tables = {name: _table(name, cells) for name, cells in pct.items()}
     exports, imports = _trade(levels, regions, pre, post)
     qgdp = tables["qgdp"]["pct"]
