@@ -157,6 +157,7 @@ tests/family/test_headers_cache.py
 tests/family/test_hybrid_nlp.py
 tests/family/test_ifsub_closure_vectorized.py
 tests/family/test_incidence_csr.py
+tests/family/test_mar246_headers_golden.py
 tests/family/test_mp_arrays.py
 tests/family/test_mp_build.py
 tests/family/test_newton_family.py
@@ -166,6 +167,7 @@ tests/family/test_phases.py
 tests/family/test_photo_freshness.py
 tests/family/test_photos.py
 tests/family/test_post_solve.py
+tests/family/test_post_solve_margins.py
 tests/family/test_prep_square.py
 tests/family/test_recorder.py
 tests/family/test_settle_cache.py
