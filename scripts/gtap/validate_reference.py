@@ -69,7 +69,7 @@ def _strip_prefix(k):
 
 def _build_model(dataset: str, period: str):
     """The old single-period model of the GAMS period (base/check/shock), default
-    FBEP basis. This tool no longer reads it (MAR-219); only bench still does."""
+    FBEP basis. No cascade layer reads it any more (MAR-219); pairing_table still does."""
     import copy
     from equilibria.templates.gtap import GTAPParameters, GTAPModelEquations
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
