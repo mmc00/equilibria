@@ -41,7 +41,7 @@ def _mode_flags(mode: str, ifsub: int) -> list[str]:
 
 def _c_pairing(ds, period, gdx, mode, ifsub):
     return [PY, f"{GTAP}/diff_mcp_pairing.py", "--dataset", ds,
-            "--period", period, "--apply-closure"] + _mode_flags(mode, ifsub)
+            "--period", period, "--apply-closure", "--gdx", str(gdx)] + _mode_flags(mode, ifsub)
 
 
 def _c_nl(ds, period, gdx, mode, ifsub):
