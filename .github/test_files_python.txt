@@ -220,6 +220,7 @@ tests/scripts/test_block_push_hook.py
 tests/scripts/test_build_pure_bundle_model.py
 tests/scripts/test_burfisher_job.py
 tests/scripts/test_check_commit_msg.py
+tests/scripts/test_check_doors.py
 tests/scripts/test_check_layout.py
 tests/scripts/test_check_parity_gates_stamp.py
 tests/scripts/test_check_test_shards.py

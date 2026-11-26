@@ -41,6 +41,16 @@ in `src/equilibria/core/door.py` (what is checked, `check_door`) and in
 The behaviour of `load` and `results` needs data and a solve, so each door's own
 tests check it (GTAP: `tests/gtap/test_load.py`, `tests/gtap/test_results.py`).
 
+No template is left without a door by accident. `find_templates` reads the source
+(nothing imported) and finds every template class: one with a real
+`default_recipe`, or a subclass of `ModelTemplate`. Each must be the template of a
+door in `DOORS` or be listed in `PENDING` with the reason it has none yet (today
+`simple_open`, which has no closure class of its own). A `PENDING` entry that names
+no template, or whose template already has a door, is an error too. Every door also
+has its page in the API reference (`docs/site/api/`). These checks run in CI
+(`tests/core/test_door_contract.py`) and before every commit that touches
+`src/equilibria/` (the `check-doors` hook, `scripts/dev/check_doors.py`, about 1 s).
+
 ## Considered Options
 
 - **Three functions that do everything** (`load`, `shock`, `results`). Rejected: it
