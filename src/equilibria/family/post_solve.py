@@ -562,48 +562,72 @@ def recompute_ifsub_report_vars(
                     _force("pp_rai", (r, a, i, period), p_rai)
 
     # --- trade prices: pwmg, pefob, pmcif, pm ---
-    if tab("pe") is not None:
+    # Whole arrays over the (r, i, rp) cells with a ``pe``, in the loop order and with
+    # the operation order of the cell formulas, so every value is the same float.
+    pe_t = tab("pe")
+    if pe_t is not None:
         bm, tx = params.benchmark, params.taxes
-        for r in R:  # exporter
-            for i in I:
-                for rp in R:  # importer
-                    pe = _pv("pe", (r, i, rp, period), None)
-                    if pe is None:
-                        continue
-                    pwmg_val = 0.0
-                    for mm in M:
-                        amgm = (
-                            _param(bm.amgm, (mm, r, i, rp))
-                            if hasattr(bm, "amgm")
-                            else _pv("amgm", (mm, r, i, rp))
-                        )
-                        ptmg = _pv("ptmg", (mm, period))
-                        lam = _pv("lambdamg", (mm, r, i, rp, period), 1.0) or 1.0
-                        pwmg_val += amgm * ptmg / (lam + 1e-12)
-                    rtxs = _param(tx.rtxs, (r, i, rp)) if hasattr(tx, "rtxs") else 0.0
-                    etax = _pv("etax", (r, i, period))
-                    pefob_val = (1.0 + rtxs + etax) * pe
-                    # tmarg is dim-3 (no period axis); mtax/chipm come from params.
-                    tmarg = _pv("tmarg", (r, i, rp))
-                    if not tmarg:
-                        tmarg = _pv("tmarg", (r, i, rp, period))
-                    pmcif_val = pefob_val + pwmg_val * tmarg
-                    imptx = _pv("imptx", (r, i, rp, period))
-                    mtax = _param(tx.mtax, (rp, i)) if hasattr(tx, "mtax") else 0.0
-                    chipm = (
-                        _param(bm.chipm, (r, i, rp), 1.0)
-                        if hasattr(bm, "chipm")
-                        else 1.0
-                    )
-                    chipm = chipm or 1.0
-                    pm_val = (1.0 + imptx + mtax) * pmcif_val / (chipm + 1e-12)
-                    for vn, val in (
-                        ("pwmg", pwmg_val),
-                        ("pefob", pefob_val),
-                        ("pmcif", pmcif_val),
-                        ("pm", pm_val),
-                    ):
-                        _force(vn, (r, i, rp, period), val)
+        cells = [(r, i, rp) for r in R for i in I for rp in R if (r, i, rp) in pe_t]
+
+        def per_cell(comp, keys, default=0.0):
+            t = tab(comp)
+            out = np.full(len(keys), default, dtype=np.float64)
+            if t is None:
+                return out
+            idx = np.fromiter((t.get(k, -1) for k in keys), np.int64, len(keys))
+            ok = idx >= 0
+            out[ok] = mp.vars[comp].value[idx[ok]]
+            return out
+
+        def params_cell(fn):
+            return np.fromiter((fn(c) for c in cells), np.float64, len(cells))
+
+        pe = per_cell("pe", cells)
+        amgm_mp = mp_params["amgm"][1]
+        pwmg = np.zeros(len(cells))
+        for mm in M:
+            if hasattr(bm, "amgm"):
+                amgm = params_cell(lambda c, mm=mm: _param(bm.amgm, (mm, *c)))
+            else:
+                amgm = params_cell(lambda c, mm=mm: amgm_mp.get((mm, *c), 0.0))
+            ptmg = _pv("ptmg", (mm, period))
+            lam = per_cell("lambdamg", [(mm, *c) for c in cells], 1.0)
+            lam[lam == 0.0] = 1.0  # ``or 1.0``
+            pwmg = pwmg + amgm * ptmg / (lam + 1e-12)
+        if hasattr(tx, "rtxs"):
+            rtxs = params_cell(lambda c: _param(tx.rtxs, c))
+        else:
+            rtxs = np.zeros(len(cells))
+        etax = per_cell("etax", [(r, i) for r, i, _ in cells])
+        pefob = (1.0 + rtxs + etax) * pe
+        # tmarg is dim-3 (no period axis); its dim-4 fallback is always the 0.0 default.
+        tmarg = params_cell(lambda c: mp_params["tmarg"][1].get(c, 0.0))
+        tmarg[tmarg == 0.0] = 0.0
+        pmcif = pefob + pwmg * tmarg
+        imptx = per_cell("imptx", cells)
+        if hasattr(tx, "mtax"):
+            mtax = params_cell(lambda c: _param(tx.mtax, (c[2], c[1])))
+        else:
+            mtax = np.zeros(len(cells))
+        if hasattr(bm, "chipm"):
+            chipm = params_cell(lambda c: _param(bm.chipm, c, 1.0))
+            chipm[chipm == 0.0] = 1.0  # ``or 1.0``
+        else:
+            chipm = np.ones(len(cells))
+        pm = (1.0 + imptx + mtax) * pmcif / (chipm + 1e-12)
+        for vn, vals in (
+            ("pwmg", pwmg),
+            ("pefob", pefob),
+            ("pmcif", pmcif),
+            ("pm", pm),
+        ):
+            t = tab(vn)
+            if t is None:
+                continue
+            idx = np.fromiter((t.get(c, -1) for c in cells), np.int64, len(cells))
+            ok = idx >= 0
+            mp.vars[vn].value[idx[ok]] = vals[ok]
+            n += int(ok.sum())
     return n
 
 
