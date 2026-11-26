@@ -10,8 +10,9 @@ Usage:
         --neos-email dracomarmol@gmail.com \\
         --out-dir /tmp/gtap_nl
 """
+
 from __future__ import annotations
-from equilibria.sources import dataset_dir
+from equilibria.sources import dataset_dir, find_reference
 import argparse
 import base64
 import sys
@@ -59,9 +60,6 @@ from nl_standalone import (  # noqa: E402, F401 — re-exported for callers of n
 GDX9 = ROOT / "data/gtap7/9x10/basedata-9x10.gdx"
 
 
-
-
-
 _SQUARENESS_FORCED_PAIRS = [
     ("eq_xfeq", "xf"),
     ("eq_regy", "regy"),
@@ -78,6 +76,7 @@ _SQUARENESS_UNCONDITIONAL_PAIRS = [
 
 def _shrink_sets(p: GTAPParameters, keep_r: list[str], keep_i: list[str]) -> None:
     from diff_3x3_full import _shrink_sets as _do_shrink
+
     _do_shrink(p, keep_r, keep_i)
 
 
@@ -118,6 +117,7 @@ def _build_python_nl(
     solver_helper.apply_conditional_fixing()
 
     from _closure_patches import apply_squareness_patches
+
     apply_squareness_patches(m, p, label=f"nl-write-{period}")
     solver_helper.apply_aggressive_fixing_for_mcp()
 
@@ -195,6 +195,7 @@ def build_python_nls(
             # closure_config.if_sub (the run's choice) is not threaded through.
             from equilibria.templates.gtap.altertax import apply_altertax_elasticities
             from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+
             params_to_use = apply_altertax_elasticities(copy.deepcopy(p))
             period_closure = GTAPClosureConfig(
                 name="altertax",
@@ -216,6 +217,7 @@ def build_python_nls(
             # the .nl comparison is coefficient-only (structure check).
             from equilibria.templates.gtap.altertax import apply_altertax_elasticities
             from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+
             params_to_use = apply_altertax_elasticities(copy.deepcopy(p))
             period_closure = GTAPClosureConfig(
                 name="altertax",
@@ -229,12 +231,15 @@ def build_python_nls(
 
         t0 = time.perf_counter()
         nl_path, built_model = _build_python_nl(
-            period, params_to_use, period_closure, out_dir,
+            period,
+            params_to_use,
+            period_closure,
+            out_dir,
             base_model=base_model if period in ("shock", "check") else None,
         )
         if period == "base":
             base_model = built_model  # cache for shock
-        print(f"  {period}: {time.perf_counter()-t0:.1f}s")
+        print(f"  {period}: {time.perf_counter() - t0:.1f}s")
         paths[period] = nl_path
 
     return paths
@@ -243,6 +248,7 @@ def build_python_nls(
 # ---------------------------------------------------------------------------
 # Phase 2: GAMS → .nl via NEOS CONVERT
 # ---------------------------------------------------------------------------
+
 
 def _encode_gdx(gdx_path: Path) -> str:
     return base64.b64encode(gdx_path.read_bytes()).decode()
@@ -276,31 +282,6 @@ sets
 """
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def _build_solve_gms_for_9x10() -> str:
     """Like _build_solve_gms but for the full 9x10 dataset.
 
@@ -310,6 +291,7 @@ def _build_solve_gms_for_9x10() -> str:
     so that esubq, esubt, esubc, etc. are available.
     """
     import re
+
     scripts_dir = COMP_GMS.parent
     dat_gdx = DATA_DIR / "9x10Dat.gdx"
     prm_gdx = DATA_DIR / "9x10Prm.gdx"
@@ -337,17 +319,19 @@ def _build_solve_gms_for_9x10() -> str:
     def _inline(text: str, depth: int = 0) -> str:
         if depth > 5:
             return text
+
         def _rep(m):
-            fname = m.group(1).strip('"\'')
+            fname = m.group(1).strip("\"'")
             if fname == "getData.gms":
                 return getdata_replacement
             fpath = scripts_dir / fname
             if fpath.exists():
                 return _inline(fpath.read_text(), depth + 1)
             return m.group(0)
+
         def _rep_bat(m):
-            fname = m.group(1).strip('"\'')
-            args = (m.group(2).strip().split() if m.group(2) else [])
+            fname = m.group(1).strip("\"'")
+            args = m.group(2).strip().split() if m.group(2) else []
             fpath = scripts_dir / fname
             if not fpath.exists():
                 return m.group(0)
@@ -355,19 +339,38 @@ def _build_solve_gms_for_9x10() -> str:
             # Handle $setargs: parse named args, substitute %name% → value,
             # then strip the $setargs line. This correctly handles mvar.gms
             # ($setargs theMacro theYear) so %theMacro%/%theYear% are resolved.
-            setargs_m = re.search(r'^\$setargs\s+(.*)', inner, re.MULTILINE | re.IGNORECASE)
+            setargs_m = re.search(
+                r"^\$setargs\s+(.*)", inner, re.MULTILINE | re.IGNORECASE
+            )
             if setargs_m:
                 named = setargs_m.group(1).split()
                 for idx, name in enumerate(named):
                     val = args[idx] if idx < len(args) else ""
                     inner = inner.replace(f"%{name}%", val)
-                inner = re.sub(r'^\$setargs\s+.*\n?', '', inner, count=1, flags=re.MULTILINE | re.IGNORECASE)
+                inner = re.sub(
+                    r"^\$setargs\s+.*\n?",
+                    "",
+                    inner,
+                    count=1,
+                    flags=re.MULTILINE | re.IGNORECASE,
+                )
             # Also substitute positional %N% args.
             for idx, arg in enumerate(args, start=1):
                 inner = inner.replace(f"%{idx}", arg)
             return _inline(inner, depth + 1)
-        text = re.sub(r'^[ \t]*\$\$?include\s+("?[^"\s]+"?)', _rep, text, flags=re.IGNORECASE | re.MULTILINE)
-        text = re.sub(r'^[ \t]*\$\$?batinclude\s+("?[^"\s]+"?)((?:[ \t]+\S+)*)', _rep_bat, text, flags=re.IGNORECASE | re.MULTILINE)
+
+        text = re.sub(
+            r'^[ \t]*\$\$?include\s+("?[^"\s]+"?)',
+            _rep,
+            text,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        text = re.sub(
+            r'^[ \t]*\$\$?batinclude\s+("?[^"\s]+"?)((?:[ \t]+\S+)*)',
+            _rep_bat,
+            text,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
         return text
 
     inlined = _inline(COMP_GMS.read_text())
@@ -376,18 +379,25 @@ def _build_solve_gms_for_9x10() -> str:
     rres = "NAmerica"
     rmuv = ("Oceania", "NAmerica", "EU_28")
     imuv = ("c_ProcFood", "c_TextWapp", "c_LightMnfc", "c_HeavyMnfc")
-    for sname, dom, elems in (("rres", "r", (rres,)), ("rmuv", "r", rmuv), ("imuv", "i", imuv)):
+    for sname, dom, elems in (
+        ("rres", "r", (rres,)),
+        ("rmuv", "r", rmuv),
+        ("imuv", "i", imuv),
+    ):
         inlined = re.sub(
             rf'set\s+{sname}\({dom}\)\s*"[^"]*"\s*/\s*[^/]*?/\s*;',
             f'set {sname}({dom}) "{sname}" /\n   {", ".join(elems)}\n/ ;',
-            inlined, flags=re.IGNORECASE,
+            inlined,
+            flags=re.IGNORECASE,
         )
 
     # Replace placeholder shock (pnum.fx=1.5) with 10% import-tariff shock.
     inlined, n = re.subn(
         r"pnum\.fx\(tsim\)\s*=\s*1\.5\s*;",
         "imptx.fx(r,i,rp,tsim) = imptx.l(r,i,rp,tsim) * 1.10 ;",
-        inlined, count=1, flags=re.IGNORECASE,
+        inlined,
+        count=1,
+        flags=re.IGNORECASE,
     )
     if n != 1:
         raise RuntimeError("could not find pnum.fx=1.5 shock anchor in comp.gms")
@@ -419,64 +429,93 @@ def _build_solve_gms(agg_gdx: Path, har_dir: Path | None = None) -> str:
     har_dir: when given, elasticities from default.prm are appended to getData.
     """
     import re
+
     scripts_dir = COMP_GMS.parent
     getdata_replacement = _build_getdata_replacement_agg(agg_gdx, har_dir=har_dir)
 
     def _inline(text: str, depth: int = 0) -> str:
         if depth > 5:
             return text
+
         def _rep(m):
-            fname = m.group(1).strip('"\'')
+            fname = m.group(1).strip("\"'")
             if fname == "getData.gms":
                 return getdata_replacement
             fpath = scripts_dir / fname
             if fpath.exists():
                 return _inline(fpath.read_text(), depth + 1)
             return m.group(0)
+
         def _rep_bat(m):
-            fname = m.group(1).strip('"\'')
-            args = (m.group(2).strip().split() if m.group(2) else [])
+            fname = m.group(1).strip("\"'")
+            args = m.group(2).strip().split() if m.group(2) else []
             fpath = scripts_dir / fname
             if not fpath.exists():
                 return m.group(0)
             inner = fpath.read_text()
             # Handle $setargs: parse named args, substitute %name% → value,
             # then strip the $setargs line so GAMS doesn't see it outside batinclude.
-            setargs_m = re.search(r'^\$setargs\s+(.*)', inner, re.MULTILINE | re.IGNORECASE)
+            setargs_m = re.search(
+                r"^\$setargs\s+(.*)", inner, re.MULTILINE | re.IGNORECASE
+            )
             if setargs_m:
                 named = setargs_m.group(1).split()
                 for idx, name in enumerate(named):
                     val = args[idx] if idx < len(args) else ""
                     inner = inner.replace(f"%{name}%", val)
-                inner = re.sub(r'^\$setargs\s+.*\n?', '', inner, count=1, flags=re.MULTILINE | re.IGNORECASE)
+                inner = re.sub(
+                    r"^\$setargs\s+.*\n?",
+                    "",
+                    inner,
+                    count=1,
+                    flags=re.MULTILINE | re.IGNORECASE,
+                )
             # Also substitute positional %N% args.
             for idx, arg in enumerate(args, start=1):
                 inner = inner.replace(f"%{idx}", arg)
             return _inline(inner, depth + 1)
-        text = re.sub(r'^[ \t]*\$\$?include\s+("?[^"\s]+"?)', _rep, text, flags=re.IGNORECASE | re.MULTILINE)
+
+        text = re.sub(
+            r'^[ \t]*\$\$?include\s+("?[^"\s]+"?)',
+            _rep,
+            text,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
         # NOTE: batinclude args must stay on the SAME line — use [ \t] not \s,
         # else the arg group swallows the rest of the file (loop + execute_unload).
-        text = re.sub(r'^[ \t]*\$\$?batinclude\s+("?[^"\s]+"?)((?:[ \t]+\S+)*)', _rep_bat, text, flags=re.IGNORECASE | re.MULTILINE)
+        text = re.sub(
+            r'^[ \t]*\$\$?batinclude\s+("?[^"\s]+"?)((?:[ \t]+\S+)*)',
+            _rep_bat,
+            text,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
         return text
 
     inlined = _inline(COMP_GMS.read_text())
 
     # Restrict comp.gms hardcoded rres/rmuv/imuv to the aggregate's elements.
-    reg  = _gdx_set_elements(agg_gdx, "REG")
+    reg = _gdx_set_elements(agg_gdx, "REG")
     comm = _gdx_set_elements(agg_gdx, "COMM")
     rres, rmuv, imuv = _muv_baskets(reg, comm)
-    for sname, dom, elems in (("rres", "r", (rres,)), ("rmuv", "r", rmuv), ("imuv", "i", imuv)):
+    for sname, dom, elems in (
+        ("rres", "r", (rres,)),
+        ("rmuv", "r", rmuv),
+        ("imuv", "i", imuv),
+    ):
         inlined = re.sub(
             rf'set\s+{sname}\({dom}\)\s*"[^"]*"\s*/\s*[^/]*?/\s*;',
             f'set {sname}({dom}) "{sname}" /\n   {", ".join(elems)}\n/ ;',
-            inlined, flags=re.IGNORECASE,
+            inlined,
+            flags=re.IGNORECASE,
         )
 
     # Replace placeholder shock (pnum.fx=1.5) with 10% import-tariff shock.
     inlined, n = re.subn(
         r"pnum\.fx\(tsim\)\s*=\s*1\.5\s*;",
         "imptx.fx(r,i,rp,tsim) = imptx.l(r,i,rp,tsim) * 1.10 ;",
-        inlined, count=1, flags=re.IGNORECASE,
+        inlined,
+        count=1,
+        flags=re.IGNORECASE,
     )
     if n != 1:
         raise RuntimeError("could not find pnum.fx=1.5 shock anchor in comp.gms")
@@ -506,23 +545,26 @@ def _build_solve_gms_9x10() -> str:
     Applies the 10% import-tariff shock (imptx * 1.10) and unloads to out.gdx.
     """
     import re
+
     scripts_dir = COMP_GMS.parent
     getdata_replacement = _build_getdata_replacement()
 
     def _inline(text: str, depth: int = 0) -> str:
         if depth > 5:
             return text
+
         def _rep(m):
-            fname = m.group(1).strip('"\'')
+            fname = m.group(1).strip("\"'")
             if fname == "getData.gms":
                 return getdata_replacement
             fpath = scripts_dir / fname
             if fpath.exists():
                 return _inline(fpath.read_text(), depth + 1)
             return m.group(0)
+
         def _rep_bat(m):
-            fname = m.group(1).strip('"\'')
-            args = (m.group(2).strip().split() if m.group(2) else [])
+            fname = m.group(1).strip("\"'")
+            args = m.group(2).strip().split() if m.group(2) else []
             fpath = scripts_dir / fname
             if fpath.exists():
                 inner = fpath.read_text()
@@ -530,8 +572,19 @@ def _build_solve_gms_9x10() -> str:
                     inner = inner.replace(f"%{idx}", arg)
                 return _inline(inner, depth + 1)
             return m.group(0)
-        text = re.sub(r'^[ \t]*\$\$?include\s+("?[^"\s]+"?)', _rep, text, flags=re.IGNORECASE | re.MULTILINE)
-        text = re.sub(r'^[ \t]*\$\$?batinclude\s+("?[^"\s]+"?)((?:[ \t]+\S+)*)', _rep_bat, text, flags=re.IGNORECASE | re.MULTILINE)
+
+        text = re.sub(
+            r'^[ \t]*\$\$?include\s+("?[^"\s]+"?)',
+            _rep,
+            text,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        text = re.sub(
+            r'^[ \t]*\$\$?batinclude\s+("?[^"\s]+"?)((?:[ \t]+\S+)*)',
+            _rep_bat,
+            text,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
         return text
 
     inlined = _inline(COMP_GMS.read_text())
@@ -540,18 +593,25 @@ def _build_solve_gms_9x10() -> str:
     rres = "NAmerica"
     rmuv = ("Oceania", "NAmerica", "EU_28")
     imuv = ("c_ProcFood", "c_TextWapp", "c_LightMnfc", "c_HeavyMnfc")
-    for sname, dom, elems in (("rres", "r", (rres,)), ("rmuv", "r", rmuv), ("imuv", "i", imuv)):
+    for sname, dom, elems in (
+        ("rres", "r", (rres,)),
+        ("rmuv", "r", rmuv),
+        ("imuv", "i", imuv),
+    ):
         inlined = re.sub(
             rf'set\s+{sname}\({dom}\)\s*"[^"]*"\s*/\s*[^/]*?/\s*;',
             f'set {sname}({dom}) "{sname}" /\n   {", ".join(elems)}\n/ ;',
-            inlined, flags=re.IGNORECASE,
+            inlined,
+            flags=re.IGNORECASE,
         )
 
     # Replace placeholder shock (pnum.fx=1.5) with 10% import-tariff shock.
     inlined, n = re.subn(
         r"pnum\.fx\(tsim\)\s*=\s*1\.5\s*;",
         "imptx.fx(r,i,rp,tsim) = imptx.l(r,i,rp,tsim) * 1.10 ;",
-        inlined, count=1, flags=re.IGNORECASE,
+        inlined,
+        count=1,
+        flags=re.IGNORECASE,
     )
     if n != 1:
         raise RuntimeError("could not find pnum.fx=1.5 shock anchor in comp.gms")
@@ -561,14 +621,19 @@ def _build_solve_gms_9x10() -> str:
     # All three blocks are ifDyn/multi-year-only; CompStat (base+shock) doesn't need them.
     for pattern in [
         # ifDyn block: contains $setargs/$macro/%theMacro% compile-time directives
-        r'if\(years\(tsim\)\s+gt\s+FirstYear\s+and\s+ifDyn\s*,.*?^\s*\)\s*;',
+        r"if\(years\(tsim\)\s+gt\s+FirstYear\s+and\s+ifDyn\s*,.*?^\s*\)\s*;",
         # lag-fixing block (ne firstYear)
-        r'if\(years\(tsim\)\s+ne\s+firstYear\s*,.*?^\s*\)\s*;',
+        r"if\(years\(tsim\)\s+ne\s+firstYear\s*,.*?^\s*\)\s*;",
         # dynamic solve guard (gt firstYear, without ifDyn)
-        r'if\(years\(tsim\)\s+gt\s+firstYear\s*,.*?^\s*\$\$endif.*?^\s*\)\s*;',
+        r"if\(years\(tsim\)\s+gt\s+firstYear\s*,.*?^\s*\$\$endif.*?^\s*\)\s*;",
     ]:
-        inlined, cnt = re.subn(pattern, '* [years(tsim) block removed — CompStat only]',
-                               inlined, count=1, flags=re.DOTALL | re.MULTILINE | re.IGNORECASE)
+        inlined, cnt = re.subn(
+            pattern,
+            "* [years(tsim) block removed — CompStat only]",
+            inlined,
+            count=1,
+            flags=re.DOTALL | re.MULTILINE | re.IGNORECASE,
+        )
         if cnt:
             continue
 
@@ -601,6 +666,7 @@ def submit_and_fetch_gdx_9x10(out_dir: Path, neos_email: str) -> Path:
     on NEOS 52.5.0. Returns path to downloaded out.gdx.
     """
     import xmlrpc.client, zipfile, io
+
     out_dir.mkdir(parents=True, exist_ok=True)
     solve_gms = _build_solve_gms_for_9x10()
     (out_dir / "gtap_solve_9x10.gms").write_text(solve_gms)
@@ -630,15 +696,21 @@ def submit_and_fetch_gdx_9x10(out_dir: Path, neos_email: str) -> Path:
             status = neos.getJobStatus(job_number, password)
         except Exception:
             pass
-        print(f"  [{attempt*10}s] status={status}")
+        print(f"  [{attempt * 10}s] status={status}")
         if status in ("Done", "Error"):
             break
 
     listing = neos.getFinalResults(job_number, password)
-    raw = listing.data.decode("utf-8", errors="replace") if hasattr(listing, "data") else str(listing)
+    raw = (
+        listing.data.decode("utf-8", errors="replace")
+        if hasattr(listing, "data")
+        else str(listing)
+    )
     (out_dir / "neos_solve_9x10.lst").write_text(raw)
     if status == "Error":
-        raise RuntimeError(f"NEOS solve #{job_number} failed. See {out_dir/'neos_solve_9x10.lst'}")
+        raise RuntimeError(
+            f"NEOS solve #{job_number} failed. See {out_dir / 'neos_solve_9x10.lst'}"
+        )
 
     zip_result = neos.getOutputFile(job_number, password, "solver-output.zip")
     zip_data = zip_result.data if hasattr(zip_result, "data") else bytes(zip_result)
@@ -651,15 +723,12 @@ def submit_and_fetch_gdx_9x10(out_dir: Path, neos_email: str) -> Path:
     if gdx_name is None:
         raise RuntimeError(
             f"no .gdx in solver-output.zip. Files: {z.namelist()} — "
-            f"check {out_dir/'neos_solve_9x10.lst'} for errors.")
+            f"check {out_dir / 'neos_solve_9x10.lst'} for errors."
+        )
     out_path = out_dir / "out.gdx"
     out_path.write_bytes(z.read(gdx_name))
     print(f"  Written: {out_path} ({out_path.stat().st_size // 1024} KB)")
     return out_path
-
-
-
-
 
 
 def _submit_and_fetch_nl(
@@ -699,12 +768,16 @@ def _submit_and_fetch_nl(
             status = neos.getJobStatus(job_number, password)
         except Exception:
             pass
-        print(f"  [{attempt*10}s] status={status}")
+        print(f"  [{attempt * 10}s] status={status}")
         if status in ("Done", "Error"):
             break
 
     listing = neos.getFinalResults(job_number, password)
-    raw_lst = listing.data.decode("utf-8", errors="replace") if hasattr(listing, "data") else str(listing)
+    raw_lst = (
+        listing.data.decode("utf-8", errors="replace")
+        if hasattr(listing, "data")
+        else str(listing)
+    )
     lst_path = out_dir / f"neos_convert_{phase}.lst"
     lst_path.write_text(raw_lst)
 
@@ -718,11 +791,15 @@ def _submit_and_fetch_nl(
         z = zipfile.ZipFile(io.BytesIO(zip_data))
     except zipfile.BadZipFile:
         msg = zip_data.decode("utf-8", errors="replace")
-        raise RuntimeError(f"NEOS ({phase}) did not return valid zip. Response: {msg[:200]}")
+        raise RuntimeError(
+            f"NEOS ({phase}) did not return valid zip. Response: {msg[:200]}"
+        )
 
     zip_path = out_dir / f"neos_convert_{phase}_output.zip"
     zip_path.write_bytes(zip_data)
-    print(f"  solver-output.zip: {zip_path.stat().st_size // 1024} KB  files: {z.namelist()}")
+    print(
+        f"  solver-output.zip: {zip_path.stat().st_size // 1024} KB  files: {z.namelist()}"
+    )
 
     if "ampl.nl" not in z.namelist():
         raise RuntimeError(
@@ -745,8 +822,9 @@ def _submit_and_fetch_nl(
     return out_path
 
 
-def submit_and_fetch_gdx(agg_gdx: Path, out_dir: Path, neos_email: str,
-                         har_dir: Path | None = None) -> Path:
+def submit_and_fetch_gdx(
+    agg_gdx: Path, out_dir: Path, neos_email: str, har_dir: Path | None = None
+) -> Path:
     """Submit a GAMS MCP/PATH SOLVE of a GTAPAgg dataset to NEOS, fetch out.gdx.
 
     Builds the solve .gms (_build_solve_gms: ifMCP=1, PATH, 10% tariff shock,
@@ -754,6 +832,7 @@ def submit_and_fetch_gdx(agg_gdx: Path, out_dir: Path, neos_email: str,
     har_dir: when given, elasticities from default.prm are appended to getData.
     """
     import xmlrpc.client, zipfile, io
+
     out_dir.mkdir(parents=True, exist_ok=True)
     solve_gms = _build_solve_gms(agg_gdx, har_dir=har_dir)
     (out_dir / "gtap_solve.gms").write_text(solve_gms)
@@ -786,15 +865,21 @@ def submit_and_fetch_gdx(agg_gdx: Path, out_dir: Path, neos_email: str,
             status = neos.getJobStatus(job_number, password)
         except Exception:
             pass
-        print(f"  [{attempt*10}s] status={status}")
+        print(f"  [{attempt * 10}s] status={status}")
         if status in ("Done", "Error"):
             break
 
     listing = neos.getFinalResults(job_number, password)
-    raw = listing.data.decode("utf-8", errors="replace") if hasattr(listing, "data") else str(listing)
+    raw = (
+        listing.data.decode("utf-8", errors="replace")
+        if hasattr(listing, "data")
+        else str(listing)
+    )
     (out_dir / "neos_solve.lst").write_text(raw)
     if status == "Error":
-        raise RuntimeError(f"NEOS solve #{job_number} failed. See {out_dir/'neos_solve.lst'}")
+        raise RuntimeError(
+            f"NEOS solve #{job_number} failed. See {out_dir / 'neos_solve.lst'}"
+        )
 
     zip_result = neos.getOutputFile(job_number, password, "solver-output.zip")
     zip_data = zip_result.data if hasattr(zip_result, "data") else bytes(zip_result)
@@ -807,7 +892,8 @@ def submit_and_fetch_gdx(agg_gdx: Path, out_dir: Path, neos_email: str,
     if gdx_name is None:
         raise RuntimeError(
             f"no .gdx in solver-output.zip. Available: {z.namelist()} — "
-            f"NEOS may not return unloaded GDX files for this solver.")
+            f"NEOS may not return unloaded GDX files for this solver."
+        )
     out_path = out_dir / "out.gdx"
     out_path.write_bytes(z.read(gdx_name))
     print(f"  Written: {out_path} ({out_path.stat().st_size // 1024} KB)")
@@ -841,14 +927,22 @@ def fetch_gams_nl(
     result: dict[str, Path] = {}
     for phase in phases:
         print(f"\n  Building standalone .gms for phase={phase} ...")
-        standalone_gms = _build_standalone_gms(phase=phase, shrink=shrink, agg_gdx=agg_gdx,
-                                               har_dir=har_dir, ifsub=ifsub, fbep=fbep)
+        standalone_gms = _build_standalone_gms(
+            phase=phase,
+            shrink=shrink,
+            agg_gdx=agg_gdx,
+            har_dir=har_dir,
+            ifsub=ifsub,
+            fbep=fbep,
+        )
         if local:
             result[phase] = _convert_locally(standalone_gms, out_dir, phase)
             continue
         standalone_path = out_dir / f"gtap_standalone_{phase}.gms"
         standalone_path.write_text(standalone_gms)
-        print(f"  Standalone .gms: {len(standalone_gms.splitlines())} lines ({len(standalone_gms)//1024} KB)")
+        print(
+            f"  Standalone .gms: {len(standalone_gms.splitlines())} lines ({len(standalone_gms) // 1024} KB)"
+        )
         result[phase] = _submit_and_fetch_nl(standalone_gms, out_dir, neos_email, phase)
 
     return result
@@ -997,7 +1091,7 @@ def _split_name(name: str) -> tuple[str, list[str]]:
         i = name.find(op)
         if i != -1:
             base = name[:i]
-            inner = name[i + 1:].rstrip(cl + " ")
+            inner = name[i + 1 :].rstrip(cl + " ")
             if inner.endswith(cl):
                 inner = inner[:-1]
             parts = [p.strip() for p in inner.split(",") if p.strip()]
@@ -1023,6 +1117,7 @@ def diff_nl_models(
     For two-period models ("base","shock"), set py_period="shock" to compare
     only the shock-period variables/constraints against the GAMS shock .nl.
     """
+
     # Python: may have multiple periods; filter to py_period entries.
     # For a single-period model t_set=("base",), py_period="base" → all entries.
     # For two-period t_set=("base","shock"), py_period="shock" → only shock entries.
@@ -1030,7 +1125,9 @@ def diff_nl_models(
         """True if the raw name contains the given period as its time index."""
         suffix = f",{period}]"
         bare = f"[{period}]"
-        return raw_name.endswith(suffix) or raw_name.endswith(bare) or raw_name == period
+        return (
+            raw_name.endswith(suffix) or raw_name.endswith(bare) or raw_name == period
+        )
 
     def _is_multi_period(model: "NLModel") -> bool:
         for i in range(min(model.n_vars, 200)):
@@ -1143,13 +1240,21 @@ def diff_nl_models(
         py_row = py_model.J.get(py_ci, {})
         gams_row = gams_model.J.get(gams_ci, {})
 
-        py_coeffs = {_normalize_name(py_model.var_name(vi)): c for vi, c in py_row.items()}
-        gams_coeffs = {_normalize_name(gams_model.var_name(vi)): c
-                       for vi, c in gams_row.items()}
+        py_coeffs = {
+            _normalize_name(py_model.var_name(vi)): c for vi, c in py_row.items()
+        }
+        gams_coeffs = {
+            _normalize_name(gams_model.var_name(vi)): c for vi, c in gams_row.items()
+        }
 
         fam = _family(con_name)
         if fam not in family_stats:
-            family_stats[fam] = {"n_pairs": 0, "n_diff": 0, "max_rel": 0.0, "worst": None}
+            family_stats[fam] = {
+                "n_pairs": 0,
+                "n_diff": 0,
+                "max_rel": 0.0,
+                "worst": None,
+            }
         fs = family_stats[fam]
 
         common_vars = set(py_coeffs) & set(gams_coeffs)
@@ -1159,7 +1264,11 @@ def diff_nl_models(
         # with .fx, making their Jacobian coefficients zero. Python has real
         # equations for these. These are structural differences, not bugs.
         _GRUPO_B_FAMILIES = {
-            "eq_pi", "eq_u", "eq_psave", "eq_pgdpmp", "eq_rgdpmp",
+            "eq_pi",
+            "eq_u",
+            "eq_psave",
+            "eq_pgdpmp",
+            "eq_rgdpmp",
         }
         if fam in _GRUPO_B_FAMILIES:
             fs.setdefault("_structural_fp", "Grupo B: GAMS .fx multi-period")
@@ -1189,7 +1298,9 @@ def diff_nl_models(
                 pc = py_coeffs[vname]
                 if abs(gc) > 1e-12 and abs(pc) > 1e-12:
                     ratios.append(pc / gc)
-            if ratios and all(abs(r - ratios[0]) / max(abs(ratios[0]), 1e-10) < 1e-6 for r in ratios):
+            if ratios and all(
+                abs(r - ratios[0]) / max(abs(ratios[0]), 1e-10) < 1e-6 for r in ratios
+            ):
                 sign_flip = abs(ratios[0] - (-1.0)) < 1e-6
 
         # --- Grupo A filter: Python linearizes nonlinear products ---
@@ -1221,7 +1332,8 @@ def diff_nl_models(
                 abs_diff = abs(py_c - effective_gams_c)
                 if fs["n_diff"] <= cell_cap:
                     cell_diffs.append(
-                        (con_name, vname, py_c, effective_gams_c, abs_diff, rel))
+                        (con_name, vname, py_c, effective_gams_c, abs_diff, rel)
+                    )
                 else:
                     cell_truncated[fam] = cell_truncated.get(fam, 0) + 1
 
@@ -1275,7 +1387,7 @@ def diff_bounds(
         if abs(py_lb) < _INF and abs(g_lb) < _INF:
             denom = max(abs(g_lb), 1e-12)
             lb_diff = abs(py_lb - g_lb) / denom > tol_rel
-        elif (py_lb < -_INF/2) != (g_lb < -_INF/2):
+        elif (py_lb < -_INF / 2) != (g_lb < -_INF / 2):
             lb_diff = True  # one is -inf, other isn't
 
         # Compare ub
@@ -1283,16 +1395,21 @@ def diff_bounds(
         if abs(py_ub) < _INF and abs(g_ub) < _INF:
             denom = max(abs(g_ub), 1e-12)
             ub_diff = abs(py_ub - g_ub) / denom > tol_rel
-        elif (py_ub > _INF/2) != (g_ub > _INF/2):
+        elif (py_ub > _INF / 2) != (g_ub > _INF / 2):
             ub_diff = True  # one is +inf, other isn't
 
         if lb_diff or ub_diff:
-            diffs.append({
-                "var": name,
-                "py_lb": py_lb, "py_ub": py_ub,
-                "g_lb": g_lb, "g_ub": g_ub,
-                "lb_diff": lb_diff, "ub_diff": ub_diff,
-            })
+            diffs.append(
+                {
+                    "var": name,
+                    "py_lb": py_lb,
+                    "py_ub": py_ub,
+                    "g_lb": g_lb,
+                    "g_ub": g_ub,
+                    "lb_diff": lb_diff,
+                    "ub_diff": ub_diff,
+                }
+            )
 
     # Also report vars that are fixed in one but not the other (lb==ub)
     only_py = sorted(set(py_bounds) - set(gams_bounds))
@@ -1304,8 +1421,12 @@ def diff_bounds(
 def print_diff_report(result: dict, period: str, tol_rel: float = 1e-4) -> None:
     s = result["structural"]
     print(f"\n=== .nl COMPARISON [{period}] ===")
-    print(f"  Python:  {s['py_vars']:6d} vars  {s['py_cons']:6d} cons  {s['py_nnz']:8d} nnz")
-    print(f"  GAMS:    {s['gams_vars']:6d} vars  {s['gams_cons']:6d} cons  {s['gams_nnz']:8d} nnz")
+    print(
+        f"  Python:  {s['py_vars']:6d} vars  {s['py_cons']:6d} cons  {s['py_nnz']:8d} nnz"
+    )
+    print(
+        f"  GAMS:    {s['gams_vars']:6d} vars  {s['gams_cons']:6d} cons  {s['gams_nnz']:8d} nnz"
+    )
 
     if result["only_py_vars"]:
         print(f"\n  Variables only in Python ({len(result['only_py_vars'])}):")
@@ -1331,27 +1452,33 @@ def print_diff_report(result: dict, period: str, tol_rel: float = 1e-4) -> None:
     if fam:
         print(f"\n  Coefficient diff by family (tol_rel={tol_rel:.0e}):")
         print(f"  {'family':<30s} {'pairs':>7s} {'diff':>6s} {'max_rel':>10s}  status")
-        print(f"  {'-'*30} {'-'*7} {'-'*6} {'-'*10}  ------")
+        print(f"  {'-' * 30} {'-' * 7} {'-' * 6} {'-' * 10}  ------")
         for fname, fs in sorted(fam.items(), key=lambda x: -x[1]["max_rel"]):
             if fs.get("_structural_fp"):
                 reason = fs["_structural_fp"]
-                print(f"  {fname:<30s} {'—':>7s} {'—':>6s} {'—':>10s}  STRUCTURAL_FP ({reason})")
+                print(
+                    f"  {fname:<30s} {'—':>7s} {'—':>6s} {'—':>10s}  STRUCTURAL_FP ({reason})"
+                )
                 continue
             worst_str = ""
             if fs["worst"] and fs["n_diff"] > 0:
                 cn, vn, py_c, gams_c, rel = fs["worst"]
-                worst_str = (f"  worst: {cn} var={vn} "
-                             f"py={py_c:.4e} gams={gams_c:.4e}")
+                worst_str = f"  worst: {cn} var={vn} py={py_c:.4e} gams={gams_c:.4e}"
             status = "OK" if fs["n_diff"] == 0 else "DIFF"
-            print(f"  {fname:<30s} {fs['n_pairs']:>7d} {fs['n_diff']:>6d} "
-                  f"{fs['max_rel']:>10.2e}  {status}{worst_str}")
+            print(
+                f"  {fname:<30s} {fs['n_pairs']:>7d} {fs['n_diff']:>6d} "
+                f"{fs['max_rel']:>10.2e}  {status}{worst_str}"
+            )
     else:
-        print("\n  No common constraints found — models may have incompatible structure.")
+        print(
+            "\n  No common constraints found — models may have incompatible structure."
+        )
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def _phase_to_period(phase: str):
     """nl_compare's --phase includes 'altertax', which is off the base/check/
@@ -1370,8 +1497,12 @@ def _cells_to_violations(result: dict) -> list[dict]:
     for con_name, vname, py_c, gams_c, abs_diff, rel in result.get("cell_diffs", []):
         eq_base, eq_idx = _split_name(con_name)
         var_base, var_idx = _split_name(vname)
-        v = make_violation(f"{eq_base} × {var_base}",
-                           {"eq": eq_idx, "var": var_idx}, "jac_coef_diff", rel)
+        v = make_violation(
+            f"{eq_base} × {var_base}",
+            {"eq": eq_idx, "var": var_idx},
+            "jac_coef_diff",
+            rel,
+        )
         v["diff_rel"] = rel
         v["diff_abs"] = abs_diff
         v["py_coeff"] = py_c
@@ -1380,8 +1511,200 @@ def _cells_to_violations(result: dict) -> list[dict]:
     return viols
 
 
+# Families whose Python row is written in a different but equivalent form, so the
+# linear coefficients differ by construction. Both were measured cell by cell
+# (2026-09-21); test_gtap7_nl_parity and the cascade's gate case leave them out:
+#
+# eq_pft -- the equality is written the other way round. GAMS: `0 = xft -
+#   sum(xf/xscale)` (xf negative); Python: `xft == sum(xf/xscale)` (positive).
+#   Measured on gtap7_10x7/base: 27 of 30 cells are py == -gams exactly; the other
+#   3 are the same with rounding noise. Mobile factors only.
+#
+# eq_pf -- a deliberately CROSS-MULTIPLIED form. GAMS solves for xf
+#   (`0 = xf - xscale*gf*xft*(pfy/pft)^omegaf`); Python writes
+#   `pf*(1-kappa)*denom == pft*xf` so as NOT to divide by denom=xscale*gf*xft, which
+#   can be almost zero (xft[CAN,Land,shock]~9e-4) and gave a Jacobian column 3100x
+#   worse than GAMS's (see gtap_model_equations.py, ug_jacobian_collapse_root_cause).
+#   Signature: py=0.0 against gams=+-1.0. It scales with the period, measured: in
+#   `base` only Land (omegaf={} -> only Land is CET via etrae=-1); in `check` all
+#   15 factors, since altertax sets omegaf=1.0 for all of them
+#   (apply_altertax_elasticities). Same cause, more cells: 3->36 in 3x3, 5->95 in
+#   5x5, 21->252 in 10x7.
+#
+# Leaving them out does not hide them: every other family still has to show 0
+# diffs. If one is rewritten to match GAMS, take it out of here.
+WRITTEN_FORM_EQUIVALENT = frozenset({"eq_pf", "eq_pft"})
+
+
+def drop_written_form(family_stats: dict, cell_diffs: list) -> tuple[list, dict]:
+    """(cell diffs outside WRITTEN_FORM_EQUIVALENT, {family: n_diff} left out)."""
+    left_out = {
+        fam: st["n_diff"]
+        for fam, st in family_stats.items()
+        if fam in WRITTEN_FORM_EQUIVALENT and st.get("n_diff", 0) > 0
+    }
+    kept = [
+        c for c in cell_diffs if _split_name(c[0])[0] not in WRITTEN_FORM_EQUIVALENT
+    ]
+    return kept, left_out
+
+
+def gate_references(dataset: str, mode: str, ifsub: int) -> dict | None:
+    """The data/ references of the case the MCP gate builds (fbep=header): the GAMS
+    .nl folder and the MCP folder whose out.gdx seeds the run; None if either is
+    missing."""
+    nl = find_reference(
+        dataset, "gams", form="nl", mode=mode, ifsub=ifsub, fbep="header"
+    )
+    mcp = find_reference(
+        dataset, "gams", form="mcp", mode=mode, ifsub=ifsub, fbep="header"
+    )
+    if nl is None or mcp is None:
+        return None
+    return {"nl": nl, "gdx": mcp / "out.gdx"}
+
+
+def build_python_nls_gate(
+    dataset: str, phases, out_dir: Path, mode: str, ifsub: int, gdx: Path
+) -> dict[str, Path]:
+    """Write ``python_<period>.nl`` for each phase from the case the MCP gate builds,
+    run on the core driver seeded at ``gdx``: each file is the model at the solve of
+    its period, the other periods fixed, as GAMS holds them (holdfixed)."""
+    from _core_run import solve_on_core
+    from seed_and_solve import _case
+
+    from equilibria.templates.gtap.recipe import _by_backend
+
+    paths: dict[str, Path] = {}
+
+    def spy(model):
+        staged = model.staged
+        period = staged.period if staged is not None else None
+        if period in phases and period not in paths:
+            out = out_dir / f"python_{period}.nl"
+            model.pyomo.write(
+                str(out), format="nl", io_options={"symbolic_solver_labels": True}
+            )
+            paths[period] = out
+        return _by_backend(model)
+
+    p, gc, rr = _case(dataset, bool(ifsub), mode)
+    solve_on_core(
+        p,
+        gc,
+        rr,
+        mode=mode,
+        ref_gdx=gdx,
+        seed_gdx=gdx,
+        solve_base="base" in phases,
+        solver=spy,
+    )
+    return paths
+
+
+def _run_nl_gate(args, refs: dict) -> dict:
+    """The cascade's case: Python's .nl from the gate case on the core driver
+    against the data/ GAMS .nl, per phase; WRITTEN_FORM_EQUIVALENT left out."""
+    from _nl_parser import parse_nl
+
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    py_paths = build_python_nls_gate(
+        args.dataset, list(args.phase), args.out_dir, args.mode, args.ifsub, refs["gdx"]
+    )
+    per_phase, all_viols, skipped = {}, [], []
+    for phase in args.phase:
+        py_nl = py_paths.get(phase)
+        gams_nl = refs["nl"] / f"gams_{phase}.nl"
+        if py_nl is None:
+            skipped.append({"phase": phase, "reason": "python_solve_not_observed"})
+            continue
+        if not gams_nl.exists():
+            skipped.append({"phase": phase, "reason": "gams_nl_missing"})
+            continue
+        result = diff_nl_models(
+            parse_nl(py_nl),
+            parse_nl(gams_nl),
+            tol_rel=args.tol_rel,
+            py_period=phase,
+            cell_cap=args.cell_cap,
+        )
+        print_diff_report(result, phase, tol_rel=args.tol_rel)  # -> stderr
+        kept, left_out = drop_written_form(result["family_stats"], result["cell_diffs"])
+        viols = _cells_to_violations({**result, "cell_diffs": kept})
+        for v in viols:
+            v["phase"] = phase
+        all_viols.extend(viols)
+        per_phase[phase] = {
+            "n_common_cons": result["n_common_cons"],
+            "comparable": result["n_common_cons"] > 0,
+            "n_cell_diffs_total": sum(
+                st["n_diff"]
+                for fam, st in result["family_stats"].items()
+                if fam not in WRITTEN_FORM_EQUIVALENT
+            ),
+            "written_form_left_out": left_out,
+            "structural": result["structural"],
+        }
+    meta = {
+        "comparison": "gate_case_vs_data_reference",
+        "case": "mcp_gate",
+        "gams_nl": str(refs["nl"]),
+        "seed_gdx": str(refs["gdx"]),
+        "phases_skipped": skipped,
+        "tol_rel": args.tol_rel,
+        "per_phase": per_phase,
+    }
+    comparable = [p for p, d in per_phase.items() if d["comparable"]]
+    period = _phase_to_period(args.phase[0]) if len(args.phase) == 1 else None
+    if not comparable:
+        why = (
+            "; ".join(f"{s['phase']}:{s['reason']}" for s in skipped)
+            or "no common named constraints"
+        )
+        return dict(
+            status="error",
+            period=period,
+            violations=[],
+            headline=f"no phase could be diffed — {why}",
+            meta={**meta, "error_kind": "no_phase_diffed"},
+        )
+    n_cons = sum(per_phase[p]["n_common_cons"] for p in comparable)
+    n_total = sum(per_phase[p]["n_cell_diffs_total"] for p in comparable)
+    left = {p: per_phase[p]["written_form_left_out"] for p in comparable}
+    if not all_viols:
+        headline = (
+            f"Jacobian coefficient diff ({'/'.join(comparable)}): 0 cells "
+            f"differ at tol_rel={args.tol_rel:g} over {n_cons} common "
+            f"constraints (written-form equivalent left out: {left}) — "
+            f"algebra matches; this layer does not explain the gap"
+        )
+    else:
+        worst = max(all_viols, key=lambda v: abs(v["value"]))
+        headline = (
+            f"Jacobian coefficient diff ({'/'.join(comparable)}): {n_total} "
+            f"cell(s) differ > {args.tol_rel:g}; worst {worst['entity']} "
+            f"rel={worst['diff_rel']:.2e} abs={worst['diff_abs']:.2e}"
+        )
+    return dict(
+        status="dirty" if all_viols else "clean",
+        period=period,
+        headline=headline,
+        violations=all_viols,
+        meta=meta,
+    )
+
+
 def _run_nl(args) -> dict:
-    """Build/parse the .nl files, diff per phase, return a common-schema dict."""
+    """Build/parse the .nl files, diff per phase, return a common-schema dict. With
+    the data/ references of the gate case (and the Python side asked for), that
+    case (``_run_nl_gate``); otherwise the old monolith route."""
+    refs = (
+        None
+        if args.skip_python
+        else gate_references(args.dataset, args.mode, args.ifsub)
+    )
+    if refs is not None:
+        return _run_nl_gate(args, refs)
     from run_gtap import _build_gtap_contract_with_calibration  # noqa: F401
     from _parity_datasets import DATASETS
     from _nl_parser import parse_nl
@@ -1401,6 +1724,7 @@ def _run_nl(args) -> dict:
     use_agg = ds.mode == "compstat" and ds.agg_gdx is not None
     if use_agg:
         from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+
         _reg = _gdx_set_elements(ds.agg_gdx, "REG")
         _comm = _gdx_set_elements(ds.agg_gdx, "COMM")
         _rres, _rmuv, _imuv = _muv_baskets(_reg, _comm)
@@ -1420,22 +1744,35 @@ def _run_nl(args) -> dict:
     _har_dir = (dataset_dir(ds.name)) if use_agg else None
     if not args.skip_python:
         py_paths = build_python_nls(
-            args.phase, args.out_dir, closure_config,
+            args.phase,
+            args.out_dir,
+            closure_config,
             gdx_path=(None if use_agg else ds.agg_gdx),
-            do_shrink=not full, har_dir=_har_dir)
+            do_shrink=not full,
+            har_dir=_har_dir,
+        )
     else:
         py_paths = {p: args.out_dir / f"python_{p}.nl" for p in args.phase}
 
     gams_nl_paths: dict[str, Path] = {}
     if not args.skip_gams:
         gams_nl_paths = fetch_gams_nl(
-            args.out_dir, args.neos_email, list(args.phase), shrink=gams_shrink,
-            agg_gdx=(ds.agg_gdx if use_agg else None), har_dir=_har_dir,
-            ifsub=args.ifsub, local=args.gams_local, fbep=args.fbep)
+            args.out_dir,
+            args.neos_email,
+            list(args.phase),
+            shrink=gams_shrink,
+            agg_gdx=(ds.agg_gdx if use_agg else None),
+            har_dir=_har_dir,
+            ifsub=args.ifsub,
+            local=args.gams_local,
+            fbep=args.fbep,
+        )
     else:
         for phase in args.phase:
-            for p in (args.out_dir / f"gams_{phase}.nl",
-                      args.out_dir / "gams_compstat.nl"):
+            for p in (
+                args.out_dir / f"gams_{phase}.nl",
+                args.out_dir / "gams_compstat.nl",
+            ):
                 if p.exists():
                     gams_nl_paths[phase] = p
                     break
@@ -1454,8 +1791,9 @@ def _run_nl(args) -> dict:
             continue
         py_m = parse_nl(py_nl)
         gams_m = parse_nl(gams_nl)
-        result = diff_nl_models(py_m, gams_m, tol_rel=args.tol_rel,
-                                py_period=period, cell_cap=args.cell_cap)
+        result = diff_nl_models(
+            py_m, gams_m, tol_rel=args.tol_rel, py_period=period, cell_cap=args.cell_cap
+        )
         print_diff_report(result, period, tol_rel=args.tol_rel)  # -> stderr
         viols = _cells_to_violations(result)
         for v in viols:
@@ -1478,19 +1816,30 @@ def _run_nl(args) -> dict:
     if args.skip_python and len(gams_nl_paths) == len(args.phase):
         # Asked for the GAMS side only (regenerate_gams.py): writing it is the job.
         return dict(
-            status="clean", period=None,
+            status="clean",
+            period=None,
             headline=f"GAMS .nl written for {', '.join(args.phase)} (python side skipped)",
-            violations=[], meta={"gams_nl": {p: str(v) for p, v in gams_nl_paths.items()}})
+            violations=[],
+            meta={"gams_nl": {p: str(v) for p, v in gams_nl_paths.items()}},
+        )
 
     if not per_phase and skipped:
         return dict(
-            status="error", period=None,
-            headline=("no phase could be diffed — " +
-                      "; ".join(f"{s['phase']}:{s['reason']}" for s in skipped)),
-            violations=[], meta={"error_kind": "no_phase_diffed",
-                                 "skipped": skipped, "phases": list(args.phase),
-                                 "skip_gams": args.skip_gams,
-                                 "skip_python": args.skip_python})
+            status="error",
+            period=None,
+            headline=(
+                "no phase could be diffed — "
+                + "; ".join(f"{s['phase']}:{s['reason']}" for s in skipped)
+            ),
+            violations=[],
+            meta={
+                "error_kind": "no_phase_diffed",
+                "skipped": skipped,
+                "phases": list(args.phase),
+                "skip_gams": args.skip_gams,
+                "skip_python": args.skip_python,
+            },
+        )
 
     diffed = list(per_phase.keys())
     comparable_phases = [p for p, d in per_phase.items() if d["comparable"]]
@@ -1504,120 +1853,214 @@ def _run_nl(args) -> dict:
     # spurious "clean" — Phase 2 must not read this as "algebra matches".
     if not comparable_phases:
         return dict(
-            status="error", period=period,
-            headline=(f"no common named constraints in any phase "
-                      f"({'/'.join(diffed)}) — GAMS .nl likely missing .row/.col "
-                      f"sidecars; coefficient diff is vacuous, not 'clean'"),
+            status="error",
+            period=period,
+            headline=(
+                f"no common named constraints in any phase "
+                f"({'/'.join(diffed)}) — GAMS .nl likely missing .row/.col "
+                f"sidecars; coefficient diff is vacuous, not 'clean'"
+            ),
             violations=[],
-            meta={"error_kind": "no_common_constraints",
-                  "comparison": "python_vs_gams_per_phase",
-                  "phases_diffed": diffed, "phases_skipped": skipped,
-                  "tol_rel": args.tol_rel, "dataset_mode": ds.mode,
-                  "per_phase": per_phase})
+            meta={
+                "error_kind": "no_common_constraints",
+                "comparison": "python_vs_gams_per_phase",
+                "phases_diffed": diffed,
+                "phases_skipped": skipped,
+                "tol_rel": args.tol_rel,
+                "dataset_mode": ds.mode,
+                "per_phase": per_phase,
+            },
+        )
 
     status = "dirty" if all_viols else "clean"
     if status == "clean":
-        headline = (f"Jacobian coefficient diff ({'/'.join(comparable_phases)}): "
-                    f"0 cells differ at tol_rel={args.tol_rel:g} over "
-                    f"{sum(per_phase[p]['n_common_cons'] for p in comparable_phases)} "
-                    f"common constraints — algebra matches; this layer does not "
-                    f"explain the gap")
+        headline = (
+            f"Jacobian coefficient diff ({'/'.join(comparable_phases)}): "
+            f"0 cells differ at tol_rel={args.tol_rel:g} over "
+            f"{sum(per_phase[p]['n_common_cons'] for p in comparable_phases)} "
+            f"common constraints — algebra matches; this layer does not "
+            f"explain the gap"
+        )
     else:
         worst = max(all_viols, key=lambda v: abs(v["value"]))
-        headline = (f"Jacobian coefficient diff ({'/'.join(comparable_phases)}): "
-                    f"{n_total} cell(s) differ > {args.tol_rel:g}; worst "
-                    f"{worst['entity']} rel={worst['diff_rel']:.2e} "
-                    f"abs={worst['diff_abs']:.2e}")
+        headline = (
+            f"Jacobian coefficient diff ({'/'.join(comparable_phases)}): "
+            f"{n_total} cell(s) differ > {args.tol_rel:g}; worst "
+            f"{worst['entity']} rel={worst['diff_rel']:.2e} "
+            f"abs={worst['diff_abs']:.2e}"
+        )
     return dict(
-        status=status, period=period, headline=headline, violations=all_viols,
-        meta={"comparison": "python_vs_gams_per_phase",
-              "phases_diffed": diffed, "phases_comparable": comparable_phases,
-              "phases_skipped": skipped,
-              "tol_rel": args.tol_rel, "cell_cap": args.cell_cap,
-              "n_cell_diffs_total": n_total, "dataset_mode": ds.mode,
-              "per_phase": per_phase})
+        status=status,
+        period=period,
+        headline=headline,
+        violations=all_viols,
+        meta={
+            "comparison": "python_vs_gams_per_phase",
+            "phases_diffed": diffed,
+            "phases_comparable": comparable_phases,
+            "phases_skipped": skipped,
+            "tol_rel": args.tol_rel,
+            "cell_cap": args.cell_cap,
+            "n_cell_diffs_total": n_total,
+            "dataset_mode": ds.mode,
+            "per_phase": per_phase,
+        },
+    )
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="GTAP .nl comparison tool (Layer 6 diagnostic)")
-    ap.add_argument("--fetch-gdx-9x10", action="store_true",
-                    help="Submit full 9x10 PATH solve to NEOS (10%% tariff shock), "
-                         "download out.gdx to --out-dir/output/gtap9x10_neos/. "
-                         "Use with --neos-email.")
-    ap.add_argument("--dataset", default="3x3",
-                    help="3x3 / 9x10 (9x10 GDX, optionally shrunk), or a GTAPAgg "
-                         "registry key with a consolidated GDX, e.g. gtap7_3x3, "
-                         "gtap7_5x5, gtap7_10x7, gtap7_20x41 (sets-agnostic NEOS).")
-    ap.add_argument("--phase", nargs="+", choices=["base", "check", "shock", "altertax"],
-                    default=["base", "check", "shock"])
+    ap = argparse.ArgumentParser(
+        description="GTAP .nl comparison tool (Layer 6 diagnostic)"
+    )
+    ap.add_argument(
+        "--fetch-gdx-9x10",
+        action="store_true",
+        help="Submit full 9x10 PATH solve to NEOS (10%% tariff shock), "
+        "download out.gdx to --out-dir/output/gtap9x10_neos/. "
+        "Use with --neos-email.",
+    )
+    ap.add_argument(
+        "--dataset",
+        default="3x3",
+        help="3x3 / 9x10 (9x10 GDX, optionally shrunk), or a GTAPAgg "
+        "registry key with a consolidated GDX, e.g. gtap7_3x3, "
+        "gtap7_5x5, gtap7_10x7, gtap7_20x41 (sets-agnostic NEOS).",
+    )
+    ap.add_argument(
+        "--phase",
+        nargs="+",
+        choices=["base", "check", "shock", "altertax"],
+        default=["base", "check", "shock"],
+    )
     ap.add_argument("--neos-email", default="dracomarmol@gmail.com")
     ap.add_argument("--out-dir", type=Path, default=Path("/tmp/gtap_nl"))
-    ap.add_argument("--skip-gams", action="store_true",
-                    help="Skip NEOS submission; use existing gams_compstat.nl")
-    ap.add_argument("--skip-python", action="store_true",
-                    help="Skip Python model builds; use existing python_*.nl files")
-    ap.add_argument("--tol-rel", type=float, default=1e-4,
-                    help="Relative tolerance for coefficient diff")
-    ap.add_argument("--gams-shrink", action="store_true",
-                    help="Shrink the GAMS sets to the same KEEP_R x KEEP_I subset "
-                         "the Python side uses (full 9x10 data, subset sets) — "
-                         "true apples-to-apples 3x3 .nl comparison.")
-    ap.add_argument("--full-9x10", action="store_true",
-                    help="Run BOTH sides on the full 9x10 (no _shrink_sets, GAMS "
-                         "default full getdata) — largest in-dataset comparison. "
-                         "Overrides --gams-shrink.")
-    ap.add_argument("--keep-r", nargs="+", default=None,
-                    help="Override KEEP_R: regions to keep for the shrunk subset "
-                         "(intermediate 9x10 sizes, e.g. 5x5). Implies --gams-shrink.")
-    ap.add_argument("--keep-i", nargs="+", default=None,
-                    help="Override KEEP_I: commodities to keep for the shrunk subset.")
-    ap.add_argument("--cell-cap", type=int, default=50,
-                    help="Max Jacobian-cell diffs reported per family in the JSON "
-                         "(prevents a huge payload on large datasets; the real "
-                         "per-family count is always in meta).")
-    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
-                    help="altertax CD (default) or pure-gtap real-CES")
-    ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
-                    help="ifSUB of the GAMS model (CONVERT .nl) and of the pure-gtap Python side")
-    ap.add_argument("--fbep", choices=["header", "zero"], default="zero",
-                    help="zero: official getData (default); header: inject basedata.har's "
-                         "FBEP/FTRV like the bundle builders (#187)")
-    ap.add_argument("--gams-local", action="store_true",
-                    help="write the GAMS .nl with the local GAMS CONVERT instead of NEOS")
+    ap.add_argument(
+        "--skip-gams",
+        action="store_true",
+        help="Skip NEOS submission; use existing gams_compstat.nl",
+    )
+    ap.add_argument(
+        "--skip-python",
+        action="store_true",
+        help="Skip Python model builds; use existing python_*.nl files",
+    )
+    ap.add_argument(
+        "--tol-rel",
+        type=float,
+        default=1e-4,
+        help="Relative tolerance for coefficient diff",
+    )
+    ap.add_argument(
+        "--gams-shrink",
+        action="store_true",
+        help="Shrink the GAMS sets to the same KEEP_R x KEEP_I subset "
+        "the Python side uses (full 9x10 data, subset sets) — "
+        "true apples-to-apples 3x3 .nl comparison.",
+    )
+    ap.add_argument(
+        "--full-9x10",
+        action="store_true",
+        help="Run BOTH sides on the full 9x10 (no _shrink_sets, GAMS "
+        "default full getdata) — largest in-dataset comparison. "
+        "Overrides --gams-shrink.",
+    )
+    ap.add_argument(
+        "--keep-r",
+        nargs="+",
+        default=None,
+        help="Override KEEP_R: regions to keep for the shrunk subset "
+        "(intermediate 9x10 sizes, e.g. 5x5). Implies --gams-shrink.",
+    )
+    ap.add_argument(
+        "--keep-i",
+        nargs="+",
+        default=None,
+        help="Override KEEP_I: commodities to keep for the shrunk subset.",
+    )
+    ap.add_argument(
+        "--cell-cap",
+        type=int,
+        default=50,
+        help="Max Jacobian-cell diffs reported per family in the JSON "
+        "(prevents a huge payload on large datasets; the real "
+        "per-family count is always in meta).",
+    )
+    ap.add_argument(
+        "--mode",
+        default="altertax",
+        choices=["altertax", "gtap"],
+        help="altertax CD (default) or pure-gtap real-CES",
+    )
+    ap.add_argument(
+        "--ifsub",
+        type=int,
+        default=0,
+        choices=[0, 1],
+        help="ifSUB of the GAMS model (CONVERT .nl) and of the pure-gtap Python side",
+    )
+    ap.add_argument(
+        "--fbep",
+        choices=["header", "zero"],
+        default="zero",
+        help="zero: official getData (default); header: inject basedata.har's "
+        "FBEP/FTRV like the bundle builders (#187)",
+    )
+    ap.add_argument(
+        "--gams-local",
+        action="store_true",
+        help="write the GAMS .nl with the local GAMS CONVERT instead of NEOS",
+    )
     args = ap.parse_args()
 
-    # mode=gtap UNSUPPORTED, honestly: the pure-gtap shock is multi-period — the
-    # tariff wedge enters the equations when the multi-period gtap exercise runs (the
-    # pmeq shock / NatRes-anchor / ytax[mt] in-equation rebuilds, which MUTATE
-    # constraints in-place at solve time). A single-period .nl write (what
-    # this tool does) cannot capture those, so a gtap .nl would diff the WRONG
-    # (un-shocked) equations and a "clean" would be a lie. Emit an explicit
-    # mode_unsupported error rather than silently writing an altertax/un-shocked .nl.
-    if args.mode == "gtap":
+    # mode=gtap: only the gate route writes that case (the core driver, at the
+    # solve), and it needs a GAMS .nl of the gtap mode under data/; none is recorded
+    # yet, so say so rather than fall back to the altertax monolith.
+    if (
+        args.mode == "gtap"
+        and gate_references(args.dataset, "gtap", args.ifsub) is None
+    ):
+
         def _unsupported() -> dict:
             return dict(
-                status="error", period=args.phase[0] if args.phase else None,
-                headline=("nl_compare does not support --mode gtap: the pure-gtap "
-                          "shock is built by the multi-period exercise (constraints rebuilt "
-                          "in-place at solve time), which a single-period .nl write "
-                          "cannot represent. Use seed_and_solve --mode gtap instead."),
+                status="error",
+                period=args.phase[0] if args.phase else None,
+                headline=(
+                    f"nl_compare --mode gtap: no GAMS .nl of the gtap mode "
+                    f"(ifSUB={args.ifsub}, fbep=header) is recorded under data/ "
+                    f"for {args.dataset}, so there is nothing to diff the gate "
+                    f"case against"
+                ),
                 violations=[],
-                meta={"error_kind": "mode_unsupported", "mode": "gtap",
-                      "ifsub": args.ifsub})
-        return run_tool("nl_compare", args.dataset, _unsupported,
-                        period_hint=args.phase[0] if args.phase else None)
+                meta={
+                    "error_kind": "gams_nl_missing",
+                    "mode": "gtap",
+                    "ifsub": args.ifsub,
+                },
+            )
+
+        return run_tool(
+            "nl_compare",
+            args.dataset,
+            _unsupported,
+            period_hint=args.phase[0] if args.phase else None,
+        )
 
     # --fetch-gdx-9x10 is a NEOS side-effect (submit + download), not a diff. It
     # still emits JSON (status clean on success, error on failure) so stdout stays
     # parseable, but it is not a cascade-signal run.
     if args.fetch_gdx_9x10:
+
         def _fetch() -> dict:
             out = ROOT / "output" / "gtap9x10_neos"
             gdx = submit_and_fetch_gdx_9x10(out_dir=out, neos_email=args.neos_email)
-            return dict(status="clean", period=None,
-                        headline=f"fetched 9x10 out.gdx: {gdx}",
-                        violations=[], meta={"mode": "fetch_gdx_9x10",
-                                             "gdx": str(gdx)})
+            return dict(
+                status="clean",
+                period=None,
+                headline=f"fetched 9x10 out.gdx: {gdx}",
+                violations=[],
+                meta={"mode": "fetch_gdx_9x10", "gdx": str(gdx)},
+            )
+
         return run_tool("nl_compare", args.dataset, _fetch)
 
     return run_tool("nl_compare", args.dataset, lambda: _run_nl(args))

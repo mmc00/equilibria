@@ -89,34 +89,9 @@ DATASETS = [
 ]
 
 
-# Familias donde Python y GAMS escriben la MISMA ecuacion de forma distinta.  El
-# .nl compara coeficientes del Jacobiano, que dependen de COMO esta escrita la
-# igualdad, asi que estas aparecen como diff sin que haya diferencia de modelo.
-# Ambas se midieron celda a celda (2026-09-21) antes de entrar aqui:
-#
-# eq_pft — la igualdad esta escrita al REVES.  GAMS: `0 = xft - sum(xf/xscale)`
-#   (xf con coeficiente negativo); Python: `xft == sum(xf/xscale)` (positivo).
-#   MEDIDO en gtap7_10x7/base: 27 de 30 celdas cumplen py == -gams EXACTO; las 3
-#   restantes son el mismo caso con ruido de redondeo.  Solo factores moviles.
-#
-# eq_pf — forma CROSS-MULTIPLICADA deliberada.  GAMS despeja xf
-#   (`0 = xf - xscale*gf*xft*(pfy/pft)^omegaf`); Python escribe
-#   `pf*(1-kappa)*denom == pft*xf` para NO dividir por denom=xscale*gf*xft, que
-#   puede ser casi cero (xft[CAN,Land,shock]~9e-4) y producia una columna del
-#   Jacobiano 3100x peor que la de GAMS — ver el comentario en
-#   gtap_model_equations.py (caso ug_jacobian_collapse_root_cause).  Firma:
-#   py=0.0 frente a gams=+-1.0 en las 21/21 celdas de gtap7_10x7/base.
-#   ESCALA CON EL PERIODO, y esto tambien se midio en vez de extrapolarlo: en
-#   `base` solo falla Land (omegaf={} -> solo Land cae en CET via etrae=-1);
-#   en `check` fallan los 15 factores porque altertax fija omegaf=1.0 para TODOS
-#   (apply_altertax_elasticities), asi que todos entran a la misma rama CET.
-#   Misma causa, mas celdas: 3->36 en 3x3, 5->95 en 5x5, 21->252 en 10x7.
-#
-# Excluirlas NO las oculta: el resto de las 53 familias sigue exigiendo 0 diffs,
-# asi que un diff NUEVO en cualquier otra familia falla el gate igual.  Si alguna
-# de estas dos se reescribe para coincidir con GAMS, quitarla de aqui.
-_WRITTEN_FORM_EQUIVALENT = frozenset({"eq_pf", "eq_pft"})
-
+# Familias donde Python y GAMS escriben la MISMA ecuacion de forma distinta (eq_pf,
+# eq_pft): la lista y su medicion viven en nl_compare, que la cascada tambien usa.
+from nl_compare import WRITTEN_FORM_EQUIVALENT as _WRITTEN_FORM_EQUIVALENT  # noqa: E402
 
 # Real model gaps, pinned EXACTLY: {dataset: {family: n_diff}}, the same in
 # every phase.  The gate fails if a family appears, disappears or changes its
