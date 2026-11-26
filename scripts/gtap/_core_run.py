@@ -46,9 +46,11 @@ def solve_on_core(
     mute_welfare: bool = True,
     seed_from_prior: bool = False,
     shock: Mapping[str, Mapping[tuple, float]] | None = None,
+    solver: Any = None,
 ) -> tuple[Any, dict[str, int], dict[str, Any]]:
     """Solve base -> check -> shock on the core; returns (Pyomo model, old-form
-    codes, the core's own result per period)."""
+    codes, the core's own result per period). ``solver`` replaces the recipe's
+    default (PATH on Pyomo)."""
     from equilibria.core.exercise import Exercise
     from equilibria.templates.gtap.recipe import gtap_static
     from equilibria.templates.gtap.template import GTAP
@@ -69,6 +71,7 @@ def solve_on_core(
             solve_check=solve_check,
             mute_welfare=mute_welfare,
             seed_from_prior=seed_from_prior,
+            solver=solver,
         ),
         shock=shock,
     )

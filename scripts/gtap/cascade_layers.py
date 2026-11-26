@@ -71,9 +71,10 @@ def _c_drift(ds, period, gdx, mode, ifsub):
 
 
 def _c_holdfixed(ds, period, gdx, mode, ifsub):
-    # tool 8: sequence holdfix diff. The .gms path is derived from the dataset
-    # inside the tool; --gdx is accepted but unused (uniform builder signature).
-    return [PY, f"{GTAP}/diff_holdfixed.py", "--dataset", ds, "--period", period] + _mode_flags(mode, ifsub)
+    # tool 8: sequence holdfix diff. The .gms is the reference's own; the case is
+    # seeded from --gdx and its solves are measured.
+    return [PY, f"{GTAP}/diff_holdfixed.py", "--dataset", ds,
+            "--gdx", str(gdx), "--period", period] + _mode_flags(mode, ifsub)
 
 
 def _c_tautology(ds, period, gdx, mode, ifsub):
