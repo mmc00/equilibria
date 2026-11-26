@@ -71,6 +71,13 @@ def _casos() -> list:
     return casos
 
 
+def test_gtap_pages_pin_what_they_print() -> None:
+    """Every GTAP guide that solves has its printed output in the golden: the numbers
+    its comments show cannot drift without a failing test."""
+    gtap = {n for n in REQUIERE if n.startswith(("gtap_", "welfare_"))}
+    assert gtap <= set(GOLDEN["docs"]), sorted(gtap - set(GOLDEN["docs"]))
+
+
 def test_requiere_nombra_paginas_que_existen() -> None:
     """Una entrada de REQUIERE con un nombre viejo no protege nada: es un error."""
     nombres = {p.name for p in PAGINAS}

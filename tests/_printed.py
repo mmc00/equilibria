@@ -1,7 +1,10 @@
 """Compare what a notebook or a doc page prints with what it printed on ``main``.
 
 The golden (``tests/examples/golden/pr3c_outputs_main.json``) holds every stdout line
-of the old-driver run. The core driver prints its solve differently (codes
+of the old-driver run, except three pages recorded by MAR-249 from their own runs:
+``gtap_quickstart.md`` and ``welfare_decomposition.md`` (moved to the capFlex default
+closure; under the old closure they printed the old lines unchanged, f3fadc04) and the
+new ``gtap_closures.md``. The core driver prints its solve differently (codes
 ``"optimal"`` instead of ``1``; no Pyomo bound warnings on the Johansen path), so
 the comparison keeps only the results. Dropped: the solver chatter, the ``codes:``
 line (each notebook asserts its codes itself), Pyomo's warnings, the body of the
