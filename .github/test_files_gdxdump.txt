@@ -14,6 +14,7 @@ tests/parity/test_inheritance_table.py
 tests/parity/test_nl_compare_gate.py
 tests/parity/test_probe.py
 tests/parity/test_seed_and_solve.py
+tests/parity/test_solve_starts_at_seed.py
 tests/parity/test_validate_reference.py
 tests/scripts/test_fbep_switch.py
 tests/scripts/test_nl_compare_local.py

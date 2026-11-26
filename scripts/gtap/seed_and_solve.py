@@ -287,15 +287,84 @@ def _case(dataset: str, if_sub: bool, mode: str):
     return pa, gc, rr
 
 
+def period_levels(m, period: str) -> dict[tuple[str, tuple], float]:
+    """``{(var, cell without the period): level}`` over ``period``'s cells."""
+    import pyomo.environ as pyo
+
+    out = {}
+    for v in m.component_objects(pyo.Var, active=True):
+        for idx in v:
+            if isinstance(idx, tuple):
+                if not idx or idx[-1] != period:
+                    continue
+                cell = idx[:-1]
+            elif idx == period:
+                cell = ()
+            else:
+                continue
+            if v[idx].value is not None:
+                out[(v.name, cell)] = float(v[idx].value)
+    return out
+
+
+def seed_levels(
+    dataset: str, gdx_path: Path, mode: str, if_sub: bool, periods=("check", "shock")
+) -> dict[str, dict[tuple[str, tuple], float]]:
+    """``{period: {(var, cell): level}}`` at the GAMS point: build_seeded plus each
+    period's derived aggregates, the levels drift_test compares against."""
+    from pyomo.environ import value as V
+
+    _p, _gc, m0 = build_seeded(dataset, gdx_path, "shock", mode, if_sub)
+
+    def _setv(comp, key, val):
+        try:
+            comp[key].set_value(val)
+            return 1
+        except Exception:
+            return 0
+
+    out = {}
+    for period in periods:
+        _cascade_derived_seed_mp(m0, V, _setv, period)
+        out[period] = period_levels(m0, period)
+    return out
+
+
+def start_at_seed(seeds: dict[str, dict[tuple[str, tuple], float]]):
+    """The default solver, but the solved period's free cells (not fixed, not
+    exogenous) first take their ``seeds`` level. The shock's plan seeds them from
+    Python's solved check (``seed_from(prior)``), so without this the shock would
+    start there and not at the GAMS point (MAR-252)."""
+    from equilibria.templates.gtap import recipe
+
+    def solver(model):
+        rows = model.row_names()
+        active = [t for t in model.periods
+                  if any(model.active_rows(r, t) for r in rows)]
+        if len(active) == 1 and active[0] in seeds:
+            period, seed = active[0], seeds[active[0]]
+            for name in model.var_names():
+                held = model.fixed_cells(name, period) | model.exogenous_cells(name, period)
+                model.set_values(name, period, {
+                    k: seed[(name, k)] for k in model.var_cells(name, period)
+                    if k not in held and (name, k) in seed
+                })
+        return recipe._by_backend(model)
+
+    return solver
+
+
 def _solve_gtap(dataset: str, gdx_path: Path, if_sub: bool, mode: str = "gtap"):
     """The full multi-period model seeded from ``gdx_path`` in every period, solved
-    base (skipped) -> check -> shock on the core driver. Returns
+    base (skipped) -> check -> shock on the core driver, each solve starting at the
+    GAMS point (``start_at_seed``). Returns
     (model, ``{period: {"code": old-form int, "residual": float}}``)."""
     from _core_run import solve_on_core
 
     p, gc, rr = _case(dataset, if_sub, mode)
     m, codes, core = solve_on_core(
-        p, gc, rr, mode=mode, ref_gdx=gdx_path, seed_gdx=gdx_path
+        p, gc, rr, mode=mode, ref_gdx=gdx_path, seed_gdx=gdx_path,
+        solver=start_at_seed(seed_levels(dataset, gdx_path, mode, if_sub)),
     )
     res = {k: {"code": codes[k], "residual": core[k]["residual"]} for k in codes}
     return m, res
