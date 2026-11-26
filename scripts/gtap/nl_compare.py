@@ -1549,6 +1549,26 @@ def drop_written_form(family_stats: dict, cell_diffs: list) -> tuple[list, dict]
     return kept, left_out
 
 
+# (row family, column) coefficients where Python follows GEMPACK, not GAMS, by
+# decision; left out of the cascade's gate case only, not of test_gtap7_nl_parity.
+# The amgm share: GEMPACK's VTFSD_MSH = VTMFSD/VTFSD sums to 1 over the modes
+# (gtapv7.tab, E_ptrans), and so does Python's amgm; GAMS's amgm is
+# VTWR/(VCIF-VFOB), whose sum keeps the data's rounding (gtap7_10x7 1.53e-4,
+# gtap7_15x10 6.5e-4). Those are the coefficients of xwmg in eq_xmgm and of ptmg
+# in eq_pwmg (MAR-247).
+NOT_GAMS_COEFFICIENTS = frozenset({("eq_xmgm", "xwmg"), ("eq_pwmg", "ptmg")})
+
+
+def drop_not_gams(cell_diffs: list) -> tuple[list, int]:
+    """(cell diffs outside NOT_GAMS_COEFFICIENTS, how many were left out)."""
+    kept = [
+        c
+        for c in cell_diffs
+        if (_split_name(c[0])[0], _split_name(c[1])[0]) not in NOT_GAMS_COEFFICIENTS
+    ]
+    return kept, len(cell_diffs) - len(kept)
+
+
 def gate_references(dataset: str, mode: str, ifsub: int) -> dict | None:
     """The data/ references of the case the MCP gate builds (fbep=header): the GAMS
     .nl folder and the MCP folder whose out.gdx seeds the run; None if either is
@@ -1604,7 +1624,8 @@ def build_python_nls_gate(
 
 def _run_nl_gate(args, refs: dict) -> dict:
     """The cascade's case: Python's .nl from the gate case on the core driver
-    against the data/ GAMS .nl, per phase; WRITTEN_FORM_EQUIVALENT left out."""
+    against the data/ GAMS .nl, per phase; WRITTEN_FORM_EQUIVALENT and
+    NOT_GAMS_COEFFICIENTS left out."""
     from _nl_parser import parse_nl
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -1630,6 +1651,7 @@ def _run_nl_gate(args, refs: dict) -> dict:
         )
         print_diff_report(result, phase, tol_rel=args.tol_rel)  # -> stderr
         kept, left_out = drop_written_form(result["family_stats"], result["cell_diffs"])
+        kept, n_not_gams = drop_not_gams(kept)
         viols = _cells_to_violations({**result, "cell_diffs": kept})
         for v in viols:
             v["phase"] = phase
@@ -1641,8 +1663,10 @@ def _run_nl_gate(args, refs: dict) -> dict:
                 st["n_diff"]
                 for fam, st in result["family_stats"].items()
                 if fam not in WRITTEN_FORM_EQUIVALENT
-            ),
+            )
+            - n_not_gams,
             "written_form_left_out": left_out,
+            "not_gams_left_out": n_not_gams,
             "structural": result["structural"],
         }
     meta = {
@@ -1671,11 +1695,13 @@ def _run_nl_gate(args, refs: dict) -> dict:
     n_cons = sum(per_phase[p]["n_common_cons"] for p in comparable)
     n_total = sum(per_phase[p]["n_cell_diffs_total"] for p in comparable)
     left = {p: per_phase[p]["written_form_left_out"] for p in comparable}
+    not_gams = {p: per_phase[p]["not_gams_left_out"] for p in comparable}
     if not all_viols:
         headline = (
             f"Jacobian coefficient diff ({'/'.join(comparable)}): 0 cells "
             f"differ at tol_rel={args.tol_rel:g} over {n_cons} common "
-            f"constraints (written-form equivalent left out: {left}) — "
+            f"constraints (written-form equivalent left out: {left}; "
+            f"not_gams coefficients left out: {not_gams}) — "
             f"algebra matches; this layer does not explain the gap"
         )
     else:

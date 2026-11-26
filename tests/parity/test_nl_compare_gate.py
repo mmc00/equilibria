@@ -30,6 +30,33 @@ def test_written_form_families_are_left_out_and_counted():
     assert kept == [] and left_out == {"eq_pf": 36}
 
 
+def test_the_amgm_coefficients_are_left_out_of_the_cascade_and_counted():
+    """GEMPACK's margin shares sum to 1 (VTFSD_MSH), as Python's amgm; GAMS's
+    amgm is VTWR/(VCIF-VFOB) and keeps the data's rounding (MAR-247)."""
+    cells = [
+        (
+            "eq_xmgm[Svces,EU_28,Rice,CHN]",
+            "xwmg[EU_28,Rice,CHN]",
+            -1.0,
+            -1.00015,
+            1.5e-4,
+            1.5e-4,
+        ),
+        ("eq_pwmg[EU_28,Rice,CHN]", "ptmg[Svces]", -1.0, -1.00015, 1.5e-4, 1.5e-4),
+        (
+            "eq_xmgm[Svces,EU_28,Rice,CHN]",
+            "xmgm[Svces,EU_28,Rice,CHN]",
+            1.0,
+            2.0,
+            1.0,
+            0.5,
+        ),
+    ]
+    kept, n_left_out = NC.drop_not_gams(cells)
+    assert n_left_out == 2
+    assert [c[1] for c in kept] == ["xmgm[Svces,EU_28,Rice,CHN]"]
+
+
 def test_the_gate_case_has_its_references_on_gtap7_3x3():
     refs = NC.gate_references("gtap7_3x3", "altertax", 0)
     assert refs is not None and refs["nl"] == _NL
