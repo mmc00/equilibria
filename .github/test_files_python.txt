@@ -284,6 +284,7 @@ tests/templates/gtap/test_capfixdp_closure.py
 tests/templates/gtap/test_capflex_closure.py
 tests/templates/gtap/test_capflex_risk_on_core.py
 tests/templates/gtap/test_cd_sigma_guard.py
+tests/templates/gtap/test_closure_gtap_default.py
 tests/templates/gtap/test_coverage_matrix.py
 tests/templates/gtap/test_cudss_linsolve.py
 tests/templates/gtap/test_default_tariff_shock.py
