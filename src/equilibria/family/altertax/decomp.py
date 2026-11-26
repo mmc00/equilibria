@@ -187,6 +187,16 @@ def _require_unchanged(A: _Period, B: _Period) -> None:
                 f"decomp.har needs the variable {var!r} to check it is unchanged"
             )
         a, b = A[var], B[var]
+        if list(a) == list(b):  # same cells in the same order: compare as arrays
+            x = np.fromiter(a.values(), np.float64, len(a))
+            y = np.fromiter(b.values(), np.float64, len(b))
+            moved = np.flatnonzero(np.abs(y - x) > 1e-12 * np.maximum(1.0, np.abs(x)))
+            if moved.size:
+                k = list(a)[int(moved[0])]
+                raise NotImplementedError(
+                    f"decomp.har assumes {var} is unchanged (ALTERTAX); {var}{k} moved"
+                )
+            continue
         for k, x in a.items():
             if abs(b.get(k, x) - x) > 1e-12 * max(1.0, abs(x)):
                 raise NotImplementedError(

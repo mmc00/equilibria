@@ -118,6 +118,7 @@ class _Period:
         self.fctts = fctts_data(run.params, run.params.sets)
         self._cache: dict[str, dict[tuple[str, ...], float]] = {}
         self._vars = mp.vars
+        self.trade: dict[tuple[str, str, str], dict[str, float]] = {}
 
     def __getitem__(self, name: str) -> dict[tuple[str, ...], float]:
         if name not in self._cache:
@@ -211,7 +212,16 @@ def _trade_prices(P: _Period, s: str, c: str, d: str) -> dict[str, float]:
     the macros of ``_ifsub_macros`` (``M_PEFOB``, ``M_PWMG``, ``M_PMCIF``, ``M_PM``),
     on the live ``pe``/``ptmg``/``imptx``. The report vars ``pefob``/``pmcif``/``pm``
     are not read: ``post_solve`` rewrites them only at the shock period, so at check they
-    keep their benchmark seed and shock-minus-check would mix two definitions."""
+    keep their benchmark seed and shock-minus-check would mix two definitions.
+    Computed once per cell of ``P`` (``VFOB``, ``VCIF``, ``VMSB`` and the decomposition
+    all ask for it); callers must not change the dict."""
+    hit = P.trade.get((s, c, d))
+    if hit is None:
+        hit = P.trade[(s, c, d)] = _trade_prices_cell(P, s, c, d)
+    return hit
+
+
+def _trade_prices_cell(P: _Period, s: str, c: str, d: str) -> dict[str, float]:
     from equilibria.blocks.gtap import _ifsub_macros as mac
 
     p = P.p
