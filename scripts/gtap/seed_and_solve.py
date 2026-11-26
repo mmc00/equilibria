@@ -73,8 +73,8 @@ from _parity_json import make_violation, make_detection, run_tool  # noqa: E402
 
 # Residual above which an equation counts as "not satisfied at the GAMS point".
 RESID_TOL = 1e-4
-# The FBEP sign of the altertax reference the cascade reads (fbep=header, #191),
-# the basis the MCP gate builds that case with.
+# The FBEP sign of the references the cascade reads (fbep=header, #191), the basis
+# the MCP gate builds both modes with.
 ALTERTAX_BASIS = "gempack"
 # Families that are KNOWN-benign even when they carry residual at the GAMS point:
 # rgdpmp/pgdpmp are report leaves (no feedback); ROW-region rows ride a corrupt reference
@@ -218,13 +218,11 @@ def _seed_household_vars(m, gdx_path: Path) -> int:
 
 
 def _case(dataset: str, if_sub: bool, mode: str):
-    """(params, closure, residual region) of one case. gtap: the data's params and
-    the base closure, as before (the MCP gate also sets the gempack FBEP sign; not
-    done here yet, MAR-219). altertax: as the MCP gate builds it
-    (``test_gtap7_mcp_parity._solve_and_measure``): the data's FBEP sign (the
-    fbep=header reference has it, #191), the altertax elasticities and the altertax
-    closure; with the base closure the shock's factor rows do not build and the
-    solve never runs."""
+    """(params, closure, residual region) of one case, as the MCP gate builds it
+    (``test_gtap7_mcp_parity._solve_and_measure``), in both modes with the data's
+    FBEP sign (the fbep=header reference has it, #191). gtap: the base closure.
+    altertax: the altertax elasticities and the altertax closure; with the base
+    closure the shock's factor rows do not build and the solve never runs."""
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
 
@@ -237,6 +235,7 @@ def _case(dataset: str, if_sub: bool, mode: str):
         baserate_path=d / "baserate.har",
     )
     rr = list(p.sets.r)[-1]
+    p.set_va_subsidy_basis(ALTERTAX_BASIS)
     if mode == "gtap":
         gc = GTAPClosureConfig(
             name="base",
@@ -247,11 +246,11 @@ def _case(dataset: str, if_sub: bool, mode: str):
             fix_technology=False,
             if_sub=if_sub,
             numeraire="pnum",
+            va_subsidy_basis=ALTERTAX_BASIS,
         )
         return p, gc, rr
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
 
-    p.set_va_subsidy_basis(ALTERTAX_BASIS)
     pa = apply_altertax_elasticities(p, in_place=False)
     gc = GTAPClosureConfig(
         name="altertax",

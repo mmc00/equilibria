@@ -83,3 +83,13 @@ def test_gams_altertax_point_stays_on_gtap7_3x3(period):
     assert lines, f"no JSON on stdout (exit {proc.returncode}):\n{proc.stderr[-2000:]}"
     payload = json.loads(lines[-1])
     assert payload["status"] == "clean", payload["headline"]
+
+
+@pytest.mark.parametrize("mode", ["altertax", "gtap"])
+def test_case_has_the_gate_fbep_basis_in_both_modes(mode):
+    # The MCP gate builds both modes with the gempack basis of the fbep=header
+    # reference (test_gtap7_mcp_parity._solve_and_measure); the gtap mode lacked it
+    # and showed a false DIFFERS on eq_ytax(EU_28,ft) (MAR-219).
+    p, gc, _rr = SS._case("gtap7_3x3", False, mode)
+    assert p.va_subsidy_basis == "gempack"
+    assert gc.va_subsidy_basis == "gempack"
