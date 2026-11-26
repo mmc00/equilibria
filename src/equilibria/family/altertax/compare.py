@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 from equilibria.compare import Report
+from equilibria.compare.gtap7_side import EQ_VARS
 from equilibria.family.altertax.levels import family_levels
 from equilibria.family.altertax.run import AltertaxRun
 
@@ -22,7 +23,10 @@ UPDATED_NAMES = ("updated.har", "altax_updated.har", "altax.upd")
 
 
 def load_compare_script():
-    """``scripts/gtap/compare_gempack_levels.py`` as a module (``run``, ``EQ_VARS``)."""
+    """``scripts/gtap/compare_gempack_levels.py`` as a module (``run``, ``gempack_side``).
+
+    The translation itself (``equilibria_side``, ``EQ_VARS``, ``model_levels``) lives in
+    :mod:`equilibria.compare.gtap7_side`; the script re-exports it."""
     path = _ROOT / "scripts" / "gtap" / "compare_gempack_levels.py"
     if not path.exists():
         raise FileNotFoundError(
@@ -69,6 +73,6 @@ def compare_levels(
 def _levels_report(cg, run: AltertaxRun, har: Path, base: Path, upd: Path) -> Report:
     from equilibria.blocks.gtap._derived_params import xscale_data
 
-    levels = family_levels(run.result.mp, cg.EQ_VARS)
+    levels = family_levels(run.result.mp, EQ_VARS)
     xscale = dict(xscale_data(run.params, run.params.sets))
     return cg.run(levels, xscale, har, base, upd)

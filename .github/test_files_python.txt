@@ -66,6 +66,7 @@ tests/compare/test_gempack3x3.py
 tests/compare/test_gtap3x3.py
 tests/compare/test_gtap7_map.py
 tests/compare/test_gtap7_names.py
+tests/compare/test_gtap7_side.py
 tests/compare/test_gtap7_side_golden.py
 tests/compare/test_har.py
 tests/compare/test_levels_six_vars.py

@@ -9,7 +9,7 @@ GEMPACK element labels in the GEMPACK dimension order.
 Names and shapes come from ``compare/maps/gtap7.yaml`` (the GEMPACK <-> equilibria
 variable map in levels: ``a`` equilibria, ``b`` GEMPACK; ``gtap7_names.yaml`` only pairs
 GAMS names). The equilibria side of each row (including the derived ones such as
-``xds_net`` or ``xw_fob``) is built by ``scripts/gtap/compare_gempack_levels.equilibria_side``;
+``xds_net`` or ``xw_fob``) is built by :func:`equilibria.compare.gtap7_side.equilibria_side`;
 scales cancel in a ratio, so ``divide_by`` is ignored. The closure's fixed variables that
 map one to one (``pop``, ``pfactwld``, ``to``) are added from :data:`FIXED`: they change by
 0, except ``to``, which carries the shock. The other fixed GEMPACK variables are many to
@@ -31,8 +31,8 @@ from equilibria.babel.har.sl4 import Sl4Change, Sl4Changes
 from equilibria.babel.har.symbols import HeaderArray
 from equilibria.babel.har.writer import write_har
 from equilibria.compare import Mapping
+from equilibria.compare.gtap7_side import EQ_VARS, equilibria_side
 from equilibria.compare.mapping import VariableMap
-from equilibria.family.altertax.compare import load_compare_script
 from equilibria.family.altertax.levels import family_levels
 from equilibria.family.altertax.run import AltertaxRun
 from equilibria.family.altertax.updated import _elements, _Period
@@ -89,11 +89,10 @@ def pct_dims(name: str) -> tuple[str, ...]:
 
 def _changes(run: AltertaxRun, pre: str, post: str) -> tuple[Pct, dict[str, set]]:
     """``(% changes, cells whose pre value is 0)``: the second has no change to report."""
-    cg = load_compare_script()
-    levels = family_levels(run.result.mp, cg.EQ_VARS)
+    levels = family_levels(run.result.mp, EQ_VARS)
     from equilibria.blocks.gtap._derived_params import xscale_data
 
-    side = cg.equilibria_side(levels, dict(xscale_data(run.params, run.params.sets)))
+    side = equilibria_side(levels, dict(xscale_data(run.params, run.params.sets)))
     out: Pct = {}
     zero: dict[str, set] = {}
     for name, row in gtap7_rows().items():
