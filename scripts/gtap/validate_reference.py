@@ -19,6 +19,7 @@ Usage:
 Exit code is non-zero if any equation family exceeds the tolerance — so this can gate
 a reference before it is trusted (CI or a pre-comparison guard).
 """
+
 from __future__ import annotations
 from equilibria.sources import dataset_dir
 import argparse
@@ -33,19 +34,25 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 from _diff_core import gams_levels, list_populated_vars  # type: ignore
 from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
-from equilibria._local_refs import refs_dir
+from equilibria.sources import find_reference
 
 # GAMS camelCase / aggregate → Python Var-name map (same as the warm-start maps).
 # p_rai/pp_rai DO have GAMS counterparts (the make-matrix producer-price Vars p/pp);
 # map them so eq_x/eq_peq/eq_pp_rai become checkable (they were silently un-checked
 # while eq_x actually violated 0.33 — the hole this map closes).
 _GAMS_TO_PY_NAME = {
-    "ytaxInd": "ytax_ind", "factY": "facty", "phiP": "phip", "regY": "regy",
-    "xd": "xda", "xm": "xma", "p": "p_rai", "pp": "pp_rai",
+    "ytaxInd": "ytax_ind",
+    "factY": "facty",
+    "phiP": "phip",
+    "regY": "regy",
+    "xd": "xda",
+    "xm": "xma",
+    "p": "p_rai",
+    "pp": "pp_rai",
     # COMPLETE-SEEDING additions: map every GAMS Var to its Python counterpart so the
     # full GAMS point can be seeded and the residual diff shows the TRUE list of bad
     # equations in one pass (not artifacts of unseeded vars in their init state).
-    "xa": "xaa",            # GAMS xa(r,i,aa) → Python xaa(r,i,aa)
+    "xa": "xaa",  # GAMS xa(r,i,aa) → Python xaa(r,i,aa)
     "factY".lower(): "facty",
 }
 
@@ -61,7 +68,8 @@ def _strip_prefix(k):
 
 
 def _build_model(dataset: str, period: str):
-    """Build the Python model matching the GAMS period (base/check/shock)."""
+    """The old single-period model of the GAMS period (base/check/shock), default
+    FBEP basis. No cascade layer reads it any more (MAR-219); pairing_table still does."""
     import copy
     from equilibria.templates.gtap import GTAPParameters, GTAPModelEquations
     from equilibria.templates.gtap.altertax import apply_altertax_elasticities
@@ -79,9 +87,14 @@ def _build_model(dataset: str, period: str):
     res = list(p.sets.r)[-1]
 
     base_clo = GTAPClosureConfig(
-        name="base", closure_type="MCP", capital_mobility="sluggish",
-        fix_endowments=False, fix_taxes=False, fix_technology=False,
-        if_sub=False, numeraire="pnum",
+        name="base",
+        closure_type="MCP",
+        capital_mobility="sluggish",
+        fix_endowments=False,
+        fix_taxes=False,
+        fix_technology=False,
+        if_sub=False,
+        numeraire="pnum",
     )
     if period == "base":
         eq = GTAPModelEquations(p.sets, p, base_clo, residual_region=res)
@@ -95,68 +108,63 @@ def _build_model(dataset: str, period: str):
         for k in list(p_period.taxes.imptx.keys()):
             p_period.taxes.imptx[k] = float(p_period.taxes.imptx[k] or 0.0) * 1.10
     alt_clo = GTAPClosureConfig(
-        name="altertax", closure_type="MCP", capital_mobility="mobile",
-        fix_endowments=False, fix_taxes=True, fix_technology=True,
-        if_sub=False, numeraire="pnum",
+        name="altertax",
+        closure_type="MCP",
+        capital_mobility="mobile",
+        fix_endowments=False,
+        fix_taxes=True,
+        fix_technology=True,
+        if_sub=False,
+        numeraire="pnum",
     )
     eq = GTAPModelEquations(
-        p_period.sets, p_period, alt_clo, residual_region=res, t0_snapshot=m_b,
+        p_period.sets,
+        p_period,
+        alt_clo,
+        residual_region=res,
+        t0_snapshot=m_b,
     )
     return eq.build_model(), p_period
 
 
-def _seed_gams(model, gdx_path: Path, period: str) -> set:
-    """Seed every matchable GAMS value for `period` into the model. Returns the
-    set of id()s of seeded variable-data objects (for the clean-equation filter)."""
-    from pyomo.environ import Var
-
-    seeded_ids = set()
-    for vn in list_populated_vars(gdx_path):
-        gvals = gams_levels(gdx_path, vn)
-        py_name = _GAMS_TO_PY_NAME.get(vn, vn)
-        pyvar = getattr(model, py_name, None)
-        if pyvar is None:
-            pyvar = getattr(model, vn, None)
-        if pyvar is None:
-            pyvar = getattr(model, vn.lower(), None)
-        if pyvar is None:
-            continue
-        for gkey, gval in gvals.items():
-            if not (isinstance(gkey, tuple) and gkey[-1] == period):
-                continue
-            pk = tuple(_strip_prefix(k) for k in gkey[:-1])
-            # Try the key as-is, then a few normalisations so the WHOLE GAMS point
-            # gets seeded (not just the trivially-matching vars):
-            #   - scalar var: pk==() → index with None / no index
-            #   - drop a singleton 'hhd' dim (GAMS uh/ev/cv/xcshr/zcons carry it, Python doesn't)
-            candidates = [pk]
-            if "hhd" in pk:
-                candidates.append(tuple(e for e in pk if e != "hhd"))
-            v = None
-            for cand in candidates:
-                try:
-                    if len(cand) == 0:
-                        # scalar Var: pyvar itself or pyvar[None]
-                        v = pyvar if pyvar.is_indexed() is False else pyvar[None]
-                    elif len(cand) == 1:
-                        v = pyvar[cand[0]]
-                    else:
-                        v = pyvar[cand]
-                    break
-                except Exception:
-                    v = None
-                    continue
-            try:
-                if v is not None and not v.fixed:
-                    v.set_value(float(gval))
-                    seeded_ids.add(id(v))
-            except Exception:
-                pass
-    return seeded_ids
+def _default_gdx(dataset: str, mode: str = "altertax", ifsub: int = 0) -> Path | None:
+    """The data/ GAMS MCP reference the MCP gate compares against."""
+    folder = find_reference(
+        dataset, "gams", form="mcp", mode=mode, ifsub=ifsub, fbep="header"
+    )
+    return None if folder is None else folder / "out.gdx"
 
 
-def _equation_residuals(model, seeded_ids: set):
-    """Per-equation-family max residual at the seeded point.
+def _seeded_case(dataset: str, gdx_path: Path, period: str, mode: str, ifsub: int):
+    """The case the MCP gate builds, seeded at the GAMS point in every period, with
+    the derived aggregates of ``period`` recomputed from the seed (as seed_and_solve
+    reads its residual tail)."""
+    from pyomo.environ import value as V
+    from seed_and_solve import _cascade_derived_seed_mp, build_seeded
+
+    _p, _gc, m = build_seeded(dataset, gdx_path, period, mode, bool(ifsub))
+
+    def _setv(comp, key, val):
+        try:
+            comp[key].set_value(val)
+            return 1
+        except Exception:
+            return 0
+
+    _cascade_derived_seed_mp(m, V, _setv, period)
+    return m
+
+
+def _in_period(idx, period: str):
+    """The cell without the period if ``idx`` (period last) is of ``period``."""
+    if isinstance(idx, tuple):
+        return idx[:-1] if idx and idx[-1] == period else None
+    return () if idx == period else None
+
+
+def _equation_residuals(model, period: str, skip: frozenset[str] = frozenset()):
+    """Per-equation-family max residual at the seeded point, over ``period``'s rows
+    (the cell is reported without the period).
 
     Checks are PER CELL, not per family: a family with some unseedable cells still
     reports the residual of its CLEAN (fully-seeded) cells. Previously a single
@@ -165,24 +173,28 @@ def _equation_residuals(model, seeded_ids: set):
     an unseedable var). `by_family[fam]["n_incomplete"]` counts the skipped cells so
     a partially-checked family is visible, and `fully_incomplete` lists families
     with ZERO checkable cells (cannot be validated at all — must be named, not
-    silently passed)."""
+    silently passed). ``skip``: families not read (the muted welfare rows)."""
     from pyomo.environ import value as V, Constraint
     from pyomo.core.expr import identify_variables
 
-    by_family = defaultdict(lambda: {"max": 0.0, "n": 0, "worst": None, "n_incomplete": 0})
+    by_family = defaultdict(
+        lambda: {"max": 0.0, "n": 0, "worst": None, "n_incomplete": 0}
+    )
 
     for c in model.component_objects(Constraint, active=True):
         fam = c.name
+        if fam in skip:
+            continue
         rec = by_family[fam]
         for idx in c:
+            cell = _in_period(idx, period)
             con = c[idx]
+            if cell is None or not con.active:
+                continue
             try:
                 clean = True
                 for vobj in identify_variables(con.body, include_fixed=False):
-                    nm = vobj.parent_component().name
-                    if nm in _UNSEEDABLE or (
-                        id(vobj) not in seeded_ids and not vobj.fixed
-                    ):
+                    if vobj.parent_component().name in _UNSEEDABLE:
                         clean = False
                         break
                 if not clean:
@@ -194,15 +206,18 @@ def _equation_residuals(model, seeded_ids: set):
                 if math.isnan(resid):
                     continue
                 rec["n"] += 1
-                if resid > rec["max"]:
-                    rec["max"] = resid
-                    rec["worst"] = idx
+                if resid > rec["max"] or rec["worst"] is None:
+                    rec["max"] = max(rec["max"], resid)
+                    rec["worst"] = cell
             except Exception:
                 rec["n_incomplete"] += 1
 
     # Families with NO checkable cell at all — cannot be validated, must be surfaced.
-    fully_incomplete = {fam for fam, rec in by_family.items()
-                        if rec["n"] == 0 and rec["n_incomplete"] > 0}
+    fully_incomplete = {
+        fam
+        for fam, rec in by_family.items()
+        if rec["n"] == 0 and rec["n_incomplete"] > 0
+    }
     return by_family, fully_incomplete
 
 
@@ -219,51 +234,64 @@ def _idx_to_list(idx):
 # Human-readable formatter — KEPT for debug only; writes to STDERR so it can
 # never contaminate the JSON on stdout. Not called in the normal path.
 # ---------------------------------------------------------------------------
-def _debug_print(gdx_name, period, n_seeded, n_checked, n_partial,
-                 fully_incomplete, violating, tol, top):
-    print(f"=== Validating reference {gdx_name} (period='{period}') ===",
-          file=sys.stderr)
-    print(f"Seeded {n_seeded} variable cells from GAMS {period}", file=sys.stderr)
-    print(f"Families with >=1 checkable cell: {n_checked} ({n_partial} partial, "
-          f"{len(fully_incomplete)} fully un-checkable)", file=sys.stderr)
+def _debug_print(
+    gdx_name, period, n_checked, n_partial, fully_incomplete, violating, tol, top
+):
+    print(
+        f"=== Validating reference {gdx_name} (period='{period}') ===", file=sys.stderr
+    )
+    print(
+        f"Families with >=1 checkable cell: {n_checked} ({n_partial} partial, "
+        f"{len(fully_incomplete)} fully un-checkable)",
+        file=sys.stderr,
+    )
     print(f"Families VIOLATED (> {tol:g}): {len(violating)}", file=sys.stderr)
     for resid, fam, worst, n, n_inc in violating[:top]:
         skip = f"({n_inc} unchecked)" if n_inc else ""
-        print(f"{resid:>12.4e}  {fam:<24} {str(worst):<28} {skip}",
-              file=sys.stderr)
+        print(f"{resid:>12.4e}  {fam:<24} {str(worst):<28} {skip}", file=sys.stderr)
 
 
 def _work(args) -> dict:
-    gdx_path = args.gdx
-    if gdx_path is None:
-        # Default to the ifSUB=1 reference (the NEOS-generated model diff_altertax
-        # compares against by default). Pass --gdx .../out_altertax_ifsub0.gdx for
-        # the regenerated ifSUB=0 reference.
-        gdx_path = Path(
-            f"{refs_dir()}/{args.dataset}_altertax_cd/"
-            f"out_altertax_ifsub1.gdx"
+    gdx_path = args.gdx or _default_gdx(args.dataset, args.mode, args.ifsub)
+    if gdx_path is None or not gdx_path.exists():
+        return dict(
+            status="error",
+            period=args.period,
+            headline=f"reference GDX not found: {gdx_path}",
+            violations=[],
+            meta={"error_kind": "gdx_not_found", "gdx": str(gdx_path)},
         )
-    if not gdx_path.exists():
-        return dict(status="error", period=args.period,
-                    headline=f"reference GDX not found: {gdx_path}",
-                    violations=[],
-                    meta={"error_kind": "gdx_not_found", "gdx": str(gdx_path)})
 
-    model, _ = _build_model(args.dataset, args.period)
-    seeded_ids = _seed_gams(model, gdx_path, args.period)
-    fams, fully_incomplete = _equation_residuals(model, seeded_ids)
+    from seed_and_solve import muted_welfare_rows
+
+    model = _seeded_case(args.dataset, gdx_path, args.period, args.mode, args.ifsub)
+    fams, fully_incomplete = _equation_residuals(
+        model, args.period, skip=muted_welfare_rows(args.mode)
+    )
 
     violating = sorted(
-        ((rec["max"], fam, rec["worst"], rec["n"], rec["n_incomplete"])
-         for fam, rec in fams.items() if rec["max"] > args.tol),
+        (
+            (rec["max"], fam, rec["worst"], rec["n"], rec["n_incomplete"])
+            for fam, rec in fams.items()
+            if rec["max"] > args.tol
+        ),
         reverse=True,
     )
     n_checked = sum(1 for rec in fams.values() if rec["n"] > 0)
-    n_partial = sum(1 for rec in fams.values()
-                    if rec["n"] > 0 and rec["n_incomplete"] > 0)
+    n_partial = sum(
+        1 for rec in fams.values() if rec["n"] > 0 and rec["n_incomplete"] > 0
+    )
 
-    _debug_print(gdx_path.name, args.period, len(seeded_ids), n_checked,
-                 n_partial, fully_incomplete, violating, args.tol, args.top)
+    _debug_print(
+        gdx_path.name,
+        args.period,
+        n_checked,
+        n_partial,
+        fully_incomplete,
+        violating,
+        args.tol,
+        args.top,
+    )
 
     # Each VIOLATING family = one violation: the GAMS reference fails its OWN eq
     # at the seeded point → the reference is mis-converged (or Python's eq/closure
@@ -283,7 +311,8 @@ def _work(args) -> dict:
             f"reference {gdx_path.name} ({args.period}): VIOLATES {len(violations)} "
             f"of its OWN equation famil(ies) > {args.tol:g}; worst "
             f"{worst_v['entity']}{worst_v['index']}={worst_v['value']:.3e} — the "
-            f"reference is mis-converged or Python's eq/closure differs there")
+            f"reference is mis-converged or Python's eq/closure differs there"
+        )
     else:
         # 'clean' with un-checkable families is NOT a full clean: a violation in
         # those would be invisible. Say so explicitly in the headline.
@@ -292,65 +321,61 @@ def _work(args) -> dict:
                 f"reference {gdx_path.name} ({args.period}): satisfies all "
                 f"{n_checked} CHECKABLE famil(ies) to {args.tol:g}, BUT "
                 f"{len(fi)} famil(ies) have no fully-seeded cell — a violation "
-                f"there would be invisible")
+                f"there would be invisible"
+            )
         else:
             headline = (
                 f"reference {gdx_path.name} ({args.period}): satisfies all "
                 f"{n_checked} equation famil(ies) to {args.tol:g} — the reference "
-                f"is internally consistent")
+                f"is internally consistent"
+            )
 
     return dict(
-        status=status, period=args.period, headline=headline,
+        status=status,
+        period=args.period,
+        headline=headline,
         violations=violations,
-        meta={"gdx": str(gdx_path), "tol": args.tol,
-              "cells_seeded": len(seeded_ids),
-              "n_families_checked": n_checked,
-              "n_families_partial": n_partial,
-              "n_families_violating": len(violations),
-              "fully_incomplete": fi,
-              "n_fully_incomplete": len(fi)})
+        meta={
+            "gdx": str(gdx_path),
+            "tol": args.tol,
+            "n_families_checked": n_checked,
+            "n_families_partial": n_partial,
+            "n_families_violating": len(violations),
+            "fully_incomplete": fi,
+            "n_fully_incomplete": len(fi),
+        },
+    )
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", default="gtap7_3x3")
     ap.add_argument("--period", default="shock", choices=["base", "check", "shock"])
-    ap.add_argument("--gdx", type=Path, default=None,
-                    help="Reference GDX (default: the durable CD ref for the dataset)")
-    ap.add_argument("--tol", type=float, default=1e-2,
-                    help="Max acceptable equation residual at the GAMS point")
+    ap.add_argument(
+        "--gdx",
+        type=Path,
+        default=None,
+        help="Reference GDX (default: the data/ GAMS MCP reference)",
+    )
+    ap.add_argument(
+        "--tol",
+        type=float,
+        default=1e-2,
+        help="Max acceptable equation residual at the GAMS point",
+    )
     ap.add_argument("--top", type=int, default=20)
-    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
-                    help="altertax CD (default) or pure-gtap real-CES")
-    ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
-                    help="ifSUB mode (pure-gtap only)")
+    ap.add_argument(
+        "--mode",
+        default="altertax",
+        choices=["altertax", "gtap"],
+        help="altertax CD (default) or pure-gtap real-CES",
+    )
+    ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1], help="ifSUB mode")
     args = ap.parse_args()
 
-    # mode=gtap UNSUPPORTED, honestly: the pure-gtap shock equations are produced by
-    # the multi-period gtap exercise via an in-place constraint-rebuild SEQUENCE
-    # (pmeq shock / NatRes anchor / ytax[mt] shock + an imptx param shock, applied in
-    # a specific order). validate_reference checks residuals
-    # on the AS-BUILT equations; without re-running that exact mutation sequence the
-    # shock-period equations here would be the UN-shocked ones, so a residual verdict
-    # would be measured against the wrong model. Replicating the sequence risks subtle
-    # infidelity. seed_and_solve --mode gtap runs the real driver and is the faithful
-    # path for the pure-gtap residual-at-GAMS question. Emit mode_unsupported.
-    if args.mode == "gtap":
-        def _unsupported() -> dict:
-            return dict(
-                status="error", period=args.period,
-                headline=("validate_reference does not support --mode gtap: the "
-                          "pure-gtap shock equations are built by the multi-period "
-                          "exercise's in-place rebuild sequence, which this static residual check "
-                          "cannot reproduce faithfully. Use seed_and_solve --mode gtap."),
-                violations=[],
-                meta={"error_kind": "mode_unsupported", "mode": "gtap",
-                      "ifsub": args.ifsub})
-        return run_tool("validate_reference", args.dataset, _unsupported,
-                        period_hint=args.period)
-
-    return run_tool("validate_reference", args.dataset, lambda: _work(args),
-                    period_hint=args.period)
+    return run_tool(
+        "validate_reference", args.dataset, lambda: _work(args), period_hint=args.period
+    )
 
 
 if __name__ == "__main__":

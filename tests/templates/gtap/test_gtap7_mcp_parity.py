@@ -129,7 +129,8 @@ def _solve_and_measure(
     route: str = "core",
 ):
     """Build + seed + solve base→check→shock via PATH (MCP); return
-    {period: {"match": float, "code": int, "total": int}}."""
+    {period: {"match": float, "code": int, "total": int, "var_div": {var: n}}},
+    ``var_div`` the cells of each compared variable outside the tolerance."""
     if route != "core":
         raise ValueError(f"route {route!r}: the gates run on the core only (PR 3a)")
     from _diff_core import gams_levels, list_populated_vars, split_t
@@ -221,6 +222,7 @@ def _solve_and_measure(
 
     def measure(period: str):
         tot = match = 0
+        var_div: dict[str, int] = {}
         for vn in list_populated_vars(gdx):
             if vn.lower() in SKIP or vn.lower() in RF:
                 continue
@@ -260,12 +262,19 @@ def _solve_and_measure(
                 )
                 if da <= 1e-6 or rel <= TOL:
                     match += 1
-        return {"match": 100.0 * match / max(tot, 1), "total": tot}
+                else:
+                    var_div[vn] = var_div.get(vn, 0) + 1
+        return {"match": 100.0 * match / max(tot, 1), "total": tot, "var_div": var_div}
 
     out = {}
     for per in PERIODS:
         mm = measure(per)
-        out[per] = {"match": mm["match"], "code": codes[per], "total": mm["total"]}
+        out[per] = {
+            "match": mm["match"],
+            "code": codes[per],
+            "total": mm["total"],
+            "var_div": mm["var_div"],
+        }
     return out
 
 

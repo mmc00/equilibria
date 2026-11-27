@@ -53,17 +53,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 from _diff_core import gams_levels  # type: ignore
 from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
 
-# Reuse validate_reference's model builder so the closure/elasticities match exactly.
-import importlib.util as _u
-from equilibria._local_refs import refs_dir
-_spec = _u.spec_from_file_location(
-    "validate_reference", str(ROOT / "scripts" / "gtap" / "validate_reference.py")
-)
-_vr = _u.module_from_spec(_spec)
-sys.modules["validate_reference"] = _vr
-_spec.loader.exec_module(_vr)
-
-DEFAULT_REFS = str(refs_dir())
+from equilibria.sources import find_reference
 
 # GAMS symbol → Python component name (calibration scalars, indexed by region).
 _SCALAR_MAP = {
@@ -92,26 +82,54 @@ _FACTOR_MAP = {
 }
 
 
-def _py_region_value(model, comp_name, region):
+def block_calibration(params, residual_region: str) -> dict[str, dict]:
+    """The calibration coefficients the block model declares as its own Parameters
+    (not Pyomo components, so not on the model), from the same functions the blocks
+    call: ``{monolith name: {key: value}}``; ``_armington_shares`` holds
+    ``{(r, i, aa): (alphad, alpham)}``."""
+    from equilibria.blocks.gtap import _derived_params as dp
+
+    s = params.sets
+    calib = dp.demand_income_params(params, s, residual_region=residual_region)
+    out = {n: calib[n] for n in ("betap", "betag", "betas", "eh", "bh")}
+    out["xcshr"] = calib["c_share"]
+    out["zcons"] = calib["zcons_init"]
+    out["gf_share"] = dp.gf_share_data(params, s)
+    out["aft"] = dp.aft_data(params, s)
+    out["xscale"] = dp.xscale_data(params, s)
+    out["_armington_shares"] = dp.armington_shares(params, s)
+    return out
+
+
+def _read(model, comp_name, key: tuple, period: str, block: dict | None = None):
+    """model.<comp> at ``key``: the period cell of a multi-period component first,
+    then the bare cell (a parameter without period); a trailing dim GAMS carries and
+    Python does not (hhd) is dropped as a last try. A name the model lacks is read
+    from ``block`` (``block_calibration``)."""
     from pyomo.environ import value
+
     comp = getattr(model, comp_name, None)
     if comp is None:
-        return None
-    try:
-        return float(value(comp[region]))
-    except Exception:
-        return None
-
-
-def _py_ytax_value(model, region, gy):
-    from pyomo.environ import value
-    comp = getattr(model, "ytax", None)
+        comp = (block or {}).get(comp_name)
     if comp is None:
         return None
-    try:
-        return float(value(comp[region, gy]))
-    except Exception:
-        return None
+    keys = [key + (period,), key]
+    if len(key) > 1:
+        keys += [key[:-1] + (period,), key[:-1]]
+    for k in keys:
+        for kk in ((k, k[0]) if len(k) == 1 else (k,)):  # a Pyomo scalar index or a 1-tuple
+            try:
+                return float(value(comp[kk]))
+            except (KeyError, ValueError, TypeError):
+                continue
+    return None
+
+
+def _default_gdx(dataset: str, mode: str = "altertax", ifsub: int = 0) -> Path | None:
+    """The data/ GAMS MCP reference the MCP gate compares against."""
+    folder = find_reference(dataset, "gams", form="mcp", mode=mode, ifsub=ifsub,
+                            fbep="header")
+    return None if folder is None else folder / "out.gdx"
 
 
 def _strip_c(s):
@@ -119,20 +137,6 @@ def _strip_c(s):
     if isinstance(s, str) and len(s) > 2 and s[1] == "_" and s[0] in "acfr":
         return s[2:]
     return s
-
-
-def _py_indexed_value(model, comp_name, key):
-    """Read model.<comp>[key] tolerating (r,i) vs (r,i,hhd) shapes."""
-    from pyomo.environ import value
-    comp = getattr(model, comp_name, None)
-    if comp is None:
-        return None
-    for k in (key, key[:-1] if len(key) > 1 else key):  # try full, then drop last (hhd)
-        try:
-            return float(value(comp[k] if len(k) > 1 else comp[k[0]]))
-        except Exception:
-            continue
-    return None
 
 
 def _rel(py, g, tol_abs):
@@ -162,11 +166,8 @@ def _debug_print(gdx_name, period, tol, rows, n_diff):
 
 
 def _work(args) -> dict:
-    gdx_path = args.gdx
-    if gdx_path is None:
-        gdx_path = Path(f"{DEFAULT_REFS}/{args.dataset}_altertax_cd/"
-                        f"out_altertax_ifsub1.gdx")
-    if not gdx_path.exists():
+    gdx_path = args.gdx or _default_gdx(args.dataset, args.mode, args.ifsub)
+    if gdx_path is None or not gdx_path.exists():
         return dict(status="error", period=args.period,
                     headline=f"reference GDX not found: {gdx_path}",
                     violations=[],
@@ -174,7 +175,12 @@ def _work(args) -> dict:
 
     # Build the Python benchmark model. The base period carries the calibrated
     # betas / income aggregates / ytax streams with no shock applied.
-    model, _params = _vr._build_model(args.dataset, args.period)
+    from seed_and_solve import build_seeded
+
+    _params, _gc, model = build_seeded(args.dataset, None, args.period, args.mode,
+                                      bool(args.ifsub))
+    per = args.period
+    block = block_calibration(_params, model._residual_region)
 
     rows = []   # (symbol, region/stream, py, gams, rel, status)
     n_diff = 0
@@ -202,7 +208,7 @@ def _work(args) -> dict:
             if not (isinstance(gkey, tuple) and gkey[-1] == args.period):
                 continue
             region = gkey[0]
-            py = _py_region_value(model, pyname, region)
+            py = _read(model, pyname, (region,), per, block)
             if py is None:
                 continue
             target = _gams_target(gsym, gkey, gval)
@@ -217,7 +223,7 @@ def _work(args) -> dict:
         if not (isinstance(gkey, tuple) and gkey[-1] == args.period):
             continue
         region, gy = gkey[0], gkey[1]
-        py = _py_ytax_value(model, region, gy)
+        py = _read(model, "ytax", (region, gy), per)
         if py is None:
             continue
         rel = _rel(py, gval, args.tol_abs)
@@ -235,7 +241,7 @@ def _work(args) -> dict:
             # body is (r, c_i) for eh/bh or (r, c_i, hhd) for xcshr/zcons.
             region = body[0]
             commodity = _strip_c(body[1])
-            py = _py_indexed_value(model, pyname, (region, commodity))
+            py = _read(model, pyname, (region, commodity), per, block)
             if py is None:
                 continue
             rel = _rel(py, gval, args.tol_abs)
@@ -253,7 +259,7 @@ def _work(args) -> dict:
             body = tuple(_strip_c(e) for e in gkey[:-1])  # drop period, strip prefixes
             if len(body) != ndim:
                 continue
-            py = _py_indexed_value(model, pyname, body)
+            py = _read(model, pyname, body, per, block)
             if py is None:
                 continue
             rel = _rel(py, gval, args.tol_abs)
@@ -272,7 +278,7 @@ def _work(args) -> dict:
     # GAMS calibrates with a consistent xa.l. So compare Python alphad/alpham AGAINST the
     # GAMS-stored values, not against 1. (Earlier "sum to 1" audit was wrong — it false-
     # positived on the IND CES cells where Python matches GAMS. See memory.)
-    _share_cache = getattr(model, "_armington_shares_cache", None)
+    _share_cache = block["_armington_shares"]
     if _share_cache:
         g_alphad = gams_levels(gdx_path, "alphad")
         g_alpham = gams_levels(gdx_path, "alpham")
@@ -339,7 +345,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", default="gtap7_3x3")
     ap.add_argument("--gdx", type=Path, default=None,
-                    help="GAMS reference GDX (default: the dataset's ifsub1 ref)")
+                    help="GAMS reference GDX (default: the data/ GAMS MCP reference)")
     ap.add_argument("--period", default="base",
                     help="GDX period to read GAMS calibration values from (default base)")
     ap.add_argument("--tol", type=float, default=1e-4,
@@ -349,25 +355,9 @@ def main() -> int:
     ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
                     help="altertax CD (default) or pure-gtap real-CES")
     ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1],
-                    help="ifSUB mode (pure-gtap only)")
+                    help="ifSUB mode")
     args = ap.parse_args()
 
-    # mode=gtap UNSUPPORTED: this tool targets the altertax CD model; the
-    # pure-gtap shock is built in place when the multi-period exercise runs (the
-    # core recipe gtap_static). Accept the flag (the orchestrator passes it) but emit an
-    # honest mode_unsupported rather than diff the wrong model. Use
-    # seed_and_solve --mode gtap for the pure-gtap diagnostic.
-    if args.mode == "gtap":
-        def _unsupported() -> dict:
-            return dict(
-                status="error", period=getattr(args, "period", None),
-                headline=("diff_calibration does not support --mode gtap (altertax-only tool); "
-                          "use seed_and_solve --mode gtap for the pure-gtap diagnostic."),
-                violations=[],
-                meta={"error_kind": "mode_unsupported", "mode": "gtap",
-                      "ifsub": args.ifsub})
-        return run_tool("diff_calibration", args.dataset, _unsupported,
-                        period_hint=getattr(args, "period", None))
     # period here is a GDX-read period (default 'base'); it IS on the base/check/
     # shock axis, so pass it through as the period_hint.
     return run_tool("diff_calibration", args.dataset, lambda: _work(args),

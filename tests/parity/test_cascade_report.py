@@ -74,3 +74,38 @@ def test_vacuous_layer_is_visible_in_report():
     assert layer["status"] == "error"  # surfaced, not painted clean
     tree = render_tree(rep)
     assert "did not opine" in tree or "vacuous" in tree
+
+
+def test_a_layer_that_did_not_measure_makes_the_verdict_inconclusive():
+    """Blocked, upstream-stopped or broken layers are not "no layer explained the
+    gap" (review of #275)."""
+    ref = GdxResolution(Path("/ref/out.gdx"), "durable", "n", True)
+    results = {
+        "check": [
+            _lr("seed_and_solve", "clean", "continue"),
+            _lr("nl_compare", "error", "blocking_stop", kind="gams_nl_missing"),
+        ],
+        "shock": [
+            _lr("seed_and_solve", "clean", "continue"),
+            _lr("drift_test", "error", "tool_broken_continue", kind="exception"),
+        ],
+    }
+    rep = build_report(
+        "gtap7_3x3",
+        ["check", "shock"],
+        ref=ref,
+        period_results=results,
+        kkt_reader="pure-python",
+    )
+    assert rep["verdict"].startswith("inconclusive")
+    assert rep["not_measured"] == {"check": ["nl_compare"], "shock": ["drift_test"]}
+
+
+def test_all_layers_measured_and_clean_is_conclusive():
+    ref = GdxResolution(Path("/ref/out.gdx"), "durable", "n", True)
+    results = {"shock": [_lr("seed_and_solve", "clean", "continue")]}
+    rep = build_report(
+        "gtap7_3x3", ["shock"], ref=ref, period_results=results, kkt_reader="x"
+    )
+    assert rep["verdict"] == "no layer explained the gap"
+    assert rep["not_measured"] == {}

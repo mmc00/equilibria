@@ -45,3 +45,11 @@ def test_unknown_error_kind_is_blocking_never_clean():
 def test_gdx_not_found_is_blocking():
     r = classify("calibration", _p("error", "gdx_not_found"), 2)
     assert r.action == "blocking_stop"
+
+
+def test_a_clean_line_from_a_tool_that_then_failed_is_broken_not_clean():
+    """run_tool exits 0 only on clean: a clean JSON line with another exit code is a
+    tool that crashed after printing it (review of #275)."""
+    r = classify("drift_test", _p("clean"), 2)
+    assert r.action == "tool_broken_continue"
+    assert r.status == "error"

@@ -13,34 +13,114 @@ GAMS has TWO inheritance mechanisms — keep them apart:
                                    is temporal continuity, already analysed — NOT the
                                    inheritance we sweep here.
 
-This tool reports class A: for each GAMS seed-from-prior var, FROM WHICH PERIOD does
-Python seed it in the check? GAMS seeds from t0 (the prior period = base/benchmark).
-Python's diff_altertax seeds the check via warmstart_from_gams(check) = the GAMS CHECK
-values, i.e. from the SAME period, not the prior — a different inheritance source.
+This tool reports class A, measured: it runs the case the MCP gate builds on the core
+driver (seeded at the data/ reference, as the cascade does; --seed-from-prior as the
+gate's own altertax run) and, at the solve of the check, compares each class-A var's
+check level with its base level (the prior period) and with the GAMS check level.
 
-Output: var | gams_seed_source | python_seed_source | differ?
+Output: var | distance to prior | distance to GAMS check | Python's seed source
 
 Usage: uv run python scripts/gtap/inheritance_table.py --dataset gtap7_3x3
 """
+
 from __future__ import annotations
+
 import argparse
 import re
 import sys
 from pathlib import Path
-from equilibria._local_refs import refs_dir
+
+from equilibria.sources import find_reference
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
-DEFAULT_REFS = str(refs_dir())
+TOL = 1e-9  # relative: below it two levels are the same seed
 
 
-def _gms(dataset: str, ifsub: int = 0) -> Path:
-    own = Path(f"{DEFAULT_REFS}/{dataset}_altertax_cd/model_altertax_ifsub{ifsub}.gms")
-    if own.exists():
-        return own
-    return Path(f"{DEFAULT_REFS}/gtap7_3x3_altertax_cd/model_altertax_ifsub{ifsub}.gms")
+def _gms(dataset: str, ifsub: int = 0, mode: str = "altertax") -> Path | None:
+    """The model.gms of the data/ GAMS MCP reference the MCP gate compares against."""
+    folder = find_reference(
+        dataset, "gams", form="mcp", mode=mode, ifsub=ifsub, fbep="header"
+    )
+    return None if folder is None else folder / "model.gms"
+
+
+def seed_source(d_prior: float, d_gams: float, tol: float = TOL) -> str:
+    """Where a check level comes from, by its distance to the prior period's level
+    and to the GAMS check level."""
+    if d_prior <= tol and d_gams <= tol:
+        return "both (they agree)"
+    if d_prior <= tol:
+        return "prior period"
+    if d_gams <= tol:
+        return "GAMS, same period"
+    return "neither"
+
+
+def _rel(a: float, b: float) -> float:
+    return abs(a - b) / max(abs(b), 1e-12)
+
+
+def _strip(k):
+    return (
+        k[2:]
+        if isinstance(k, str) and len(k) > 2 and k[1] == "_" and k[0] in "acfr"
+        else k
+    )
+
+
+def measure(
+    dataset: str, gdx: Path, mode: str, ifsub: int, gams_vars, seed_from_prior: bool
+) -> dict[str, tuple[float, float] | None]:
+    """{GAMS var: (max distance check-to-base, max distance check-to-GAMS-check)} at
+    the core solve of the check, before it runs; None for a var Python lacks."""
+    from _core_run import solve_on_core
+    from _diff_core import gams_levels  # type: ignore
+    from diff_mcp_pairing import GAMS_VAR_TO_PY
+    from seed_and_solve import _case
+
+    from equilibria.templates.gtap.recipe import _by_backend
+
+    out: dict = {}
+
+    def spy(model):
+        staged = model.staged
+        if staged is not None and staged.period == "check" and not out:
+            for gv in gams_vars:
+                py = GAMS_VAR_TO_PY.get(gv, gv)
+                if not model.has_var(py):
+                    out[gv] = None
+                    continue
+                chk, base = model.values(py, "check"), model.values(py, "base")
+                gams = {
+                    tuple(_strip(x) for x in k[:-1]): v
+                    for k, v in gams_levels(gdx, gv).items()
+                    if isinstance(k, tuple) and k[-1] == "check"
+                }
+                d_prior = max(
+                    (_rel(v, base[c]) for c, v in chk.items() if c in base), default=0.0
+                )
+                d_gams = max(
+                    (_rel(v, gams[c]) for c, v in chk.items() if c in gams),
+                    default=float("inf"),
+                )
+                out[gv] = (d_prior, d_gams)
+        return _by_backend(model)
+
+    p, gc, rr = _case(dataset, bool(ifsub), mode)
+    solve_on_core(
+        p,
+        gc,
+        rr,
+        mode=mode,
+        ref_gdx=gdx,
+        seed_gdx=gdx,
+        seed_from_prior=seed_from_prior,
+        solver=spy,
+    )
+    return out
 
 
 def parse_seed_from_prior(gms_path: Path):
@@ -66,41 +146,58 @@ def parse_freeze_prior(gms_path: Path):
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--dataset", default="gtap7_3x3")
     ap.add_argument("--ifsub", type=int, default=0)
+    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"])
+    ap.add_argument(
+        "--seed-from-prior",
+        action="store_true",
+        help="start the check from Python's base, as the MCP gate's altertax "
+        "run does (default: seeded from the reference, as the cascade)",
+    )
     args = ap.parse_args()
-    gms = _gms(args.dataset, args.ifsub)
+    gms = _gms(args.dataset, args.ifsub, args.mode)
+    folder = None if gms is None else gms.parent
+    if gms is None or not gms.exists() or not (folder / "out.gdx").exists():
+        print(f"ERROR: no data/ GAMS MCP reference for {args.dataset}", file=sys.stderr)
+        raise SystemExit(2)
 
-    seed = parse_seed_from_prior(gms)   # class A
-    freeze = parse_freeze_prior(gms)    # class B (reference only)
+    seed = parse_seed_from_prior(gms)  # class A
+    freeze = parse_freeze_prior(gms)  # class B (reference only)
+    dist = measure(
+        args.dataset,
+        folder / "out.gdx",
+        args.mode,
+        args.ifsub,
+        seed,
+        args.seed_from_prior,
+    )
 
-    # Python's check seed source: diff_altertax.warmstart_from_gams(m_chk, gdx, "check")
-    # seeds from the GAMS CHECK values (same period), NOT from the prior (base). So for
-    # EVERY class-A var, GAMS seeds from t0 (prior) while Python seeds from check (same).
-    # The DIFFERENCE is the inheritance source: prior-period vs same-period-GAMS-value.
-    import diff_altertax as DA
-    py_seeds_from = "GAMS_check_value (warmstart_from_gams, same period)"
-    gams_seeds_from = "t0 = prior period (base)"
-
-    print(f"=== INHERITANCE (class A: seed current period from prior) — {args.dataset} ===\n")
+    start = "Python's base" if args.seed_from_prior else "the reference GDX"
+    print(
+        f"=== INHERITANCE (class A: seed current period from prior) — {args.dataset} ==="
+    )
+    print(
+        f"measured at the core solve of check, before it runs; check seeded from {start}\n"
+    )
     print(f"GAMS class-A seed-from-prior vars ({len(seed)}): {seed}")
     print(f"GAMS class-B freeze-prior vars   ({len(freeze)}): {freeze}\n")
-    print(f"{'var':<8}{'gams seed source':<26}{'python seed source':<46}differ?")
-    print("-" * 92)
-    differ = []
+    print(f"{'var':<8}{'to prior':>12}{'to GAMS check':>16}  python seed source")
+    print("-" * 64)
+    counts: dict[str, int] = {}
     for v in seed:
-        # both seed the var, but from DIFFERENT periods → inheritance source differs
-        d = "DIFFER (prior vs same-period)"
-        differ.append(v)
-        print(f"{v:<8}{gams_seeds_from:<26}{py_seeds_from:<46}{d}")
+        d = dist.get(v)
+        if d is None:
+            print(f"{v:<8}{'-':>12}{'-':>16}  not a Python variable")
+            continue
+        src = seed_source(*d)
+        counts[src] = counts.get(src, 0) + 1
+        print(f"{v:<8}{d[0]:>12.3e}{d[1]:>16.3e}  {src}")
     print()
-    print(f"=> {len(differ)} of {len(seed)} class-A vars have a DIFFERENT inheritance SOURCE.")
-    print("   GAMS seeds the check from the PRIOR period (base); Python seeds it from the")
-    print("   GAMS CHECK value (warmstart_from_gams). To test the faithful inheritance, seed")
-    print("   each from the PYTHON prior-stage (m_b) value instead — one var per bench round.")
-    print(f"\n   Bench candidates (one per round): {differ}")
+    print(f"=> GAMS seeds all {len(seed)} from the prior period (t0); Python: {counts}")
 
 
 if __name__ == "__main__":

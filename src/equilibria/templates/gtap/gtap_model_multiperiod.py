@@ -1050,8 +1050,14 @@ class GTAPMultiPeriodModel:
                     continue
         return n
 
-    def seed_all_periods(self, m: ConcreteModel, gdx_path) -> None:
+    def seed_all_periods(
+        self, m: ConcreteModel, gdx_path
+    ) -> dict[str, tuple[int, int]]:
         """Seed var[...,t] from a GAMS altertax GDX for t ∈ {base, check, shock}.
+
+        Returns ``{t: (exported, placed)}``: the level cells the GDX holds for a
+        Python Var with a time axis, and those that land on a cell of it (fixed or
+        not; only unfixed ones take the value).
 
         Handles the GAMS → Python mapping:
           - Symbol aliases: xa→xaa, pa→pa, xw→xw, pefob→pefob, pmcif→pmcif, etc.
@@ -1160,6 +1166,7 @@ class GTAPMultiPeriodModel:
                     pass
             return names
 
+        counts = {t: [0, 0] for t in sorted(T_LABELS)}
         for gams_name in _list_var_symbols():
             py_name = _ALIAS.get(gams_name, gams_name)
             # Try to get the Var from m (case-sensitive, then lowercase)
@@ -1179,10 +1186,12 @@ class GTAPMultiPeriodModel:
                 if not (gk and gk[-1] in T_LABELS):
                     continue
                 t = gk[-1]
+                counts[t][0] += 1
                 # Strip prefixes from non-period keys
                 stripped = tuple(_strip(x) for x in gk[:-1]) + (t,)
                 try:
                     vd = py_var[stripped]
+                    counts[t][1] += 1
                     if not vd.fixed:
                         vd.set_value(float(gval))
                 except (KeyError, TypeError, ValueError):
@@ -1193,3 +1202,4 @@ class GTAPMultiPeriodModel:
         # scalars). Without this they keep their construction-time value and every
         # Fisher row carries a residual at the GAMS point.
         self.refresh_fisher_aggregates(m)
+        return {t: (e, n) for t, (e, n) in counts.items()}

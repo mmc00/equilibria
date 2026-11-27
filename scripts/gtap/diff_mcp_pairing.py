@@ -14,10 +14,10 @@ input/coefficient/form diff shows this; only the pairing does.
 This tool:
   1. parses GAMS's `model <name> / eqA.varA, eqB.varB, eqC, ... /` block, classifying
      each equation as PAIRED(var) or FREE-ROW (no `.var`);
-  2. builds the Python model and applies the solver closure (free-row deactivations,
-     aggressive fixing) by running the solver setup with a 0-iteration limit, then
-     records, per equation family, whether it is ACTIVE and whether its GAMS-paired
-     variable is FIXED;
+  2. runs the case the MCP gate builds on the core driver, seeded at the data/
+     reference, and right after the solve of the period records, per equation family
+     and over that period's rows, whether it is ACTIVE and whether its GAMS-paired
+     variable is FIXED (the solver's free-row deactivations and fixings applied);
   3. flags families where GAMS treats the equation as a free row but Python keeps it
      active+paired (or vice versa) — the pairing mismatch class.
 
@@ -25,6 +25,7 @@ Usage:
   uv run python scripts/gtap/diff_mcp_pairing.py --dataset gtap7_3x3
   uv run python scripts/gtap/diff_mcp_pairing.py --dataset gtap7_3x3 --model-name gtap
 """
+
 from __future__ import annotations
 import argparse
 import re
@@ -37,14 +38,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "gtap"))
 
 from _parity_json import make_violation, run_tool  # noqa: E402 — shared JSON contract
 
-import importlib.util as _u
 from equilibria.sources import find_reference
-_spec = _u.spec_from_file_location(
-    "validate_reference", str(ROOT / "scripts" / "gtap" / "validate_reference.py")
-)
-_vr = _u.module_from_spec(_spec)
-sys.modules["validate_reference"] = _vr
-_spec.loader.exec_module(_vr)
 
 # Explicit GAMS-equation -> Python-constraint pairing. The name heuristic below
 # (eq_<gams_eq>, eq_<stem>, ...) is FRAGILE: it silently resolves to a same-named
@@ -58,9 +52,9 @@ _spec.loader.exec_module(_vr)
 # Python constraint name does NOT follow the eq_<gams_eq> convention. Anything not
 # listed falls back to the name heuristic (so unmapped/new datasets still work).
 GAMS_EQ_TO_PY = {
-    "pseq": "eq_xs",       # CES domestic supply determines ps (NOT eq_ps legacy)
+    "pseq": "eq_xs",  # CES domestic supply determines ps (NOT eq_ps legacy)
     "peq": "eq_peq",
-    "pseq.ps": "eq_xs",    # tolerated alias form
+    "pseq.ps": "eq_xs",  # tolerated alias form
 }
 
 
@@ -104,31 +98,61 @@ def _parse_gams_model(gms_path: Path, model_name: str) -> list[tuple[str, str | 
     return pairs
 
 
-def _var_fixed_frac(model, var_name):
-    """Return (fixed_count, total) for a Python Var, or None if absent.
+def _of_period(idx, period) -> bool:
+    """True for every cell when ``period`` is None, else for the period's (last)."""
+    if period is None:
+        return True
+    last = idx[-1] if isinstance(idx, tuple) and idx else idx
+    return last == period
+
+
+# GAMS variable -> Python Var name where they differ (as the multi-period seeder,
+# GTAPMultiPeriodModel.seed_all_periods, maps them).
+GAMS_VAR_TO_PY = {
+    "xa": "xaa",
+    "pp": "pp_rai",
+    "p": "p_rai",
+    "xd": "xda",
+    "xm": "xma",
+    "ytaxInd": "ytax_ind",
+    "factY": "facty",
+    "phiP": "phip",
+    "regY": "regy",
+    "xg": "xg_agg",
+}
+
+
+def _var_fixed_frac(model, var_name, period=None):
+    """Return (fixed_count, total) for a Python Var, or None if absent; with
+    ``period``, over that period's cells of a multi-period model.
     A GAMS-paired variable that Python FIXES (exogenous wedge / holdfix-equivalent)
     is a valid pairing even when its defining equation is deactivated."""
     from pyomo.environ import Var
+
     if not var_name:
         return None
-    v = getattr(model, var_name, None)
+    v = getattr(model, GAMS_VAR_TO_PY.get(var_name, var_name), None)
     if v is None or v.ctype is not Var:
         return None
     fixed = total = 0
     for idx in v:
+        if not _of_period(idx, period):
+            continue
         total += 1
         if v[idx].fixed:
             fixed += 1
     return (fixed, total)
 
 
-def _py_family_state(model, gams_eq: str, paired_var: str | None = None):
-    """Return (py_eq_name_or_None, active_count, total, paired_var_fixed_frac).
+def _py_family_state(model, gams_eq: str, paired_var: str | None = None, period=None):
+    """Return (py_eq_name_or_None, active_count, total, paired_var_fixed_frac); with
+    ``period``, over that period's rows and cells of a multi-period model.
 
     Resolution order: the explicit GAMS_EQ_TO_PY map FIRST (authoritative for
     non-conventional names like pseq->eq_xs), then the name heuristic as fallback.
     paired_var_fixed_frac is (fixed,total) for the GAMS-paired variable, or None."""
     from pyomo.environ import Constraint
+
     # 1) explicit map wins (handles pseq->eq_xs and any other non-eq_<name> homolog)
     cands = []
     if gams_eq in GAMS_EQ_TO_PY:
@@ -136,7 +160,7 @@ def _py_family_state(model, gams_eq: str, paired_var: str | None = None):
     # 2) name heuristic fallback
     cands.append(f"eq_{gams_eq}")
     if gams_eq.endswith("eq"):
-        cands.append(f"eq_{gams_eq[:-2]}")     # pfteq -> eq_pft
+        cands.append(f"eq_{gams_eq[:-2]}")  # pfteq -> eq_pft
     cands.append(f"eq_{gams_eq.replace('eq', '')}")
     comp = None
     pyname = None
@@ -145,11 +169,13 @@ def _py_family_state(model, gams_eq: str, paired_var: str | None = None):
         if comp is not None and comp.ctype is Constraint:
             pyname = c
             break
-    var_frac = _var_fixed_frac(model, paired_var)
+    var_frac = _var_fixed_frac(model, paired_var, period)
     if comp is None:
         return (None, 0, 0, var_frac)
     active = total = 0
     for idx in comp:
+        if not _of_period(idx, period):
+            continue
         total += 1
         if comp[idx].active:
             active += 1
@@ -173,7 +199,9 @@ BENIGN = {"pnumeq", "walraseq", "eveq", "cveq", "xseq", "capAccteq", "savfeq", "
 _NUMERAIRE_WALRAS = {"pnumeq", "walraseq", "eveq", "cveq"}
 
 
-def _classify_free_row(eq: str, pyname, active: int, total: int) -> tuple[str, float, str]:
+def _classify_free_row(
+    eq: str, pyname, active: int, total: int
+) -> tuple[str, float, str]:
     """Classify a GAMS FREE-ROW against Python state.
 
     Returns (kind, severity, note). Only kind=='pairing_mismatch' (severity 1.0)
@@ -186,13 +214,20 @@ def _classify_free_row(eq: str, pyname, active: int, total: int) -> tuple[str, f
     if active == 0:
         return ("matches", 0.0, "deactivated → matches GAMS free-row")
     if eq in BENIGN:
-        kindnote = ("numeraire/walras/welfare report" if eq in _NUMERAIRE_WALRAS
-                    else "single-root form, ef807eb" if eq == "pfteq"
-                    else "linear market-clearing/balance identity (single root)")
+        kindnote = (
+            "numeraire/walras/welfare report"
+            if eq in _NUMERAIRE_WALRAS
+            else "single-root form, ef807eb"
+            if eq == "pfteq"
+            else "linear market-clearing/balance identity (single root)"
+        )
         return ("benign_active", 0.0, f"active but BENIGN ({kindnote})")
-    return ("pairing_mismatch", 1.0,
-            "ACTIVE+paired in Python but FREE-ROW in GAMS → may converge to a "
-            "different root (pfteq factor-2 class)")
+    return (
+        "pairing_mismatch",
+        1.0,
+        "ACTIVE+paired in Python but FREE-ROW in GAMS → may converge to a "
+        "different root (pfteq factor-2 class)",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -203,13 +238,19 @@ def _debug_print(model_name, gms_name, pairs, free_rows, rows):
     print(f"=== GAMS `model {model_name}` pairing ({gms_name}) ===", file=sys.stderr)
     print(f"  {len(pairs)} entries, {len(free_rows)} FREE ROWS:", file=sys.stderr)
     print(f"    {', '.join(free_rows)}", file=sys.stderr)
-    print(f"\n  {'gams_eq':<12}{'python_eq':<16}{'py_active':>10}   note",
-          file=sys.stderr)
+    print(
+        f"\n  {'gams_eq':<12}{'python_eq':<16}{'py_active':>10}   note", file=sys.stderr
+    )
     for r in rows:
-        astr = "-" if r["py_total"] == 0 and r["pyname"] is None else \
-            f"{r['py_active']}/{r['py_total']}"
-        print(f"  {r['gams_eq']:<12}{(r['pyname'] or '-'):<16}{astr:>10}   "
-              f"{r['note']}", file=sys.stderr)
+        astr = (
+            "-"
+            if r["py_total"] == 0 and r["pyname"] is None
+            else f"{r['py_active']}/{r['py_total']}"
+        )
+        print(
+            f"  {r['gams_eq']:<12}{(r['pyname'] or '-'):<16}{astr:>10}   {r['note']}",
+            file=sys.stderr,
+        )
 
 
 def _resolve_gms_path(dataset: str, ifsub: int) -> tuple[Path | None, bool]:
@@ -218,9 +259,12 @@ def _resolve_gms_path(dataset: str, ifsub: int) -> tuple[Path | None, bool]:
     model that wrote it (the tool is altertax-only). The `model gtap /eq.var/` block is the SAME for
     every dataset (only sets/data differ), so a dataset without its own reference
     borrows a sibling's."""
-    for i, ds in enumerate((dataset, *(d for d in _GMS_FALLBACK_DATASETS if d != dataset))):
-        folder = find_reference(ds, "gams", form="mcp", mode="altertax",
-                                ifsub=ifsub, fbep="header")
+    for i, ds in enumerate(
+        (dataset, *(d for d in _GMS_FALLBACK_DATASETS if d != dataset))
+    ):
+        folder = find_reference(
+            ds, "gams", form="mcp", mode="altertax", ifsub=ifsub, fbep="header"
+        )
         if folder is not None and (folder / "model.gms").exists():
             return (folder / "model.gms", i > 0)
     return (None, False)
@@ -229,37 +273,147 @@ def _resolve_gms_path(dataset: str, ifsub: int) -> tuple[Path | None, bool]:
 _GMS_FALLBACK_DATASETS = ("gtap7_3x3", "gtap7_10x7", "gtap7_15x10")
 
 
+class _Cell:
+    __slots__ = ("active", "fixed")
+
+    def __init__(self, active: bool = False, fixed: bool = False):
+        self.active, self.fixed = active, fixed
+
+
+class _Frozen(dict):
+    """One component's ``{index: _Cell}`` with its Pyomo ``ctype``."""
+
+    def __init__(self, ctype):
+        super().__init__()
+        self.ctype = ctype
+
+
+# In check and shock the driver swaps eq_nd/eq_va for the same demand row with its
+# share recalibrated from the prior period (pyomo_ops, one scalar Constraint per
+# cell named _eq_<nd|va>_recal_<r>_<a>_<period>); the cell's row is that one.
+_RECAL_ROWS = frozenset({"eq_nd", "eq_va"})
+
+
+def _recal_name(family: str, idx) -> str:
+    return "_" + family + "_recal_" + "_".join(str(x) for x in idx)
+
+
+def _freeze_state(model, period: str):
+    """A copy of ``period``'s row activity and cell fixings, readable as the model
+    is (``getattr(m, name)``, iteration, ``[idx].active``/``.fixed``, ``ctype``).
+    The Pyomo model is shared: after the solve the driver fixes the period's cells
+    (freeze_period) and the next period switches its rows off (freeze_inactive),
+    so the model read later no longer shows what the solver was handed."""
+    from types import SimpleNamespace
+
+    from pyomo.environ import Constraint, Var
+
+    state = SimpleNamespace()
+    for c in model.component_objects(Constraint):
+        comp = _Frozen(Constraint)
+        for idx in c:
+            if _of_period(idx, period):
+                active = c[idx].active
+                if not active and c.local_name in _RECAL_ROWS:
+                    recal = getattr(model, _recal_name(c.local_name, idx), None)
+                    active = recal is not None and recal.active
+                comp[idx] = _Cell(active=active)
+        setattr(state, c.local_name, comp)
+    for v in model.component_objects(Var):
+        comp = _Frozen(Var)
+        for idx in v:
+            if _of_period(idx, period):
+                comp[idx] = _Cell(fixed=v[idx].fixed)
+        setattr(state, v.local_name, comp)
+    return state
+
+
+def gate_model_at_solve(dataset: str, period: str, mode: str, ifsub: int, gdx: Path):
+    """The state of the case the MCP gate builds, on the core driver seeded at
+    ``gdx``, as it stands right after the solve of ``period`` (the solver's own free
+    rows and fixings applied, the other periods fixed), copied there
+    (``_freeze_state``); None if no solve of it ran."""
+    from _core_run import solve_on_core
+    from seed_and_solve import _case
+
+    from equilibria.templates.gtap.recipe import _by_backend
+
+    seen: dict = {}
+
+    def spy(model):
+        status = _by_backend(model)
+        staged = model.staged
+        if staged is not None and staged.period == period and "m" not in seen:
+            seen["m"] = _freeze_state(model.pyomo, period)
+        return status
+
+    p, gc, rr = _case(dataset, bool(ifsub), mode)
+    solve_on_core(
+        p,
+        gc,
+        rr,
+        mode=mode,
+        ref_gdx=gdx,
+        seed_gdx=gdx,
+        solve_base=period == "base",
+        solver=spy,
+    )
+    return seen.get("m")
+
+
 def _work(args) -> dict:
     gms_path, gms_is_fallback = _resolve_gms_path(args.dataset, args.ifsub)
     if gms_path is None:
-        return dict(status="error", period=args.period,
-                    headline=f"GAMS source not found for {args.dataset} "
-                             f"(no own .gms, no fallback)",
-                    violations=[],
-                    meta={"error_kind": "gams_source_missing",
-                          "dataset": args.dataset})
+        return dict(
+            status="error",
+            period=args.period,
+            headline=f"GAMS source not found for {args.dataset} "
+            f"(no own .gms, no fallback)",
+            violations=[],
+            meta={"error_kind": "gams_source_missing", "dataset": args.dataset},
+        )
 
     pairs = _parse_gams_model(gms_path, args.model_name)
     if not pairs:
-        return dict(status="error", period=args.period,
-                    headline=(f"model '{args.model_name}' block not parsed from "
-                              f"{gms_path.name}"),
-                    violations=[],
-                    meta={"error_kind": "model_block_unparsed",
-                          "gms_path": str(gms_path)})
+        return dict(
+            status="error",
+            period=args.period,
+            headline=(
+                f"model '{args.model_name}' block not parsed from {gms_path.name}"
+            ),
+            violations=[],
+            meta={"error_kind": "model_block_unparsed", "gms_path": str(gms_path)},
+        )
 
     free_rows = [eq for eq, var in pairs if var is None]
     paired = [(eq, var) for eq, var in pairs if var is not None]
 
-    model, _p = _vr._build_model(args.dataset, args.period)
-    closure_applied = False
-    closure_warn = None
-    if args.apply_closure:
-        try:
-            _apply_solver_closure(model, args.dataset, _p)
-            closure_applied = True
-        except Exception as e:  # noqa: BLE001
-            closure_warn = str(e)
+    mode = getattr(args, "mode", "altertax")
+    gdx = getattr(args, "gdx", None)
+    if gdx is None:
+        folder = find_reference(
+            args.dataset, "gams", form="mcp", mode=mode, ifsub=args.ifsub, fbep="header"
+        )
+        gdx = None if folder is None else folder / "out.gdx"
+    if gdx is None or not Path(gdx).exists():
+        return dict(
+            status="error",
+            period=args.period,
+            violations=[],
+            headline=f"reference GDX not found for {args.dataset}",
+            meta={"error_kind": "gdx_not_found"},
+        )
+    model = gate_model_at_solve(args.dataset, args.period, mode, args.ifsub, Path(gdx))
+    if model is None:
+        return dict(
+            status="error",
+            period=args.period,
+            violations=[],
+            headline=f"MCP pairing: no solve of {args.period} was observed",
+            meta={"error_kind": "solve_not_observed"},
+        )
+    closure_applied, closure_warn = True, None  # the core solve applied it
+    per = args.period
 
     violations = []
     rows = []  # full per-free-row detail for meta + debug print
@@ -267,11 +421,19 @@ def _work(args) -> dict:
     # Direction 1: GAMS FREE-ROW vs Python state. The dangerous mismatch is a
     # multi-root economic free-row that Python keeps active+paired.
     for eq in free_rows:
-        pyname, active, total, _ = _py_family_state(model, eq, None)
+        pyname, active, total, _ = _py_family_state(model, eq, None, per)
         kind, sev, note = _classify_free_row(eq, pyname, active, total)
-        rows.append({"gams_eq": eq, "pyname": pyname, "py_active": active,
-                     "py_total": total, "kind": kind, "note": note,
-                     "direction": "gams_free_row"})
+        rows.append(
+            {
+                "gams_eq": eq,
+                "pyname": pyname,
+                "py_active": active,
+                "py_total": total,
+                "kind": kind,
+                "note": note,
+                "direction": "gams_free_row",
+            }
+        )
         if kind == "pairing_mismatch":
             v = make_violation(eq, [eq], "mcp_pairing", sev)
             v["kind"] = "pairing_mismatch"
@@ -291,17 +453,28 @@ def _work(args) -> dict:
     # pins it via holdfixed=1 from the prior period). A fixed variable IS paired —
     # not a free DOF — so this is NOT a violation (e.g. dintx/mintx tax wedges).
     for eq, var in paired:
-        pyname, active, total, var_frac = _py_family_state(model, eq, var)
+        pyname, active, total, var_frac = _py_family_state(model, eq, var, per)
         if pyname is not None and total > 0 and active == 0:
-            var_is_fixed = var_frac is not None and var_frac[1] > 0 and var_frac[0] == var_frac[1]
+            var_is_fixed = (
+                var_frac is not None and var_frac[1] > 0 and var_frac[0] == var_frac[1]
+            )
             if var_is_fixed:
-                rows.append({"gams_eq": eq, "pyname": pyname, "py_active": active,
-                             "py_total": total, "kind": "benign_fixed_var",
-                             "note": (f"eq deactivated but var {var} is "
-                                      f"{var_frac[0]}/{var_frac[1]} FIXED "
-                                      f"(exogenous wedge / holdfix-equivalent) → "
-                                      f"valid pairing"),
-                             "direction": "gams_paired"})
+                rows.append(
+                    {
+                        "gams_eq": eq,
+                        "pyname": pyname,
+                        "py_active": active,
+                        "py_total": total,
+                        "kind": "benign_fixed_var",
+                        "note": (
+                            f"eq deactivated but var {var} is "
+                            f"{var_frac[0]}/{var_frac[1]} FIXED "
+                            f"(exogenous wedge / holdfix-equivalent) → "
+                            f"valid pairing"
+                        ),
+                        "direction": "gams_paired",
+                    }
+                )
                 continue
             v = make_violation(eq, [eq], "mcp_pairing", 1.0)
             v["kind"] = "free_row_python_only"
@@ -310,55 +483,97 @@ def _work(args) -> dict:
             v["gams_paired_var"] = var
             v["gams_side"] = f"paired(.{var})"
             v["python_side"] = "deactivated"
-            v["note"] = (f"GAMS pairs {eq}.{var} but Python deactivates {pyname} "
-                         f"→ {var} is left unpaired (root-selection candidate)")
+            v["note"] = (
+                f"GAMS pairs {eq}.{var} but Python deactivates {pyname} "
+                f"→ {var} is left unpaired (root-selection candidate)"
+            )
             violations.append(v)
-            rows.append({"gams_eq": eq, "pyname": pyname, "py_active": active,
-                         "py_total": total, "kind": "free_row_python_only",
-                         "note": v["note"], "direction": "gams_paired"})
+            rows.append(
+                {
+                    "gams_eq": eq,
+                    "pyname": pyname,
+                    "py_active": active,
+                    "py_total": total,
+                    "kind": "free_row_python_only",
+                    "note": v["note"],
+                    "direction": "gams_paired",
+                }
+            )
 
     _debug_print(args.model_name, gms_path.name, pairs, free_rows, rows)
 
     n_mismatch = len(violations)
-    n_benign = sum(1 for r in rows if r["kind"] in ("benign_active", "benign_fixed_var"))
+    n_benign = sum(
+        1 for r in rows if r["kind"] in ("benign_active", "benign_fixed_var")
+    )
     status = "dirty" if violations else "clean"
     if violations:
         kinds = {}
         for v in violations:
             kinds[v["kind"]] = kinds.get(v["kind"], 0) + 1
         kind_str = ", ".join(f"{n}×{k}" for k, n in kinds.items())
-        headline = (f"MCP pairing ({args.period}): {n_mismatch} divergent row(s) "
-                    f"[{kind_str}] — a GAMS free-row Python pairs (or a GAMS-paired "
-                    f"eq Python frees); candidate missing anchor / wrong root")
+        headline = (
+            f"MCP pairing ({args.period}): {n_mismatch} divergent row(s) "
+            f"[{kind_str}] — a GAMS free-row Python pairs (or a GAMS-paired "
+            f"eq Python frees); candidate missing anchor / wrong root"
+        )
     else:
-        headline = (f"MCP pairing ({args.period}): every economic GAMS free-row is "
-                    f"deactivated/absent in Python and every GAMS-paired eq is "
-                    f"active — pairing matches; this layer does not explain the gap")
+        headline = (
+            f"MCP pairing ({args.period}): every economic GAMS free-row is "
+            f"deactivated/absent in Python and every GAMS-paired eq is "
+            f"active — pairing matches; this layer does not explain the gap"
+        )
 
     return dict(
-        status=status, period=args.period, headline=headline,
+        status=status,
+        period=args.period,
+        headline=headline,
         violations=violations,
-        meta={"model_name": args.model_name, "ifsub": args.ifsub,
-              "gms_path": str(gms_path), "gms_is_fallback": gms_is_fallback,
-              "n_model_entries": len(pairs), "n_free_rows": len(free_rows),
-              "free_rows": free_rows, "n_benign_active": n_benign,
-              "apply_closure": args.apply_closure,
-              "closure_applied": closure_applied,
-              "closure_warn": closure_warn,
-              "free_row_states": rows})
+        meta={
+            "model_name": args.model_name,
+            "ifsub": args.ifsub,
+            "gms_path": str(gms_path),
+            "gms_is_fallback": gms_is_fallback,
+            "n_model_entries": len(pairs),
+            "n_free_rows": len(free_rows),
+            "free_rows": free_rows,
+            "n_benign_active": n_benign,
+            "case": "mcp_gate",
+            "apply_closure": args.apply_closure,
+            "closure_applied": closure_applied,
+            "closure_warn": closure_warn,
+            "free_row_states": rows,
+        },
+    )
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", default="gtap7_3x3")
-    ap.add_argument("--model-name", default="gtap", help="GAMS model name (default gtap)")
+    ap.add_argument(
+        "--model-name", default="gtap", help="GAMS model name (default gtap)"
+    )
     ap.add_argument("--ifsub", type=int, default=0, choices=[0, 1])
     ap.add_argument("--period", default="shock", choices=["base", "check", "shock"])
-    ap.add_argument("--apply-closure", action="store_true",
-                    help="Run the solver setup (0 iterations) so free-row deactivations "
-                         "and aggressive fixing are reflected in the Python state.")
-    ap.add_argument("--mode", default="altertax", choices=["altertax", "gtap"],
-                    help="altertax CD (default) or pure-gtap real-CES")
+    ap.add_argument(
+        "--apply-closure",
+        action="store_true",
+        help="kept for the orchestrator: the Python state is always read "
+        "right after the core solve, with the solver's closure applied",
+    )
+    ap.add_argument(
+        "--gdx",
+        type=Path,
+        default=None,
+        help="reference GDX the case is seeded from (default: the data/ "
+        "GAMS MCP reference)",
+    )
+    ap.add_argument(
+        "--mode",
+        default="altertax",
+        choices=["altertax", "gtap"],
+        help="altertax CD (default) or pure-gtap real-CES",
+    )
     args = ap.parse_args()
 
     # mode=gtap UNSUPPORTED: this tool targets the altertax CD model; the
@@ -367,53 +582,32 @@ def main() -> int:
     # honest mode_unsupported rather than diff the wrong model. Use
     # seed_and_solve --mode gtap for the pure-gtap diagnostic.
     if args.mode == "gtap":
+
         def _unsupported() -> dict:
             return dict(
-                status="error", period=getattr(args, "period", None),
-                headline=("diff_mcp_pairing does not support --mode gtap (altertax-only tool); "
-                          "use seed_and_solve --mode gtap for the pure-gtap diagnostic."),
+                status="error",
+                period=getattr(args, "period", None),
+                headline=(
+                    "diff_mcp_pairing does not support --mode gtap (altertax-only tool); "
+                    "use seed_and_solve --mode gtap for the pure-gtap diagnostic."
+                ),
                 violations=[],
-                meta={"error_kind": "mode_unsupported", "mode": "gtap",
-                      "ifsub": args.ifsub})
-        return run_tool("diff_mcp_pairing", args.dataset, _unsupported,
-                        period_hint=getattr(args, "period", None))
-    return run_tool("diff_mcp_pairing", args.dataset, lambda: _work(args),
-                    period_hint=args.period)
+                meta={
+                    "error_kind": "mode_unsupported",
+                    "mode": "gtap",
+                    "ifsub": args.ifsub,
+                },
+            )
 
-
-def _apply_solver_closure(model, dataset, params):
-    """Apply the solver closure + free-row handling without solving (0 iterations)."""
-    import os
-    spec2 = _u.spec_from_file_location("run_gtap", str(ROOT / "scripts" / "gtap" / "run_gtap.py"))
-    rg = _u.module_from_spec(spec2); sys.modules["run_gtap"] = rg; spec2.loader.exec_module(rg)
-    # build the altertax closure the same way diff_altertax does
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-    alt = GTAPClosureConfig(name="altertax", closure_type="MCP", capital_mobility="mobile",
-                            fix_endowments=False, fix_taxes=True, fix_technology=True,
-                            if_sub=False, numeraire="pnum")
-    # `major_iteration_limit 0` es LO QUE ESTA HERRAMIENTA NECESITA (aplicar el
-    # closure sin resolver), pero PATH_CAPI_OPTIONS es del PROCESO: dejarla puesta
-    # le dice "no iteres" a cualquier solve posterior.  Como proceso suelto daba
-    # igual; dentro de pytest (tests/parity/test_diff_mcp_pairing.py) contaminaba
-    # el resto de la sesion.
-    #
-    # MEDIDO: con este test delante, 4 filas de test_gtap7_mcp_parity (10x7 y
-    # 15x10 altertax) caian bajo el floor — pasan solas y fallan detras de el.  El
-    # sintoma enganaba: "Setting Var pwmg[...] to 0.0 outside the bounds", que
-    # parece un seed corrupto y era un solve que nunca arranco.  El centinela de
-    # the driver no cubre este caso a proposito: solo limpia el valor que
-    # escribe EL MISMO, y uno externo "siempre gana".
-    _prev_opts = os.environ.get("PATH_CAPI_OPTIONS")
-    os.environ["PATH_CAPI_OPTIONS"] = "major_iteration_limit 0"
-    try:
-        rg._run_path_capi_nonlinear_full(model, params, enforce_post_checks=False,
-                                         strict_path_capi=False, equation_scaling=True,
-                                         closure_config=alt)
-    finally:
-        if _prev_opts is None:
-            os.environ.pop("PATH_CAPI_OPTIONS", None)
-        else:
-            os.environ["PATH_CAPI_OPTIONS"] = _prev_opts
+        return run_tool(
+            "diff_mcp_pairing",
+            args.dataset,
+            _unsupported,
+            period_hint=getattr(args, "period", None),
+        )
+    return run_tool(
+        "diff_mcp_pairing", args.dataset, lambda: _work(args), period_hint=args.period
+    )
 
 
 if __name__ == "__main__":
