@@ -141,15 +141,19 @@ class DemandUtilityBlock(Block):
         _param("chif0", ("r",))
         _param("savf_bar", ("r",))
 
-        # risk[r] = rorg/rore at benchmark (GAMS cal.gms:676), used by the capFlex
-        # capital-account closure (savfeq: risk*rore == rorg). Calibrated from a capFix
-        # twin solve by build_block_model._calibrate_capflex_risk and stashed on
-        # params._capflex_risk; falls back to 1.0 (uncalibrated) if absent.
+        # risk[r] = rorg/rore at benchmark (GAMS cal.gms:684), used by the capFlex
+        # capital-account closure (savfeq: risk*rore == rorg). From the calibrated data
+        # (capflex_risk.capflex_risk_from_data), stashed on params._capflex_risk by the
+        # builders; computed here when absent. Never 1 by default.
         if self.savf_flag == "capFlex":
-            _risk_cal = getattr(p, "_capflex_risk", None) or {}
-            risk_vals = np.array(
-                [float(_risk_cal.get(r, 1.0)) for r in regions], dtype=float
-            )
+            _risk_cal = getattr(p, "_capflex_risk", None)
+            if not _risk_cal:
+                from equilibria.templates.gtap.capflex_risk import (
+                    capflex_risk_from_data,
+                )
+
+                _risk_cal = capflex_risk_from_data(p)
+            risk_vals = np.array([float(_risk_cal[r]) for r in regions], dtype=float)
             parameters["risk"] = Parameter(
                 name="risk",
                 value=risk_vals,

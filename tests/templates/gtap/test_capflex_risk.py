@@ -70,3 +70,53 @@ def test_a_region_without_capital_return_raises() -> None:
     b.vdep["USA"] = evos_usa
     with pytest.raises(ValueError, match="USA"):
         capflex_risk_from_data(p)
+
+
+def _capflex_closure(if_sub: bool = False):
+    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+
+    return GTAPClosureConfig(
+        name="base",
+        closure_type="MCP",
+        capital_mobility="sluggish",
+        fix_endowments=False,
+        fix_taxes=False,
+        fix_technology=False,
+        if_sub=if_sub,
+        savf_flag="capFlex",
+        numeraire="pnum",
+    )
+
+
+@pytest.fixture
+def no_twin(monkeypatch):
+    """Any capFix twin-solve fails loudly: the test proves none is attempted."""
+    from equilibria.core import exercise
+
+    def _fail(self):
+        raise AssertionError("a capFix twin-solve was attempted")
+
+    monkeypatch.setattr(exercise.Exercise, "run", _fail)
+
+
+@pytest.mark.skipif(not has_dataset("nus333"), reason="nus333 not present")
+def test_pyomo_capflex_risk_is_the_formula(no_twin) -> None:
+    from equilibria.templates.gtap.capflex_risk import capflex_risk_from_data
+    from equilibria.templates.gtap.gtap_block_model import _calibrate_capflex_risk
+
+    p = _params("nus333")
+    risk = _calibrate_capflex_risk(p, p.sets, _capflex_closure(), "ROW", ref_gdx=None)
+    assert risk == capflex_risk_from_data(p)
+
+
+@pytest.mark.skipif(not has_dataset("nus333"), reason="nus333 not present")
+def test_built_capflex_model_carries_the_formula_risk(no_twin) -> None:
+    """Burfisher's case (no GDX): the risk the block reads is the formula, never 1.
+    (The multi-period model folds ``risk`` to numbers, so it is read off ``params``.)"""
+    from equilibria.templates.gtap.capflex_risk import capflex_risk_from_data
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+
+    p = _params("nus333")
+    want = capflex_risk_from_data(p)
+    build_block_model(p, p.sets, _capflex_closure(), "ROW")
+    assert p._capflex_risk == want

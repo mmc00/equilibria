@@ -1,9 +1,9 @@
 """Record the settle outputs the switch to the core must keep (to ``REL_TOL``).
 
 Writes ``tests/blocks/gtap/golden/calibrate_base_main.json``: for each case, the
-``FactorBlock.calibrate_base`` settled seed (``{var: {body: value}}``) and the capFlex
-``risk`` of the capFix twin-solve (``_calibrate_capflex_risk`` with no GDX), every
-value as ``repr(float)``. Run it on the commit whose numbers are the reference
+``FactorBlock.calibrate_base`` settled seed (``{var: {body: value}}``), every value as
+``repr(float)``. (Its ``capflex_risk`` key is the capFix twin of commit 146ecf8e, kept
+as a record; capFlex ``risk`` now comes from the data, MAR-251, and is not recorded.) Run it on the commit whose numbers are the reference
 (``main`` before PR 3a of gtap-on-core); the seed cache is disabled.
 
     PYTHONPATH=$PWD/src:$PWD python scripts/dev/record_calibrate_base.py
@@ -25,7 +25,6 @@ SETTLE_CASES = (
     ("gtap7_3x3-ifsub1", "gtap7_3x3", 1),
     ("nus333-ifsub0", "nus333", 0),
 )
-CAPFLEX_CASES = (("gtap7_3x3-ifsub0", "gtap7_3x3", 0),)
 
 
 def _params(dataset: str):
@@ -76,17 +75,6 @@ def _settle(dataset: str, ifsub: int) -> dict:
     }
 
 
-def _risk(dataset: str, ifsub: int) -> dict:
-    from equilibria.templates.gtap.gtap_block_model import _calibrate_capflex_risk
-
-    p = _params(dataset)
-    rr = list(p.sets.r)[-1]
-    risk = _calibrate_capflex_risk(p, p.sets, closure(ifsub, "capFlex"), rr, ref_gdx=None)
-    if not risk:
-        raise SystemExit(f"{dataset}: the capFix twin-solve returned no risk")
-    return {r: repr(float(v)) for r, v in risk.items()}
-
-
 def main() -> None:
     os.environ["EQUILIBRIA_SEED_CACHE_DISABLE"] = "1"
     head = subprocess.run(
@@ -99,7 +87,6 @@ def main() -> None:
     out = {
         "commit": head,
         "settle": {cid: _settle(ds, i) for cid, ds, i in SETTLE_CASES},
-        "capflex_risk": {cid: _risk(ds, i) for cid, ds, i in CAPFLEX_CASES},
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(out, indent=1, sort_keys=True) + "\n", encoding="utf-8")

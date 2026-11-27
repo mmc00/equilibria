@@ -879,11 +879,10 @@ def _build_block_model(
     # (blocks/gtap/_cd.py); "gams" leaves the parameters as they are.
     params.set_unit_sigma(getattr(closure, "unit_sigma", "gams"))
 
-    # capFlex needs risk[r] = rorg/rore(r) calibrated from a benchmark (capFix) solve
+    # capFlex needs risk[r] = rorg/rore(r) at the benchmark (cal.gms:684, from the data)
     # BEFORE the multi-period model folds mutable params to numbers (gtap_model_multiperiod
     # substitutes every mutable ParamData by its value). Stash it on params so the
-    # DemandUtilityBlock reads it in setup(). Gated on _capflex_risk to avoid recursion
-    # (the capFix twin build must not re-enter this).
+    # DemandUtilityBlock reads it in setup().
     if (
         str(getattr(closure, "savf_flag", "capFix")) == "capFlex"
         and getattr(params, "_capflex_risk", None) is None
@@ -986,83 +985,13 @@ def _capflex_risk_from_gdx(ref_gdx, regions) -> dict:
 def _calibrate_capflex_risk(
     params, sets, closure, residual_region, ref_gdx=None
 ) -> dict:
-    """Calibrate capFlex risk[r] = rorg/rore(r) at benchmark (GAMS cal.gms:676).
+    """capFlex ``risk[r] = rorg/rore(r)`` at the benchmark, from the calibrated data as
+    GAMS ``cal.gms:680-684`` (``capflex_risk.capflex_risk_from_data``). No solve and no
+    GDX; ``sets``, ``closure``, ``residual_region`` and ``ref_gdx`` stay in the signature
+    for the callers. Raises when a region has no rate of return (never ``risk = 1``)."""
+    from equilibria.templates.gtap.capflex_risk import capflex_risk_from_data
 
-    The equalization savfeq (risk*rore == rorg) must preserve the benchmark return spread:
-    at base, returns DIFFER by region (rore(r) != rorg), and risk[r] freezes that ratio so a
-    shock reallocates investment relative to the benchmark, not toward a spurious uniform rore.
-    Leaving risk=1 blows up qinv.
-
-    FAST PATH: read the benchmark rore/rorg from the GAMS ref GDX (GAMS already solved them) —
-    avoids a full capFix twin-solve (266s on 10x7). Only when no usable GDX is available do we
-    fall back to building+solving a capFix twin. Returns ``{}`` on any failure (block then
-    falls back to risk=1)."""
-    import contextlib
-    import io
-
-    from pyomo.environ import value as _V
-
-    from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
-
-    regions = _set_elems(sets).get("r", [])
-
-    # --- fast path: GAMS ref GDX carries the benchmark rore/rorg ---
-    fast = _capflex_risk_from_gdx(ref_gdx, regions)
-    if fast:
-        return fast
-
-    # --- fallback: capFix twin-solve (slow) ---
-    cfix = (
-        closure.model_copy(update={"savf_flag": "capFix"})
-        if hasattr(closure, "model_copy")
-        else GTAPClosureConfig(
-            name="base",
-            closure_type="MCP",
-            capital_mobility="sluggish",
-            if_sub=bool(getattr(closure, "if_sub", False)),
-            savf_flag="capFix",
-        )
-    )
-    try:
-        with (
-            contextlib.redirect_stderr(io.StringIO()),
-            contextlib.redirect_stdout(io.StringIO()),
-        ):
-            from equilibria.core.exercise import Exercise
-            from equilibria.templates.gtap.recipe import gtap_static
-            from equilibria.templates.gtap.template import GTAP
-
-            ex = Exercise(
-                GTAP(params, cfix, residual_region=residual_region), gtap_static()
-            )
-            ex.run()
-            mt = cast("Any", ex.model).pyomo
-    except Exception as exc:
-        # falls back to risk = 1, as before, but not silently
-        _log.warning(
-            "capFlex risk: the capFix twin-solve failed (%s: %s); risk falls back to 1",
-            type(exc).__name__,
-            exc,
-        )
-        return {}
-
-    def _base(v, *keys):
-        for k in keys:
-            try:
-                return float(_V(getattr(mt, v)[k]))
-            except Exception:
-                continue
-        return None
-
-    rorg_b = _base("rorg", "base", ("base",))
-    if rorg_b is None:
-        return {}
-    out: dict = {}
-    for r in regions:
-        rore_b = _base("rore", (r, "base"))
-        if rore_b and abs(rore_b) > 1e-12:
-            out[r] = rorg_b / rore_b
-    return out
+    return capflex_risk_from_data(params)
 
 
 def _fisher_snapshot(pm: Any) -> tuple[dict[str, Any], Any]:
