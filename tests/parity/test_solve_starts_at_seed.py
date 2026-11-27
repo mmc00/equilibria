@@ -87,3 +87,21 @@ def test_the_solve_of_the_period_starts_at_the_gams_point(period, monkeypatch):
         f"{len(off)} free cell(s) of {period} do not start at the GAMS seed; "
         f"largest {off[-3:]}"
     )
+
+
+@pytest.mark.skipif(_FOLDER is None, reason="GAMS MCP altertax ref absent")
+@pytest.mark.needs_path
+@pytest.mark.needs_gdxdump  # the seed reads the GAMS GDX through it
+@pytest.mark.parametrize("period", ["check", "shock"])
+def test_the_residual_tail_reads_the_system_handed_to_the_solver(period):
+    """STAYS reads the tail at the GAMS point on the system PATH solved: with the
+    rows recalibrate_shares rebuilt (``_eq_nd_recal_<r>_<a>_<t>``), without the
+    rows PATH switches off (the zero-flow wedges eq_dintxeq, eq_mintxeq)."""
+    assert _FOLDER is not None
+    out = SS.run_seed_and_solve_gtap(
+        "gtap7_3x3", _FOLDER / "out.gdx", period, 5, False, "altertax"
+    )
+    families = {family for _, family, _ in out["eq_resid"]}
+    assert not families & {"eq_dintxeq", "eq_mintxeq"}
+    recal = {f for f in families if f.startswith("_eq_nd_recal_")}
+    assert recal and all(f.endswith(f"_{period}") for f in recal), sorted(recal)
