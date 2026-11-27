@@ -126,3 +126,21 @@ def test_the_cascade_case_seeds_from_the_cascade_gdx(monkeypatch, tmp_path):
     monkeypatch.setattr(NC, "_run_nl_gate", lambda args, refs: seen.update(refs))
     NC._run_nl(_nl_args(gdx=gdx))
     assert seen["gdx"] == gdx
+
+
+@pytest.mark.skipif(_NL is None, reason="GAMS .nl altertax ref absent")
+@pytest.mark.needs_path
+@pytest.mark.needs_gdxdump
+def test_the_python_nl_is_the_system_path_solves(tmp_path):
+    """The .nl is written after PATH's own fixes, as diff_mcp_pairing reads them:
+    the zero-flow wedge rows PATH switches off (eq_dintxeq, eq_mintxeq) are not in
+    it (MAR-252)."""
+    refs = NC.gate_references("gtap7_3x3", "altertax", 0)
+    assert refs is not None
+    paths = NC.build_python_nls_gate(
+        "gtap7_3x3", ["check", "shock"], tmp_path, "altertax", 0, refs["gdx"]
+    )
+    for period, nl in paths.items():
+        rows = nl.with_suffix(".row").read_text().split()
+        off = [r for r in rows if r.startswith(("eq_dintxeq[", "eq_mintxeq["))]
+        assert not off, f"{period}: {len(off)} rows PATH switches off, e.g. {off[:2]}"

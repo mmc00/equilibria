@@ -336,11 +336,74 @@ def seed_levels(
     return out
 
 
-def start_at_seed(seeds: dict[str, dict[tuple[str, tuple], float]]):
+def _put_seed(model, period: str, seed) -> None:
+    """``period``'s free cells take their ``seed`` level; fixed and exogenous cells
+    keep theirs."""
+    for name in model.var_names():
+        held = model.fixed_cells(name, period) | model.exogenous_cells(name, period)
+        model.set_values(
+            name,
+            period,
+            {
+                k: seed[(name, k)]
+                for k in model.var_cells(name, period)
+                if k not in held and (name, k) in seed
+            },
+        )
+
+
+def residual_tail(m, period: str) -> list[tuple[float, str, tuple]]:
+    """``[(residual, row family, cell without the period)]`` over ``period``'s active
+    rows, largest first. The rows recalibrate_shares builds are scalars named
+    ``_eq_<nd|va>_recal_<r>_<a>_<t>``: they count for the period their name ends with."""
+    from pyomo.environ import Constraint
+    from pyomo.environ import value as V
+
+    out = []
+    for c in m.component_objects(Constraint, active=True):
+        for idx in c:
+            cd = c[idx]
+            if not cd.active:
+                continue
+            if isinstance(idx, tuple):
+                if not idx or idx[-1] != period:
+                    continue
+                body_idx = idx[:-1] if len(idx) > 1 else ()
+            elif idx is None and "_recal_" in c.name:
+                if not c.name.endswith(f"_{period}"):
+                    continue
+                body_idx = ()
+            else:
+                if idx != period:
+                    continue
+                body_idx = ()
+            try:
+                b = V(cd.body)
+                lo = V(cd.lower) if cd.lower is not None else None
+                up = V(cd.upper) if cd.upper is not None else None
+                rr_ = 0.0
+                if lo is not None:
+                    rr_ = max(rr_, abs(b - lo))
+                if up is not None:
+                    rr_ = max(rr_, abs(b - up))
+                out.append((rr_, c.name, body_idx))
+            except Exception:
+                pass
+    out.sort(reverse=True)
+    return out
+
+
+def start_at_seed(seeds: dict[str, dict[tuple[str, tuple], float]], tails=None):
     """The default solver, but the solved period's free cells (not fixed, not
     exogenous) first take their ``seeds`` level. The shock's plan seeds them from
     Python's solved check (``seed_from(prior)``), so without this the shock would
-    start there and not at the GAMS point (MAR-252)."""
+    start there and not at the GAMS point (MAR-252).
+
+    With a ``tails`` dict, right after the solve (before the driver freezes the
+    period) it records ``tails[period] = residual_tail`` at the seed on the system
+    the solver was handed: the rows recalibrate_shares rebuilt are in, the rows
+    PATH switched off and the cells it fixed are as PATH left them. The solved
+    levels are put back afterwards."""
     from equilibria.templates.gtap import recipe
 
     def solver(model):
@@ -348,33 +411,33 @@ def start_at_seed(seeds: dict[str, dict[tuple[str, tuple], float]]):
         active = [
             t for t in model.periods if any(model.active_rows(r, t) for r in rows)
         ]
-        if len(active) == 1 and active[0] in seeds:
-            period, seed = active[0], seeds[active[0]]
-            for name in model.var_names():
-                held = model.fixed_cells(name, period) | model.exogenous_cells(
-                    name, period
-                )
-                model.set_values(
-                    name,
-                    period,
-                    {
-                        k: seed[(name, k)]
-                        for k in model.var_cells(name, period)
-                        if k not in held and (name, k) in seed
-                    },
-                )
-        return recipe._by_backend(model)
+        period = active[0] if len(active) == 1 and active[0] in seeds else None
+        if period is not None:
+            _put_seed(model, period, seeds[period])
+        status = recipe._by_backend(model)
+        if period is not None and tails is not None:
+            solved = {n: model.values(n, period) for n in model.var_names()}
+            _put_seed(model, period, seeds[period])
+            tails[period] = residual_tail(model.pyomo, period)
+            for name, levels in solved.items():
+                model.set_values(name, period, levels)
+        return status
 
     return solver
 
 
 def _solve_gtap(
-    dataset: str, gdx_path: Path, if_sub: bool, mode: str = "gtap", seeded=None
+    dataset: str,
+    gdx_path: Path,
+    if_sub: bool,
+    mode: str = "gtap",
+    seeded=None,
+    tails=None,
 ):
     """The full multi-period model seeded from ``gdx_path`` in every period, solved
     base (skipped) -> check -> shock on the core driver, each solve starting at the
     GAMS point (``start_at_seed``) read from ``seeded``, a build_seeded model of the
-    case (built here when None). Returns
+    case (built here when None); ``tails`` as in ``start_at_seed``. Returns
     (model, ``{period: {"code": old-form int, "residual": float}}``)."""
     from _core_run import solve_on_core
 
@@ -388,7 +451,7 @@ def _solve_gtap(
         mode=mode,
         ref_gdx=gdx_path,
         seed_gdx=gdx_path,
-        solver=start_at_seed(seed_levels(seeded)),
+        solver=start_at_seed(seed_levels(seeded), tails),
     )
     res = {k: {"code": codes[k], "residual": core[k]["residual"]} for k in codes}
     return m, res
@@ -438,17 +501,17 @@ def run_seed_and_solve_gtap(
     The shock is MULTI-PERIOD: the tariff is the 'shock' cell of imptx in the
     ShockBlock (shocks.apply_default_tariff). So we build the FULL multi-period
     model as the MCP gate does (``_case``), seed it from the GAMS GDX in every
-    period, solve on the core driver (gtap_static), and compute the residual TAIL
-    for the requested period on a FRESH re-seeded build (so the residual reflects
-    the SEED, not the post-solve state).
+    period, solve on the core driver (gtap_static) from that point, and read the
+    residual TAIL of the requested period at the seed on the system the solver was
+    handed (``start_at_seed``), not on the post-solve state.
     """
-    from pyomo.environ import value as V, Constraint
+    from pyomo.environ import value as V
 
     def _build_seeded():
         return build_seeded(dataset, gdx_path, period, mode, if_sub)
 
-    # 1) One hand build holds the SEED: the sentinel before the solve here, the
-    #    residual tail below (it is not solved). The SOLVE runs on the core driver.
+    # 1) One hand build holds the SEED: the sentinel before the solve and the start
+    #    levels of every solve. The SOLVE runs on the core driver.
     _p2, _gc2, m2 = _build_seeded()
     m = m2
 
@@ -471,17 +534,10 @@ def run_seed_and_solve_gtap(
 
     sent_name, sent_before = _sentinel()
 
-    m, res = _solve_gtap(dataset, gdx_path, if_sub, mode, seeded=m2)
-    code = res.get(period, {}).get("code")
-    resid = float(res.get(period, {}).get("residual") or 0.0)
-    _, sent_after = _sentinel()
-
-    # 2) Residual TAIL at the SEED — fresh re-seeded build, filter constraints to
-    #    the requested period (MP constraints are indexed (...,period)). DISCIPLINE 1:
-    #    cascade the Python-only derived aggregates for this period BEFORE reading the
-    #    residual, else eq_xc/eq_xda/eq_xaa/eq_xigbl carry spurious ~1-2 seed-incomplete
-    #    residuals that masquerade as differing equations.
-
+    # DISCIPLINE 1: the seed carries the Python-only derived aggregates of the period
+    # (xd/xmt/xc/xg/xi/...), else eq_xc/eq_xda/eq_xaa/eq_xigbl carry spurious ~1-2
+    # seed-incomplete residuals that masquerade as differing equations; seed_levels
+    # (in _solve_gtap) reads them the same way.
     def _setv(comp, key, val):
         try:
             comp[key].set_value(val)
@@ -490,34 +546,15 @@ def run_seed_and_solve_gtap(
             return 0
 
     n_cascade = _cascade_derived_seed_mp(m2, V, _setv, period)
-    eq_resid = []  # (resid, family, idx-without-period)
-    for c in m2.component_objects(Constraint, active=True):
-        for idx in c:
-            cd = c[idx]
-            if not cd.active:
-                continue
-            # period filter: keep only this period's slice.
-            if isinstance(idx, tuple):
-                if not idx or idx[-1] != period:
-                    continue
-                body_idx = idx[:-1] if len(idx) > 1 else ()
-            else:
-                if idx != period:
-                    continue
-                body_idx = ()
-            try:
-                b = V(cd.body)
-                lo = V(cd.lower) if cd.lower is not None else None
-                up = V(cd.upper) if cd.upper is not None else None
-                rr_ = 0.0
-                if lo is not None:
-                    rr_ = max(rr_, abs(b - lo))
-                if up is not None:
-                    rr_ = max(rr_, abs(b - up))
-                eq_resid.append((rr_, c.name, body_idx))
-            except Exception:
-                pass
-    eq_resid.sort(reverse=True)
+
+    # 2) The solve, from the GAMS point; the residual TAIL at the seed is read inside
+    #    the solver, on the system PATH was handed (start_at_seed), not on m2.
+    tails: dict = {}
+    m, res = _solve_gtap(dataset, gdx_path, if_sub, mode, seeded=m2, tails=tails)
+    code = res.get(period, {}).get("code")
+    resid = float(res.get(period, {}).get("residual") or 0.0)
+    _, sent_after = _sentinel()
+    eq_resid = tails.get(period, [])  # (resid, family, idx-without-period)
     median = statistics.median([r_ for r_, _, _ in eq_resid]) if eq_resid else 0.0
 
     return {

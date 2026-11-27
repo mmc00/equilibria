@@ -1583,8 +1583,10 @@ def build_python_nls_gate(
     dataset: str, phases, out_dir: Path, mode: str, ifsub: int, gdx: Path
 ) -> dict[str, Path]:
     """Write ``python_<period>.nl`` for each phase from the case the MCP gate builds,
-    run on the core driver seeded at ``gdx``: each file is the model at the solve of
-    its period, the other periods fixed, as GAMS holds them (holdfixed)."""
+    run on the core driver seeded at ``gdx``: each file is the system PATH solves for
+    its period (after its own fixes and switched-off rows, as diff_mcp_pairing reads
+    it), at the point the solve started, the other periods fixed, as GAMS holds them
+    (holdfixed)."""
     from _core_run import solve_on_core
     from seed_and_solve import _case
 
@@ -1595,13 +1597,24 @@ def build_python_nls_gate(
     def spy(model):
         staged = model.staged
         period = staged.period if staged is not None else None
-        if period in phases and period not in paths:
-            out = out_dir / f"python_{period}.nl"
-            model.pyomo.write(
-                str(out), format="nl", io_options={"symbolic_solver_labels": True}
+        if period not in phases or period in paths:
+            return _by_backend(model)
+        start = {n: model.values(n, period) for n in model.var_names()}
+        status = _by_backend(model)
+        solved = {n: model.values(n, period) for n in model.var_names()}
+        for name, levels in start.items():
+            fixed = model.fixed_cells(name, period)
+            model.set_values(
+                name, period, {k: v for k, v in levels.items() if k not in fixed}
             )
-            paths[period] = out
-        return _by_backend(model)
+        out = out_dir / f"python_{period}.nl"
+        model.pyomo.write(
+            str(out), format="nl", io_options={"symbolic_solver_labels": True}
+        )
+        paths[period] = out
+        for name, levels in solved.items():
+            model.set_values(name, period, levels)
+        return status
 
     p, gc, rr = _case(dataset, bool(ifsub), mode)
     solve_on_core(
