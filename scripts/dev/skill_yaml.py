@@ -3,7 +3,8 @@ hash and stamp of a skill's folder (specs/2026-11-26-skills-uber-method-design.m
 
 The YAML subset: a list of flat maps whose values are strings or lists of
 strings; plain, single- and double-quoted scalars; flow (``[a, b]``) and block
-(``- a``) lists; ``#`` comments. Anything else raises ``SubsetError`` with its
+(``- a``) lists; ``#`` comments. A plain scalar may not hold ``": "`` (YAML
+would read a map); quote it. Anything else raises ``SubsetError`` with its
 line: it never gets a guessed parse.
 """
 
@@ -56,6 +57,10 @@ def _scalar(raw: str, line: int) -> str:
         if len(raw) < 2 or raw[-1] != "'":
             raise SubsetError(line, "unclosed single quote")
         return raw[1:-1].replace("''", "'")
+    if raw[0] in "[]}" or ": " in raw or raw.endswith(":"):
+        raise SubsetError(
+            line, f"plain value {raw!r} reads as a list or a map in YAML; quote it"
+        )
     return raw
 
 
@@ -84,6 +89,7 @@ def read_prompts(text: str) -> list[dict[str, str | list[str]]]:
     """The prompts of a prompts.yaml, as a list of flat maps."""
     out: list[dict[str, str | list[str]]] = []
     open_list: list[str] | None = None
+    opened_at: dict[int, int] = {}  # id of an open block list -> its key's line
     for n, original in enumerate(text.replace("\r\n", "\n").split("\n"), start=1):
         line = _strip_comment(original)
         if not line.strip():
@@ -114,6 +120,7 @@ def read_prompts(text: str) -> list[dict[str, str | list[str]]]:
             raise SubsetError(n, f"duplicate key {key!r}")
         if not value:
             open_list = []
+            opened_at[id(open_list)] = n
             out[-1][key] = open_list
         elif value.startswith("["):
             if not value.endswith("]"):
@@ -124,7 +131,7 @@ def read_prompts(text: str) -> list[dict[str, str | list[str]]]:
     for item in out:
         for key, value in item.items():
             if value == []:
-                raise SubsetError(0, f"{key!r} has no value")
+                raise SubsetError(opened_at[id(value)], f"{key!r} has no value")
     return out
 
 

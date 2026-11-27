@@ -69,3 +69,34 @@ def test_the_hash_ignores_dotfiles_and_git_ignored_files(tmp_path):
     assert SY.skill_hash(folder) == before
     (folder / "spec.md").write_text("new\n")
     assert SY.skill_hash(folder) != before
+
+
+# MAR-257: the final review's deferred minors
+
+
+def test_an_empty_list_key_names_its_own_line():
+    with pytest.raises(SY.SubsetError) as err:
+        SY.read_prompts("- id: p1\n  must_run:\n  expect: x\n")
+    assert err.value.line == 2
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "- id: p1\n  must_run: [a, [b]]\n",
+        "- id: p1\n  must_run: [a, {b: c}]\n",
+        "- id: p1\n  prompt: Fix: the thing\n",
+        "- id: p1\n  must_run: [a: b]\n",
+    ],
+)
+def test_nested_flow_or_a_colon_in_a_plain_scalar_raises(text):
+    with pytest.raises(SY.SubsetError) as err:
+        SY.read_prompts(text)
+    assert err.value.line == 2
+
+
+def test_a_quoted_colon_and_a_url_are_fine():
+    text = '- id: p1\n  prompt: "Fix: the thing"\n  expect: see https://x.org/a\n'
+    assert SY.read_prompts(text) == [
+        {"id": "p1", "prompt": "Fix: the thing", "expect": "see https://x.org/a"}
+    ]
