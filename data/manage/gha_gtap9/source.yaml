@@ -1,0 +1,23 @@
+kind: data
+model: manage
+dataset: gha_gtap9
+source: Ghana (GTAP region GHA) bridge files of MANAGE-WB, made from manage/gams_wb/dat/gtapData9.gdx
+  by manage/gams/run_gha_one_year.sh steps 1-2 (gtapSamV6.gms with mac/gui_prepare_gtap_sam.gms,
+  the GUI task Prepare GTAP SAM; then mac/fix_bridge.py) on macOS 26.2, GAMS 53.5.0,
+  LibreOffice for the recalculation, 2026-11-27. BaseBridge_GHA_GTAP_9.xlsx and SAM_GHA_GTAP.xlsx
+  are reg/GHA/ of that run; BaseBridge_GHA_GTAP_9.gdx is sav/ of the same run, the
+  conversion inc/opt.inc makes of the xlsx at the start of run.gms (mac/gdxxrw.py
+  with the Layout index sheet)
+license: Derived from the GTAP 9 Data Base (free archived release; cite Aguiar, A.,
+  Narayanan, B. and McDougall, R. (2016), An Overview of the GTAP 9 Data Base, Journal
+  of Global Economic Analysis 1(1), 181-208) through MANAGE-WB (MIT with the World
+  Bank IGO Rider); kept in the repository with the maintainer's approval (2026-11-27)
+outputs:
+  BaseBridge_GHA_GTAP_9.gdx: 53bd45fb4029d14ad13d921197fe86c12dbe4e9ab22cec3a2c39bef1fa5ba52b
+  BaseBridge_GHA_GTAP_9.xlsx: 19e1f32c1f7ef2ffce3fa52ff9c5b2a52c287ad2fe81e993d8edc613b5c26078
+  SAM_GHA_GTAP.xlsx: d8a4974f9097c0dd03145c2f2654ea52b2e2587e2d0bd407807524f507926e31
+status: verified
+notes: 'Base year 2014: the set BaseYear of dat/BridgeFile_GTAP_9_template.xlsx (gtapSamV6.gms
+  itself sets 2011 for GTAP 9 and writes debt data for 2017). The balancing QCP of
+  gtapSamV6.gms ran with IPOPT instead of the GUI default CONOPT4 (license). The SAM
+  is the GTAP SAM: the task Match to macro SAM (SAMest.gms) was not run.'

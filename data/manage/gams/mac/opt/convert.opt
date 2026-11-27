@@ -1,0 +1,4 @@
+* CONVERT: write the MCP instance as a scalar GAMS model for NEOS (see run.gms, convertMCP)
+Gams     mac/run/neos/gha2015_scalar.gms
+Dict     mac/run/neos/gha2015_dict.txt
+DictMap  mac/run/neos/gha2015_dictmap.gdx

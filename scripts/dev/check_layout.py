@@ -185,6 +185,11 @@ ALLOWED_PREFIXES: tuple[str, ...] = (
     # keep the author's upstream CamelCase — renaming would break fidelity to
     # the published sources and the references in dogams.bat / the README.
     "data/horridge_simple/",
+    # World Bank MANAGE-WB (github.com/worldbank/MANAGE-WB): upstream names
+    # (Base.inc, RSCCDamages.inc, dat/MFMODgdp.gdx, ...), the bridge files the
+    # model reads by name (reg/GHA/BaseBridge_GHA_GTAP_9.xlsx) and the result
+    # it writes (res/GHA/GHA_BaU.gdx).
+    "data/manage/",
 )
 
 

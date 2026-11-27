@@ -414,3 +414,8 @@ gtap7_status_sweep_*.md
 # not hide them.
 !data/**/gams_*/model.lst
 !data/**/gams_*/neos.log
+# MANAGE-WB (data/manage/): the model's inc/output/ include folder (not an
+# output folder) and the local result's listing and log, listed as outputs.
+!data/manage/**/inc/output/
+!data/manage/**/gams_*/baseline.lst
+!data/manage/**/gams_*/baseline.log

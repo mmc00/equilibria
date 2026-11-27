@@ -87,6 +87,7 @@ a record is still `pending`.
 | `gtap6/gtap6_{3x3,3x4,5x5,10x7,15x10,20x41}/` | GTAP v6 aggregations (HAR) |
 | `gtap7/nus333/` | Burfisher's NUS333 package: HAR data and the book's experiments (`.exp`, `.shk`, `.prm`) |
 | `gtap7/9x10/` | GTAP Standard 7 GAMS distribution, HAR inputs |
+| `manage/gha_gtap9/` | MANAGE-WB Ghana bridge files (from GTAP 9 through `gtapSamV6.gms`); see MANAGE results below |
 
 `nus333` and `9x10` also ship inside the wheel (`load_bundled("gtap", name)`).
 Code finds a dataset by name:
@@ -168,6 +169,32 @@ says `PATH` while `solver.name` says CONOPT. `SUBPAR` of CHE sits at the GTAP
 floor (1e-6), which puts `zcons(CHE)` near 1e-10, below the solvers'
 tolerances; these runs scale `zcons` and `zconseq` by their calibrated level
 (`--scale-zcons`), and `notes` says so.
+
+## MANAGE results
+
+`data/manage/gams_wb/` holds the World Bank MANAGE-WB files the Ghana run reads,
+untouched (github.com/worldbank/MANAGE-WB at 4de012a, MIT with the World Bank
+IGO Rider). `data/manage/gams/` is the model that runs on macOS without the GUI
+or GDXXRW (derived_from `gams_wb`; `source.yaml` lists every change with its
+commit on the local branch `mac-one-year`); `run_gha_one_year.sh` runs it.
+`gha_gtap9/` is the Ghana dataset: the bridge files that branch's
+`gtapSamV6.gms` makes from `dat/gtapData9.gdx`, derived from the GTAP 9 Data Base
+(Aguiar, Narayanan and McDougall 2016, Journal of Global Economic Analysis 1(1)).
+Its results are one solved year, the task Baseline with `none.inc`: base year
+2014, 2015 solved, dynamics, damages and links off. A folder is
+`gams_mcp_baseline_y<year>_<mcp_solver>`:
+
+| `mcp_solver` | Where |
+|---|---|
+| `nlpec-ipopt` | local, NLPEC with IPOPT (PATH and CONOPT4 exceed the local license at 9,452 rows); also keeps the CONVERT scalar model at the start and at the solution and the NEOS file |
+| `path` | NEOS, PATH on that NEOS file (job 25276438, collected, not resubmitted) |
+
+```python
+reference("gha_gtap9", "gams", form="mcp", task="baseline", year=2015,
+          mcp_solver="nlpec-ipopt")
+reference("gha_gtap9", "gams", form="mcp", task="baseline", year=2015,
+          mcp_solver="path")
+```
 
 ## GEMPACK results
 

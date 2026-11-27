@@ -1,0 +1,5 @@
+* NLPEC options for macOS runs: same as opt/nlpec.opt, but the NLP subsolver
+* is IPOPT because CONOPT4 (and PATH) exceed the local GAMS license for this
+* model size.
+subsolver=IPOPT
+parmFile=opt/nlpec.par

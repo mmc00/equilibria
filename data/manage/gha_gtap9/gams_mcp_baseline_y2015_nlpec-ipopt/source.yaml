@@ -1,0 +1,141 @@
+kind: result
+model: manage
+dataset: gha_gtap9
+tool: gams
+tool_version: 53.5.0
+variant:
+  form: mcp
+  task: baseline
+  year: 2015
+  mcp_solver: nlpec-ipopt
+generated_from:
+  model:
+    path: manage/gams
+    sha256:
+      LICENSE: 37e518c3a62635aaf58cd10a618bf709456b7128429549c0720c869d21155ec5
+      WB-IGO-RIDER.md: 0eb2ebbc7e1181ea7d5b6f58698f2b9c85313455b4c923ed8b7de1709d52d548
+      dat/BridgeFile_GTAP_9_template.xlsx: 7c6259989627ef1e5531ad5de3b66307cbe602a7b988d4f169fd64aabdd33c89
+      dat/MFMODgdp.gdx: 7345ed651a34b9ba520492c635db832b3d165c82caed078e957fcd9b429be4c4
+      dat/SAM_GTAP_STD_template.xlsx: ff8518169f8b92b48f4793daf2251d731cc7e7ebabcb0e432506baec6fca471f
+      dat/debtData.gdx: c6add9779ed184cb1a24281f6981586dea2da41dfb9957cc4b67835cfa0b1b61
+      dat/faoProd.gdx: 8c5e5bc090d86a7cec8d40acd5acd30372cb3897035283a7ce544872ccb7d214
+      dat/ghg.gdx: 85eeead3479f1cef9dec91f3005fbbc6b7c4993558aed36d10eaf4a1d4d8e460
+      dat/gtapData9.gdx: ac1761a243d2953f533916ba84ace5c9cb19f7356408c6b0fa6c88c8e7f3cdc5
+      dat/unPop.gdx: b06f353d9ed07d84a6e40b5cd1da0f68e0e08f3b9fa1d37a53822cb7a03a2492
+      gtapSamV6.gms: f104d1d7448816e698a761f1484ddcca0c6d38254e2d1c6a3c38accd402c3b68
+      gui/manage.xml: a52aa4fa5d15d023d8e4646da6934e0e429c7a9882dc72e63b488b356e03390c
+      inc/Base.inc: 8575e054ffcebf807aeb626d701b7ffd838e1de3081e2f55f5cb15a48bc30382
+      inc/RSCCDamages.inc: 7bc1a656af1536f264e82402c5f76f87d021c83f57dbbe83e45813ecd4f2e70b
+      inc/cal/calCDE.inc: b0e6cc8ec871934d104d95abcb28367cd3771916d669965dea912e2719460446
+      inc/cal/iniEmis.inc: 98c5e8447e6e75f1319b21d9d738b8943e2c4842fe38c95651349ba2c3aea58e
+      inc/cal/inical.inc: 7388f5fc051f894be4831f747a71dad192738f4b09c90aecd191a558b64726de
+      inc/cal/rescale.inc: 4ce8745ce3ee226f3bff7821bb4551dff98845fc2cce78e9affe7bcff30c4626
+      inc/gdxxrw_cmd.inc: 9d4d5cd7a0fb3020d604382982917135e1be7b05949e3acaf101f1291f0d96f0
+      inc/model.inc: 5773a4f041098cd77739a2ab6be72e84bd1358c8d55a35a916e43ccd8906e08e
+      inc/model_def.inc: 2380072c0934193437b8eb9ea1cde082afd4f905c9077036878285bc53970323
+      inc/model_def_copy.inc: 26ac0696c4cacb86759b3be090e6cd933d59d310a32796011288d9b439b4d3cb
+      inc/opt.inc: dc8af03d3f4dd3ef5c5a5f61a93a13607a727cfc311b29349c2ddd2481a1d01e
+      inc/output/generate_set_gdx.gms: b65d59d9238a1faac029ec922e5cde532973b456edf3f83057f7babfbb94ce59
+      inc/output/reportDecl.inc: 6e3e6e9c3369230082b05519cb9f3ca2357640f9166178c489a63fcc2f749c47
+      inc/output/toGui.inc: 8e64098866f763ade33e5fb4802b6edd418d46395eeca68d365edaf99b22fe97
+      inc/shockFiles/BalGrowth.inc: 71d1d9819cf77ef857962a48363aaa7a3c036e19c1874160ec398507cfacda22
+      inc/shockFiles/GHGMitigation.inc: dbd4e8a78d7701f82fdab7316724664d28ac47cebc0ad698c29348bc13fa71ee
+      inc/shockFiles/ccdmgIEC.inc: 95856a1b23a6b066f1e079a0f41944f78b9f6cb739d13de35912fac59bcbade8
+      inc/shockFiles/ccdr.inc: ae61fbe03353c2cf3d06215542e77cf2db5179aba44311b94aba1b43da8c53de
+      inc/shockFiles/empty.inc: be1666ff4fa2b79bb827afd6b7a0e5c26203a6ace7d8d5299b0be7dd4a2548c6
+      inc/shockFiles/fixEnergy.inc: 9b57cab39a43144cff4ded788c88191e863ee8066626bede58f881120e2a4f74
+      inc/shockFiles/fixPowerMix.inc: 3a6aa69fad53ea90e5b6eeaa3fd2114e6acfc99cd5b15a8c0c2fa066ec918999
+      inc/shockFiles/fixSectSpecFac.inc: 9a4d588028a425ec6445f14419886b4dfb5750d077a1afd76a4146b175be52f5
+      inc/shockFiles/none.inc: a851c96ffd4f1bfa4bf0975ae88bf25f1642d2a1f36657fe6f0e595150e20638
+      inc/shockFiles/numtest.inc: c1c61d43cef4c22ad1ae095258cc984e3199bef939feef81afcfe356f221de62
+      inc/shockFiles/output_keyInd.inc: e057e1c127a1dec8c87a17d6146885cd2c7aaff4beb4a785e017d392d68de898
+      inc/shockFiles/redGhg.inc: 55839a2e9090a7fdf53e04ca1e5a1e8e6cd9c20c8cdfc8634f9ce13996a9a800
+      inc/shockFiles/shk_drm.inc: 1f26cc8bf670c49e3abea43d9093246f6a058ac4180c9108c9d587c4c8062d6a
+      inc/solve/checkInfes.inc: d4badc5d78c3c1da29ca18ae5520847af8a53d25023ab8a41108549918d021c0
+      inc/solve/checkModelSolution.inc: defc7b948e997aa8f113c96a4da20e7625686d2dddac8b8383bae56ff224fd5c
+      inc/solve/iniVars.inc: 54242ef627eebea8cb65b0c042d0bba0c62a1aa20534110d602dab20b684ede0
+      inc/solve/iterloop.inc: 124238f1573a7995f8c087c85a5e79167cdecec97b7b5e325f34d4c2899ed8eb
+      inc/solve/kill_equ.inc: 81c12e7374038141564c49c46d79c0e246fef4ffd8529945b8841a1dbe000bef
+      inc/solve/prepSolve.inc: d3e06b13373908e177c51af1faf16adf2558950fe7bb82bbb667f9129186c060
+      inc/solve/resLastYear.inc: 01df572764ccc02633a9933d494d734f04adb2421ecd8f9d9cf24542fb0622e2
+      inc/title.inc: 514c44252c678495fba96316bf29a8c5bf081d530457b41d4f0744b1c101e5e9
+      inc/title_def.inc: 5d9055d80b60b8012ce966c1da25f2e99d50c8fdc5e16d34f3b91ebd78f431f6
+      mac/fix_bridge.py: 026f82201554b8dd3478b07b03fe363bff33d60e984da086cce00a86f2733e6b
+      mac/gdxxrw.py: 7172b7c6a1009463b579dfc8a31e32e93485d76e928577a0606b415885928d7b
+      mac/gui_baseline_one_year.gms: 415ba2d33d963064813a9ddd934c99f6b31a3ccf47240a4b419414abf87b13f5
+      mac/gui_meta_items.gms: ebe390889132d8d691bc1e1d86f37ce8b25327d8e97bab980aab3aac6c04c282
+      mac/gui_prepare_gtap_sam.gms: b3dc254db509a3ab3dbf940596885a4a44728046a8fe050d50ecbc0152b01956
+      mac/make_neos_model.py: 4e9eb7f9adda9b1109885c26117b2fd6645935444d192d065aa7593a7ab9ea64
+      mac/neos_collect.py: 363a8d0120268b744bfb27fa5682b285c0da570e9f49a194e8bff751ee8f0aef
+      mac/neos_submit.py: 26371e18396b2aad742086115c00ebfd6f4c86fccb169a12096b1791ed759fa1
+      mac/opt/convert.op2: 69fab6eab654e291774efe7034c23abf857be2373b4b2201c4d2c7a6df9f9fd8
+      mac/opt/convert.opt: 7117cbbcca6641e1c57b62755632325779d206870c70a8b8da5c109175b2fd8d
+      mac/opt/nlpec.opt: 92fbf63138465b2fc01c5da2e1dd7ba538454488c41975af47e537ea37e0fd4a
+      opt/conop4.op5: a5f6e2467713e13217b82478665bce2cab044e2b783a8d8ff5dd97488a7ac463
+      opt/conopt4.op2: 03cc4aca6b056ce73620019adad5622f17cd22b78dba9c32471ba300466d1acb
+      opt/conopt4.op3: eb6dd5c881595333fee4eaa34c3849f633fb986f311ec9dbf934907c529c2379
+      opt/conopt4.op4: e08e4bf7fc5af66d4946e22e9d1ad0d86a6b51d371c245105f81bf289060e2d3
+      opt/conopt4.op5: a5f6e2467713e13217b82478665bce2cab044e2b783a8d8ff5dd97488a7ac463
+      opt/conopt4.opt: 492256e4ddffa30a30ceaeb7c0bad6d2304f75b47d81189a30fe16e928d7bd5f
+      opt/nlpec.opt: 27a4feeba0144b42f872d6df8e55cb92d66f22eb0a8d82584142fe7cd2634b6c
+      opt/nlpec.par: 513017595915a5094e4789d0f7dd5a595d85a2a3e39c4243e866cb256b0e533e
+      opt/path.op2: f399c893551307bb226750e4c54c9a450ce8c0c3c2defa38648eb0f05f8d0e50
+      opt/path.op3: 4b4603c5b6227186e7b8f677bec3b7a91e8fbc46a3ceb163e67e1eb079827d8c
+      opt/path.op4: f399c893551307bb226750e4c54c9a450ce8c0c3c2defa38648eb0f05f8d0e50
+      opt/path.op5: d0352ebccf1c7d22b5670b6d12a0742ea3226b68993cd51ecbba4cf13d6b85e9
+      opt/path.op6: 317afb2d1df4f5a354d4eebdefaa60ce3002fc4434e523ded42db6af288ccc15
+      opt/path.opt: 4b4603c5b6227186e7b8f677bec3b7a91e8fbc46a3ceb163e67e1eb079827d8c
+      run.gms: 8b6c0480ae89a2ec46645d3716232e9efbe41e6433bf023362bc6ad6ce6afdc2
+      run_gha_one_year.sh: 77233d2635193215259e5f1bfd1684b82727b3026c65d300f732a006829f6da6
+  data:
+    path: manage/gha_gtap9
+    sha256:
+      BaseBridge_GHA_GTAP_9.gdx: 53bd45fb4029d14ad13d921197fe86c12dbe4e9ab22cec3a2c39bef1fa5ba52b
+      BaseBridge_GHA_GTAP_9.xlsx: 19e1f32c1f7ef2ffce3fa52ff9c5b2a52c287ad2fe81e993d8edc613b5c26078
+      SAM_GHA_GTAP.xlsx: d8a4974f9097c0dd03145c2f2654ea52b2e2587e2d0bd407807524f507926e31
+solver:
+  name: NLPEC (subsolver IPOPT)
+command: bash -c 'T=$(mktemp -d) && cp -R ../../gams/. "$T" && BRIDGE=../BaseBridge_GHA_GTAP_9.xlsx
+  OUT=. "$T/run_gha_one_year.sh" && rm -rf "$T"'
+equilibria_commit: 1b696835
+exit:
+  code: 0
+outputs:
+  GHA_BaU.gdx: f48d9b8a27e1087b45c90d6a80b085bc7aaedd3acdb52f5bef266c31e49a690e
+  baseline.log: e6ae91f08ba7052a6fbab2ac591ee69f3ea75b4bff4c2088507601aed563389f
+  baseline.lst: 08ef3a593399366648ac06a5b5dd1a6fac5d4c96c66264be50554456dcb944c6
+  gha2015_dict.txt: f1927a1937dd280ad9bb41aec2149d7f038be8df01a8481a5e8bb4f244c37c5a
+  gha2015_path.gms: 3b0b42b15650241f6d793d13e03f775def1e28cbbef69dc4f5ed3679359e39fe
+  gha2015_scalar.gms: a41b89fa7955f6b88e7176d4d0d303d307dd5344bbf5c9f6a83b434bfb009e9e
+  gha2015_solution.gms: 1017b43e7ca87490fcbb3956409531b40fc7419695273cdd4ecbaa291631d74d
+run:
+  date: '2026-11-27T13:28:06-06:00'
+  duration_s: 24.055
+  machine:
+    os: macOS 26.2 (Darwin 25.2.0)
+    cpu: Apple M3 Pro
+    cores: 11
+    ram_gb: 18.0
+status: verified
+notes: 'MANAGE-WB Ghana, task Baseline, shock file none.inc: base year 2014 (the bridge
+  file''s BaseYear, from the GTAP 9 template) calibrated, 2015 solved; dynamics (forward
+  looking, vintages, labor vintages, endogenous technology), climate damages and the
+  Invest link off. The command runs run_gha_one_year.sh in a temporary copy of manage/gams
+  from the recorded bridge file: the benchmark check, the balanced growth check (their
+  outputs are not kept) and the baseline, whose 2015 MCP (9,452 rows and columns,
+  all free, all equalities) NLPEC solves with IPOPT in one attempt (solve status 1,
+  model status 1, 0 infeasibilities). GHA_BaU.gdx holds every symbol after inc/cal/rescale.inc
+  (levels unscaled); gha2015_scalar.gms and gha2015_solution.gms are the CONVERT scalar
+  model at the start and at the solution of the 2015 solve (x1..xN, names in gha2015_dict.txt,
+  levels in the model''s internal scaling); gha2015_path.gms is the NEOS file made
+  from the start point (its CONVERT time stamp differs from the file sent to NEOS,
+  recorded in gams_mcp_baseline_y2015_path). The benchmark check does not replicate
+  in GAMS itself: inc/solve/resLastYear.inc lines 393-394 copy tPaf and tPaf0 to the
+  new year only for iExp, so the 7 goods Ghana does not export (c-coa, c-wol, c-wht,
+  c-gas, c-sgr, c-c_b, c-gdt) start at tPaf = 0 (largest residual 2.33 in e_paf(c-coa,a-i_s)),
+  and line 275 copies nshrGDP only for factors (residual 0.68 in e_nshrGDP(h-hhold));
+  the baseline solve starts from the same point and converges. The 2015 output of
+  a-ele rises 10.5 times and that of a-omf falls to 0.53 times; it is the model''s
+  equilibrium: PATH on NEOS from the same start point reaches the same point (max
+  abs difference 1.1e-6, max relative 7.9e-9 over the 9,452 variables). PATH and CONOPT4
+  cannot solve it locally: the local license limits them to demo size.'

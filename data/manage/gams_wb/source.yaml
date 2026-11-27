@@ -1,0 +1,80 @@
+kind: model
+model: manage
+source: 'World Bank MANAGE-WB, github.com/worldbank/MANAGE-WB at commit 4de012a (main,
+  committed 2026-06-23, cloned 2026-11-27), license MIT with the World Bank IGO Rider
+  (LICENSE, WB-IGO-RIDER.md). Only the files the Ghana one-year pipeline reads, byte
+  for byte as in git (CRLF kept): run.gms, gtapSamV6.gms, the inc/ files they include,
+  inc/shockFiles/ (gtapSamV6.gms copies all of them), opt/ (copied whole as the option
+  directory), the dat/ files they load, and gui/manage.xml (the GUI defaults the settings
+  files under manage/gams/mac/ reproduce; no run reads it). Not kept: jre/, gui/ jars
+  and images, htlm/, manage.bat, SAMest.gms and the other dat/ files'
+outputs:
+  LICENSE: 37e518c3a62635aaf58cd10a618bf709456b7128429549c0720c869d21155ec5
+  WB-IGO-RIDER.md: 0eb2ebbc7e1181ea7d5b6f58698f2b9c85313455b4c923ed8b7de1709d52d548
+  dat/BridgeFile_GTAP_9_template.xlsx: 7c6259989627ef1e5531ad5de3b66307cbe602a7b988d4f169fd64aabdd33c89
+  dat/MFMODgdp.gdx: 7345ed651a34b9ba520492c635db832b3d165c82caed078e957fcd9b429be4c4
+  dat/SAM_GTAP_STD_template.xlsx: ff8518169f8b92b48f4793daf2251d731cc7e7ebabcb0e432506baec6fca471f
+  dat/debtData.gdx: c6add9779ed184cb1a24281f6981586dea2da41dfb9957cc4b67835cfa0b1b61
+  dat/faoProd.gdx: 8c5e5bc090d86a7cec8d40acd5acd30372cb3897035283a7ce544872ccb7d214
+  dat/ghg.gdx: 85eeead3479f1cef9dec91f3005fbbc6b7c4993558aed36d10eaf4a1d4d8e460
+  dat/gtapData9.gdx: ac1761a243d2953f533916ba84ace5c9cb19f7356408c6b0fa6c88c8e7f3cdc5
+  dat/unPop.gdx: b06f353d9ed07d84a6e40b5cd1da0f68e0e08f3b9fa1d37a53822cb7a03a2492
+  gtapSamV6.gms: 64c4b181cdeff5bc620763a7e6331b52990a7540420c3e194533e086b6404b1a
+  gui/manage.xml: a52aa4fa5d15d023d8e4646da6934e0e429c7a9882dc72e63b488b356e03390c
+  inc/Base.inc: ff432dff6389d5496e8afe5437acfeea10ecc16d62e388c7860111154c3f3047
+  inc/RSCCDamages.inc: 7bc1a656af1536f264e82402c5f76f87d021c83f57dbbe83e45813ecd4f2e70b
+  inc/cal/calCDE.inc: b0e6cc8ec871934d104d95abcb28367cd3771916d669965dea912e2719460446
+  inc/cal/iniEmis.inc: 98c5e8447e6e75f1319b21d9d738b8943e2c4842fe38c95651349ba2c3aea58e
+  inc/cal/inical.inc: 7388f5fc051f894be4831f747a71dad192738f4b09c90aecd191a558b64726de
+  inc/cal/rescale.inc: 4ce8745ce3ee226f3bff7821bb4551dff98845fc2cce78e9affe7bcff30c4626
+  inc/model.inc: 5773a4f041098cd77739a2ab6be72e84bd1358c8d55a35a916e43ccd8906e08e
+  inc/model_def.inc: 2380072c0934193437b8eb9ea1cde082afd4f905c9077036878285bc53970323
+  inc/model_def_copy.inc: 26ac0696c4cacb86759b3be090e6cd933d59d310a32796011288d9b439b4d3cb
+  inc/opt.inc: c5d895f6bb62280188373f021c2435a4283fea9604cb9d403e9a826b21ad55f6
+  inc/output/generate_set_gdx.gms: b65d59d9238a1faac029ec922e5cde532973b456edf3f83057f7babfbb94ce59
+  inc/output/reportDecl.inc: 6e3e6e9c3369230082b05519cb9f3ca2357640f9166178c489a63fcc2f749c47
+  inc/output/toGui.inc: 8e64098866f763ade33e5fb4802b6edd418d46395eeca68d365edaf99b22fe97
+  inc/shockFiles/BalGrowth.inc: 71d1d9819cf77ef857962a48363aaa7a3c036e19c1874160ec398507cfacda22
+  inc/shockFiles/GHGMitigation.inc: dbd4e8a78d7701f82fdab7316724664d28ac47cebc0ad698c29348bc13fa71ee
+  inc/shockFiles/ccdmgIEC.inc: 95856a1b23a6b066f1e079a0f41944f78b9f6cb739d13de35912fac59bcbade8
+  inc/shockFiles/ccdr.inc: ae61fbe03353c2cf3d06215542e77cf2db5179aba44311b94aba1b43da8c53de
+  inc/shockFiles/empty.inc: be1666ff4fa2b79bb827afd6b7a0e5c26203a6ace7d8d5299b0be7dd4a2548c6
+  inc/shockFiles/fixEnergy.inc: 9b57cab39a43144cff4ded788c88191e863ee8066626bede58f881120e2a4f74
+  inc/shockFiles/fixPowerMix.inc: 3a6aa69fad53ea90e5b6eeaa3fd2114e6acfc99cd5b15a8c0c2fa066ec918999
+  inc/shockFiles/fixSectSpecFac.inc: 9a4d588028a425ec6445f14419886b4dfb5750d077a1afd76a4146b175be52f5
+  inc/shockFiles/none.inc: a851c96ffd4f1bfa4bf0975ae88bf25f1642d2a1f36657fe6f0e595150e20638
+  inc/shockFiles/numtest.inc: c1c61d43cef4c22ad1ae095258cc984e3199bef939feef81afcfe356f221de62
+  inc/shockFiles/output_keyInd.inc: e057e1c127a1dec8c87a17d6146885cd2c7aaff4beb4a785e017d392d68de898
+  inc/shockFiles/redGhg.inc: 55839a2e9090a7fdf53e04ca1e5a1e8e6cd9c20c8cdfc8634f9ce13996a9a800
+  inc/shockFiles/shk_drm.inc: 1f26cc8bf670c49e3abea43d9093246f6a058ac4180c9108c9d587c4c8062d6a
+  inc/solve/checkInfes.inc: d4badc5d78c3c1da29ca18ae5520847af8a53d25023ab8a41108549918d021c0
+  inc/solve/checkModelSolution.inc: defc7b948e997aa8f113c96a4da20e7625686d2dddac8b8383bae56ff224fd5c
+  inc/solve/iniVars.inc: 54242ef627eebea8cb65b0c042d0bba0c62a1aa20534110d602dab20b684ede0
+  inc/solve/iterloop.inc: 124238f1573a7995f8c087c85a5e79167cdecec97b7b5e325f34d4c2899ed8eb
+  inc/solve/kill_equ.inc: 81c12e7374038141564c49c46d79c0e246fef4ffd8529945b8841a1dbe000bef
+  inc/solve/prepSolve.inc: d3e06b13373908e177c51af1faf16adf2558950fe7bb82bbb667f9129186c060
+  inc/solve/resLastYear.inc: 01df572764ccc02633a9933d494d734f04adb2421ecd8f9d9cf24542fb0622e2
+  inc/title.inc: 514c44252c678495fba96316bf29a8c5bf081d530457b41d4f0744b1c101e5e9
+  inc/title_def.inc: 5d9055d80b60b8012ce966c1da25f2e99d50c8fdc5e16d34f3b91ebd78f431f6
+  opt/conop4.op5: a5f6e2467713e13217b82478665bce2cab044e2b783a8d8ff5dd97488a7ac463
+  opt/conopt4.op2: 03cc4aca6b056ce73620019adad5622f17cd22b78dba9c32471ba300466d1acb
+  opt/conopt4.op3: eb6dd5c881595333fee4eaa34c3849f633fb986f311ec9dbf934907c529c2379
+  opt/conopt4.op4: e08e4bf7fc5af66d4946e22e9d1ad0d86a6b51d371c245105f81bf289060e2d3
+  opt/conopt4.op5: a5f6e2467713e13217b82478665bce2cab044e2b783a8d8ff5dd97488a7ac463
+  opt/conopt4.opt: 492256e4ddffa30a30ceaeb7c0bad6d2304f75b47d81189a30fe16e928d7bd5f
+  opt/nlpec.opt: 27a4feeba0144b42f872d6df8e55cb92d66f22eb0a8d82584142fe7cd2634b6c
+  opt/nlpec.par: 513017595915a5094e4789d0f7dd5a595d85a2a3e39c4243e866cb256b0e533e
+  opt/path.op2: f399c893551307bb226750e4c54c9a450ce8c0c3c2defa38648eb0f05f8d0e50
+  opt/path.op3: 4b4603c5b6227186e7b8f677bec3b7a91e8fbc46a3ceb163e67e1eb079827d8c
+  opt/path.op4: f399c893551307bb226750e4c54c9a450ce8c0c3c2defa38648eb0f05f8d0e50
+  opt/path.op5: d0352ebccf1c7d22b5670b6d12a0742ea3226b68993cd51ecbba4cf13d6b85e9
+  opt/path.op6: 317afb2d1df4f5a354d4eebdefaa60ce3002fc4434e523ded42db6af288ccc15
+  opt/path.opt: 4b4603c5b6227186e7b8f677bec3b7a91e8fbc46a3ceb163e67e1eb079827d8c
+  run.gms: 84508e52a576f3b214bd0d9a92ab7029e9bb2eb1754a3bd0f2defe3ad65cd6c0
+status: verified
+notes: 'dat/gtapData9.gdx is derived from the GTAP 9 Data Base, a free archived release:
+  Aguiar, A., Narayanan, B. and McDougall, R. (2016), An Overview of the GTAP 9 Data
+  Base, Journal of Global Economic Analysis 1(1), 181-208. The maintainer approved
+  keeping it in the repository (2026-11-27). gtapSamV6.gms names the bridge template
+  dat/Bridgefile_GTAP_9_template.xlsx while the file is BridgeFile_...; it is found
+  on a case-insensitive file system (macOS default).'
