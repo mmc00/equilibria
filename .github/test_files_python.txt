@@ -226,6 +226,8 @@ tests/scripts/test_burfisher_job.py
 tests/scripts/test_check_commit_msg.py
 tests/scripts/test_check_layout.py
 tests/scripts/test_check_parity_gates_stamp.py
+tests/scripts/test_check_skill_hook.py
+tests/scripts/test_check_skills.py
 tests/scripts/test_check_test_shards.py
 tests/scripts/test_codecov_components.py
 tests/scripts/test_compare_path_solver_parity_cli.py
@@ -260,6 +262,8 @@ tests/scripts/test_run_parity_gates_exige_solvers.py
 tests/scripts/test_run_pep_base_export_tax_parity_cli.py
 tests/scripts/test_run_pep_core_scenarios_gate_cli.py
 tests/scripts/test_run_pep_systemic_parity_classification.py
+tests/scripts/test_run_skill_evals.py
+tests/scripts/test_skill_yaml.py
 tests/scripts/test_spec_tools.py
 tests/scripts/test_swap_job.py
 tests/scripts/test_write_source.py
