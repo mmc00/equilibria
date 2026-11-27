@@ -10,12 +10,14 @@ How each prompt of ``evals/prompts.yaml`` runs:
 2. The agent is ``claude -p`` and its run is contained:
    - ``git push``, ``gh``, ``git commit`` and the GTAP gates are denied;
    - it has a turn cap and a timeout.
-3. The prompt is graded by its kind (a run whose agent exits non-zero or times
+3. A prompt may carry ``setup: "<command>"`` (empty string: none), which replaces the
+   run's ``--setup`` for that prompt, e.g. to reproduce a bare ``uv sync --dev`` symptom.
+4. The prompt is graded by its kind (a run whose agent exits non-zero or times
    out fails, whatever it ran):
    - ``trajectory``: by ``must_run`` and ``must_not_run`` over the commands the agent ran;
    - ``golden``: by a judge, against ``expect``;
    - ``author``: printed for the author, and it does not count toward the pass rate.
-4. With ``--ablation``, each prompt also runs without the skill. A judge then
+5. With ``--ablation``, each prompt also runs without the skill. A judge then
    picks the better of the two answers, unlabeled and in random order.
 
 The run writes ``evals/last_run.md``, which check_skills.py requires to be
@@ -29,8 +31,10 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import os
 import random
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -51,6 +55,10 @@ ROOT = DEV.parents[1]
 SKILLS = Path(".agents") / "skills"
 ALLOWED = ("Bash", "Read", "Grep", "Glob", "Edit", "Write")
 TARGET_MIX = {"golden": 0.05, "trajectory": 0.80, "author": 0.15}
+# Run in each fresh worktree before the agent starts: its own venv, with jax (the
+# ``family`` extra), so ``uv run`` there works. The main repo's .venv is not shared:
+# uv would reinstall the project into it, editable, from the throwaway worktree.
+DEFAULT_SETUP = ["uv", "sync", "--frozen", "--dev", "--extra", "family"]
 DENIED = (
     "Bash(git push:*)",
     "Bash(gh:*)",
@@ -137,8 +145,13 @@ def run_prompt(
     max_turns: int,
     repo: Path = ROOT,
     model: str | None = None,
+    setup_cmd: list[str] | None = None,
 ) -> dict:
-    """One contained agent run of ``prompt`` in a throwaway worktree of HEAD."""
+    """One contained agent run of ``prompt`` in a throwaway worktree of HEAD.
+    ``setup_cmd`` (default ``DEFAULT_SETUP``; ``[]`` skips it) runs in the worktree
+    first; if it fails the agent is not started."""
+    if setup_cmd is None:
+        setup_cmd = DEFAULT_SETUP
     tmp = Path(tempfile.mkdtemp(prefix=f"skill-eval-{skill}-"))
     work = tmp / "wt"
     try:
@@ -157,6 +170,42 @@ def run_prompt(
                 link.symlink_to(Path("../..") / SKILLS / skill)
         elif link.is_symlink() or link.exists():
             link.unlink()
+        if setup_cmd:
+            # the caller's venv must not leak in: uv would sync into it
+            env = {
+                k: v
+                for k, v in os.environ.items()
+                if k not in ("UV_PROJECT_ENVIRONMENT", "VIRTUAL_ENV")
+            }
+            reason = ""
+            try:
+                setup = subprocess.run(
+                    setup_cmd,
+                    cwd=work,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout_s,
+                )
+                if setup.returncode:
+                    tail = [x for x in setup.stderr.splitlines() if x.strip()]
+                    reason = f"{setup.returncode}" + (
+                        f": {tail[-1].strip()}" if tail else ""
+                    )
+            except subprocess.TimeoutExpired:
+                reason = f"timed out after {timeout_s}s"
+            except OSError as err:
+                reason = str(err)
+            if reason:
+                return {
+                    "commands": [],
+                    "answer": "",
+                    "passed": False,
+                    "agent_error": f"setup failed: {reason}",
+                    "minutes": 0.0,
+                    "tool_calls": 0,
+                    "tool_errors": 0,
+                }
         argv = [
             *agent_cmd,
             "-p",
@@ -208,6 +257,13 @@ def run_prompt(
         )
         shutil.rmtree(tmp, ignore_errors=True)
         subprocess.run(["git", "worktree", "prune"], cwd=repo, capture_output=True)
+
+
+def _setup_for(prompt: dict, default: list[str]) -> list[str]:
+    """The prompt's own ``setup`` (a string; empty means none) or the run's default."""
+    if "setup" in prompt:
+        return shlex.split(str(prompt["setup"]))
+    return default
 
 
 def judge_prompt(
@@ -327,6 +383,11 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     ap.add_argument(
         "--ablation", action="store_true", help="also run without the skill and judge"
     )
+    ap.add_argument(
+        "--setup",
+        default=shlex.join(DEFAULT_SETUP),
+        help="command run in each fresh worktree before the agent; empty disables it",
+    )
     ap.add_argument("--seed", type=int, default=None)
     args = ap.parse_args(argv)
 
@@ -342,6 +403,7 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     target = " / ".join(f"{TARGET_MIX[k]:.0%}" for k in PROMPT_KINDS)
     print(f"prompts: {mix} ({shares}; the method's target is {target})")
     agent = [args.agent]
+    setup = shlex.split(args.setup)
     rng = random.Random(args.seed)
     results, wins, pairs = [], 0, 0
     deltas = {"tool_calls": 0, "tool_errors": 0, "minutes": 0.0}
@@ -357,6 +419,7 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
                     max_turns=args.max_turns,
                     repo=root,
                     model=args.model,
+                    setup_cmd=_setup_for(p, setup),
                 )
                 kind = p.get("kind")
                 if kind == "golden" and not r.get("agent_error"):
@@ -377,6 +440,7 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
                         max_turns=args.max_turns,
                         repo=root,
                         model=args.model,
+                        setup_cmd=_setup_for(p, setup),
                     )
                     text, label = judge_prompt(p, r["answer"], bare["answer"], rng)
                     pairs += 1
