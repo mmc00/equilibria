@@ -2256,7 +2256,7 @@
    "",
    "codes: {'base': 1, 'check': 1, 'shock': 1}",
    "390 cells (pre and post) against the book's GEMPACK run, method Johansen",
-   "largest difference: 0.029%",
+   "largest difference: 0.026%",
    "government demand qgd/qgm (#201, not checked): up to 0.02%",
    "",
    "largest differences:",
