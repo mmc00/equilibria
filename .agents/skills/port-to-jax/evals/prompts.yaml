@@ -1,0 +1,78 @@
+# Prompts from the real MAR-131 history (PR #264, merge 758b2073). Each is a symptom a
+# developer reports, not the fix.
+- id: family-tests-skip-silently
+  kind: trajectory
+  prompt: "Fresh checkout, I ran uv sync --dev and then pytest on tests/family/test_simple_open_family.py. It exits 0 but I never see any passes. Is the JAX path of simple_open fine or not?"
+  expect: "finds the tests are skipped because jax is the family extra, installs it with uv sync --dev --extra family, reruns and reports a real pass count with no skips"
+  setup: "uv sync --frozen --dev"
+  must_run:
+    - 'uv sync.*--extra family'
+    - 'uv run pytest.*(tests/family|test_simple_open)'
+  must_not_run:
+    - '\.venv/bin/python'
+    - 'eq-mumps'
+    - 'git push'
+- id: measure-gap-before-tolerance
+  kind: trajectory
+  prompt: "Before we pick a tolerance for the simple_open JAX parity test, how far is each backend from GAMS? I need numbers, not a guess."
+  expect: "runs the measuring script and reports the worst gap per period (about 4.2e-11 at shock E[MLK]) and the EV difference; says the model owner sets the tolerance"
+  must_run:
+    - 'scripts/simple_open/measure_gams_gap\.py'
+  must_not_run:
+    - '\.venv/bin/python'
+    - '(^|[;&|]\s*)gams\b'
+- id: pyomo-in-sys-modules
+  kind: trajectory
+  prompt: "I wrote a test that asserts 'pyomo' not in sys.modules after a family run of simple_open and it fails. Does that mean the JAX backend still builds a Pyomo model? I need evidence either way."
+  expect: "explains the recorder imports pyomo.environ so the import proves nothing; shows evidence by counting Pyomo model builds (ConcreteModel, PyomoNLP, identify_variables all 0) with the _spies helper or the existing test"
+  must_run:
+    - '(?s)uv run (pytest.*no_pyomo|python.*(_spies|ConcreteModel))'
+  must_not_run:
+    - '\.venv/bin/python'
+- id: residual-with-deactivated-row
+  kind: trajectory
+  prompt: "On a family period model I deactivated one row and the solver says optimal, but model.residual('base') still reports about 3e-3. Which of the two is lying, and what should residual be measuring?"
+  expect: "finds residual must take the max over active rows only, as the solver does (a deactivated row is not an equation of the period), and checks it with the generic period tests"
+  must_run:
+    - 'uv run pytest.*(test_generic_periods|tests/family)'
+  must_not_run:
+    - '\.venv/bin/python'
+- id: second-run-returns-first-shock
+  kind: trajectory
+  prompt: "I run Exercise(SimpleOpenEconomy(backend='family'), shock={'tau_m': 0.0}).run() and then a second Exercise on the same template with no shock. The second shows the abolished tariff. Is the family backend leaking state between runs?"
+  expect: "reproduces with a short script or the existing tests and reports whether build() records fresh arrays per call; does not change the template unless the leak is shown"
+  must_run:
+    - '(?s)uv run (pytest.*(test_simple_open_family|leak)|python.*Exercise.*Exercise)'
+  must_not_run:
+    - '\.venv/bin/python'
+    - 'git push'
+- id: parity-tolerance-copy
+  kind: trajectory
+  prompt: "The stdcge compare map is at 1e-6 but the maintainer wants the JAX parity test at 1e-9. Show me how the existing test does that without touching the shared yaml, and run it."
+  expect: "points to the test tightening a copy of the map with dataclasses.replace and Tolerance, leaves compare/maps/stdcge.yaml unchanged (graded here, not by a command), runs test_simple_open_gams_parity and reports it passes"
+  must_run:
+    - 'uv run pytest.*(test_simple_open_gams_parity|tests/family)'
+  must_not_run:
+    - '\.venv/bin/python'
+- id: new-family-test-in-ci
+  kind: trajectory
+  prompt: "CI never ran my new tests/family/test_foo_family.py. I ran the refresh script for the test lists and my diff shows dozens of removed lines in .github/test_files_python.txt. What is going on and what do I commit?"
+  expect: "explains the refresh drops files that skip locally (no jax, or importorskip mumps) and rewrites both lists; restores the removed lines so only the new file is added, sorted"
+  must_run:
+    - 'git (diff|checkout).*test_files'
+  must_not_run:
+    - '\.venv/bin/python'
+    - 'git push'
+    - 'git commit'
+- id: bounds-golden
+  kind: golden
+  prompt: "In my family port a level variable declared Reals goes to zero or negative during Newton, but Pyomo keeps it positive. Why, and what do I use?"
+  expect: "level blocks bound Reals vars below by LEVEL_FLOOR (1e-5); GTAP's MPArrays.build only knows NonNegativeReals, so use build_arrays, which takes bounds from StateModel.lower/upper and passes them to newton_tr"
+- id: plan-the-port
+  kind: author
+  prompt: "I have a new blocks template called toy_closed that matches GAMS on Pyomo. Plan how to put it on the JAX backend; do not write code yet."
+  expect: "reuses build_arrays, GenericFamilyPeriodModel and newton_family without writing a new Newton; lists the six-rung ladder; measures the gap before proposing a tolerance and leaves the tolerance to the owner"
+- id: gams-only-model
+  kind: author
+  prompt: "A colleague has a model that only exists as a .gms file and wants it on the JAX backend. Where do they start?"
+  expect: "says stretch 1 comes first: build the template from blocks, calibrate and reach cell parity with the original on Pyomo (parity skills); only then the generic family pieces, never a new Newton"
