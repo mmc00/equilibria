@@ -109,11 +109,7 @@ def test_family_against_gempack_gives_pyomos_report(exp: str) -> None:
     """``compare_burfisher_gempack`` from family levels: the same report as from
     Pyomo levels solved now (cells, within-counts, largest difference and its cell).
     (tbl45a is the book's Johansen run against a nonlinear solve: its largest
-    difference is ~2%, as in the oracle.)
-
-    Not the oracle's ``EX18_MAX``: that was measured on the stored levels of
-    ``nus333/equilibria_burfisher_levels``, solved before capFlex risk moved to
-    cal.gms (tbl46a 1.4881e-4 there, 1.4897e-4 from a solve now, on both backends)."""
+    difference is ~2%, as in the oracle.)"""
     from tests.compare import _oracle as O
 
     sys.path[:0] = [str(ROOT / "scripts" / "gtap")]
