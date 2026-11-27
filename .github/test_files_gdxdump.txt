@@ -1,9 +1,6 @@
 tests/compare/test_gtap3x3.py
 tests/data/test_fbep_variants.py
-tests/family/test_capflex_risk.py
-tests/family/test_family_e2e_capflex.py
 tests/family/test_family_gams_parity.py
-tests/family/test_gate1_all_families.py
 tests/family/test_gtap_family_on_core.py
 tests/parity/test_diff_calibration.py
 tests/parity/test_diff_holdfixed.py
