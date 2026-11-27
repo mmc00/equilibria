@@ -1,0 +1,673 @@
+--- Job run.gms Start 11/27/26 13:28:23 53.5.0 5dc151ca DAX-DAC arm 64bit/macOS
+--- Applying:
+    /Library/Frameworks/GAMS.framework/Versions/53/Resources/gmsprmun.txt
+    /Users/marmol/Library/Preferences/GAMS/gamsconfig.yaml
+--- GAMS Parameters defined
+    Input /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/run.gms
+    Output /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/mac/run/logs/baseline.lst
+    ScrDir /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/225a/
+    SysDir /Library/Frameworks/GAMS.framework/Versions/53/Resources/
+    LogOption 3
+    AppendLog 1
+    OptDir /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/mac/run/opt/
+    ResLim 600
+Licensee: Marlon                                         G260715+0003Cc-GEN
+          marlon.molina.corella@una.cr                            FLP000519
+          225a/gamslice.dat
+          af70f2cc-0979-4cc8
+          node:25193606 mem:18 cores:11 ipport:50625 v:2                   
+          Other time limited license
+          The time-limited license stops working on : Aug 09, 2027
+System information: 11 physical cores and 18 Gb physical memory detected
+GAMS 53.5.0   Copyright (C) 1987-2026 GAMS Development. All rights reserved
+--- Starting compilation
+--- run.gms(23) 2 Mb
+--- > fromGuiToRun.gms(391) 3 Mb
+--- run.gms(27) 3 Mb
+--- > opt.inc(60) 3 Mb
+--- Initialize embedded library libembpycclib64.dylib
+--- Execute embedded library libembpycclib64.dylib
+--- > opt.inc(155) 3 Mb
+--- call mkdir ./htlm
+--- > opt.inc(263) 3 Mb
+--- >> gdxxrw_cmd.inc(4) 3 Mb
+--- > opt.inc(264) 3 Mb
+--- call /Library/Frameworks/GAMS.framework/Versions/53/Resources/GMSPython/bin/python3 mac/gdxxrw.py i='reg/GHA/BaseBridge_GHA_GTAP_9.xlsx' o='sav/BaseBridge_GHA_GTAP_9.gdx' dSetText=Yes index=Layout!B4 MaxDupeErrors=100
+gdxxrw.py: read set  mapaGTAP               Maps!A6                dim=2 records=60
+gdxxrw.py: read set  mapcGTAP               Maps!D6                dim=2 records=60
+gdxxrw.py: read dset is                     Sets!B6                dim=1 records=239
+gdxxrw.py: read dset e                      Sets!G6                dim=1 records=5
+gdxxrw.py: read dset debt                   Sets!S6                dim=1 records=1
+gdxxrw.py: read dset l                      Sets!H6                dim=1 records=19
+gdxxrw.py: read dset cap                    Sets!I6                dim=1 records=1
+gdxxrw.py: read dset lnd                    Sets!J6                dim=1 records=20
+gdxxrw.py: read dset natres                 Sets!K6                dim=1 records=1
+gdxxrw.py: read dset inv                    Sets!L6                dim=1 records=1
+gdxxrw.py: read dset ginv                   Sets!M6                dim=1 records=1
+gdxxrw.py: read dset adpinv                 Sets!N6                dim=1 records=0
+gdxxrw.py: read dset stb                    Sets!O6                dim=1 records=0
+gdxxrw.py: read dset row                    Sets!P6                dim=1 records=1
+gdxxrw.py: read dset nrgFac                 Sets!T6                dim=1 records=1
+gdxxrw.py: read set  maptax                 Maps!J6                dim=2 records=9
+gdxxrw.py: read set  mapis                  Maps!G6                dim=2 records=219
+gdxxrw.py: read par  mapkNestShr            mapk!B5                dim=2 records=83
+gdxxrw.py: read par  sigmacNest0            mapk!C2                dim=1 records=16
+gdxxrw.py: read set  mapaagr                Maps!M6                dim=2 records=61
+gdxxrw.py: read par  pnest                  pnest!B6               dim=3 records=242
+gdxxrw.py: read par  subselas               pnest!C2               dim=2 records=22
+gdxxrw.py: read par  fmNest                 fmNest!B9              dim=2 records=472
+gdxxrw.py: read par  fmNestPar              fmNest!B2              dim=2 records=383
+gdxxrw.py: read dset GTAPVersion            Sets!U6                dim=1 records=1
+gdxxrw.py: read dset BaseYear               Sets!V6                dim=1 records=1
+gdxxrw.py: read dset cohorts                Sets!Q6                dim=1 records=4
+gdxxrw.py: read par  SAM0                   SAM!A1                 dim=2 records=2301
+gdxxrw.py: read par  defPar                 defPar!B2              dim=1 records=43
+gdxxrw.py: read par  actPar                 actPar!A1              dim=3 records=432
+gdxxrw.py: read par  comPar                 comPar!A1              dim=2 records=125
+gdxxrw.py: 2 duplicate records in hohPar dropped
+gdxxrw.py: read par  hohPar                 hohPar!B9              dim=3 records=24
+gdxxrw.py: read par  othpar                 othPar!A1              dim=2 records=0
+gdxxrw.py: read par  labor0                 labor!B1               dim=2 records=1
+gdxxrw.py: read par  emiInventory_OFF       emiinv!A2              dim=2 records=0
+gdxxrw.py: read par  powerMix               powerMix!A1            dim=3 records=180
+gdxxrw.py: read par  GHGMitigation          GHGMitigation!A1       dim=3 records=252
+gdxxrw.py: read par  energyProj             Energy!A1              dim=4 records=7430
+gdxxrw.py: read par  nutCont                Nutrients!A1           dim=2 records=74
+gdxxrw.py: read par  macc                   macc!A1                dim=2 records=114
+gdxxrw.py: read par  regparIncomeCDE        hohPar!A3              dim=3 records=36
+gdxxrw.py: read par  GDPComp                GDPComposition!A1      dim=3 records=356
+gdxxrw.py: read par  xfmSupDistrInst        hohPar!B15             dim=3 records=0
+gdxxrw.py: read par  EnTPar                 EnTech!G5              dim=1 records=6
+gdxxrw.py: read par  PhiRDtoes              EnTech!A5              dim=1 records=1
+gdxxrw.py: read par  Supfgrowth             EnTech!D5              dim=1 records=1
+gdxxrw.py: wrote sav/BaseBridge_GHA_GTAP_9.gdx
+--- > opt.inc(265) 3 Mb--- > opt.inc(283) 3 Mb
+--- Initialize embedded library libembpycclib64.dylib
+--- Execute embedded library libembpycclib64.dylib
+BaseYear(2014):  yes
+--- > opt.inc(507) 3 Mb
+--- run.gms(31) 3 Mb
+--- > title_def.inc(51) 3 Mb
+--- run.gms(36) 3 Mb
+--- > model.inc(3635) 3 Mb
+--- Initialize embedded library libembpycclib64.dylib
+--- Execute embedded library libembpycclib64.dylib
+--- > model.inc(3639) 3 Mb
+--- >> model_def_copy.inc(359) 3 Mb
+--- > model.inc(3653) 3 Mb
+--- run.gms(40) 3 Mb
+--- > Base.inc(132) 3 Mb
+--- Initialize embedded library libembpycclib64.dylib
+--- Execute embedded library libembpycclib64.dylib
+GTAPVersion(GTAPData9):  yes
+--- > Base.inc(160) 3 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- GDX File ($gdxIn) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- > Base.inc(238) 3 Mb
+--- Initialize embedded library libembpycclib64.dylib
+--- Execute embedded library libembpycclib64.dylib
+--- > Base.inc(308) 3 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- GDX File ($gdxIn) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- > Base.inc(377) 3 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- GDX File ($gdxIn) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- > Base.inc(435) 3 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- GDX File ($gdxIn) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- > Base.inc(707) 3 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/dat/unPop.gdx
+--- GDX File ($gdxIn) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/dat/unPop.gdx
+--- > Base.inc(800) 3 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- GDX File ($gdxIn) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- > Base.inc(824) 3 Mb
+--- Initialize embedded library libembpycclib64.dylib
+--- Execute embedded library libembpycclib64.dylib
+--- > Base.inc(972) 3 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- GDX File ($gdxIn) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- > Base.inc(987) 3 Mb
+--- Initialize embedded library libembpycclib64.dylib
+--- Execute embedded library libembpycclib64.dylib
+--- > Base.inc(999) 3 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/dat/GTAPData9.gdx
+--- GDX File ($gdxIn) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/dat/GTAPData9.gdx
+--- > Base.inc(1022) 3 Mb
+--- Initialize embedded library libembpycclib64.dylib
+--- Execute embedded library libembpycclib64.dylib
+--- > Base.inc(1032) 3 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- GDX File ($gdxIn) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- > Base.inc(1181) 3 Mb
+--- Initialize embedded library libembpycclib64.dylib
+--- Execute embedded library libembpycclib64.dylib
+--- > Base.inc(1384) 3 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- GDX File ($gdxIn) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- > Base.inc(1450) 3 Mb
+--- Initialize embedded library libembpycclib64.dylib
+--- Execute embedded library libembpycclib64.dylib
+--- > Base.inc(1466) 3 Mb
+--- run.gms(44) 3 Mb
+--- > RSCCDamages.inc(18) 3 Mb
+--- run.gms(48) 3 Mb
+--- > inical.inc(22) 3 Mb
+--- >> title.inc(48) 3 Mb
+--- > inical.inc(107) 3 Mb
+--- >> iniEmis.inc(28) 3 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/dat/GHG.gdx
+--- GDX File ($gdxIn) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/dat/GHG.gdx
+--- >> iniEmis.inc(40) 3 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- GDX File ($gdxIn) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- >> iniEmis.inc(42) 3 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- GDX File ($gdxIn) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- >> iniEmis.inc(80) 3 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/dat/GTAPData9.gdx
+--- GDX File ($gdxIn) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/dat/GTAPData9.gdx
+--- >> iniEmis.inc(657) 12 Mb
+--- > inical.inc(1533) 12 Mb
+--- >> calCDE.inc(138) 12 Mb
+--- >>> title.inc(48) 12 Mb
+--- >> calCDE.inc(199) 12 Mb
+--- > inical.inc(2427) 12 Mb
+--- run.gms(52) 12 Mb
+--- > reportDecl.inc(171) 12 Mb
+--- run.gms(65) 12 Mb
+--- > none.inc(38) 12 Mb
+--- run.gms(116) 12 Mb
+--- > title.inc(48) 12 Mb
+--- run.gms(120) 12 Mb
+--- > prepSolve.inc(98) 12 Mb
+--- >> iterloop.inc(170) 12 Mb
+--- >>> resLastYear.inc(534) 12 Mb
+--- >> iterloop.inc(175) 12 Mb
+--- >>> resLastYear.inc(534) 12 Mb
+--- >> iterloop.inc(184) 12 Mb
+--- >>> resLastYear.inc(534) 12 Mb
+--- >> iterloop.inc(690) 13 Mb
+--- > prepSolve.inc(127) 13 Mb
+--- run.gms(124) 13 Mb
+--- > RSCCDamages.inc(18) 13 Mb
+--- run.gms(129) 13 Mb
+--- > none.inc(38) 13 Mb
+--- run.gms(143) 13 Mb
+--- > iterloop.inc(690) 13 Mb
+--- run.gms(157) 13 Mb
+--- > iterloop.inc(669) 13 Mb
+--- >> iniVars.inc(872) 13 Mb
+--- > iterloop.inc(690) 13 Mb
+--- run.gms(191) 13 Mb
+--- > title.inc(48) 13 Mb
+--- run.gms(200) 13 Mb
+--- > resLastYear.inc(534) 13 Mb
+--- run.gms(201) 13 Mb
+--- > iterloop.inc(669) 13 Mb
+--- >> iniVars.inc(872) 13 Mb
+--- > iterloop.inc(690) 13 Mb
+--- run.gms(365) 13 Mb
+--- > checkModelSolution.inc(57) 13 Mb
+--- >> checkInfes.inc(84) 13 Mb
+--- > checkModelSolution.inc(64) 13 Mb
+--- >> title.inc(48) 13 Mb
+--- > checkModelSolution.inc(69) 13 Mb
+--- >> rescale.inc(141) 13 Mb
+--- > checkModelSolution.inc(93) 13 Mb
+--- run.gms(382) 13 Mb
+--- > kill_equ.inc(22) 13 Mb
+--- >> equs.gms(242) 13 Mb
+--- > kill_equ.inc(42) 13 Mb
+--- run.gms(397) 13 Mb
+--- > kill_equ.inc(22) 13 Mb
+--- >> equs.gms(242) 13 Mb
+--- > kill_equ.inc(42) 13 Mb
+--- run.gms(401) 13 Mb
+--- > rescale.inc(141) 13 Mb
+--- run.gms(446) 13 Mb
+--- > toGui.inc(19) 13 Mb
+--- >> title.inc(48) 13 Mb
+--- > toGui.inc(1590) 13 Mb
+--- run.gms(506) 13 Mb
+--- > generate_set_gdx.gms(37) 13 Mb
+--- Initialize embedded library libembpycclib64.dylib
+--- Execute embedded library libembpycclib64.dylib
+--- > generate_set_gdx.gms(39) 13 Mb
+--- >> sets.txt(1) 13 Mb
+--- > generate_set_gdx.gms(43) 13 Mb
+--- run.gms(519) 13 Mb
+--- Starting execution: elapsed 0:00:02.949
+--- run.gms(5463) 15 Mb--- run.gms(5560) 16 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- GDX File (execute_load) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- run.gms(5582) 16 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- GDX File (execute_load) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/sav/BaseBridge_GHA_GTAP_9.gdx
+--- run.gms(5604) 16 Mb--- run.gms(5656) 16 Mb--- run.gms(5884) 17 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/reg/GHA/addData_GHA.gdx
+--- GDX File (execute_load) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/reg/GHA/addData_GHA.gdx
+--- run.gms(6047) 17 Mb
+    title Baseline :  Initialization of variables
+--- run.gms(6151) 17 Mb
+--- GDXin=/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/dat/ghg.gdx
+--- run.gms(6151) 20 Mb--- run.gms(6151) 22 Mb
+--- GDX File (execute_load) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/dat/ghg.gdx
+--- run.gms(6468) 26 Mb
+--- Generating NLP model m_ghgInv
+--- run.gms(6496) 28 Mb
+---   20 rows  329 columns  657 non-zeroes
+---   2,508 nl-code  328 nl-non-zeroes
+--- Range statistics (absolute non-zero finite values)
+--- RHS       [min, max] : [ 2.600E-03, 4.000E+01]
+--- Bound     [min, max] : [ 9.901E+00, 1.000E+03] - Zero values observed as well
+--- Matrix    [min, max] : [ 2.220E-15, 3.280E+02] - Zero values observed as well
+--- run.gms(6496) 26 Mb
+--- Executing CONOPT4 (Solvelink=2): elapsed 0:00:04.426
+
+CONOPT 4         53.5.0 5dc151ca May 5, 2026           DAC arm 64bit/macOS    
+
+--- *** This solver runs with a demo license. No commercial use.
+
+Reading parameter(s) from "/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/mac/run/opt/conopt4.opt"
+>>  * -------------------------------------------------
+>>  *   General Option file for CONOPT4
+>>  * -------------------------------------------------
+>>  * Maximum and minimum jacobian element
+>> 
+>>  Lim_Variable = 1.00e+20
+>>  Lim_Pre_Msg  = 100
+>>  Flg_ForDefc  =    1
+>>  frq_log_simple =  1
+>>  frq_log_slpsqp =  1
+>>  tol_feas_min   = 1.E-7
+>>  tol_feas_max   = 2.E-7
+>>  Tol_Optimality = 5E-7
+>>  num_rounds     = 1
+Finished reading from "/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/mac/run/opt/conopt4.opt"
+
+ 
+ 
+    C O N O P T   version 4.39.0
+    Copyright (C) GAMS Software GmbH
+                  GAMS Development Corporation
+ 
+    Will use up to 4 threads.
+ 
+ 
+    The user model has 20 constraints and 329 variables
+    with 657 Jacobian elements, 328 of which are nonlinear.
+    The Hessian of the Lagrangian has 328 elements on the diagonal,
+    119 elements below the diagonal, and 328 nonlinear variables.
+ 
+    Iter Phase   Ninf   Infeasibility   RGmax      NSB   Step  InItr MX OK
+       0   0          1.7149019686E+01 (Input point)
+ 
+ ** An equation in the pre-triangular part of the model cannot
+    be solved because the critical variable is at a bound.
+ 
+ 
+    The pre-triangular part of the model has 1 constraints and variables.
+ 
+ ** Infeasible solution. The Preprocessor has determined that the model
+    is infeasible.
+ 
+--- Reading solution for model m_ghgInv
+--- Executing after solve: elapsed 0:00:04.451
+--- run.gms(6538) 31 Mb--- run.gms(7674) 31 Mb
+--- Generating NLP model m_balanceXfmsup
+--- run.gms(7675) 33 Mb
+---   361 rows  700 columns  2,098 non-zeroes
+---   3,498 nl-code  699 nl-non-zeroes
+--- Range statistics (absolute non-zero finite values)
+--- RHS       [min, max] : [ 1.000E+00, 1.000E+00] - Zero values observed as well
+--- Bound     [min, max] : [        NA,        NA] - Zero values observed as well
+--- Matrix    [min, max] : [ 1.148E-19, 8.941E+05] - Zero values observed as well
+--- run.gms(7675) 31 Mb
+--- Executing CONOPT4 (Solvelink=5): elapsed 0:00:04.512
+
+CONOPT 4         53.5.0 5dc151ca May 5, 2026           DAC arm 64bit/macOS    
+
+--- *** This solver runs with a demo license. No commercial use.
+ 
+ 
+    C O N O P T   version 4.39.0
+    Copyright (C) GAMS Software GmbH
+                  GAMS Development Corporation
+ 
+    Will use up to 4 threads.
+ 
+ 
+    The user model has 361 constraints and 700 variables
+    with 2098 Jacobian elements, 699 of which are nonlinear.
+    The Hessian of the Lagrangian has 699 elements on the diagonal,
+    0 elements below the diagonal, and 699 nonlinear variables.
+ 
+    Iter Phase   Ninf   Infeasibility   RGmax      NSB   Step  InItr MX OK
+       0   0          2.5592925004E-13 (Input point)
+ 
+    The pre-triangular part of the model has 41 constraints and 36 variables.
+    The post-triangular part of the model has 1 constraints and variables.
+    There are 103 definitional constraints and defined variables.
+ 
+    Preprocessed model has 216 constraints and 560 variables
+    with 1120 Jacobian elements, 0 of which are nonlinear.
+ 
+    Iter Phase   Ninf   Infeasibility   RGmax      NSB   Step  InItr MX OK
+                      1.5688903028E-13 (Full preprocessed model)
+                      1.5688903028E-13 (After scaling)
+ 
+ ** Feasible solution. Value of objective =   1.084027027101E-24
+ 
+    Iter Phase   Ninf     Objective     RGmax      NSB   Step  InItr MX OK
+       1   3          9.9209011402E-25 3.3E-05     350 0.0E+00     8 F  T
+       6   4         -2.7863350453E-26 7.1E-07     350 1.0E+00     3 F  T
+      11   4         -1.3626681127E-26 7.1E-07     350 1.0E+00     3 F  T
+      13   4         -1.3624813805E-26 7.1E-07     350
+ 
+ ** Optimal solution. Reduced gradient less than tolerance.
+    Tolerance is relaxed due to large 2nd derivatives.
+ 
+--- Reading solution for model m_balanceXfmsup
+--- Executing after solve: elapsed 0:00:04.546
+--- run.gms(8215) 31 Mb
+    title Baseline :  Demand system calibration for h-hhold
+--- Generating NLP model ehcal
+--- run.gms(8273) 33 Mb
+--- LOOPS hp = h-hhold
+---   101 rows  109 columns  1,099 non-zeroes
+---   786 nl-code  180 nl-non-zeroes
+--- Range statistics (absolute non-zero finite values)
+--- RHS       [min, max] : [ 1.853E-03, 1.405E+00] - Zero values observed as well
+--- Bound     [min, max] : [ 1.000E-06, 2.000E+00]
+--- Matrix    [min, max] : [ 1.178E-05, 1.405E+00]
+--- run.gms(8273) 31 Mb
+--- Executing CONOPT4 (Solvelink=2): elapsed 0:00:04.599
+
+CONOPT 4         53.5.0 5dc151ca May 5, 2026           DAC arm 64bit/macOS    
+
+--- *** This solver runs with a demo license. No commercial use.
+ 
+ 
+    C O N O P T   version 4.39.0
+    Copyright (C) GAMS Software GmbH
+                  GAMS Development Corporation
+ 
+    Will use up to 4 threads.
+ 
+ 
+    The user model has 101 constraints and 109 variables
+    with 1099 Jacobian elements, 180 of which are nonlinear.
+    The Hessian of the Lagrangian has 27 elements on the diagonal,
+    117 elements below the diagonal, and 36 nonlinear variables.
+ 
+    Iter Phase   Ninf   Infeasibility   RGmax      NSB   Step  InItr MX OK
+       0   0          4.8851838312E-01 (Input point)
+ 
+    The pre-triangular part of the model has 9 constraints and 0 variables.
+    The post-triangular part of the model has 82 constraints and variables.
+ 
+    Preprocessed model has 10 constraints and 27 variables
+    with 180 Jacobian elements, 162 of which are nonlinear.
+ 
+    Iter Phase   Ninf   Infeasibility   RGmax      NSB   Step  InItr MX OK
+                      4.0832896354E-01 (Full preprocessed model)
+                      2.0753532441E-01 (After scaling)
+                      4.1983125040E-07 (After adjusting individual variables)
+ 
+ ** Feasible solution. Value of objective =   9.643229093710E-02
+ 
+    Iter Phase   Ninf     Objective     RGmax      NSB   Step  InItr MX OK
+       6   4          3.4429907983E-03 1.6E-02      18 5.7E-01    16 F  T
+      11   4          1.4637270353E-03 6.5E-05      15 1.0E+00     5 F  T
+      14   4          1.4637208822E-03 4.1E-09      15
+ 
+ ** Optimal solution. Reduced gradient less than tolerance.
+ 
+--- Reading solution for model ehcal
+--- Executing after solve: elapsed 0:00:04.626
+--- run.gms(8597) 31 Mb
+--- GDX File (execute_unload) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/reg/GHA/addData_GHA.gdx
+--- run.gms(8947) 31 Mb
+    title Baseline :  GHA: Prepare for solving BaU scenario for 2015
+    title Baseline :  GHA: Solve model for BaU scenario and 2015, attempt: 1
+--- Generating MCP model cge_test
+--- run.gms(8947) 32 Mb--- run.gms(11844) 34 Mb
+--- LOOPS tt = 2015
+---       shockMode = 
+---       iter = 1
+---   9,452 rows  9,452 columns  31,812 non-zeroes
+---   40,697 nl-code  11,718 nl-non-zeroes
+--- Range statistics (absolute non-zero finite values)
+--- RHS       [min, max] : [ 8.351E-15, 8.654E+06] - Zero values observed as well
+--- Bound     [min, max] : [        NA,        NA]
+--- Matrix    [min, max] : [ 1.228E-11, 1.198E+07] - Zero values observed as well
+--- run.gms(11844) 32 Mb
+--- Executing CONVERT (Solvelink=0): elapsed 0:00:04.716
+
+CONVERT          53.5.0 5dc151ca May 5, 2026           DAC arm 64bit/macOS    
+
+
+Reading parameter(s) from "/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/mac/run/opt/convert.opt"
+>>  * CONVERT: write the MCP instance as a scalar GAMS model for NEOS (see run.gms, convertMCP)
+>>  Gams     mac/run/neos/gha2015_scalar.gms
+>>  Dict     mac/run/neos/gha2015_dict.txt
+>>  DictMap  mac/run/neos/gha2015_dictmap.gdx
+Finished reading from "/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/mac/run/opt/convert.opt"
+
+--- Writing Dict      : mac/run/neos/gha2015_dict.txt
+--- Writing DictMap   : mac/run/neos/gha2015_dictmap.gdx
+--- Writing Gams      : mac/run/neos/gha2015_scalar.gms
+
+--- Restarting execution
+--- run.gms(11844) 12 Mb
+--- Reading solution for model cge_test
+--- Executing after solve: elapsed 0:00:04.862
+--- run.gms(8947) 14 Mb
+--- Generating MCP model cge_test
+--- run.gms(11850) 18 Mb
+--- LOOPS tt = 2015
+---       shockMode = 
+---       iter = 1
+---   9,452 rows  9,452 columns  31,812 non-zeroes
+---   40,697 nl-code  11,718 nl-non-zeroes
+--- Range statistics (absolute non-zero finite values)
+--- RHS       [min, max] : [ 8.351E-15, 8.654E+06] - Zero values observed as well
+--- Bound     [min, max] : [        NA,        NA]
+--- Matrix    [min, max] : [ 1.228E-11, 1.198E+07] - Zero values observed as well
+--- run.gms(11850) 16 Mb
+--- Executing NLPEC (Solvelink=0): elapsed 0:00:04.916
+
+NLPEC 1.6        53.5.0 5dc151ca May 5, 2026           DAC arm 64bit/macOS    
+
+Reformulates Nonlinear Programs with Equilibrium Constraints
+Michael Ferris, University of Wisconsin
+
+--- Using Option File
+Reading parameter(s) from "/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/mac/run/opt/nlpec.opt"
+>>  * NLPEC options for macOS runs: same as opt/nlpec.opt, but the NLP subsolver
+>>  * is IPOPT because CONOPT4 (and PATH) exceed the local GAMS license for this
+>>  * model size.
+>>  subsolver=IPOPT
+>>  parmFile=opt/nlpec.par
+Finished reading from "/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/mac/run/opt/nlpec.opt"
+* Reformulation parameters, after checking for consistency.
+* Reform Type        SINGLE      DOUBLE
+*  refType             mult        mult
+*  slack           positive    positive
+*  constraint      equality    equality
+*  aggregate           none        none
+*  NCPBounds           none        none
+
+
+--- The reformulated model /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/225a/gms.dat will be solved by GAMS
+---  gams /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/225a/gms.dat
+---    pf /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/225a/pf.dat
+
+--- Job gms.dat Start 11/27/26 13:28:28 53.5.0 5dc151ca DAX-DAC arm 64bit/macOS
+--- Applying:
+    /Library/Frameworks/GAMS.framework/Versions/53/Resources/gmsprmun.txt
+    /Users/marmol/Library/Preferences/GAMS/gamsconfig.yaml
+--- GAMS Parameters defined
+    Input /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/225a/gms.dat
+    Output /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/225a/lst.dat
+    ScrDir /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/225a/225a/
+    SysDir /Library/Frameworks/GAMS.framework/Versions/53/Resources/
+    LogOption 3
+    AppendLog 1
+    Suppress 1
+    SolverCntr /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/225a/nlpeccntr.dat
+    SolverMatr /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/225a/nlpecmatr.dat
+    SolverStat /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/225a/nlpecstat.dat
+    SolverSolu /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/225a/nlpecsolu.dat
+    OptDir /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/opt/
+    SolveLink 2
+    ProcDirPath /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/225a
+    Digit off
+Licensee: Marlon                                         G260715+0003Cc-GEN
+          marlon.molina.corella@una.cr                            FLP000519
+          /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/225a/225a/gamslice.dat
+          af70f2cc-0979-4cc8
+          node:25193606 mem:18 cores:11 ipport:50644 v:2                   
+          Other time limited license
+          The time-limited license stops working on : Aug 09, 2027
+System information: 11 physical cores and 18 Gb physical memory detected
+GAMS 53.5.0   Copyright (C) 1987-2026 GAMS Development. All rights reserved
+--- Starting compilation
+--- gms.dat(35358) 9 Mb
+--- Starting execution: elapsed 0:00:00.032
+--- gms.dat(35356) 10 Mb
+--- Generating DNLP model m
+--- gms.dat(35358) 15 Mb
+---   9,453 rows  9,453 columns  31,813 non-zeroes
+---   37,988 nl-code  11,718 nl-non-zeroes
+--- Range statistics (absolute non-zero finite values)
+--- RHS       [min, max] : [ 8.351E-15, 8.654E+06] - Zero values observed as well
+--- Bound     [min, max] : [        NA,        NA]
+--- Matrix    [min, max] : [ 1.228E-11, 1.198E+07] - Zero values observed as well
+--- gms.dat(35358) 13 Mb
+--- Executing IPOPT (Solvelink=2): elapsed 0:00:00.068
+
+COIN-OR Ipopt    53.5.0 5dc151ca May 5, 2026           DAC arm 64bit/macOS    
+
+COIN-OR Interior Point Optimizer (Ipopt Library 3.14.19)
+written by A. Waechter.
+
+******************************************************************************
+This program contains Ipopt, a library for large-scale nonlinear optimization.
+ Ipopt is released as open source code under the Eclipse Public License (EPL).
+         For more information visit https://github.com/coin-or/Ipopt
+******************************************************************************
+
+This is Ipopt version 3.14.19, running with linear solver MUMPS 5.8.2.
+
+Number of nonzeros in equality constraint Jacobian...:    31812
+Number of nonzeros in inequality constraint Jacobian.:        0
+Number of nonzeros in Lagrangian Hessian.............:    15290
+
+Total number of variables............................:     9452
+                     variables with only lower bounds:        0
+                variables with lower and upper bounds:        0
+                     variables with only upper bounds:        0
+Total number of equality constraints.................:     9452
+Total number of inequality constraints...............:        0
+        inequality constraints with only lower bounds:        0
+   inequality constraints with lower and upper bounds:        0
+        inequality constraints with only upper bounds:        0
+
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+   0  0.0000000e+00 2.33e+00 0.00e+00   0.0 0.00e+00    -  0.00e+00 0.00e+00   0
+   1  0.0000000e+00 8.58e-01 0.00e+00 -11.0 1.99e+04    -  1.00e+00 1.00e+00h  1
+   2  0.0000000e+00 6.89e-01 0.00e+00 -11.0 1.51e+03    -  1.00e+00 5.00e-01h  2
+   3  0.0000000e+00 8.24e-01 0.00e+00 -11.0 5.22e+02    -  1.00e+00 1.00e+00h  1
+   4  0.0000000e+00 5.85e-01 0.00e+00 -11.0 2.04e+02    -  1.00e+00 1.00e+00H  1
+   5  0.0000000e+00 9.78e-02 0.00e+00 -11.0 1.03e+01    -  1.00e+00 1.00e+00h  1
+   6  0.0000000e+00 8.12e-02 0.00e+00 -11.0 4.42e+01    -  1.00e+00 1.25e-01h  4
+   7  0.0000000e+00 4.25e-03 0.00e+00 -11.0 9.47e-01    -  1.00e+00 1.00e+00h  1
+   8  0.0000000e+00 9.94e-06 0.00e+00 -11.0 4.48e-02    -  1.00e+00 1.00e+00h  1
+   9  0.0000000e+00 2.33e-10 0.00e+00 -11.0 1.05e-04    -  1.00e+00 1.00e+00h  1
+
+Number of Iterations....: 9
+
+                                   (scaled)                 (unscaled)
+Objective...............:   0.0000000000000000e+00    0.0000000000000000e+00
+Dual infeasibility......:   0.0000000000000000e+00    0.0000000000000000e+00
+Constraint violation....:   5.4658610970648169e-11    2.3283064365386963e-10
+Variable bound violation:   0.0000000000000000e+00    0.0000000000000000e+00
+Complementarity.........:   0.0000000000000000e+00    0.0000000000000000e+00
+Overall NLP error.......:   5.4658610970648169e-11    2.3283064365386963e-10
+
+
+Number of objective function evaluations             = 17
+Number of objective gradient evaluations             = 1
+Number of equality constraint evaluations            = 17
+Number of inequality constraint evaluations          = 0
+Number of equality constraint Jacobian evaluations   = 10
+Number of inequality constraint Jacobian evaluations = 0
+Number of Lagrangian Hessian evaluations             = 9
+Total seconds in IPOPT                               = 0.344
+
+EXIT: Optimal Solution Found.
+--- Reading solution for model m
+*** Status: Normal completion
+--- gms.dat(35358) 13 Mb
+--- Job gms.dat Stop 11/27/26 13:28:29 elapsed 0:00:00.502
+--- Returning from GAMS NLPEC step
+
+--- Additional Mpec Equations = 1
+--- Additional Mpec Variables = 1
+--- Restarting execution
+--- run.gms(11850) 12 Mb
+--- Reading solution for model cge_test
+--- run.gms(11850) 12 Mb
+--- Executing after solve: elapsed 0:00:06.201
+--- run.gms(8947) 15 Mb
+--- Generating MCP model cge_test
+--- run.gms(11863) 19 Mb
+--- LOOPS tt = 2015
+---       shockMode = 
+---       iter = 1
+---   9,452 rows  9,452 columns  31,812 non-zeroes
+---   40,697 nl-code  11,718 nl-non-zeroes
+--- Range statistics (absolute non-zero finite values)
+--- RHS       [min, max] : [ 8.351E-15, 8.654E+06] - Zero values observed as well
+--- Bound     [min, max] : [        NA,        NA]
+--- Matrix    [min, max] : [ 9.514E-12, 1.150E+07] - Zero values observed as well
+--- run.gms(11863) 17 Mb
+--- Executing CONVERT (Solvelink=0): elapsed 0:00:06.282
+
+CONVERT          53.5.0 5dc151ca May 5, 2026           DAC arm 64bit/macOS    
+
+
+Reading parameter(s) from "/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/mac/run/opt/convert.op2"
+>>  * CONVERT: the same instance at the solution of the first attempt (see run.gms, convertMCP)
+>>  Gams     mac/run/neos/gha2015_solution.gms
+Finished reading from "/var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/mac/run/opt/convert.op2"
+
+--- Writing Gams      : mac/run/neos/gha2015_solution.gms
+
+--- Restarting execution
+--- run.gms(11863) 13 Mb
+--- Reading solution for model cge_test
+--- Executing after solve: elapsed 0:00:06.412
+--- run.gms(8947) 15 Mb
+    *
+    BaU for year 2015,attempt 1 solved with 0 infeas.,sum of infeas. 0.000
+    *
+--- run.gms(13085) 15 Mb
+    title Baseline :  Post model reporting for backend
+--- run.gms(14579) 20 Mb
+--- Initialize embedded library libembpycclib64.dylib
+--- Execute embedded library libembpycclib64.dylib
+--- run.gms(14588) 20 Mb
+--- run.gms(14657) 20 Mb
+--- GDX File (execute_unload) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/inc/gamsDocSets.gdx
+--- run.gms(14671) 20 Mb
+--- GDX File (execute_unload) /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/res/GHA/GHA_BaU.gdx
+--- run.gms(14676) 20 Mb
+--- Putfile logfile /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/225a/nonense.txt
+--- Putfile xml /var/folders/5m/l38_xvm53k91rq80qh4qx54c0000gn/T/tmp.jBxVrREegS/gui/generated.xml
+*** Status: Normal completion
+--- Job run.gms Stop 11/27/26 13:28:30 elapsed 0:00:06.869
+Delete file 225a/sets.txt
+Delete file 225a/equs.gms
