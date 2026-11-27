@@ -4084,7 +4084,6 @@
  "tests/templates/gtap/test_capflex_risk.py::test_formula_vs_todays_twin[gtap7_3x3]": 0.059,
  "tests/templates/gtap/test_capflex_risk.py::test_formula_vs_todays_twin[nus333]": 0.05,
  "tests/templates/gtap/test_capflex_risk.py::test_a_region_without_capital_return_raises": 0.035,
- "tests/templates/gtap/test_capflex_risk.py::test_pyomo_capflex_risk_is_the_formula": 0.028,
  "tests/templates/gtap/test_capflex_risk.py::test_built_capflex_model_carries_the_formula_risk": 0.129,
  "tests/templates/gtap/test_capflex_risk_oracle.py::test_oracle_covers_burfisher_and_several_sizes": 0.0,
  "tests/templates/gtap/test_capflex_risk_oracle.py::test_every_region_has_a_finite_positive_risk[gtap7_10x7]": 0.0,
@@ -4093,5 +4092,8 @@
  "tests/templates/gtap/test_capflex_risk_oracle.py::test_every_region_has_a_finite_positive_risk[gtap7_5x5]": 0.0,
  "tests/templates/gtap/test_capflex_risk_oracle.py::test_every_region_has_a_finite_positive_risk[nus333]": 0.0,
  "tests/templates/gtap/test_capflex_risk_oracle.py::test_the_twin_is_close_to_gams_but_not_equal[gtap7_3x3]": 0.0,
- "tests/templates/gtap/test_capflex_risk_oracle.py::test_the_twin_is_close_to_gams_but_not_equal[nus333]": 0.0
+ "tests/templates/gtap/test_capflex_risk_oracle.py::test_the_twin_is_close_to_gams_but_not_equal[nus333]": 0.0,
+ "tests/family/test_period_levels.py::test_a_cell_missing_from_the_run_is_a_mismatch": 0.001,
+ "tests/family/test_period_levels.py::test_a_cell_the_reference_lacks_is_a_mismatch": 0.001,
+ "tests/family/test_period_levels.py::test_equal_cells_within_the_bound_match": 0.001
 }
