@@ -146,7 +146,6 @@ tests/family/test_family_e2e_capflex_ifsub0.py
 tests/family/test_family_e2e_gate.py
 tests/family/test_family_e2e_ifsub0.py
 tests/family/test_family_gempack_parity.py
-tests/family/test_family_johansen.py
 tests/family/test_family_multishock.py
 tests/family/test_family_shock_steps.py
 tests/family/test_fscale.py

@@ -1,6 +1,6 @@
-"""The shock in steps on the family route (MAR-251): Burfisher's ME9B (capital ROW
-+213 %, the exercise that needs the steps) equals the Pyomo run cell by cell, and a
-step that fails is reported as the period's status."""
+"""The shock in steps on the family route (MAR-251): a step that fails is reported as
+the period's status. (That the steps give Pyomo's numbers, ME9B included, is
+``tests/scripts/test_run_burfisher_family.py``.)"""
 
 from __future__ import annotations
 
@@ -13,10 +13,9 @@ pytest.importorskip("jax")
 pytest.importorskip("pyomo")
 
 from equilibria._local_refs import nus333_dir  # noqa: E402
-from tests.family._period_levels import levels, mismatches, solver_env  # noqa: E402
+from tests.family._period_levels import solver_env  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
-REL = 1e-9
 
 
 def _rb():
@@ -27,30 +26,6 @@ def _rb():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
-
-def _solve(exp: str, backend: str, cache_root=None):
-    rb = _rb()
-    extra = {} if cache_root is None else {"EQUILIBRIA_FAMILY_CACHE": str(cache_root)}
-    with solver_env(extra):
-        ex = rb.exercise(exp, nus333_dir(), backend=backend)
-        out = ex.run()
-    return {k: v["code"] for k, v in out.items()}, levels(ex.model)
-
-
-@pytest.fixture(scope="module")
-def me9b(tmp_path_factory):
-    return (
-        _solve("ME9B", "pyomo"),
-        _solve("ME9B", "family", tmp_path_factory.mktemp("cache")),
-    )
-
-
-def test_family_steps_match_pyomo_on_me9b(me9b):
-    (p_codes, p), (f_codes, f) = me9b
-    assert p_codes["shock"] == f_codes["shock"] == "optimal"
-    bad = mismatches(p, f, REL)
-    assert not bad, f"{len(bad)} of {len(f)} cells differ, first: {bad[:10]}"
 
 
 def test_family_failed_step_reports_its_status(monkeypatch, tmp_path):

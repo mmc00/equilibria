@@ -2,8 +2,8 @@
 ``run_burfisher.EXERCISES`` gives on family what it gives on Pyomo, and the GEMPACK
 comparison of the oracle's two exercises gives the same numbers from either backend.
 
-Johansen exercises (GEMPACK's method for them) are solved as Johansen, with the
-looser bound of ``tests/family/test_family_johansen.py``."""
+Johansen exercises (GEMPACK's method for them) are solved as Johansen, with a
+looser bound (``REL_JOHANSEN``)."""
 
 from __future__ import annotations
 
@@ -21,6 +21,10 @@ pytestmark = pytest.mark.integration
 # the exercises GEMPACK solves with Johansen (test_burfisher_gempack)
 JOHANSEN = {"TBL45A", "TBL45B", "TBL45C", "TBL64", "ME4A", "ME4B", "GTAPV7"}
 REL = 1e-9
+# Richardson combines four solves at lambda = +-h, +-2h (h = 0.01) as
+# (8(f1 - f-1) - (f2 - f-2)) / 12h: a solve error e becomes up to 18e/12h = 150e in
+# the slope. Measured on TBL45A: family vs Pyomo 1.6e-10 after a nonlinear shock,
+# 2.0e-8 after Johansen (GTAPV7 2.6e-8, check period 1.7e-13). The bound is 150 x REL.
 REL_JOHANSEN = 1.5e-7
 # TBL62B (sectorspecifick.prm) has ETRAE(CAPITAL) = -1e-5: pft(CAPITAL) enters
 # eq_xfteq, the only row that pins it, with that exponent, so a solve knows it only to
@@ -38,11 +42,24 @@ def _rb() -> Any:
     return importlib.import_module("run_burfisher")
 
 
-def _exercises() -> list[str]:
+# One exercise per mechanism runs in PR CI (the plan-groups budget); the other ones
+# are ``slow``: run them all locally with ``pytest -m slow`` or no marker filter.
+IN_CI = {
+    "TBL46A",  # nonlinear in steps, default.prm
+    "ME9B",  # capital ROW +213 %: the one that needs the steps
+    "TBL45A",  # Johansen
+    "ME4A",  # Johansen, land productivity -81 %
+    "TBL62B",  # sector-specific capital (ETRAE -1e-5)
+    "TBL62C",  # sluggish capital
+}
+
+
+def _exercises() -> list[Any]:
     try:
-        return sorted(_rb().EXERCISES)
+        names = sorted(_rb().EXERCISES)
     except pytest.skip.Exception:
         return []
+    return [e if e in IN_CI else pytest.param(e, marks=pytest.mark.slow) for e in names]
 
 
 def _solve(exp: str, backend: str, cache_root) -> tuple[dict, Any]:
