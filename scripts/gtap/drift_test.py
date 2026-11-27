@@ -70,26 +70,6 @@ def _default_gdx(dataset: str, mode: str = "altertax", ifsub: int = 0) -> Path |
     return None if folder is None else folder / "out.gdx"
 
 
-def period_levels(m, period: str) -> dict[tuple[str, tuple], float]:
-    """``{(var, cell without the period): level}`` over ``period``'s cells."""
-    import pyomo.environ as pyo
-
-    out = {}
-    for v in m.component_objects(pyo.Var, active=True):
-        for idx in v:
-            if isinstance(idx, tuple):
-                if not idx or idx[-1] != period:
-                    continue
-                cell = idx[:-1]
-            elif idx == period:
-                cell = ()
-            else:
-                continue
-            if v[idx].value is not None:
-                out[(v.name, cell)] = float(v[idx].value)
-    return out
-
-
 def drift_rows(seeded: dict, solved: dict, floor: float = 1e-3):
     """[(|solved - seeded| / |seeded|, var, cell, seeded, solved)], largest first.
     Cells seeded below ``floor`` are skipped: a near-zero seed (walras) gives a huge
@@ -114,7 +94,12 @@ def run_drift(
     ``period``'s cells. Returns (code, residual, drifts, eq_resid at the seed)."""
     from pyomo.environ import Constraint
     from pyomo.environ import value as V
-    from seed_and_solve import _cascade_derived_seed_mp, _solve_gtap, build_seeded
+    from seed_and_solve import (
+        _cascade_derived_seed_mp,
+        _solve_gtap,
+        build_seeded,
+        period_levels,
+    )
 
     _p, _gc, m0 = build_seeded(dataset, gdx_path, period, mode, bool(ifsub))
 
@@ -145,7 +130,7 @@ def run_drift(
                 pass
         eq_resid[c.name] = mx
 
-    m, res = _solve_gtap(dataset, gdx_path, bool(ifsub), mode)
+    m, res = _solve_gtap(dataset, gdx_path, bool(ifsub), mode, seeded=m0)
     code = res.get(period, {}).get("code")
     resid = float(res.get(period, {}).get("residual") or 0.0)
     return code, resid, drift_rows(seeded, period_levels(m, period)), eq_resid
