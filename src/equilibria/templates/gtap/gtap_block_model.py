@@ -953,7 +953,7 @@ def _calibrate_capflex_risk(
     GAMS ``cal.gms:680-684`` (``capflex_risk.capflex_risk_from_data``). No solve and no
     GDX; ``sets``, ``closure``, ``residual_region`` and ``ref_gdx`` stay in the signature
     for the callers. Raises when a region has no rate of return (never ``risk = 1``)."""
-    from equilibria.templates.gtap.capflex_risk import capflex_risk_from_data
+    from equilibria.blocks.gtap.capflex_risk import capflex_risk_from_data
 
     return capflex_risk_from_data(params)
 

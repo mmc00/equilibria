@@ -41,7 +41,7 @@ def _rel(got: dict[str, float], want: dict[str, float]) -> float:
 def test_formula_matches_gams(dataset: str) -> None:
     if not has_dataset(dataset):
         pytest.skip(f"{dataset} not present")
-    from equilibria.templates.gtap.capflex_risk import capflex_risk_from_data
+    from equilibria.blocks.gtap.capflex_risk import capflex_risk_from_data
 
     _, want = RISK_GDX[dataset]
     assert _rel(capflex_risk_from_data(_params(dataset)), want) < GDX_REL
@@ -52,7 +52,7 @@ def test_formula_vs_todays_twin(dataset: str) -> None:
     """The move Pyomo makes when the twin goes: inside the twin's own tolerance."""
     if not has_dataset(dataset):
         pytest.skip(f"{dataset} not present")
-    from equilibria.templates.gtap.capflex_risk import capflex_risk_from_data
+    from equilibria.blocks.gtap.capflex_risk import capflex_risk_from_data
 
     rel = _rel(capflex_risk_from_data(_params(dataset)), RISK_TWIN[dataset])
     print(f"{dataset}: formula vs twin max rel {rel:.3e}")
@@ -62,7 +62,7 @@ def test_formula_vs_todays_twin(dataset: str) -> None:
 @pytest.mark.skipif(not has_dataset("nus333"), reason="nus333 not present")
 def test_a_region_without_capital_return_raises() -> None:
     """rorc = arent - fdepr = 0 makes rore 0: an error naming the region, never 1."""
-    from equilibria.templates.gtap.capflex_risk import capflex_risk_from_data
+    from equilibria.blocks.gtap.capflex_risk import capflex_risk_from_data
 
     p = copy.deepcopy(_params("nus333"))
     b = p.benchmark
@@ -101,7 +101,7 @@ def no_twin(monkeypatch):
 
 @pytest.mark.skipif(not has_dataset("nus333"), reason="nus333 not present")
 def test_pyomo_capflex_risk_is_the_formula(no_twin) -> None:
-    from equilibria.templates.gtap.capflex_risk import capflex_risk_from_data
+    from equilibria.blocks.gtap.capflex_risk import capflex_risk_from_data
     from equilibria.templates.gtap.gtap_block_model import _calibrate_capflex_risk
 
     p = _params("nus333")
@@ -113,7 +113,7 @@ def test_pyomo_capflex_risk_is_the_formula(no_twin) -> None:
 def test_built_capflex_model_carries_the_formula_risk(no_twin) -> None:
     """Burfisher's case (no GDX): the risk the block reads is the formula, never 1.
     (The multi-period model folds ``risk`` to numbers, so it is read off ``params``.)"""
-    from equilibria.templates.gtap.capflex_risk import capflex_risk_from_data
+    from equilibria.blocks.gtap.capflex_risk import capflex_risk_from_data
     from equilibria.templates.gtap.gtap_block_model import build_block_model
 
     p = _params("nus333")

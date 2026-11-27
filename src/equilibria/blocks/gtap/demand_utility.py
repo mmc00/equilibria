@@ -148,7 +148,7 @@ class DemandUtilityBlock(Block):
         if self.savf_flag == "capFlex":
             _risk_cal = getattr(p, "_capflex_risk", None)
             if not _risk_cal:
-                from equilibria.templates.gtap.capflex_risk import (
+                from equilibria.blocks.gtap.capflex_risk import (
                     capflex_risk_from_data,
                 )
 
