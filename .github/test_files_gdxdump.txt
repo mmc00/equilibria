@@ -1,3 +1,4 @@
+tests/babel/gdx/test_reader_manage.py
 tests/compare/test_gtap3x3.py
 tests/data/test_fbep_variants.py
 tests/family/test_capflex_risk.py

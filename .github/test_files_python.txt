@@ -8,6 +8,7 @@ tests/babel/gdx/test_reader.py
 tests/babel/gdx/test_reader_data_locate.py
 tests/babel/gdx/test_reader_extended.py
 tests/babel/gdx/test_reader_gtap_equations.py
+tests/babel/gdx/test_reader_manage.py
 tests/babel/gdx/test_reader_symtab_453.py
 tests/babel/gdx/test_reader_values_vs_gdxdump.py
 tests/babel/gdx/test_reader_vs_gdxdump_snapshot.py
