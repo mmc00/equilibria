@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -225,3 +226,86 @@ def test_main_checks_only_named_skills(tmp_path, capsys):
     _pending(tmp_path)
     assert CS.main(["good"], root=tmp_path) == 0
     assert capsys.readouterr().out == ""
+
+
+def _body(steps: str = GOOD_STEPS, errors: str = GOOD_ERRORS) -> str:
+    return f"# Demo\n\n{steps}\n{errors}"
+
+
+def test_no_steps_section(tmp_path):
+    make_skill(tmp_path, body=_body(steps=""))
+    assert rules(CS.check_skill(tmp_path, "demo")) == ["steps"]
+
+
+def test_step_without_command(tmp_path):
+    steps = (
+        "## Steps\n\n1. Open `recipe.py` and read it.\n   Check: you see the plan.\n"
+    )
+    make_skill(tmp_path, body=_body(steps=steps))
+    assert rules(CS.check_skill(tmp_path, "demo")) == ["steps"]
+
+
+def test_step_with_empty_check(tmp_path):
+    steps = "## Steps\n\n1. Run `uv run pytest -q`.\n   Check:   \n"
+    make_skill(tmp_path, body=_body(steps=steps))
+    assert rules(CS.check_skill(tmp_path, "demo")) == ["steps"]
+
+
+def test_numbered_line_inside_a_fence_is_not_a_step(tmp_path):
+    steps = (
+        "## Steps\n\n1. Read the log.\n\n   ```text\n2. this is log output\n   ```\n\n"
+        "   Run `uv run python scripts/gtap/triage.py`.\n   Check: a verdict.\n"
+    )
+    make_skill(tmp_path, body=_body(steps=steps))
+    assert CS.check_skill(tmp_path, "demo") == []
+
+
+def test_errors_table_needs_two_rows(tmp_path):
+    errors = "## Errors\n\n| Failure | Fix |\n|---|---|\n| it fails | read the log |\n"
+    make_skill(tmp_path, body=_body(errors=errors))
+    assert rules(CS.check_skill(tmp_path, "demo")) == ["errors"]
+
+
+def test_fix_that_only_retries_fails(tmp_path):
+    for i, fix in enumerate(["Try again", "retry.", "Rerun it", "rerun the command"]):
+        errors = (
+            "## Errors\n\n| Failure | Fix |\n|---|---|\n"
+            f"| it fails | {fix} |\n| it hangs | add `--tool-timeout 600` |\n"
+        )
+        make_skill(tmp_path, f"s{i}", body=_body(errors=errors))
+        assert rules(CS.check_skill(tmp_path, f"s{i}")) == ["errors"], fix
+
+
+def test_fix_that_reruns_with_a_change_passes(tmp_path):
+    errors = (
+        "## Errors\n\n| Failure | Fix |\n|---|---|\n"
+        "| wrong mode | Rerun with --ifsub 1 |\n| it hangs | add `--tool-timeout 600` |\n"
+    )
+    make_skill(tmp_path, body=_body(errors=errors))
+    assert CS.check_skill(tmp_path, "demo") == []
+
+
+def test_spec_missing_or_heading_empty(tmp_path):
+    make_skill(tmp_path, "none", spec=None)
+    assert rules(CS.check_skill(tmp_path, "none")) == ["spec"]
+    for heading in ("Goal", "Outputs", "Tools", "Forbidden", "Agents"):
+        cut = re.sub(rf"(## {heading}\n)\n[^#]+", r"\1\n", GOOD_SPEC)
+        make_skill(tmp_path, heading.lower(), spec=cut)
+        assert rules(CS.check_skill(tmp_path, heading.lower())) == ["spec"], heading
+
+
+def test_broken_relative_link(tmp_path):
+    make_skill(tmp_path, body=_body() + "\nSee [x](references/missing.md).\n")
+    assert rules(CS.check_skill(tmp_path, "demo")) == ["links"]
+
+
+def test_portable_in_skill_code_fails_but_spec_forbidden_may_name_it(tmp_path):
+    bad = _body() + "\n```bash\n.venv/bin/python scripts/x.py\n```\n"
+    make_skill(tmp_path, "venv", body=bad)
+    assert rules(CS.check_skill(tmp_path, "venv")) == ["portable"]
+    make_skill(tmp_path, "ok")  # GOOD_SPEC names .venv/bin/python under Forbidden
+    assert CS.check_skill(tmp_path, "ok") == []
+    folder = make_skill(tmp_path, "ref", body=_body() + "\nSee [r](references/x.md).\n")
+    (folder / "references").mkdir()
+    (folder / "references" / "x.md").write_text("```bash\ncd /Users/me/repo\n```\n")
+    assert rules(CS.check_skill(tmp_path, "ref")) == ["portable"]

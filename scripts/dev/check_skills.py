@@ -109,6 +109,177 @@ def rule_length(root: Path, name: str) -> list[Finding]:
     return []
 
 
+COMMAND_PREFIXES = ("uv run", "git ", "gh ", "python3 ", "bash ", "scripts/")
+SPEC_HEADINGS = ("Goal", "Outputs", "Tools", "Forbidden", "Agents")
+_FENCE = re.compile(r"^\s*(```|~~~)")
+_STEP = re.compile(r"^\d+\. ")
+_INLINE = re.compile(r"`([^`\n]+)`")
+_RETRY_ONLY = re.compile(r"^(try again|retry|re-?run( it| the command)?)\.?$")
+_LINK = re.compile(r"\]\(([^)\s]+)\)")
+_NOT_PORTABLE = (
+    (re.compile(r"\.venv/bin/python"), ".venv/bin/python"),
+    (re.compile(r"(?<!uv run )(?<![\w/.])python (?!3)"), "a bare python"),
+    (re.compile(r"/Users/"), "an absolute /Users/ path"),
+)
+
+
+def _outside_fences(text: str) -> list[tuple[str, bool]]:
+    """Each line with whether it is inside a fenced block (fence lines count as in)."""
+    out, inside = [], False
+    for line in text.split("\n"):
+        if _FENCE.match(line):
+            out.append((line, True))
+            inside = not inside
+        else:
+            out.append((line, inside))
+    return out
+
+
+def section(body: str, heading: str) -> str | None:
+    """The text under ``## <heading>`` up to the next ``## `` heading; headings
+    inside fences do not count. None when there is no such heading."""
+    lines, found = [], False
+    for line, fenced in _outside_fences(body):
+        if not fenced and line.startswith("## "):
+            if found:
+                break
+            found = line[3:].strip().lower() == heading.lower()
+            continue
+        if found:
+            lines.append(line)
+    return "\n".join(lines) if found else None
+
+
+def _code(text: str) -> list[str]:
+    """Fenced lines and inline code spans of ``text``."""
+    out = []
+    for line, fenced in _outside_fences(text):
+        if fenced:
+            if not _FENCE.match(line):
+                out.append(line)
+        else:
+            out.extend(_INLINE.findall(line))
+    return out
+
+
+def _is_command(code: str, fenced: bool) -> bool:
+    return fenced or code.strip().startswith(COMMAND_PREFIXES)
+
+
+def rule_steps(root: Path, name: str) -> list[Finding]:
+    _, body = split_skill(read_text(_folder(root, name) / "SKILL.md"))
+    text = section(body, "Steps")
+    if text is None:
+        return [Finding(name, "steps", "no ## Steps section")]
+    steps: list[list[tuple[str, bool]]] = []
+    for line, fenced in _outside_fences(text):
+        if not fenced and _STEP.match(line):
+            steps.append([])
+        if steps:
+            steps[-1].append((line, fenced))
+    if not steps:
+        return [Finding(name, "steps", "## Steps has no numbered step")]
+    out = []
+    for n, lines in enumerate(steps, start=1):
+        fenced_code = any(
+            f and not _FENCE.match(line) and line.strip() for line, f in lines
+        )
+        inline = [c for line, f in lines if not f for c in _INLINE.findall(line)]
+        if not (fenced_code or any(_is_command(c, False) for c in inline)):
+            out.append(Finding(name, "steps", f"step {n} has no command"))
+        checks = [line for line, f in lines if not f and "Check:" in line]
+        if not checks or all(not c.split("Check:", 1)[1].strip() for c in checks):
+            out.append(
+                Finding(name, "steps", f"step {n} has no Check: line with content")
+            )
+    return out
+
+
+def rule_errors(root: Path, name: str) -> list[Finding]:
+    _, body = split_skill(read_text(_folder(root, name) / "SKILL.md"))
+    text = section(body, "Errors")
+    if text is None:
+        return [Finding(name, "errors", "no ## Errors section")]
+    rows = [
+        [c.strip() for c in line.strip().strip("|").split("|")]
+        for line in text.split("\n")
+        if line.strip().startswith("|")
+    ]
+    rows = [r for r in rows[1:] if not all(set(c) <= set("-: ") for c in r)]
+    out = []
+    if len(rows) < 2:
+        out.append(
+            Finding(name, "errors", f"the errors table has {len(rows)} row(s) (min 2)")
+        )
+    for r in rows:
+        if len(r) >= 2 and _RETRY_ONLY.match(r[-1].lower().strip()):
+            out.append(Finding(name, "errors", f"fix {r[-1]!r} only retries"))
+    return out
+
+
+def rule_spec(root: Path, name: str) -> list[Finding]:
+    path = _folder(root, name) / "spec.md"
+    if not path.is_file():
+        return [Finding(name, "spec", "spec.md is missing")]
+    text = read_text(path)
+    out = []
+    for heading in SPEC_HEADINGS:
+        body = section(text, heading)
+        if body is None or not body.strip():
+            out.append(
+                Finding(name, "spec", f"spec.md has no content under ## {heading}")
+            )
+    return out
+
+
+def _skill_docs(folder: Path) -> list[Path]:
+    docs = [folder / "SKILL.md"]
+    for sub in ("references", "scripts"):
+        if (folder / sub).is_dir():
+            docs += sorted(p for p in (folder / sub).rglob("*") if p.is_file())
+    return docs
+
+
+def rule_links(root: Path, name: str) -> list[Finding]:
+    folder = _folder(root, name)
+    out = []
+    for doc in [folder / "SKILL.md", folder / "spec.md"]:
+        if not doc.is_file():
+            continue
+        for target in _LINK.findall(read_text(doc)):
+            if "://" in target or target.startswith(("#", "mailto:")):
+                continue
+            path = target.split("#", 1)[0]
+            if path and not (doc.parent / path).exists():
+                out.append(
+                    Finding(name, "links", f"{doc.name} links to missing {path}")
+                )
+    return out
+
+
+def rule_portable(root: Path, name: str) -> list[Finding]:
+    folder = _folder(root, name)
+    out = []
+    for doc in _skill_docs(folder):
+        try:
+            text = read_text(doc)
+        except UnicodeDecodeError:
+            continue
+        code = text.split("\n") if doc.suffix not in (".md", "") else _code(text)
+        for snippet in code:
+            for pattern, what in _NOT_PORTABLE:
+                if pattern.search(snippet):
+                    rel = doc.relative_to(folder)
+                    out.append(
+                        Finding(
+                            name,
+                            "portable",
+                            f"{rel} uses {what}: {snippet.strip()[:60]}",
+                        )
+                    )
+    return out
+
+
 def rule_wiring(root: Path, name: str) -> list[Finding]:
     out = []
     link = root / ".claude" / "skills" / name
@@ -136,6 +307,11 @@ def rule_wiring(root: Path, name: str) -> list[Finding]:
 RULES: list[Callable[[Path, str], list[Finding]]] = [
     rule_frontmatter,
     rule_length,
+    rule_steps,
+    rule_errors,
+    rule_spec,
+    rule_links,
+    rule_portable,
     rule_wiring,
 ]
 
