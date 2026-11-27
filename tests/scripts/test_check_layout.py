@@ -135,7 +135,13 @@ def test_agent_guides_pass_only_at_the_root() -> None:
     assert _module().violations(["src/CLAUDE.md"])
 
 
+def test_the_claude_settings_pass() -> None:
+    """MAR-208: the repo's Claude Code hooks live in a tracked .claude/settings.json."""
+    assert _module().violations([".claude/settings.json"]) == []
+
+
 def test_other_agent_folders_are_rejected() -> None:
-    assert _module().violations([".claude/settings.json"])
+    assert _module().violations([".claude/settings.local.json"])
+    assert _module().violations([".claude/agents/x.md"])
     assert _module().violations([".agents/notes.md"])
     assert _module().violations([".agents/skills/x/Notes.md"])

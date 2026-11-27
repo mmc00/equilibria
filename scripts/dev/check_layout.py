@@ -45,9 +45,11 @@ ROOT_FILES = frozenset(
 )
 # The repo's agent skills (open Agent Skills format): .agents/skills/<name>/SKILL.md,
 # each linked from .claude/skills/<name> for Claude Code. Nothing else of .agents/
-# or .claude/ is tracked. SKILL.md and README.md are the names the format fixes.
+# or .claude/ is tracked but AGENT_FILES. SKILL.md and README.md are the names the format fixes.
 SKILL_PREFIXES: tuple[str, ...] = (".agents/skills/", ".claude/skills/")
 SKILL_NAMES = frozenset({"SKILL.md", "README.md"})
+# The repo's Claude Code hooks (MAR-208): the GTAP gates hook and the skills hook.
+AGENT_FILES = frozenset({".claude/settings.json"})
 
 # Emptied by later phases of specs/data/changes/one-data-folder; each phase
 # removes its entry.
@@ -206,7 +208,7 @@ def violations(paths: list[str]) -> list[str]:
                 bad.append(
                     f"{path}: new file at the root (see data/README.md for where things go)"
                 )
-        elif path.startswith(SKILL_PREFIXES):
+        elif path.startswith(SKILL_PREFIXES) or path in AGENT_FILES:
             pass
         elif top not in ROOT_DIRS and top not in ROOT_DIRS_TEMPORARY:
             bad.append(

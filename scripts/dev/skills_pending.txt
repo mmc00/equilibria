@@ -1,0 +1,6 @@
+# Skills not migrated to the method yet (specs/2026-11-26-skills-uber-method-design.md).
+# The checker only warns for them; a skill leaves this list in the PR that migrates it.
+port-to-jax
+equilibria-parity-debug
+xmodel-parity
+sam-audit
