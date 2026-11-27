@@ -399,3 +399,127 @@ def test_sigterm_becomes_keyboard_interrupt():
         with pytest.raises(KeyboardInterrupt):
             os.kill(os.getpid(), signal.SIGTERM)
             time.sleep(1)
+
+
+# MAR-257: the final review's deferred minors
+
+MIX_PROMPTS = """- id: g1
+  kind: golden
+  prompt: "q"
+  expect: "a"
+- id: t1
+  kind: trajectory
+  prompt: "q"
+  must_run: ["ok"]
+  expect: "a"
+- id: t2
+  kind: trajectory
+  prompt: "q"
+  must_run: ["ok"]
+  expect: "a"
+- id: a1
+  kind: author
+  prompt: "q"
+  expect: "a"
+"""
+
+
+def _main_with(repo, monkeypatch, prompts: str, passed: dict[str, bool]) -> int:
+    """main over ``prompts`` with the agent and judge faked: ``passed`` per id."""
+    (repo / ".agents/skills/demo/evals/prompts.yaml").write_text(prompts)
+
+    def fake_run(prompt, skill, **kw):
+        ok = passed.get(str(prompt.get("id")), True)
+        return {
+            "commands": ["ok"] if ok else [],
+            "answer": "x",
+            "passed": ok,
+            "agent_error": "",
+            "minutes": 0.0,
+            "tool_calls": 0,
+            "tool_errors": 0,
+        }
+
+    monkeypatch.setattr(RE, "run_prompt", fake_run)
+    monkeypatch.setattr(
+        RE, "golden_matches", lambda p, *a, **k: passed.get(str(p.get("id")), True)
+    )
+    return RE.main(["demo"], root=repo)
+
+
+def test_main_exits_1_under_the_70_percent_pass_rate(repo, monkeypatch, capsys):
+    assert _main_with(repo, monkeypatch, MIX_PROMPTS, {"t1": False, "t2": False}) == 1
+    assert "under 70%" in capsys.readouterr().out
+    assert _main_with(repo, monkeypatch, MIX_PROMPTS, {}) == 0
+
+
+def test_a_failed_agent_run_fails_its_prompt(repo, tmp_path):
+    agent = _fake_agent(
+        tmp_path,
+        """
+        import json, sys
+        print(json.dumps({"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "id": "t0", "name": "Bash",
+             "input": {"command": "ok"}}]}}))
+        print(json.dumps({"type": "result", "result": "half"}))
+        sys.exit(3)
+    """,
+    )
+    res = RE.run_prompt(
+        {"prompt": "go", "must_run": ["ok"]},
+        "demo",
+        with_skill=True,
+        agent_cmd=agent,
+        timeout_s=60,
+        max_turns=5,
+        repo=repo,
+    )
+    assert res["commands"] == ["ok"]
+    assert res["passed"] is False
+    assert res["agent_error"] == "the agent exited 3"
+
+
+def test_a_failed_agent_run_is_not_sent_to_the_golden_judge(repo, monkeypatch):
+    (repo / ".agents/skills/demo/evals/prompts.yaml").write_text(
+        '- id: g1\n  kind: golden\n  prompt: "q"\n  expect: "a"\n'
+    )
+    monkeypatch.setattr(
+        RE,
+        "run_prompt",
+        lambda p, s, **kw: {
+            "commands": [],
+            "answer": "",
+            "passed": False,
+            "agent_error": "the agent exited 1",
+            "minutes": 0.0,
+            "tool_calls": 0,
+            "tool_errors": 0,
+        },
+    )
+    monkeypatch.setattr(RE, "golden_matches", lambda *a, **k: True)
+    assert RE.main(["demo"], root=repo) == 1
+    stamp = SY.read_last_run(repo / ".agents/skills/demo/evals/last_run.md")
+    assert stamp["pass_rate"] == "0.00"
+
+
+def test_a_bad_prompts_yaml_is_one_error_line_not_a_traceback(
+    repo, monkeypatch, capsys
+):
+    (repo / ".agents/skills/demo/evals/prompts.yaml").write_text(
+        "- id: p1\n  prompt: |\n    many\n"
+    )
+    assert RE.main(["demo"], root=repo) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("error: demo: evals/prompts.yaml line 2:")
+    assert "Traceback" not in err
+
+
+def test_the_run_reports_the_prompt_mix(repo, monkeypatch, capsys):
+    _main_with(repo, monkeypatch, MIX_PROMPTS, {})
+    out = capsys.readouterr().out
+    assert (
+        "prompts: 1 golden, 2 trajectory, 1 author "
+        "(25% / 50% / 25%; the method's target is 5% / 80% / 15%)"
+    ) in out
+    stamp = SY.read_last_run(repo / ".agents/skills/demo/evals/last_run.md")
+    assert stamp["mix"] == "1 golden, 2 trajectory, 1 author"

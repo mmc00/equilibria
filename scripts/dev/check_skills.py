@@ -43,7 +43,32 @@ class Finding:
 
 
 def read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8").replace("\r\n", "\n")
+    """The file as text, without a UTF-8 BOM and with LF line ends."""
+    return path.read_text(encoding="utf-8-sig").replace("\r\n", "\n")
+
+
+_BLOCK_SCALAR = re.compile(r"^[>|][+-]?$")
+
+
+def _frontmatter(lines: list[str]) -> dict[str, str]:
+    """``key: value`` pairs; a ``>`` or ``|`` value takes the indented lines
+    under it, joined by spaces (``>``) or newlines (``|``)."""
+    meta: dict[str, str] = {}
+    i = 0
+    while i < len(lines):
+        key, sep, value = lines[i].partition(":")
+        i += 1
+        if not sep or lines[i - 1][:1].isspace():
+            continue
+        value = value.strip()
+        if _BLOCK_SCALAR.match(value):
+            block = []
+            while i < len(lines) and (not lines[i].strip() or lines[i][:1].isspace()):
+                block.append(lines[i].strip())
+                i += 1
+            value = (" " if value[0] == ">" else "\n").join(b for b in block if b)
+        meta[key.strip()] = value
+    return meta
 
 
 def split_skill(text: str) -> tuple[dict[str, str] | None, str]:
@@ -53,12 +78,7 @@ def split_skill(text: str) -> tuple[dict[str, str] | None, str]:
         return None, text
     for end in range(1, len(lines)):
         if lines[end].strip() == "---":
-            meta = {}
-            for line in lines[1:end]:
-                key, sep, value = line.partition(":")
-                if sep:
-                    meta[key.strip()] = value.strip()
-            return meta, "\n".join(lines[end + 1 :])
+            return _frontmatter(lines[1:end]), "\n".join(lines[end + 1 :])
     return None, text
 
 
@@ -117,7 +137,7 @@ def rule_length(root: Path, name: str) -> list[Finding]:
 
 COMMAND_PREFIXES = ("uv run", "git ", "gh ", "python3 ", "bash ", "scripts/")
 SPEC_HEADINGS = ("Goal", "Outputs", "Tools", "Forbidden", "Agents")
-_FENCE = re.compile(r"^\s*(```|~~~)")
+_FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
 _STEP = re.compile(r"^\d+\. ")
 _INLINE = re.compile(r"`([^`\n]+)`")
 _RETRY_ONLY = re.compile(r"^(try again|retry|re-?run( it| the command)?)\.?$")
@@ -130,14 +150,26 @@ _NOT_PORTABLE = (
 
 
 def _outside_fences(text: str) -> list[tuple[str, bool]]:
-    """Each line with whether it is inside a fenced block (fence lines count as in)."""
-    out, inside = [], False
+    """Each line with whether it is inside a fenced block (fence lines count as in).
+    As in CommonMark, a fence closes only on a bare run of its own character at
+    least as long as the one that opened it, so a ```` block may hold ``` ones."""
+    out: list[tuple[str, bool]] = []
+    opened: str | None = None
     for line in text.split("\n"):
-        if _FENCE.match(line):
-            out.append((line, True))
-            inside = not inside
+        m = _FENCE.match(line)
+        if opened is None:
+            if m:
+                opened = m.group(1)
+            out.append((line, opened is not None))
         else:
-            out.append((line, inside))
+            out.append((line, True))
+            run = m.group(1) if m else ""
+            if (
+                run[:1] == opened[0]
+                and len(run) >= len(opened)
+                and not line.strip()[len(run) :].strip()
+            ):
+                opened = None
     return out
 
 
@@ -208,8 +240,8 @@ def rule_errors(root: Path, name: str) -> list[Finding]:
         return [Finding(name, "errors", "no ## Errors section")]
     rows = [
         [c.strip() for c in line.strip().strip("|").split("|")]
-        for line in text.split("\n")
-        if line.strip().startswith("|")
+        for line, fenced in _outside_fences(text)
+        if not fenced and line.strip().startswith("|")
     ]
     rows = [r for r in rows[1:] if not all(set(c) <= set("-: ") for c in r)]
     out = []
@@ -271,7 +303,7 @@ def rule_portable(root: Path, name: str) -> list[Finding]:
             text = read_text(doc)
         except UnicodeDecodeError:
             continue
-        code = text.split("\n") if doc.suffix not in (".md", "") else _code(text)
+        code = _code(text) if doc.suffix == ".md" else text.split("\n")
         for snippet in code:
             for pattern, what in _NOT_PORTABLE:
                 if pattern.search(snippet):
@@ -409,13 +441,30 @@ RULES: list[Callable[[Path, str], list[Finding]]] = [
 ]
 
 
+TEXT_FILES = ("SKILL.md", "spec.md", "evals/prompts.yaml", str(LAST_RUN))
+
+
+def rule_encoding(root: Path, name: str) -> list[Finding]:
+    """The files the rules read must be UTF-8; the rules do not run otherwise."""
+    folder = _folder(root, name)
+    out = []
+    for rel in TEXT_FILES:
+        path = folder / rel
+        if path.is_file():
+            try:
+                read_text(path)
+            except UnicodeDecodeError:
+                out.append(Finding(name, "encoding", f"{rel} is not UTF-8"))
+    return out
+
+
 def check_skill(root: Path, name: str) -> list[Finding]:
     """Every rule's findings for the skill ``name`` under ``root``."""
     if not (_folder(root, name) / "SKILL.md").is_file():
         return [
             Finding(name, "frontmatter", f"{SKILLS / name / 'SKILL.md'} is missing")
         ]
-    return [f for rule in RULES for f in rule(root, name)]
+    return rule_encoding(root, name) or [f for rule in RULES for f in rule(root, name)]
 
 
 def load_pending(root: Path) -> set[str]:

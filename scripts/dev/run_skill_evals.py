@@ -10,7 +10,8 @@ How each prompt of ``evals/prompts.yaml`` runs:
 2. The agent is ``claude -p`` and its run is contained:
    - ``git push``, ``gh``, ``git commit`` and the GTAP gates are denied;
    - it has a turn cap and a timeout.
-3. The prompt is graded by its kind:
+3. The prompt is graded by its kind (a run whose agent exits non-zero or times
+   out fails, whatever it ran):
    - ``trajectory``: by ``must_run`` and ``must_not_run`` over the commands the agent ran;
    - ``golden``: by a judge, against ``expect``;
    - ``author``: printed for the author, and it does not count toward the pass rate.
@@ -18,7 +19,9 @@ How each prompt of ``evals/prompts.yaml`` runs:
    picks the better of the two answers, unlabeled and in random order.
 
 The run writes ``evals/last_run.md``, which check_skills.py requires to be
-fresh. This costs real agent runs: a few minutes and some money per prompt.
+fresh, and exits 1 under the 70% pass rate (2 on an unreadable prompts.yaml).
+It reports the golden / trajectory / author mix against the method's target.
+This costs real agent runs: a few minutes and some money per prompt.
 """
 
 from __future__ import annotations
@@ -41,11 +44,13 @@ from pathlib import Path
 DEV = Path(__file__).resolve().parent
 sys.path.insert(0, str(DEV))
 
-from skill_yaml import LAST_RUN, read_prompts, skill_hash  # noqa: E402
+from check_skills import MIN_PASS_RATE, PROMPT_KINDS  # noqa: E402
+from skill_yaml import LAST_RUN, SubsetError, read_prompts, skill_hash  # noqa: E402
 
 ROOT = DEV.parents[1]
 SKILLS = Path(".agents") / "skills"
 ALLOWED = ("Bash", "Read", "Grep", "Glob", "Edit", "Write")
+TARGET_MIX = {"golden": 0.05, "trajectory": 0.80, "author": 0.15}
 DENIED = (
     "Bash(git push:*)",
     "Bash(gh:*)",
@@ -176,16 +181,21 @@ def run_prompt(
                 argv, cwd=work, capture_output=True, text=True, timeout=timeout_s
             )
             lines = proc.stdout.splitlines()
+            agent_error = (
+                f"the agent exited {proc.returncode}" if proc.returncode else ""
+            )
         except subprocess.TimeoutExpired as err:
             out = err.stdout or ""
             lines = (out.decode() if isinstance(out, bytes) else out).splitlines()
+            agent_error = f"the agent timed out after {timeout_s // 60} min"
         minutes = (time.monotonic() - start) / 60
         commands = commands_from_stream(lines)
         answer, calls, errors = _stream_stats(lines)
         return {
             "commands": commands,
             "answer": answer,
-            "passed": grade(prompt, commands),
+            "passed": not agent_error and grade(prompt, commands),
+            "agent_error": agent_error,
             "minutes": minutes,
             "tool_calls": calls,
             "tool_errors": errors,
@@ -261,9 +271,19 @@ def golden_matches(
     return _ask(agent_cmd, text, timeout_s, model).upper().startswith("YES")
 
 
+def prompt_mix(prompts: list[dict]) -> tuple[str, str]:
+    """("1 golden, 2 trajectory, 1 author", "25% / 50% / 25%") of the prompts."""
+    counts = [sum(1 for p in prompts if p.get("kind") == k) for k in PROMPT_KINDS]
+    total = len(prompts) or 1
+    return (
+        ", ".join(f"{c} {k}" for c, k in zip(counts, PROMPT_KINDS, strict=True)),
+        " / ".join(f"{c / total:.0%}" for c in counts),
+    )
+
+
 def write_last_run(folder: Path, results: list[dict], meta: dict) -> Path:
     """Stamp ``evals/last_run.md`` with the pass rate over graded prompts and the
-    folder's hash; ``meta`` gives commit, agent, model and ablation_wins."""
+    folder's hash; ``meta`` gives commit, agent, model, ablation_wins and mix."""
     graded = [r for r in results if r.get("kind") != "author"]
     rate = sum(1 for r in graded if r.get("passed")) / len(graded) if graded else 0.0
     fields = {
@@ -273,6 +293,7 @@ def write_last_run(folder: Path, results: list[dict], meta: dict) -> Path:
         "model": meta.get("model", ""),
         "pass_rate": f"{rate:.2f}",
         "ablation_wins": meta.get("ablation_wins", "not run"),
+        "mix": meta.get("mix", ""),
         "skill_hash": skill_hash(folder),
     }
     lines = [
@@ -295,7 +316,7 @@ def write_last_run(folder: Path, results: list[dict], meta: dict) -> Path:
     return path
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("skill")
     ap.add_argument("--agent", default="claude", help="the agent command (claude)")
@@ -309,10 +330,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=None)
     args = ap.parse_args(argv)
 
-    folder = ROOT / SKILLS / args.skill
-    prompts = read_prompts(
-        (folder / "evals" / "prompts.yaml").read_text(encoding="utf-8")
-    )
+    folder = root / SKILLS / args.skill
+    try:
+        prompts = read_prompts(
+            (folder / "evals" / "prompts.yaml").read_text(encoding="utf-8")
+        )
+    except (OSError, UnicodeDecodeError, SubsetError) as err:
+        print(f"error: {args.skill}: evals/prompts.yaml {err}", file=sys.stderr)
+        return 2
+    mix, shares = prompt_mix(prompts)
+    target = " / ".join(f"{TARGET_MIX[k]:.0%}" for k in PROMPT_KINDS)
+    print(f"prompts: {mix} ({shares}; the method's target is {target})")
     agent = [args.agent]
     rng = random.Random(args.seed)
     results, wins, pairs = [], 0, 0
@@ -327,10 +355,11 @@ def main(argv: list[str] | None = None) -> int:
                     agent_cmd=agent,
                     timeout_s=args.timeout,
                     max_turns=args.max_turns,
+                    repo=root,
                     model=args.model,
                 )
                 kind = p.get("kind")
-                if kind == "golden":
+                if kind == "golden" and not r.get("agent_error"):
                     r["passed"] = golden_matches(
                         p, r["answer"], agent, args.timeout, args.model
                     )
@@ -346,6 +375,7 @@ def main(argv: list[str] | None = None) -> int:
                         agent_cmd=agent,
                         timeout_s=args.timeout,
                         max_turns=args.max_turns,
+                        repo=root,
                         model=args.model,
                     )
                     text, label = judge_prompt(p, r["answer"], bare["answer"], rng)
@@ -357,12 +387,16 @@ def main(argv: list[str] | None = None) -> int:
                     for k in deltas:
                         deltas[k] += bare[k] - r[k]
                 results.append({"id": p.get("id"), "kind": kind, "passed": r["passed"]})
-                print(
-                    f"{p.get('id')}: {'author' if kind == 'author' else ('pass' if r['passed'] else 'FAIL')}"
+                mark = (
+                    "author"
+                    if kind == "author"
+                    else ("pass" if r["passed"] else "FAIL")
                 )
+                why = f" ({r['agent_error']})" if r.get("agent_error") else ""
+                print(f"{p.get('id')}: {mark}{why}")
     commit = subprocess.run(
         ["git", "rev-parse", "--short", "HEAD"],
-        cwd=ROOT,
+        cwd=root,
         capture_output=True,
         text=True,
     ).stdout.strip()
@@ -374,12 +408,13 @@ def main(argv: list[str] | None = None) -> int:
             "agent": args.agent,
             "model": args.model or "default",
             "ablation_wins": f"{wins}/{pairs}" if args.ablation else "not run",
+            "mix": mix,
         },
     )
     graded = [r for r in results if r["kind"] != "author"]
     rate = sum(r["passed"] for r in graded) / len(graded) if graded else 0.0
     print(
-        f"pass rate {rate:.0%} over {len(graded)} graded run(s); stamp: {path.relative_to(ROOT)}"
+        f"pass rate {rate:.0%} over {len(graded)} graded run(s); stamp: {path.relative_to(root)}"
     )
     if args.ablation:
         print(
@@ -387,6 +422,9 @@ def main(argv: list[str] | None = None) -> int:
             f"{deltas['tool_calls']:+d} tool calls, {deltas['tool_errors']:+d} tool errors, "
             f"{deltas['minutes']:+.1f} min"
         )
+    if rate < MIN_PASS_RATE:
+        print(f"pass rate {rate:.0%} is under {MIN_PASS_RATE:.0%}")
+        return 1
     return 0
 
 

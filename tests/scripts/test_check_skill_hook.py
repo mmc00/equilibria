@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "dev"))
 sys.path.insert(0, str(ROOT / "tests" / "scripts"))
@@ -85,3 +87,19 @@ def test_outside_path_non_skill_or_bad_json_exits_0_silent(
     monkeypatch.setattr(sys, "stdin", __import__("io").StringIO("not json"))
     assert HOOK.main(root=tmp_path) == 0
     assert capsys.readouterr() == ("", "")
+
+
+# MAR-257: the final review's deferred minors
+
+
+def test_a_loose_file_under_the_skills_folder_exits_0_silent(tmp_path):
+    make_skill(tmp_path)
+    _pending(tmp_path)
+    loose = tmp_path / ".agents" / "skills" / "notes.md"
+    loose.write_text("notes\n")
+    assert HOOK.run(_payload(loose), tmp_path) == (0, "")
+
+
+@pytest.mark.parametrize("payload", [{"tool_input": "x"}, {"tool_input": ["x"]}])
+def test_a_tool_input_that_is_not_a_map_exits_0_silent(tmp_path, payload):
+    assert HOOK.run(payload, tmp_path) == (0, "")

@@ -391,3 +391,61 @@ def test_real_repo_exits_0_with_every_skill_pending(capsys):
         assert f"warning: {name}: " in out, name
     for name in ("equilibria-parity-debug", "xmodel-parity", "sam-audit"):
         assert f"warning: {name}: pending: not in the repo yet" in out, name
+
+
+# MAR-257: the final review's deferred minors
+
+
+def test_a_bom_skill_md_passes(tmp_path):
+    folder = make_skill(tmp_path)
+    skill = folder / "SKILL.md"
+    skill.write_bytes(b"\xef\xbb\xbf" + skill.read_bytes())
+    write_stamp(folder)
+    assert CS.check_skill(tmp_path, "demo") == []
+
+
+def test_a_non_utf8_file_is_a_finding_not_a_crash(tmp_path):
+    folder = make_skill(tmp_path)
+    (folder / "spec.md").write_bytes(GOOD_SPEC.encode("utf-16"))
+    write_stamp(folder)
+    assert [(f.rule, f.detail) for f in CS.check_skill(tmp_path, "demo")] == [
+        ("encoding", "spec.md is not UTF-8")
+    ]
+
+
+def test_a_heading_inside_a_four_backtick_fence_is_not_a_section():
+    body = "# Demo\n\n````markdown\n```bash\n## Steps\n\n1. no\n```\n````\n"
+    assert CS.section(body, "Steps") is None
+
+
+def test_a_folded_description_is_read_whole(tmp_path):
+    raw = (
+        "---\nname: demo\ndescription: >\n  Use when a model\n  differs from GAMS.\n"
+        f"---\n# Demo\n\n{GOOD_STEPS}\n{GOOD_ERRORS}"
+    )
+    make_skill(tmp_path, raw_skill=raw)
+    assert CS.check_skill(tmp_path, "demo") == []
+    long = raw.replace("differs from GAMS.", "differs " + "word " * 100)
+    make_skill(tmp_path, "long", raw_skill=long.replace("name: demo", "name: long"))
+    assert [f.detail for f in CS.check_skill(tmp_path, "long")] == [
+        "description has 105 words (max 100)"
+    ]
+
+
+def test_an_extensionless_script_is_read_as_code(tmp_path):
+    folder = make_skill(tmp_path)
+    (folder / "scripts").mkdir()
+    (folder / "scripts" / "run").write_text("#!/bin/sh\npython scripts/x.py\n")
+    write_stamp(folder)
+    assert rules(CS.check_skill(tmp_path, "demo")) == ["portable"]
+
+
+def test_table_rows_inside_a_fence_do_not_count_as_errors(tmp_path):
+    errors = (
+        "## Errors\n\n| Failure | Fix |\n|---|---|\n| it fails | read the log |\n\n"
+        "```text\n| a | b |\n| c | d |\n```\n"
+    )
+    make_skill(tmp_path, body=_body(errors=errors))
+    assert [f.detail for f in CS.check_skill(tmp_path, "demo")] == [
+        "the errors table has 1 row(s) (min 2)"
+    ]
