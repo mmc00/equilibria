@@ -83,6 +83,16 @@ repos:
         pass_filenames: false
         require_serial: true
 
+      # Agent skills follow Uber's skills method
+      # (specs/2026-11-26-skills-uber-method-design.md); skills listed in
+      # scripts/dev/skills_pending.txt only warn until they are migrated.
+      - id: check-skills
+        name: agent skills follow the method
+        entry: python scripts/dev/check_skills.py
+        language: python
+        files: ^(\.agents/skills/|scripts/dev/(check_skills|skill_yaml)\.py|scripts/dev/skills_pending\.txt)
+        pass_filenames: false
+
       - id: ruff-lint
         name: ruff (lint --fix)
         entry: uv run ruff check --fix --force-exclude
