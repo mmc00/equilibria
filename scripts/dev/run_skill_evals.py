@@ -73,19 +73,34 @@ DENIED = (
 )
 
 
-def commands_from_stream(lines: Iterable[str]) -> list[str]:
-    """The ``command`` of every Bash tool call in the agent's stream-json whose
-    result was not an error: a denied or failed command does not count."""
-    calls: list[tuple[str, str]] = []
-    failed: set[str] = set()
+def _messages(lines: Iterable[str]) -> Iterable[tuple[dict, list[dict]]]:
+    """(message, its content blocks) for each JSON object line of the stream;
+    a line, a message or a block of another shape is skipped."""
     for line in lines:
         try:
             msg = json.loads(line)
         except (json.JSONDecodeError, ValueError):
             continue
-        for block in (msg.get("message") or {}).get("content") or []:
+        if not isinstance(msg, dict):
+            continue
+        body = msg.get("message")
+        content = body.get("content") if isinstance(body, dict) else None
+        blocks = content if isinstance(content, list) else []
+        yield msg, [b for b in blocks if isinstance(b, dict)]
+
+
+def commands_from_stream(lines: Iterable[str]) -> list[str]:
+    """The ``command`` of every Bash tool call in the agent's stream-json whose
+    result was not an error: a denied or failed command does not count."""
+    calls: list[tuple[str, str]] = []
+    failed: set[str] = set()
+    for msg, content in _messages(lines):
+        for block in content:
             if msg.get("type") == "assistant" and block.get("type") == "tool_use":
-                cmd = (block.get("input") or {}).get("command")
+                tool_input = block.get("input")
+                cmd = (
+                    tool_input.get("command") if isinstance(tool_input, dict) else None
+                )
                 if block.get("name") == "Bash" and isinstance(cmd, str):
                     calls.append((str(block.get("id")), cmd))
             elif msg.get("type") == "user" and block.get("type") == "tool_result":
@@ -97,12 +112,7 @@ def commands_from_stream(lines: Iterable[str]) -> list[str]:
 def _stream_stats(lines: list[str]) -> tuple[str, int, int]:
     """(final answer, tool calls, tool errors) of the stream."""
     answer, calls, errors = "", 0, 0
-    for line in lines:
-        try:
-            msg = json.loads(line)
-        except (json.JSONDecodeError, ValueError):
-            continue
-        content = (msg.get("message") or {}).get("content") or []
+    for msg, content in _messages(lines):
         if msg.get("type") == "assistant":
             calls += sum(1 for b in content if b.get("type") == "tool_use")
         elif msg.get("type") == "user":
@@ -146,6 +156,7 @@ def run_prompt(
     repo: Path = ROOT,
     model: str | None = None,
     setup_cmd: list[str] | None = None,
+    log_dir: Path | None = None,
 ) -> dict:
     """One contained agent run of ``prompt`` in a throwaway worktree of HEAD.
     ``setup_cmd`` (default ``DEFAULT_SETUP``; ``[]`` skips it) runs in the worktree
@@ -238,6 +249,17 @@ def run_prompt(
             lines = (out.decode() if isinstance(out, bytes) else out).splitlines()
             agent_error = f"the agent timed out after {timeout_s // 60} min"
         minutes = (time.monotonic() - start) / 60
+        if log_dir is not None:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            side = "with" if with_skill else "without"
+            log = Path(
+                tempfile.mkstemp(
+                    prefix=f"{prompt.get('id', 'prompt')}-{side}-",
+                    suffix=".jsonl",
+                    dir=log_dir,
+                )[1]
+            )
+            log.write_text("\n".join(lines) + "\n", encoding="utf-8")
         commands = commands_from_stream(lines)
         answer, calls, errors = _stream_stats(lines)
         return {
@@ -389,7 +411,15 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
         help="command run in each fresh worktree before the agent; empty disables it",
     )
     ap.add_argument("--seed", type=int, default=None)
+    ap.add_argument(
+        "--log-dir",
+        type=Path,
+        default=None,
+        help="where each run's stream-json is kept (default: a new temp folder)",
+    )
     args = ap.parse_args(argv)
+    with contextlib.suppress(AttributeError, ValueError):
+        sys.stdout.reconfigure(line_buffering=True)  # ty: ignore[unresolved-attribute]
 
     folder = root / SKILLS / args.skill
     try:
@@ -404,6 +434,10 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     print(f"prompts: {mix} ({shares}; the method's target is {target})")
     agent = [args.agent]
     setup = shlex.split(args.setup)
+    log_dir = args.log_dir or Path(
+        tempfile.mkdtemp(prefix=f"skill-evals-{args.skill}-")
+    )
+    print(f"run logs: {log_dir}")
     rng = random.Random(args.seed)
     results, wins, pairs = [], 0, 0
     deltas = {"tool_calls": 0, "tool_errors": 0, "minutes": 0.0}
@@ -420,6 +454,7 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
                     repo=root,
                     model=args.model,
                     setup_cmd=_setup_for(p, setup),
+                    log_dir=log_dir,
                 )
                 kind = p.get("kind")
                 if kind == "golden" and not r.get("agent_error"):
@@ -441,6 +476,7 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
                         repo=root,
                         model=args.model,
                         setup_cmd=_setup_for(p, setup),
+                        log_dir=log_dir,
                     )
                     text, label = judge_prompt(p, r["answer"], bare["answer"], rng)
                     pairs += 1

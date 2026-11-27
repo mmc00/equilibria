@@ -704,3 +704,62 @@ def test_the_setup_does_not_see_the_callers_virtual_env(repo, tmp_path, monkeypa
     )
     _run_with_setup(repo, tmp_path, probe, monkeypatch)
     assert marker.read_text() == "(None, None)"
+
+
+def test_a_stream_line_with_a_string_message_or_block_is_skipped():
+    """The real exam crashed on a line whose ``message`` was a string."""
+    lines = [
+        json.dumps({"type": "system", "message": "init"}),
+        json.dumps({"type": "assistant", "message": {"content": ["text", 3]}}),
+        json.dumps({"type": "user", "message": {"content": "plain"}}),
+        *_stream(["uv run pytest -q"], "done").splitlines(),
+    ]
+    assert RE.commands_from_stream(lines) == ["uv run pytest -q"]
+    plain = _stream(["uv run pytest -q"], "done").splitlines()
+    assert RE._stream_stats(lines) == RE._stream_stats(plain)
+
+
+def test_each_run_leaves_its_stream_in_the_log_dir(repo, tmp_path):
+    agent = _fake_agent(
+        tmp_path, 'import json; print(json.dumps({"type": "result", "result": "hi"}))'
+    )
+    logs = tmp_path / "logs"
+    RE.run_prompt(
+        {"id": "p1", "prompt": "go"},
+        "demo",
+        with_skill=False,
+        agent_cmd=agent,
+        timeout_s=60,
+        max_turns=5,
+        repo=repo,
+        setup_cmd=[],
+        log_dir=logs,
+    )
+    (log,) = logs.iterdir()
+    assert log.name.startswith("p1-without-")
+    assert '"result": "hi"' in log.read_text()
+
+
+def test_main_passes_one_log_dir_to_every_run_and_prints_it(repo, monkeypatch, capsys):
+    (repo / ".agents/skills/demo/evals/prompts.yaml").write_text(MIX_PROMPTS)
+    seen = []
+
+    def fake_run(prompt, skill, **kw):
+        seen.append(kw["log_dir"])
+        return {
+            "commands": ["ok"],
+            "answer": "x",
+            "passed": True,
+            "agent_error": "",
+            "minutes": 0.0,
+            "tool_calls": 0,
+            "tool_errors": 0,
+        }
+
+    monkeypatch.setattr(RE, "run_prompt", fake_run)
+    monkeypatch.setattr(RE, "golden_matches", lambda *a, **k: True)
+    monkeypatch.setattr(RE, "_ask", lambda *a, **k: "A")
+    logs = repo.parent / "logs"
+    assert RE.main(["demo", "--ablation", "--log-dir", str(logs)], root=repo) == 0
+    assert seen and all(d == logs for d in seen) and len(seen) == 8
+    assert f"run logs: {logs}" in capsys.readouterr().out
