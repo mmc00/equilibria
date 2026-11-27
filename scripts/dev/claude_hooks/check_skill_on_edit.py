@@ -24,7 +24,8 @@ PREFIXES = ((".agents", "skills"), (".claude", "skills"))
 
 
 def skill_of(path: str, root: Path) -> str | None:
-    """The skill a file belongs to, or None when it is not under a skill folder."""
+    """The skill a file belongs to, or None when it is not inside a skill folder
+    (a loose file such as the skills README sits beside the folders, not in one)."""
     try:
         rel = Path(path).resolve().relative_to(root.resolve())
     except (ValueError, OSError):
@@ -33,18 +34,19 @@ def skill_of(path: str, root: Path) -> str | None:
         except ValueError:
             return None
     parts = rel.parts
-    if len(parts) >= 3 and parts[:2] in PREFIXES:
+    if len(parts) >= 4 and parts[:2] in PREFIXES:
         return parts[2]
     return None
 
 
 def run(payload: dict, root: Path) -> tuple[int, str]:
     """(exit code, text to print) for one hook payload."""
-    path = (payload.get("tool_input") or {}).get("file_path")
+    tool_input = payload.get("tool_input")
+    path = tool_input.get("file_path") if isinstance(tool_input, dict) else None
     if not isinstance(path, str):
         return 0, ""
     name = skill_of(path, root)
-    if name is None or name == "README.md":
+    if name is None:
         return 0, ""
     findings = check_skill(root, name)
     if not findings:
