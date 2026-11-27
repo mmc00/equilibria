@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import ast
 import importlib
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -48,11 +49,12 @@ class DoorSpec:
     starting_point: str
 
 
+#: The public model doors; ``check_door`` runs on each.
 DOORS: tuple[DoorSpec, ...] = (
     DoorSpec("equilibria.gtap", "GTAP", "gtap_static", "gtap_default"),
 )
 
-# template classes without a door yet -> why (and what unblocks it)
+#: Template classes without a door yet, and why (what unblocks it).
 PENDING: dict[str, str] = {
     "equilibria.templates.simple_open.template.SimpleOpenEconomy": (
         "no closure class of its own (no ModelClosureConfig subclass) yet; its "
@@ -84,7 +86,8 @@ def _names(nodes: list[ast.expr]) -> set[str]:
 
 
 def _real_body(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-    """Not a stub: not only ``...`` or ``raise NotImplementedError`` (after a docstring)."""
+    """Not a stub: not only ``...``, ``pass``, ``return NotImplemented`` or ``raise
+    NotImplementedError`` (after a docstring)."""
     body = list(fn.body)
     if (
         body
@@ -98,6 +101,12 @@ def _real_body(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         only = body[0]
         if isinstance(only, ast.Expr) and isinstance(only.value, ast.Constant):
             return only.value.value is not Ellipsis
+        if isinstance(only, ast.Pass):
+            return False
+        if isinstance(only, ast.Return) and "NotImplemented" in _names(
+            [only.value] if only.value is not None else []
+        ):
+            return False
         if isinstance(only, ast.Raise) and only.exc is not None:
             exc = only.exc.func if isinstance(only.exc, ast.Call) else only.exc
             return "NotImplementedError" not in _names([exc])
@@ -162,6 +171,8 @@ def _own_recipe(node: ast.ClassDef) -> bool | None:
             isinstance(f, ast.FunctionDef | ast.AsyncFunctionDef)
             and f.name == "default_recipe"
         ):
+            if "abstractmethod" in _names(f.decorator_list):
+                return False
             return _real_body(f)
         targets = (
             f.targets
@@ -223,15 +234,22 @@ def find_templates(root: Path, package: str = "equilibria") -> set[str]:
 
 
 def api_page_problems(api_dir: Path, doors: tuple[DoorSpec, ...] = DOORS) -> list[str]:
-    """One message per door with no page in the API reference ``api_dir`` (a
-    ``.. automodule:: <door>`` line in one of its ``.md`` files)."""
+    """One message per door with no page in the API reference ``api_dir``: an
+    ``.. automodule:: <door>`` line (inside ``{eval-rst}``) or a MyST
+    ``{automodule} <door>`` fence in one of its ``.md`` files."""
     pages = "\n".join(
         p.read_text(encoding="utf-8") for p in sorted(api_dir.glob("*.md"))
     )
+
+    def documented(module: str) -> bool:
+        m = re.escape(module)
+        pattern = rf"^\s*(\.\. automodule::|[`:]{{3,}}\{{automodule\}})\s+{m}\s*$"
+        return re.search(pattern, pages, re.MULTILINE) is not None
+
     return [
         f"{spec.module} has no API page (an `.. automodule:: {spec.module}` in {api_dir})"
         for spec in doors
-        if f".. automodule:: {spec.module}\n" not in pages
+        if not documented(spec.module)
     ]
 
 
@@ -247,11 +265,16 @@ def coverage_problems(
     pending = PENDING if pending is None else pending
     templates = find_templates(root or package_root(), package)
     behind: dict[str, str] = {}
+    out: list[str] = []
     for spec in doors:
-        cls = getattr(importlib.import_module(spec.module), spec.template, None)
+        try:
+            door = importlib.import_module(spec.module)
+        except ImportError as e:
+            out.append(f"{spec.module}: cannot import ({e})")
+            continue
+        cls = getattr(door, spec.template, None)
         if cls is not None:
             behind[f"{cls.__module__}.{cls.__qualname__}"] = spec.module
-    out: list[str] = []
     for t in sorted(templates):
         if t in behind and t in pending:
             out.append(f"{t} is in PENDING but has a door ({behind[t]}): remove it")
@@ -274,7 +297,10 @@ def check_door(spec: DoorSpec) -> list[str]:
     from equilibria.core.exercise import Exercise
     from equilibria.core.recipe import Recipe
 
-    door = importlib.import_module(spec.module)
+    try:
+        door = importlib.import_module(spec.module)
+    except ImportError as e:
+        return [f"{spec.module}: cannot import ({e})"]
     out: list[str] = []
     exported = set(getattr(door, "__all__", ()))
     for name in (*CONTRACT_NAMES, spec.template, spec.recipe):

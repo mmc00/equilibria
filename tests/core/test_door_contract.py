@@ -180,3 +180,41 @@ def test_a_door_without_an_api_page_fails(tmp_path) -> None:
         f"{DOORS[0].module} has no API page (an `.. automodule:: {DOORS[0].module}` "
         f"in {tmp_path})"
     ], msgs
+
+
+def test_stub_shapes_are_not_templates(tmp_path) -> None:
+    """``pass``, ``return NotImplemented`` and ``@abstractmethod`` recipes are stubs: an
+    abstract base written that way must not block commits."""
+    from equilibria.core.door import find_templates
+
+    _write(tmp_path, "pkg/__init__.py", "")
+    _write(
+        tmp_path,
+        "pkg/bases.py",
+        "class A:\n    def default_recipe(self):\n        '''doc'''\n        pass\n\n"
+        "class B:\n    def default_recipe(self):\n        return NotImplemented\n\n"
+        "class C(ABC):\n    @abstractmethod\n    def default_recipe(self):\n"
+        "        return make()\n\n"
+        "class D(ABC):\n    @abc.abstractmethod\n    def default_recipe(self):\n"
+        "        return make()\n",
+    )
+    assert find_templates(tmp_path / "pkg", "pkg") == set()
+
+
+def test_a_door_that_does_not_import_is_a_problem() -> None:
+    from equilibria.core.door import DoorSpec, check_door, coverage_problems
+
+    broken = DoorSpec("equilibria_no_such_door", "X", "x", "y")
+    msgs = coverage_problems(doors=(broken,))
+    assert any("equilibria_no_such_door: cannot import" in m for m in msgs), msgs
+    assert check_door(broken) == [
+        "equilibria_no_such_door: cannot import (No module named 'equilibria_no_such_door')"
+    ]
+
+
+def test_a_myst_automodule_fence_counts_as_a_page(tmp_path) -> None:
+    from equilibria.core.door import DOORS, api_page_problems
+
+    m = DOORS[0].module
+    (tmp_path / "p.md").write_text(f"```{{automodule}} {m}\n```\n", encoding="utf-8")
+    assert api_page_problems(tmp_path, DOORS) == []

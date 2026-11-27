@@ -25,6 +25,14 @@ documented with the closure class in {doc}`templates_gtap`.
 
 ```{eval-rst}
 .. automodule:: equilibria.gtap
+
+.. autodata:: equilibria.gtap.overwrite
+   :no-value:
+
+   The ``@overwrite`` registry for advanced closures (ADR-0004), the same object
+   as ``equilibria.blocks.gtap.overwrite``: ``@overwrite(ShockBlock, period="shock")``
+   changes one block in one period; ``overwrite.clear()`` drops the hooks of a
+   previous exercise. Examples in :doc:`../guide/gtap_closures`.
 ```
 
 ## The door contract
