@@ -20,7 +20,6 @@ GOOD: dict[str, Any] = dict(  # noqa: C408
     mute_welfare=True,
     seed_from_prior=False,
     solve_check=True,
-    shock_method="nonlinear",
 )
 
 
@@ -47,7 +46,6 @@ def test_supported_config_passes():
         ({"seed_from_prior": True}, "seed_from_prior"),
         ({"mute_welfare": False}, "mute_welfare"),
         ({"solve_check": False}, "solve_check"),
-        ({"shock_method": "johansen"}, "shock_method"),
     ],
 )
 def test_argument_refusals_name_the_setting(kw, needle):
@@ -152,8 +150,7 @@ def test_user_shocks_are_not_a_refusal_reason():
     import inspect
 
     assert not any(
-        "shock" in p and p != "shock_method"
-        for p in inspect.signature(run_setup.check_supported).parameters
+        "shock" in p for p in inspect.signature(run_setup.check_supported).parameters
     )
 
 

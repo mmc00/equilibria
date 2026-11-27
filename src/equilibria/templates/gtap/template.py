@@ -142,7 +142,6 @@ class GTAP:
             mute_welfare=True,
             seed_from_prior=False,
             solve_check=True,
-            shock_method="nonlinear",
         )
         rr = self.residual_region or list(self.params.sets.r)[-1]
         # as the old family driver: the load and the settle under one GC setup; the
