@@ -43,6 +43,7 @@ templates = [
 "templates/gtap" = [
   "src/equilibria/templates/gtap/",
   "src/equilibria/blocks/gtap/",
+  "src/equilibria/gtap/",
 ]
 "templates/pep" = [
   "src/equilibria/templates/pep_",
@@ -85,6 +86,8 @@ parity = [
 [docs]
 "templates/gtap" = [
   "docs/site/guide/gtap_quickstart.md",
+  "docs/site/guide/gtap_closures.md",
+  "docs/site/api/gtap.md",
   "docs/site/api/templates_gtap.md",
   "docs/site/guide/welfare_decomposition.md",
   "docs/site/guide/gtap7_coverage_matrix.md",

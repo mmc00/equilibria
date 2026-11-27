@@ -48,6 +48,7 @@ component_management:
     paths:
     - ^src/equilibria/templates/gtap/
     - ^src/equilibria/blocks/gtap/
+    - ^src/equilibria/gtap/
   - component_id: templates_pep
     name: templates/pep
     paths:
