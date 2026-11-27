@@ -362,6 +362,7 @@ docs/GTAP_*.md
 # Local agent state and in-progress plans; the repo's own skills are tracked
 # (.agents/skills/<name>, each linked from .claude/skills/<name> for Claude Code)
 **/.claude/*
+!/.claude/settings.json
 !/.claude/skills/
 /.claude/skills/*
 !/.claude/skills/port-to-jax
