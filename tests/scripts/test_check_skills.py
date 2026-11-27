@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 DEV = ROOT / "scripts" / "dev"
 sys.path.insert(0, str(DEV))
@@ -379,15 +381,11 @@ def test_pass_rate_100_is_a_note_not_a_failure(tmp_path, capsys):
     assert "note: demo: evals_run: pass rate 100%" in capsys.readouterr().out
 
 
-def test_real_repo_exits_0_with_every_skill_pending(capsys):
+def test_real_repo_exits_0_with_port_to_jax_migrated(capsys):
     assert CS.main([], root=ROOT) == 0
     out = capsys.readouterr().out
-    for name in (
-        "port-to-jax",
-        "equilibria-parity-debug",
-        "xmodel-parity",
-        "sam-audit",
-    ):
+    assert "port-to-jax" not in out
+    for name in ("equilibria-parity-debug", "xmodel-parity", "sam-audit"):
         assert f"warning: {name}: " in out, name
     for name in ("equilibria-parity-debug", "xmodel-parity", "sam-audit"):
         assert f"warning: {name}: pending: not in the repo yet" in out, name
@@ -449,3 +447,22 @@ def test_table_rows_inside_a_fence_do_not_count_as_errors(tmp_path):
     assert [f.detail for f in CS.check_skill(tmp_path, "demo")] == [
         "the errors table has 1 row(s) (min 2)"
     ]
+
+
+@pytest.mark.parametrize(
+    "line,flagged",
+    [
+        ("uv run python scripts/dev/x.py --suite python --refresh-files", False),
+        ("uv run python scripts/dev/x.py --suite=python", False),
+        ("python3 x.py", False),
+        ("uv run python x.py", False),
+        ("python x.py", True),
+        ("FOO=1 python x.py", True),
+        ("cd a && python x.py", True),
+        ("echo $(python x.py)", True),
+    ],
+)
+def test_bare_python_only_where_a_command_starts(tmp_path, line, flagged):
+    make_skill(tmp_path, body=_body() + f"\n```bash\n{line}\n```\n")
+    found = rules(CS.check_skill(tmp_path, "demo")) == ["portable"]
+    assert found is flagged
