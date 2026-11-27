@@ -144,7 +144,10 @@ _RETRY_ONLY = re.compile(r"^(try again|retry|re-?run( it| the command)?)\.?$")
 _LINK = re.compile(r"\]\(([^)\s]+)\)")
 _NOT_PORTABLE = (
     (re.compile(r"\.venv/bin/python"), ".venv/bin/python"),
-    (re.compile(r"(?<!uv run )(?<![\w/.])python (?!3)"), "a bare python"),
+    (
+        re.compile(r"(?:^\s*|[;&|(]\s*|\$\(\s*)(?:\w+=\S+\s+)*python\b(?!3)"),
+        "a bare python",
+    ),
     (re.compile(r"/Users/"), "an absolute /Users/ path"),
 )
 

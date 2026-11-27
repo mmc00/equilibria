@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 DEV = ROOT / "scripts" / "dev"
 sys.path.insert(0, str(DEV))
@@ -449,3 +451,22 @@ def test_table_rows_inside_a_fence_do_not_count_as_errors(tmp_path):
     assert [f.detail for f in CS.check_skill(tmp_path, "demo")] == [
         "the errors table has 1 row(s) (min 2)"
     ]
+
+
+@pytest.mark.parametrize(
+    "line,flagged",
+    [
+        ("uv run python scripts/dev/x.py --suite python --refresh-files", False),
+        ("uv run python scripts/dev/x.py --suite=python", False),
+        ("python3 x.py", False),
+        ("uv run python x.py", False),
+        ("python x.py", True),
+        ("FOO=1 python x.py", True),
+        ("cd a && python x.py", True),
+        ("echo $(python x.py)", True),
+    ],
+)
+def test_bare_python_only_where_a_command_starts(tmp_path, line, flagged):
+    make_skill(tmp_path, body=_body() + f"\n```bash\n{line}\n```\n")
+    found = rules(CS.check_skill(tmp_path, "demo")) == ["portable"]
+    assert found is flagged
