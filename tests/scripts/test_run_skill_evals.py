@@ -94,6 +94,12 @@ def _fake_agent(tmp_path: Path, body: str) -> list[str]:
     return [sys.executable, str(script)]
 
 
+@pytest.fixture(autouse=True)
+def _no_setup(monkeypatch):
+    """The default setup is a real ``uv sync``: the tests that do not test it skip it."""
+    monkeypatch.setattr(RE, "DEFAULT_SETUP", [])
+
+
 @pytest.fixture
 def repo(tmp_path):
     """A git repo with a committed skill ``demo`` and its .claude link."""
@@ -399,3 +405,361 @@ def test_sigterm_becomes_keyboard_interrupt():
         with pytest.raises(KeyboardInterrupt):
             os.kill(os.getpid(), signal.SIGTERM)
             time.sleep(1)
+
+
+# MAR-257: the final review's deferred minors
+
+MIX_PROMPTS = """- id: g1
+  kind: golden
+  prompt: "q"
+  expect: "a"
+- id: t1
+  kind: trajectory
+  prompt: "q"
+  must_run: ["ok"]
+  expect: "a"
+- id: t2
+  kind: trajectory
+  prompt: "q"
+  must_run: ["ok"]
+  expect: "a"
+- id: a1
+  kind: author
+  prompt: "q"
+  expect: "a"
+"""
+
+
+def _main_with(repo, monkeypatch, prompts: str, passed: dict[str, bool]) -> int:
+    """main over ``prompts`` with the agent and judge faked: ``passed`` per id."""
+    (repo / ".agents/skills/demo/evals/prompts.yaml").write_text(prompts)
+
+    def fake_run(prompt, skill, **kw):
+        ok = passed.get(str(prompt.get("id")), True)
+        return {
+            "commands": ["ok"] if ok else [],
+            "answer": "x",
+            "passed": ok,
+            "agent_error": "",
+            "minutes": 0.0,
+            "tool_calls": 0,
+            "tool_errors": 0,
+        }
+
+    monkeypatch.setattr(RE, "run_prompt", fake_run)
+    monkeypatch.setattr(
+        RE, "golden_matches", lambda p, *a, **k: passed.get(str(p.get("id")), True)
+    )
+    return RE.main(["demo"], root=repo)
+
+
+def test_main_exits_1_under_the_70_percent_pass_rate(repo, monkeypatch, capsys):
+    assert _main_with(repo, monkeypatch, MIX_PROMPTS, {"t1": False, "t2": False}) == 1
+    assert "under 70%" in capsys.readouterr().out
+    assert _main_with(repo, monkeypatch, MIX_PROMPTS, {}) == 0
+
+
+def test_a_failed_agent_run_fails_its_prompt(repo, tmp_path):
+    agent = _fake_agent(
+        tmp_path,
+        """
+        import json, sys
+        print(json.dumps({"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "id": "t0", "name": "Bash",
+             "input": {"command": "ok"}}]}}))
+        print(json.dumps({"type": "result", "result": "half"}))
+        sys.exit(3)
+    """,
+    )
+    res = RE.run_prompt(
+        {"prompt": "go", "must_run": ["ok"]},
+        "demo",
+        with_skill=True,
+        agent_cmd=agent,
+        timeout_s=60,
+        max_turns=5,
+        repo=repo,
+    )
+    assert res["commands"] == ["ok"]
+    assert res["passed"] is False
+    assert res["agent_error"] == "the agent exited 3"
+
+
+def test_a_failed_agent_run_is_not_sent_to_the_golden_judge(repo, monkeypatch):
+    (repo / ".agents/skills/demo/evals/prompts.yaml").write_text(
+        '- id: g1\n  kind: golden\n  prompt: "q"\n  expect: "a"\n'
+    )
+    monkeypatch.setattr(
+        RE,
+        "run_prompt",
+        lambda p, s, **kw: {
+            "commands": [],
+            "answer": "",
+            "passed": False,
+            "agent_error": "the agent exited 1",
+            "minutes": 0.0,
+            "tool_calls": 0,
+            "tool_errors": 0,
+        },
+    )
+    monkeypatch.setattr(RE, "golden_matches", lambda *a, **k: True)
+    assert RE.main(["demo"], root=repo) == 1
+    stamp = SY.read_last_run(repo / ".agents/skills/demo/evals/last_run.md")
+    assert stamp["pass_rate"] == "0.00"
+
+
+def test_a_bad_prompts_yaml_is_one_error_line_not_a_traceback(
+    repo, monkeypatch, capsys
+):
+    (repo / ".agents/skills/demo/evals/prompts.yaml").write_text(
+        "- id: p1\n  prompt: |\n    many\n"
+    )
+    assert RE.main(["demo"], root=repo) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("error: demo: evals/prompts.yaml line 2:")
+    assert "Traceback" not in err
+
+
+def test_the_run_reports_the_prompt_mix(repo, monkeypatch, capsys):
+    _main_with(repo, monkeypatch, MIX_PROMPTS, {})
+    out = capsys.readouterr().out
+    assert (
+        "prompts: 1 golden, 2 trajectory, 1 author "
+        "(25% / 50% / 25%; the method's target is 5% / 80% / 15%)"
+    ) in out
+    stamp = SY.read_last_run(repo / ".agents/skills/demo/evals/last_run.md")
+    assert stamp["mix"] == "1 golden, 2 trajectory, 1 author"
+
+
+def _run_with_setup(repo, tmp_path, setup_cmd, monkeypatch):
+    spy = tmp_path / "spy.json"
+    monkeypatch.setenv("SPY", str(spy))
+    agent = _fake_agent(
+        tmp_path,
+        """
+        import json, os, pathlib
+        pathlib.Path(os.environ["SPY"]).write_text(
+            json.dumps({"marker": pathlib.Path("setup_ran").exists()}))
+        print(json.dumps({"type": "result", "result": "a"}))
+    """,
+    )
+    res = RE.run_prompt(
+        {"prompt": "go"},
+        "demo",
+        with_skill=True,
+        agent_cmd=agent,
+        timeout_s=60,
+        max_turns=5,
+        repo=repo,
+        setup_cmd=setup_cmd,
+    )
+    return res, spy
+
+
+def test_the_setup_runs_in_the_worktree_before_the_agent(repo, tmp_path, monkeypatch):
+    touch = [sys.executable, "-c", "open('setup_ran', 'w').close()"]
+    res, spy = _run_with_setup(repo, tmp_path, touch, monkeypatch)
+    assert json.loads(spy.read_text()) == {"marker": True}
+    assert res["agent_error"] == ""
+
+
+def test_a_failing_setup_fails_the_run_without_starting_the_agent(
+    repo, tmp_path, monkeypatch
+):
+    bad = [sys.executable, "-c", "import sys; sys.exit(4)"]
+    res, spy = _run_with_setup(repo, tmp_path, bad, monkeypatch)
+    assert not spy.exists()
+    assert res["passed"] is False
+    assert res["agent_error"] == "setup failed: 4"
+    assert _worktrees(repo) == 1
+
+
+def test_an_empty_setup_is_skipped(repo, tmp_path, monkeypatch):
+    res, spy = _run_with_setup(repo, tmp_path, [], monkeypatch)
+    assert json.loads(spy.read_text()) == {"marker": False}
+
+
+def test_the_default_setup_installs_the_family_extra():
+    import importlib
+
+    fresh = importlib.reload(RE)
+    assert fresh.DEFAULT_SETUP == [
+        "uv",
+        "sync",
+        "--frozen",
+        "--dev",
+        "--extra",
+        "family",
+    ]
+
+
+def test_main_passes_the_setup_option(repo, monkeypatch):
+    seen = {}
+
+    def fake_run(prompt, skill, **kw):
+        seen["setup"] = kw.get("setup_cmd")
+        return {
+            "commands": [],
+            "answer": "",
+            "passed": True,
+            "agent_error": "",
+            "minutes": 0.0,
+            "tool_calls": 0,
+            "tool_errors": 0,
+        }
+
+    monkeypatch.setattr(RE, "run_prompt", fake_run)
+    monkeypatch.setattr(RE, "golden_matches", lambda *a, **k: True)
+    (repo / ".agents/skills/demo/evals/prompts.yaml").write_text(
+        "- id: a\n  kind: trajectory\n  prompt: p\n  expect: e\n  must_run: [ok]\n"
+    )
+    RE.main(["demo", "--setup", "uv sync --dev"], root=repo)
+    assert seen["setup"] == ["uv", "sync", "--dev"]
+    RE.main(["demo", "--setup", ""], root=repo)
+    assert seen["setup"] == []
+
+
+def test_a_prompt_setup_key_overrides_the_default(repo, monkeypatch):
+    seen = []
+
+    def fake_run(prompt, skill, **kw):
+        seen.append(kw.get("setup_cmd"))
+        return {
+            "commands": [],
+            "answer": "",
+            "passed": True,
+            "agent_error": "",
+            "minutes": 0.0,
+            "tool_calls": 0,
+            "tool_errors": 0,
+        }
+
+    monkeypatch.setattr(RE, "run_prompt", fake_run)
+    monkeypatch.setattr(RE, "golden_matches", lambda *a, **k: True)
+    (repo / ".agents/skills/demo/evals/prompts.yaml").write_text(
+        "- id: a\n  kind: trajectory\n  prompt: p\n  expect: e\n  must_run: [ok]\n"
+        '  setup: "uv sync --frozen --dev"\n'
+        "- id: b\n  kind: trajectory\n  prompt: p\n  expect: e\n  must_run: [ok]\n"
+        '  setup: ""\n'
+        "- id: c\n  kind: trajectory\n  prompt: p\n  expect: e\n  must_run: [ok]\n"
+    )
+    RE.main(["demo", "--setup", "uv sync --dev --extra family"], root=repo)
+    assert seen == [
+        ["uv", "sync", "--frozen", "--dev"],
+        [],
+        ["uv", "sync", "--dev", "--extra", "family"],
+    ]
+
+
+def test_a_missing_setup_executable_fails_the_run(repo, tmp_path, monkeypatch):
+    res, spy = _run_with_setup(repo, tmp_path, ["no-such-exe-xyz"], monkeypatch)
+    assert not spy.exists()
+    assert res["passed"] is False
+    assert res["agent_error"].startswith("setup failed: ")
+    assert _worktrees(repo) == 1
+
+
+def test_a_setup_that_times_out_fails_the_run(repo, tmp_path, monkeypatch):
+    slow = [sys.executable, "-c", "import time; time.sleep(30)"]
+    spy = tmp_path / "spy.json"
+    monkeypatch.setenv("SPY", str(spy))
+    res = RE.run_prompt(
+        {"prompt": "go"},
+        "demo",
+        with_skill=True,
+        agent_cmd=[sys.executable, "-c", "raise SystemExit(9)"],
+        timeout_s=1,
+        max_turns=5,
+        repo=repo,
+        setup_cmd=slow,
+    )
+    assert res["passed"] is False
+    assert res["agent_error"].startswith("setup failed: timed out")
+
+
+def test_a_failing_setup_reports_its_last_stderr_line(repo, tmp_path, monkeypatch):
+    bad = [
+        sys.executable,
+        "-c",
+        "import sys; print('first', file=sys.stderr);"
+        " print('no wheel for jax', file=sys.stderr); sys.exit(2)",
+    ]
+    res, _ = _run_with_setup(repo, tmp_path, bad, monkeypatch)
+    assert res["agent_error"] == "setup failed: 2: no wheel for jax"
+
+
+def test_the_setup_does_not_see_the_callers_virtual_env(repo, tmp_path, monkeypatch):
+    monkeypatch.setenv("UV_PROJECT_ENVIRONMENT", "/elsewhere")
+    monkeypatch.setenv("VIRTUAL_ENV", "/elsewhere")
+    probe = [
+        sys.executable,
+        "-c",
+        "import os; open('seen', 'w').write("
+        "repr((os.environ.get('UV_PROJECT_ENVIRONMENT'), os.environ.get('VIRTUAL_ENV'))))"
+        "; open('/dev/null')",
+    ]
+    marker = tmp_path / "seen_copy"
+    probe[2] = probe[2].replace(
+        "; open('/dev/null')", f"; import shutil; shutil.copy('seen', {str(marker)!r})"
+    )
+    _run_with_setup(repo, tmp_path, probe, monkeypatch)
+    assert marker.read_text() == "(None, None)"
+
+
+def test_a_stream_line_with_a_string_message_or_block_is_skipped():
+    """The real exam crashed on a line whose ``message`` was a string."""
+    lines = [
+        json.dumps({"type": "system", "message": "init"}),
+        json.dumps({"type": "assistant", "message": {"content": ["text", 3]}}),
+        json.dumps({"type": "user", "message": {"content": "plain"}}),
+        *_stream(["uv run pytest -q"], "done").splitlines(),
+    ]
+    assert RE.commands_from_stream(lines) == ["uv run pytest -q"]
+    plain = _stream(["uv run pytest -q"], "done").splitlines()
+    assert RE._stream_stats(lines) == RE._stream_stats(plain)
+
+
+def test_each_run_leaves_its_stream_in_the_log_dir(repo, tmp_path):
+    agent = _fake_agent(
+        tmp_path, 'import json; print(json.dumps({"type": "result", "result": "hi"}))'
+    )
+    logs = tmp_path / "logs"
+    RE.run_prompt(
+        {"id": "p1", "prompt": "go"},
+        "demo",
+        with_skill=False,
+        agent_cmd=agent,
+        timeout_s=60,
+        max_turns=5,
+        repo=repo,
+        setup_cmd=[],
+        log_dir=logs,
+    )
+    (log,) = logs.iterdir()
+    assert log.name.startswith("p1-without-")
+    assert '"result": "hi"' in log.read_text()
+
+
+def test_main_passes_one_log_dir_to_every_run_and_prints_it(repo, monkeypatch, capsys):
+    (repo / ".agents/skills/demo/evals/prompts.yaml").write_text(MIX_PROMPTS)
+    seen = []
+
+    def fake_run(prompt, skill, **kw):
+        seen.append(kw["log_dir"])
+        return {
+            "commands": ["ok"],
+            "answer": "x",
+            "passed": True,
+            "agent_error": "",
+            "minutes": 0.0,
+            "tool_calls": 0,
+            "tool_errors": 0,
+        }
+
+    monkeypatch.setattr(RE, "run_prompt", fake_run)
+    monkeypatch.setattr(RE, "golden_matches", lambda *a, **k: True)
+    monkeypatch.setattr(RE, "_ask", lambda *a, **k: "A")
+    logs = repo.parent / "logs"
+    assert RE.main(["demo", "--ablation", "--log-dir", str(logs)], root=repo) == 0
+    assert seen and all(d == logs for d in seen) and len(seen) == 8
+    assert f"run logs: {logs}" in capsys.readouterr().out

@@ -10,15 +10,20 @@ How each prompt of ``evals/prompts.yaml`` runs:
 2. The agent is ``claude -p`` and its run is contained:
    - ``git push``, ``gh``, ``git commit`` and the GTAP gates are denied;
    - it has a turn cap and a timeout.
-3. The prompt is graded by its kind:
+3. A prompt may carry ``setup: "<command>"`` (empty string: none), which replaces the
+   run's ``--setup`` for that prompt, e.g. to reproduce a bare ``uv sync --dev`` symptom.
+4. The prompt is graded by its kind (a run whose agent exits non-zero or times
+   out fails, whatever it ran):
    - ``trajectory``: by ``must_run`` and ``must_not_run`` over the commands the agent ran;
    - ``golden``: by a judge, against ``expect``;
    - ``author``: printed for the author, and it does not count toward the pass rate.
-4. With ``--ablation``, each prompt also runs without the skill. A judge then
+5. With ``--ablation``, each prompt also runs without the skill. A judge then
    picks the better of the two answers, unlabeled and in random order.
 
 The run writes ``evals/last_run.md``, which check_skills.py requires to be
-fresh. This costs real agent runs: a few minutes and some money per prompt.
+fresh, and exits 1 under the 70% pass rate (2 on an unreadable prompts.yaml).
+It reports the golden / trajectory / author mix against the method's target.
+This costs real agent runs: a few minutes and some money per prompt.
 """
 
 from __future__ import annotations
@@ -26,8 +31,10 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import os
 import random
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -41,11 +48,17 @@ from pathlib import Path
 DEV = Path(__file__).resolve().parent
 sys.path.insert(0, str(DEV))
 
-from skill_yaml import LAST_RUN, read_prompts, skill_hash  # noqa: E402
+from check_skills import MIN_PASS_RATE, PROMPT_KINDS  # noqa: E402
+from skill_yaml import LAST_RUN, SubsetError, read_prompts, skill_hash  # noqa: E402
 
 ROOT = DEV.parents[1]
 SKILLS = Path(".agents") / "skills"
 ALLOWED = ("Bash", "Read", "Grep", "Glob", "Edit", "Write")
+TARGET_MIX = {"golden": 0.05, "trajectory": 0.80, "author": 0.15}
+# Run in each fresh worktree before the agent starts: its own venv, with jax (the
+# ``family`` extra), so ``uv run`` there works. The main repo's .venv is not shared:
+# uv would reinstall the project into it, editable, from the throwaway worktree.
+DEFAULT_SETUP = ["uv", "sync", "--frozen", "--dev", "--extra", "family"]
 DENIED = (
     "Bash(git push:*)",
     "Bash(gh:*)",
@@ -60,19 +73,34 @@ DENIED = (
 )
 
 
-def commands_from_stream(lines: Iterable[str]) -> list[str]:
-    """The ``command`` of every Bash tool call in the agent's stream-json whose
-    result was not an error: a denied or failed command does not count."""
-    calls: list[tuple[str, str]] = []
-    failed: set[str] = set()
+def _messages(lines: Iterable[str]) -> Iterable[tuple[dict, list[dict]]]:
+    """(message, its content blocks) for each JSON object line of the stream;
+    a line, a message or a block of another shape is skipped."""
     for line in lines:
         try:
             msg = json.loads(line)
         except (json.JSONDecodeError, ValueError):
             continue
-        for block in (msg.get("message") or {}).get("content") or []:
+        if not isinstance(msg, dict):
+            continue
+        body = msg.get("message")
+        content = body.get("content") if isinstance(body, dict) else None
+        blocks = content if isinstance(content, list) else []
+        yield msg, [b for b in blocks if isinstance(b, dict)]
+
+
+def commands_from_stream(lines: Iterable[str]) -> list[str]:
+    """The ``command`` of every Bash tool call in the agent's stream-json whose
+    result was not an error: a denied or failed command does not count."""
+    calls: list[tuple[str, str]] = []
+    failed: set[str] = set()
+    for msg, content in _messages(lines):
+        for block in content:
             if msg.get("type") == "assistant" and block.get("type") == "tool_use":
-                cmd = (block.get("input") or {}).get("command")
+                tool_input = block.get("input")
+                cmd = (
+                    tool_input.get("command") if isinstance(tool_input, dict) else None
+                )
                 if block.get("name") == "Bash" and isinstance(cmd, str):
                     calls.append((str(block.get("id")), cmd))
             elif msg.get("type") == "user" and block.get("type") == "tool_result":
@@ -84,12 +112,7 @@ def commands_from_stream(lines: Iterable[str]) -> list[str]:
 def _stream_stats(lines: list[str]) -> tuple[str, int, int]:
     """(final answer, tool calls, tool errors) of the stream."""
     answer, calls, errors = "", 0, 0
-    for line in lines:
-        try:
-            msg = json.loads(line)
-        except (json.JSONDecodeError, ValueError):
-            continue
-        content = (msg.get("message") or {}).get("content") or []
+    for msg, content in _messages(lines):
         if msg.get("type") == "assistant":
             calls += sum(1 for b in content if b.get("type") == "tool_use")
         elif msg.get("type") == "user":
@@ -132,8 +155,14 @@ def run_prompt(
     max_turns: int,
     repo: Path = ROOT,
     model: str | None = None,
+    setup_cmd: list[str] | None = None,
+    log_dir: Path | None = None,
 ) -> dict:
-    """One contained agent run of ``prompt`` in a throwaway worktree of HEAD."""
+    """One contained agent run of ``prompt`` in a throwaway worktree of HEAD.
+    ``setup_cmd`` (default ``DEFAULT_SETUP``; ``[]`` skips it) runs in the worktree
+    first; if it fails the agent is not started."""
+    if setup_cmd is None:
+        setup_cmd = DEFAULT_SETUP
     tmp = Path(tempfile.mkdtemp(prefix=f"skill-eval-{skill}-"))
     work = tmp / "wt"
     try:
@@ -152,6 +181,42 @@ def run_prompt(
                 link.symlink_to(Path("../..") / SKILLS / skill)
         elif link.is_symlink() or link.exists():
             link.unlink()
+        if setup_cmd:
+            # the caller's venv must not leak in: uv would sync into it
+            env = {
+                k: v
+                for k, v in os.environ.items()
+                if k not in ("UV_PROJECT_ENVIRONMENT", "VIRTUAL_ENV")
+            }
+            reason = ""
+            try:
+                setup = subprocess.run(
+                    setup_cmd,
+                    cwd=work,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout_s,
+                )
+                if setup.returncode:
+                    tail = [x for x in setup.stderr.splitlines() if x.strip()]
+                    reason = f"{setup.returncode}" + (
+                        f": {tail[-1].strip()}" if tail else ""
+                    )
+            except subprocess.TimeoutExpired:
+                reason = f"timed out after {timeout_s}s"
+            except OSError as err:
+                reason = str(err)
+            if reason:
+                return {
+                    "commands": [],
+                    "answer": "",
+                    "passed": False,
+                    "agent_error": f"setup failed: {reason}",
+                    "minutes": 0.0,
+                    "tool_calls": 0,
+                    "tool_errors": 0,
+                }
         argv = [
             *agent_cmd,
             "-p",
@@ -176,16 +241,32 @@ def run_prompt(
                 argv, cwd=work, capture_output=True, text=True, timeout=timeout_s
             )
             lines = proc.stdout.splitlines()
+            agent_error = (
+                f"the agent exited {proc.returncode}" if proc.returncode else ""
+            )
         except subprocess.TimeoutExpired as err:
             out = err.stdout or ""
             lines = (out.decode() if isinstance(out, bytes) else out).splitlines()
+            agent_error = f"the agent timed out after {timeout_s // 60} min"
         minutes = (time.monotonic() - start) / 60
+        if log_dir is not None:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            side = "with" if with_skill else "without"
+            log = Path(
+                tempfile.mkstemp(
+                    prefix=f"{prompt.get('id', 'prompt')}-{side}-",
+                    suffix=".jsonl",
+                    dir=log_dir,
+                )[1]
+            )
+            log.write_text("\n".join(lines) + "\n", encoding="utf-8")
         commands = commands_from_stream(lines)
         answer, calls, errors = _stream_stats(lines)
         return {
             "commands": commands,
             "answer": answer,
-            "passed": grade(prompt, commands),
+            "passed": not agent_error and grade(prompt, commands),
+            "agent_error": agent_error,
             "minutes": minutes,
             "tool_calls": calls,
             "tool_errors": errors,
@@ -198,6 +279,13 @@ def run_prompt(
         )
         shutil.rmtree(tmp, ignore_errors=True)
         subprocess.run(["git", "worktree", "prune"], cwd=repo, capture_output=True)
+
+
+def _setup_for(prompt: dict, default: list[str]) -> list[str]:
+    """The prompt's own ``setup`` (a string; empty means none) or the run's default."""
+    if "setup" in prompt:
+        return shlex.split(str(prompt["setup"]))
+    return default
 
 
 def judge_prompt(
@@ -261,9 +349,19 @@ def golden_matches(
     return _ask(agent_cmd, text, timeout_s, model).upper().startswith("YES")
 
 
+def prompt_mix(prompts: list[dict]) -> tuple[str, str]:
+    """("1 golden, 2 trajectory, 1 author", "25% / 50% / 25%") of the prompts."""
+    counts = [sum(1 for p in prompts if p.get("kind") == k) for k in PROMPT_KINDS]
+    total = len(prompts) or 1
+    return (
+        ", ".join(f"{c} {k}" for c, k in zip(counts, PROMPT_KINDS, strict=True)),
+        " / ".join(f"{c / total:.0%}" for c in counts),
+    )
+
+
 def write_last_run(folder: Path, results: list[dict], meta: dict) -> Path:
     """Stamp ``evals/last_run.md`` with the pass rate over graded prompts and the
-    folder's hash; ``meta`` gives commit, agent, model and ablation_wins."""
+    folder's hash; ``meta`` gives commit, agent, model, ablation_wins and mix."""
     graded = [r for r in results if r.get("kind") != "author"]
     rate = sum(1 for r in graded if r.get("passed")) / len(graded) if graded else 0.0
     fields = {
@@ -273,6 +371,7 @@ def write_last_run(folder: Path, results: list[dict], meta: dict) -> Path:
         "model": meta.get("model", ""),
         "pass_rate": f"{rate:.2f}",
         "ablation_wins": meta.get("ablation_wins", "not run"),
+        "mix": meta.get("mix", ""),
         "skill_hash": skill_hash(folder),
     }
     lines = [
@@ -295,7 +394,7 @@ def write_last_run(folder: Path, results: list[dict], meta: dict) -> Path:
     return path
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("skill")
     ap.add_argument("--agent", default="claude", help="the agent command (claude)")
@@ -306,14 +405,39 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--ablation", action="store_true", help="also run without the skill and judge"
     )
-    ap.add_argument("--seed", type=int, default=None)
-    args = ap.parse_args(argv)
-
-    folder = ROOT / SKILLS / args.skill
-    prompts = read_prompts(
-        (folder / "evals" / "prompts.yaml").read_text(encoding="utf-8")
+    ap.add_argument(
+        "--setup",
+        default=shlex.join(DEFAULT_SETUP),
+        help="command run in each fresh worktree before the agent; empty disables it",
     )
+    ap.add_argument("--seed", type=int, default=None)
+    ap.add_argument(
+        "--log-dir",
+        type=Path,
+        default=None,
+        help="where each run's stream-json is kept (default: a new temp folder)",
+    )
+    args = ap.parse_args(argv)
+    with contextlib.suppress(AttributeError, ValueError):
+        sys.stdout.reconfigure(line_buffering=True)  # ty: ignore[unresolved-attribute]
+
+    folder = root / SKILLS / args.skill
+    try:
+        prompts = read_prompts(
+            (folder / "evals" / "prompts.yaml").read_text(encoding="utf-8")
+        )
+    except (OSError, UnicodeDecodeError, SubsetError) as err:
+        print(f"error: {args.skill}: evals/prompts.yaml {err}", file=sys.stderr)
+        return 2
+    mix, shares = prompt_mix(prompts)
+    target = " / ".join(f"{TARGET_MIX[k]:.0%}" for k in PROMPT_KINDS)
+    print(f"prompts: {mix} ({shares}; the method's target is {target})")
     agent = [args.agent]
+    setup = shlex.split(args.setup)
+    log_dir = args.log_dir or Path(
+        tempfile.mkdtemp(prefix=f"skill-evals-{args.skill}-")
+    )
+    print(f"run logs: {log_dir}")
     rng = random.Random(args.seed)
     results, wins, pairs = [], 0, 0
     deltas = {"tool_calls": 0, "tool_errors": 0, "minutes": 0.0}
@@ -327,10 +451,13 @@ def main(argv: list[str] | None = None) -> int:
                     agent_cmd=agent,
                     timeout_s=args.timeout,
                     max_turns=args.max_turns,
+                    repo=root,
                     model=args.model,
+                    setup_cmd=_setup_for(p, setup),
+                    log_dir=log_dir,
                 )
                 kind = p.get("kind")
-                if kind == "golden":
+                if kind == "golden" and not r.get("agent_error"):
                     r["passed"] = golden_matches(
                         p, r["answer"], agent, args.timeout, args.model
                     )
@@ -346,7 +473,10 @@ def main(argv: list[str] | None = None) -> int:
                         agent_cmd=agent,
                         timeout_s=args.timeout,
                         max_turns=args.max_turns,
+                        repo=root,
                         model=args.model,
+                        setup_cmd=_setup_for(p, setup),
+                        log_dir=log_dir,
                     )
                     text, label = judge_prompt(p, r["answer"], bare["answer"], rng)
                     pairs += 1
@@ -357,12 +487,16 @@ def main(argv: list[str] | None = None) -> int:
                     for k in deltas:
                         deltas[k] += bare[k] - r[k]
                 results.append({"id": p.get("id"), "kind": kind, "passed": r["passed"]})
-                print(
-                    f"{p.get('id')}: {'author' if kind == 'author' else ('pass' if r['passed'] else 'FAIL')}"
+                mark = (
+                    "author"
+                    if kind == "author"
+                    else ("pass" if r["passed"] else "FAIL")
                 )
+                why = f" ({r['agent_error']})" if r.get("agent_error") else ""
+                print(f"{p.get('id')}: {mark}{why}")
     commit = subprocess.run(
         ["git", "rev-parse", "--short", "HEAD"],
-        cwd=ROOT,
+        cwd=root,
         capture_output=True,
         text=True,
     ).stdout.strip()
@@ -374,12 +508,13 @@ def main(argv: list[str] | None = None) -> int:
             "agent": args.agent,
             "model": args.model or "default",
             "ablation_wins": f"{wins}/{pairs}" if args.ablation else "not run",
+            "mix": mix,
         },
     )
     graded = [r for r in results if r["kind"] != "author"]
     rate = sum(r["passed"] for r in graded) / len(graded) if graded else 0.0
     print(
-        f"pass rate {rate:.0%} over {len(graded)} graded run(s); stamp: {path.relative_to(ROOT)}"
+        f"pass rate {rate:.0%} over {len(graded)} graded run(s); stamp: {path.relative_to(root)}"
     )
     if args.ablation:
         print(
@@ -387,6 +522,9 @@ def main(argv: list[str] | None = None) -> int:
             f"{deltas['tool_calls']:+d} tool calls, {deltas['tool_errors']:+d} tool errors, "
             f"{deltas['minutes']:+.1f} min"
         )
+    if rate < MIN_PASS_RATE:
+        print(f"pass rate {rate:.0%} is under {MIN_PASS_RATE:.0%}")
+        return 1
     return 0
 
 

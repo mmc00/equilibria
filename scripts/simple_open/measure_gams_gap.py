@@ -6,8 +6,8 @@ distance is the compare metric, ``|a - b| / max(|b|, abs_floor)``; the table sho
 the largest per period, the variable it falls on and the next four, plus Walras
 and the equivalent variation. It measures; it sets no tolerance.
 
-    PYTHONPATH=src /opt/homebrew/envs/eq-mumps/bin/python \
-        scripts/simple_open/measure_gams_gap.py
+    uv sync --dev --extra family
+    uv run python scripts/simple_open/measure_gams_gap.py
 """
 
 from __future__ import annotations
@@ -44,7 +44,9 @@ def measure(backend: str) -> None:
     model = ex.model
     codes = ", ".join(f"{t} {results[t]['code']}" for t in PERIODS)
     print(f"\n== {backend}: {codes} ({took:.2f} min)")
-    print(f"{'period':7} {'cells':>5} {'passed':>6} {'max d':>10}  worst variable (cell)")
+    print(
+        f"{'period':7} {'cells':>5} {'passed':>6} {'max d':>10}  worst variable (cell)"
+    )
     for t in PERIODS:
         report = compare(
             from_dict(_period(model, t), period=t),
@@ -58,7 +60,9 @@ def measure(backend: str) -> None:
             f"{o['max_variable']} {o['max_cell']}"
         )
         top = sorted(report.summary.items(), key=lambda kv: -(kv[1]["max"] or 0.0))[1:5]
-        print("        next: " + ", ".join(f"{v} {s['max'] or 0.0:.1e}" for v, s in top))
+        print(
+            "        next: " + ", ".join(f"{v} {s['max'] or 0.0:.1e}" for v, s in top)
+        )
     for t in ("check", "shock"):
         print(f"|WALRAS| {t}: {abs(model.value('WALRAS', (), t)):.2e}")
     ev_gams = read_parameter_values(read_gdx(gams / "shock.gdx"), "EV")[()]
