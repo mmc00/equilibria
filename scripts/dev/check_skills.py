@@ -19,11 +19,17 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from skill_yaml import LAST_RUN, SubsetError, read_last_run, read_prompts, skill_hash
+
 ROOT = Path(__file__).resolve().parents[2]
 SKILLS = Path(".agents") / "skills"
 PENDING = Path("scripts") / "dev" / "skills_pending.txt"
 MAX_DESCRIPTION_WORDS = 100
 MAX_BODY_LINES = 500
+MIN_PROMPTS = 5
+MIN_PASS_RATE = 0.70
+PROMPT_KEYS = ("id", "kind", "prompt", "expect")
+PROMPT_KINDS = ("golden", "trajectory", "author")
 
 
 @dataclass(frozen=True)
@@ -280,6 +286,91 @@ def rule_portable(root: Path, name: str) -> list[Finding]:
     return out
 
 
+def rule_evals(root: Path, name: str) -> list[Finding]:
+    path = _folder(root, name) / "evals" / "prompts.yaml"
+    if not path.is_file():
+        return [Finding(name, "evals", "evals/prompts.yaml is missing")]
+    try:
+        prompts = read_prompts(read_text(path))
+    except SubsetError as err:
+        return [Finding(name, "evals", f"prompts.yaml {err}")]
+    out = []
+    if len(prompts) < MIN_PROMPTS:
+        out.append(
+            Finding(name, "evals", f"{len(prompts)} prompt(s) (min {MIN_PROMPTS})")
+        )
+    kinds = [p.get("kind") for p in prompts]
+    for kind in ("golden", "trajectory"):
+        if kind not in kinds:
+            out.append(Finding(name, "evals", f"no {kind} prompt"))
+    for i, p in enumerate(prompts, start=1):
+        pid = p.get("id", f"#{i}")
+        missing = [k for k in PROMPT_KEYS if not p.get(k)]
+        if missing:
+            out.append(
+                Finding(name, "evals", f"prompt {pid} lacks {', '.join(missing)}")
+            )
+        if p.get("kind") and p.get("kind") not in PROMPT_KINDS:
+            out.append(
+                Finding(
+                    name, "evals", f"prompt {pid} has unknown kind {p.get('kind')!r}"
+                )
+            )
+        if p.get("kind") == "trajectory" and not p.get("must_run"):
+            out.append(
+                Finding(name, "evals", f"trajectory prompt {pid} has no must_run")
+            )
+    return out
+
+
+def _pass_rate(root: Path, name: str) -> float | None:
+    path = _folder(root, name) / LAST_RUN
+    try:
+        return float(read_last_run(path).get("pass_rate", ""))
+    except (OSError, ValueError):
+        return None
+
+
+def rule_evals_run(root: Path, name: str) -> list[Finding]:
+    folder = _folder(root, name)
+    path = folder / LAST_RUN
+    if not path.is_file():
+        return [
+            Finding(
+                name,
+                "evals_run",
+                f"{LAST_RUN} is missing: run scripts/dev/run_skill_evals.py {name}",
+            )
+        ]
+    stamp = read_last_run(path)
+    out = []
+    if stamp.get("skill_hash") != skill_hash(folder):
+        out.append(
+            Finding(
+                name,
+                "evals_run",
+                f"{LAST_RUN} is stale: the skill changed since its last eval run",
+            )
+        )
+    rate = _pass_rate(root, name)
+    if rate is None:
+        out.append(Finding(name, "evals_run", f"{LAST_RUN} has no pass_rate"))
+    elif rate < MIN_PASS_RATE:
+        out.append(
+            Finding(
+                name, "evals_run", f"pass rate {rate:.0%} is under {MIN_PASS_RATE:.0%}"
+            )
+        )
+    return out
+
+
+def notes(root: Path, name: str) -> list[str]:
+    """What is allowed but worth a look: a pass rate of 100% may mean easy prompts."""
+    if _pass_rate(root, name) == 1.0:
+        return [f"{name}: evals_run: pass rate 100%; the prompts may be too easy"]
+    return []
+
+
 def rule_wiring(root: Path, name: str) -> list[Finding]:
     out = []
     link = root / ".claude" / "skills" / name
@@ -312,6 +403,8 @@ RULES: list[Callable[[Path, str], list[Finding]]] = [
     rule_spec,
     rule_links,
     rule_portable,
+    rule_evals,
+    rule_evals_run,
     rule_wiring,
 ]
 
@@ -362,6 +455,8 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
             for f in findings:
                 print(f)
             bad = bad or bool(findings)
+        for note in notes(root, name):
+            print(f"note: {note}")
     return 1 if bad else 0
 
 

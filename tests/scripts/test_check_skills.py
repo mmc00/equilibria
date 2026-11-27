@@ -135,11 +135,26 @@ def make_skill(root: Path, name: str = "demo", **over: Any) -> Path:
     if over.get("readme", True):
         text += f"| [{name}]({name}/SKILL.md) | demo |\n"
     readme.write_text(text)
-    stamp_hook = getattr(CS, "write_test_stamp", None)
     stamp = over.get("stamp", {})
-    if stamp is not False and stamp_hook is not None:
-        stamp_hook(folder, **stamp)
+    if stamp is not False:
+        write_stamp(folder, **stamp)
     return folder
+
+
+def write_stamp(folder: Path, **keys: str) -> None:
+    """A fresh evals/last_run.md for the folder as it is now; ``keys`` override."""
+    fields = {
+        "commit": "abc1234",
+        "date": "2026-11-26",
+        "agent": "claude",
+        "model": "claude-opus-5-5",
+        "pass_rate": "0.80",
+        "ablation_wins": "4/5",
+        "skill_hash": CS.skill_hash(folder),
+        **keys,
+    }
+    text = "# Last eval run\n\n" + "".join(f"{k}: {v}\n" for k, v in fields.items())
+    (folder / "evals" / "last_run.md").write_text(text)
 
 
 def rules(findings) -> list[str]:
@@ -308,4 +323,57 @@ def test_portable_in_skill_code_fails_but_spec_forbidden_may_name_it(tmp_path):
     folder = make_skill(tmp_path, "ref", body=_body() + "\nSee [r](references/x.md).\n")
     (folder / "references").mkdir()
     (folder / "references" / "x.md").write_text("```bash\ncd /Users/me/repo\n```\n")
+    write_stamp(folder)
     assert rules(CS.check_skill(tmp_path, "ref")) == ["portable"]
+
+
+def test_fewer_than_5_prompts(tmp_path):
+    four = GOOD_PROMPTS.split("- id: p5")[0]
+    make_skill(tmp_path, prompts=four)
+    assert rules(CS.check_skill(tmp_path, "demo")) == ["evals"]
+
+
+def test_no_golden(tmp_path):
+    make_skill(tmp_path, prompts=GOOD_PROMPTS.replace("kind: golden", "kind: author"))
+    assert rules(CS.check_skill(tmp_path, "demo")) == ["evals"]
+
+
+def test_no_trajectory(tmp_path):
+    only = GOOD_PROMPTS.replace("kind: trajectory", "kind: author")
+    make_skill(tmp_path, prompts=only)
+    assert rules(CS.check_skill(tmp_path, "demo")) == ["evals"]
+
+
+def test_trajectory_without_must_run(tmp_path):
+    cut = GOOD_PROMPTS.replace('  must_run: ["cascade_orchestrator.py"]\n', "")
+    make_skill(tmp_path, prompts=cut)
+    assert rules(CS.check_skill(tmp_path, "demo")) == ["evals"]
+
+
+def test_prompt_missing_expect(tmp_path):
+    make_skill(tmp_path, prompts=GOOD_PROMPTS.replace('  expect: "plain words"\n', ""))
+    assert rules(CS.check_skill(tmp_path, "demo")) == ["evals"]
+
+
+def test_last_run_missing(tmp_path):
+    make_skill(tmp_path, stamp=False)
+    assert rules(CS.check_skill(tmp_path, "demo")) == ["evals_run"]
+
+
+def test_last_run_hash_stale_after_an_edit(tmp_path):
+    folder = make_skill(tmp_path)
+    skill = folder / "SKILL.md"
+    skill.write_text(skill.read_text() + " ")
+    assert rules(CS.check_skill(tmp_path, "demo")) == ["evals_run"]
+
+
+def test_pass_rate_under_70(tmp_path):
+    make_skill(tmp_path, stamp={"pass_rate": "0.60"})
+    assert rules(CS.check_skill(tmp_path, "demo")) == ["evals_run"]
+
+
+def test_pass_rate_100_is_a_note_not_a_failure(tmp_path, capsys):
+    make_skill(tmp_path, stamp={"pass_rate": "1.00"})
+    _pending(tmp_path)
+    assert CS.main([], root=tmp_path) == 0
+    assert "note: demo: evals_run: pass rate 100%" in capsys.readouterr().out
