@@ -73,6 +73,16 @@ repos:
         always_run: true
         pass_filenames: false
 
+      # ADR-0012: every template keeps behind a public door that keeps the door
+      # contract (equilibria.core.door; the same checks run in CI). ~1 s.
+      - id: check-doors
+        name: every template has a door (ADR-0012)
+        entry: uv run python scripts/dev/check_doors.py
+        language: system
+        files: ^(src/equilibria/|docs/site/api/|scripts/dev/check_doors\.py$)
+        pass_filenames: false
+        require_serial: true
+
       # Agent skills follow Uber's skills method
       # (specs/2026-11-26-skills-uber-method-design.md); skills listed in
       # scripts/dev/skills_pending.txt only warn until they are migrated.

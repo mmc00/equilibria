@@ -449,6 +449,44 @@ class GTAPClosureConfig(ModelClosureConfig):
     rmuv: tuple[str, ...] = Field(default_factory=tuple)
     imuv: tuple[str, ...] = Field(default_factory=tuple)
 
+    @classmethod
+    def gtap_default(cls, **changes: Any) -> GTAPClosureConfig:
+        """The default closure of RunGTAP/GEMPACK, with ``changes`` on top.
+
+        It is the closure ``scripts/gtap/run_burfisher.py`` runs against GEMPACK (100 %
+        on the Burfisher exercises): the Burfisher ``.cmf``
+        (``data/gtap7/nus333/gempack_burfisher/gtapv7/run.cmf``) has no swap, so the
+        trade balance is free and investment follows the rate of return
+        (``savf_flag="capFlex"``); endowments, taxes and technology are not fixed
+        by the flags (the shock and the closure decide); MCP form; ``pnum``
+        numeraire. Every other field keeps its default. ``capital_mobility`` is
+        ``"sluggish"`` as in that script, but the block model does not read it: how
+        mobile each endowment is comes from the elasticities file (``ETRAE`` of the
+        ``.prm``; nus333's ``default.prm`` makes all three mobile, ``sluggishk.prm``
+        makes capital sluggish).
+
+        ``changes`` set any field and go through the normal validation (an unknown
+        field or a bad value raises). ``savf_flag="capFix"`` is the fixed trade
+        balance variant. The field defaults of ``GTAPClosureConfig()`` are a different
+        closure and stay as they are.
+
+        Example:
+            >>> GTAPClosureConfig.gtap_default(savf_flag="capFix").closure_type
+            'MCP'
+        """
+        base: dict[str, Any] = {
+            "name": "gtap_default",
+            "closure_type": "MCP",
+            "capital_mobility": "sluggish",
+            "fix_endowments": False,
+            "fix_taxes": False,
+            "fix_technology": False,
+            "if_sub": False,
+            "savf_flag": "capFlex",
+            "numeraire": "pnum",
+        }
+        return cls(**{**base, **changes})
+
     @field_validator("name", mode="before")
     @classmethod
     def _normalize_name(cls, value: Any) -> str:

@@ -9,7 +9,7 @@ GEMPACK element labels in the GEMPACK dimension order.
 Names and shapes come from ``compare/maps/gtap7.yaml`` (the GEMPACK <-> equilibria
 variable map in levels: ``a`` equilibria, ``b`` GEMPACK; ``gtap7_names.yaml`` only pairs
 GAMS names). The equilibria side of each row (including the derived ones such as
-``xds_net`` or ``xw_fob``) is built by ``scripts/gtap/compare_gempack_levels.equilibria_side``;
+``xds_net`` or ``xw_fob``) is built by :func:`equilibria.compare.gtap7_side.equilibria_side`;
 scales cancel in a ratio, so ``divide_by`` is ignored. The closure's fixed variables that
 map one to one (``pop``, ``pfactwld``, ``to``) are added from :data:`FIXED`: they change by
 0, except ``to``, which carries the shock. The other fixed GEMPACK variables are many to
@@ -30,30 +30,19 @@ import numpy as np
 from equilibria.babel.har.sl4 import Sl4Change, Sl4Changes
 from equilibria.babel.har.symbols import HeaderArray
 from equilibria.babel.har.writer import write_har
-from equilibria.compare import Mapping
-from equilibria.compare.mapping import VariableMap
-from equilibria.family.altertax.compare import load_compare_script
+from equilibria.compare.gtap7_side import (  # noqa: F401  (re-exported)
+    _SET,
+    EQ_VARS,
+    NOT_VARIABLES,
+    _ratio,
+    gempack_pct,
+    gtap7_rows,
+)
 from equilibria.family.altertax.levels import family_levels
 from equilibria.family.altertax.run import AltertaxRun
 from equilibria.family.altertax.updated import _elements, _Period
 
 Pct = dict[str, dict[tuple[str, ...], float]]
-
-# GEMPACK set name of each dimension label of gtap7.yaml
-_SET = {
-    "REG": "REG",
-    "SRC": "REG",
-    "DST": "REG",
-    "COMM": "COMM",
-    "ACT": "ACTS",
-    "ENDW": "ENDW",
-    "MARG": "MARG",
-}
-
-# gtap7.yaml rows that are not GEMPACK variables, with the reason
-NOT_VARIABLES = {
-    "vdfb": "VDFB is a data coefficient (basedata.har), not a variable of the .sl4"
-}
 
 # GEMPACK variables that are the % change of a POWER (1 + rate) of an equilibria rate
 POWER = ("to",)
@@ -67,19 +56,6 @@ FIXED: dict[str, tuple[str, tuple[int, ...], tuple[str, ...]]] = {
 }
 
 
-def _ratio(pre: float, post: float) -> float:
-    return 0.0 if pre == 0.0 else 100.0 * (post / pre - 1.0)
-
-
-def gtap7_rows() -> dict[str, VariableMap]:
-    """The compared rows of ``gtap7.yaml`` by GEMPACK variable name."""
-    return {
-        v.b.var: v
-        for v in Mapping.builtin("gtap7").variables
-        if v.name not in NOT_VARIABLES
-    }
-
-
 def pct_dims(name: str) -> tuple[str, ...]:
     """GEMPACK set names of each dimension of ``name`` (as written by :func:`write_pct_har`)."""
     if name in FIXED:
@@ -89,26 +65,12 @@ def pct_dims(name: str) -> tuple[str, ...]:
 
 def _changes(run: AltertaxRun, pre: str, post: str) -> tuple[Pct, dict[str, set]]:
     """``(% changes, cells whose pre value is 0)``: the second has no change to report."""
-    cg = load_compare_script()
-    levels = family_levels(run.result.mp, cg.EQ_VARS)
     from equilibria.blocks.gtap._derived_params import xscale_data
 
-    side = cg.equilibria_side(levels, dict(xscale_data(run.params, run.params.sets)))
-    out: Pct = {}
-    zero: dict[str, set] = {}
-    for name, row in gtap7_rows().items():
-        if name in FIXED:  # pfactwld: FIXED overrides the gtap7.yaml row (pwfact)
-            continue
-        cells = side.levels[row.a.var]
-        perm = [row.a.dims.index(d) for d in row.b.dims]
-        out[name], zero[name] = {}, set()
-        for period, idx in cells:
-            if period != pre:
-                continue
-            key = tuple(idx[p] for p in perm)
-            out[name][key] = _ratio(cells[(pre, idx)], cells[(post, idx)])
-            if cells[(pre, idx)] == 0.0:
-                zero[name].add(key)
+    levels = family_levels(run.result.mp, EQ_VARS)
+    xscale = dict(xscale_data(run.params, run.params.sets))
+    # pfactwld: FIXED overrides the gtap7.yaml row (pwfact)
+    out, zero = gempack_pct(levels, xscale, pre, post, skip=FIXED)
     A, B = _Period(run, pre), _Period(run, post)
     for name, (var, perm, _) in FIXED.items():
         one = 1.0 if name in POWER else 0.0
@@ -116,7 +78,7 @@ def _changes(run: AltertaxRun, pre: str, post: str) -> tuple[Pct, dict[str, set]
             tuple(k[p] for p in perm): _ratio(one + x, one + B[var][k])
             for k, x in A[var].items()
         }
-    return out, {n: c for n, c in zero.items() if c}
+    return out, zero
 
 
 def pct_changes(run: AltertaxRun, pre: str = "check", post: str = "shock") -> Pct:

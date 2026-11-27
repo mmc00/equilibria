@@ -789,11 +789,11 @@ def report_levels_from_pct(run: AltertaxRun, gem_pct) -> dict:
     as in the pct gate. This is the pct gate restated in levels, not an independent
     measurement of GEMPACK's levels."""
     from equilibria.blocks.gtap._derived_params import xscale_data
+    from equilibria.compare.gtap7_side import EQ_VARS, equilibria_side
     from equilibria.family.altertax import pct as _pct
 
-    cg = _levels.load_compare_script()
-    lv = _levels.family_levels(run.result.mp, cg.EQ_VARS)
-    side = cg.equilibria_side(lv, dict(xscale_data(run.params, run.params.sets)))
+    lv = _levels.family_levels(run.result.mp, EQ_VARS)
+    side = equilibria_side(lv, dict(xscale_data(run.params, run.params.sets)))
     gem = _pct.gempack_changes(gem_pct)
     zero = zero_base_cells(run)
     rows = _pct.gtap7_rows()

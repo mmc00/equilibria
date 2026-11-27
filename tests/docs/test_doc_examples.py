@@ -34,6 +34,7 @@ PAGINAS = sorted((ROOT / "docs" / "site" / "guide").glob("*.md")) + [ROOT / "REA
 
 # Lo que cada página necesita para correr; el resto corre en cualquier lado.
 REQUIERE: dict[str, tuple[str, ...]] = {
+    "gtap_closures.md": ("needs_path", "needs_asl"),
     "gtap_quickstart.md": ("needs_path", "needs_asl"),
     "welfare_decomposition.md": ("needs_path", "needs_asl"),
     "pep_quickstart.md": ("needs_path", "needs_asl", "needs_ipopt"),
@@ -68,6 +69,13 @@ def _casos() -> list:
         marcas = [getattr(pytest.mark, m) for m in REQUIERE.get(pagina.name, ())]
         casos.append(pytest.param(pagina, id=pagina.name, marks=marcas))
     return casos
+
+
+def test_gtap_pages_pin_what_they_print() -> None:
+    """Every GTAP guide that solves has its printed output in the golden: the numbers
+    its comments show cannot drift without a failing test."""
+    gtap = {n for n in REQUIERE if n.startswith(("gtap_", "welfare_"))}
+    assert gtap <= set(GOLDEN["docs"]), sorted(gtap - set(GOLDEN["docs"]))
 
 
 def test_requiere_nombra_paginas_que_existen() -> None:

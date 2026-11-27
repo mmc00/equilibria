@@ -18,5 +18,6 @@ ADR supersedes the old one. Create one with
 | [0009](0009-one-name-dictionary-per-model.md) | One name dictionary per model, checked for completeness against both sides |
 | [0010](0010-one-data-folder.md) | One `data/` folder, and every reference file says where it came from |
 | [0011](0011-one-driver-fed-by-a-recipe.md) | One driver for every model, fed by a recipe |
+| [0012](0012-one-door-per-model.md) | One door per model, with the same names in every model |
 
 Vocabulary: [`docs/glossary.md`](../glossary.md).

@@ -1,4 +1,4 @@
-"""Levels of a family run in the shape ``compare_gempack_levels.model_levels`` returns."""
+"""Levels of a family run in the shape ``equilibria.compare.gtap7_side.model_levels`` returns."""
 
 from __future__ import annotations
 

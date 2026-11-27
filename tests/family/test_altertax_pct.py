@@ -268,3 +268,17 @@ def test_pct_har_loads(altax_run, ours, tmp_path):
     assert qo.shape == (3, 2)
     assert qo[0, 0] == pytest.approx(ours["qo"][("AGR", "USA")], rel=1e-6)
     assert np.asarray(by_name["pfactwld"].array).size == 1
+
+
+def test_gempack_pct_is_pct_changes_minus_fixed(altax_run):
+    """The mapped rows of ``pct_changes`` are ``gtap7_side.gempack_pct`` of the levels:
+    one % change rule for AlterTax and ``equilibria.gtap.results`` (MAR-249)."""
+    from equilibria.blocks.gtap._derived_params import xscale_data
+    from equilibria.compare.gtap7_side import EQ_VARS, gempack_pct
+    from equilibria.family.altertax.levels import family_levels
+
+    p = altax_run.params
+    levels = family_levels(altax_run.result.mp, EQ_VARS)
+    got, _ = gempack_pct(levels, dict(xscale_data(p, p.sets)), skip=FIXED)
+    want = {k: v for k, v in pct_changes(altax_run).items() if k not in FIXED}
+    assert got == want

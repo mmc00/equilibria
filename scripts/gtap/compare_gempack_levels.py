@@ -47,90 +47,24 @@ import argparse
 import dataclasses
 import gzip
 import json
-from collections.abc import Mapping as AbcMapping
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 
 from equilibria.babel.har.reader import read_har
-from equilibria.compare import Mapping, Report, Solution, compare, from_dict, from_har
+from equilibria.compare import Mapping, Report, Solution, compare, from_har
+from equilibria.compare.gtap7_side import (  # noqa: F401  (re-exported for repo scripts)
+    BASE,
+    EQ_VARS,
+    FINAL_AGENTS,
+    MARGIN_AGENT,
+    Levels,
+    equilibria_side,
+    model_levels,
+)
 from equilibria.sources import dataset_dir
 
 ROOT = Path(__file__).resolve().parents[2]
-Levels = AbcMapping[str, AbcMapping[tuple[str, ...], float]]
-MARGIN_AGENT = "tmg"
-FINAL_AGENTS = ("hhd", "gov", "inv", "tmg")
-BASE = "check"  # el periodo base del modelo de equilibria (el pre de GEMPACK)
-
-
-def equilibria_side(
-    levels: Levels, xscale: AbcMapping[Any, float], *, linear: bool = False
-) -> Solution:
-    """``levels[var][(indices..., periodo)] = nivel`` del modelo de equilibria, mas
-    las variables armadas (ver el docstring del modulo). ``xscale[(r, a)]`` va como
-    parametro de la fuente.
-
-    ``linear``: the levels are a Johansen solution (``shock_method="johansen"``).
-    There a product or a ratio moves by the first-order change of its factors, as
-    GEMPACK reports it, not by the product of the new levels; the other derived
-    variables are already linear in the levels."""
-    xds, xda, xma, pd = levels["xds"], levels["xda"], levels["xma"], levels["pd"]
-    acts = {a for (_, a, _) in levels["xp"]}
-    regs = {r for (r, _) in levels["rore"]}
-    data: dict[str, AbcMapping[tuple[str, ...], float]] = dict(levels)
-    data["xds_net"] = {
-        (r, c, t): x - xda.get((r, c, MARGIN_AGENT, t), 0.0)
-        for (r, c, t), x in xds.items()
-    }
-    for var, table in (("xda", xda), ("xma", xma)):
-        data[f"{var}_act"] = {k: x for k, x in table.items() if k[2] in acts}
-        for agent in FINAL_AGENTS:
-            data[f"{var}_{agent}"] = {
-                (r, c, t): x for (r, c, a, t), x in table.items() if a == agent
-            }
-    # qst es solo de los productos de margenes (MARG): los que tienen oferta de
-    # margenes en la base; el modelo guarda un 0 para los demas.
-    data["xda_tmg"] = {
-        (r, c, t): x
-        for (r, c, t), x in data["xda_tmg"].items()
-        if xda[(r, c, MARGIN_AGENT, BASE)] != 0.0
-    }
-    data["xf_pf0"] = {
-        (r, e, a, t): x * levels["pf"][(r, e, a, BASE)]
-        for (r, e, a, t), x in levels["xf"].items()
-    }
-    xw, pefob = levels["xw"], levels["pefob"]
-    data["xw_fob"] = {
-        (r, c, t): sum(
-            xw[(r, c, d, t)] * pefob[(r, c, d, BASE)]
-            for d in regs
-            if (r, c, d, t) in xw
-        )
-        + xda.get((r, c, MARGIN_AGENT, t), 0.0)
-        for (r, c, t) in xds
-    }
-    data["tpd"] = {
-        (r, c, t): 1.0 + x for (r, c, a, t), x in levels["dintx"].items() if a == "hhd"
-    }
-    pmt = levels["pmt"]
-    data["pd_pmt"] = {k: x / pmt[k] for k, x in pd.items()}
-    data["vdfb"] = {
-        (r, c, a, t): pd[(r, c, t)] * q for (r, c, a, t), q in xda.items() if a in acts
-    }
-    if linear:
-        # d(p/m) = dp/m0 - p0·dm/m0²  and  d(p·q) = q0·dp + p0·dq, from check.
-        for (r, c, t), x in pd.items():
-            p0, m0 = pd[(r, c, BASE)], pmt[(r, c, BASE)]
-            dp, dm = x - p0, pmt[(r, c, t)] - m0
-            data["pd_pmt"][(r, c, t)] = p0 / m0 + dp / m0 - p0 * dm / m0**2
-        for r, c, a, t in data["vdfb"]:
-            p0, q0 = pd[(r, c, BASE)], xda[(r, c, a, BASE)]
-            dp, dq = pd[(r, c, t)] - p0, xda[(r, c, a, t)] - q0
-            data["vdfb"][(r, c, a, t)] = p0 * q0 + q0 * dp + p0 * dq
-    return from_dict(
-        data, period_dim=-1, origin="equilibria", params={"xscale": dict(xscale)}
-    )
 
 
 def gempack_side(har: Path, basedata: Path, updated: Path) -> Solution:
@@ -150,13 +84,6 @@ def gempack_side(har: Path, basedata: Path, updated: Path) -> Solution:
     )
 
 
-# Variables del modelo que usan el mapeo y equilibria_side.
-EQ_VARS = (
-    "xp", "rore", "regy", "pi", "xiagg", "pva", "xds", "xda", "pd", "pft",
-    "pfact", "pwfact", "pgdpmp", "pmt", "pet", "xs", "xf", "pf", "xma", "rgdpmp",
-    "xmt", "xw", "pefob", "dintx",
-)  # fmt: skip
-
 # Newton-TR + MUMPS: el solver del 20x41 en el paper (IPOPT se queda sin memoria).
 NEWTON_MUMPS = {
     "EQUILIBRIA_GTAP_SOLVE_NLP": "1",
@@ -170,20 +97,6 @@ NEWTON_MUMPS = {
     "EQUILIBRIA_GTAP_GMIN": "1e-9",
     "EQUILIBRIA_GTAP_TR_RELTOL": "1e-6",
 }
-
-
-def model_levels(m: Any) -> dict[str, dict[tuple[str, ...], float]]:
-    """``{var: {(indices..., periodo): nivel}}`` de las ``EQ_VARS`` de un modelo
-    resuelto (``pyomo.value``)."""
-    from pyomo.environ import value
-
-    return {
-        v: {
-            (i if isinstance(i, tuple) else (i,)): float(value(c))
-            for i, c in getattr(m, v).items()
-        }
-        for v in EQ_VARS
-    }
 
 
 def dataset_xscale(dataset: str, va_subsidy_basis: str = "gempack") -> dict:
