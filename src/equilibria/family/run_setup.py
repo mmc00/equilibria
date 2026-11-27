@@ -55,7 +55,6 @@ def check_supported(
     mute_welfare: bool,
     seed_from_prior: bool,
     solve_check: bool,
-    shock_steps: tuple[float, ...] | None,
     shock_method: str,
     env: Mapping[str, str] | None = None,
 ) -> None:
@@ -77,8 +76,6 @@ def check_supported(
         refuse("mute_welfare=False")
     if not solve_check:
         refuse("solve_check=False (the route runs base, check and shock)")
-    if shock_steps:
-        refuse("shock_steps")
     if shock_method != "nonlinear":
         refuse(f"shock_method={shock_method!r} (only 'nonlinear')")
     if env.get("EQUILIBRIA_GTAP_SOLVER") != "scipy_newton_tr":

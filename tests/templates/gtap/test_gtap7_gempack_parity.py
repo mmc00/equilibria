@@ -138,7 +138,6 @@ def _solve_shock(
                 mute_welfare=True,
                 seed_from_prior=False,
                 solve_check=True,
-                shock_steps=None,
                 shock_method="nonlinear",
             )
         from equilibria.core.exercise import Exercise

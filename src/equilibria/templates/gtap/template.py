@@ -142,7 +142,6 @@ class GTAP:
             mute_welfare=True,
             seed_from_prior=False,
             solve_check=True,
-            shock_steps=None,
             shock_method="nonlinear",
         )
         rr = self.residual_region or list(self.params.sets.r)[-1]
