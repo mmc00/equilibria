@@ -381,15 +381,11 @@ def test_pass_rate_100_is_a_note_not_a_failure(tmp_path, capsys):
     assert "note: demo: evals_run: pass rate 100%" in capsys.readouterr().out
 
 
-def test_real_repo_exits_0_with_every_skill_pending(capsys):
+def test_real_repo_exits_0_with_port_to_jax_migrated(capsys):
     assert CS.main([], root=ROOT) == 0
     out = capsys.readouterr().out
-    for name in (
-        "port-to-jax",
-        "equilibria-parity-debug",
-        "xmodel-parity",
-        "sam-audit",
-    ):
+    assert "port-to-jax" not in out
+    for name in ("equilibria-parity-debug", "xmodel-parity", "sam-audit"):
         assert f"warning: {name}: " in out, name
     for name in ("equilibria-parity-debug", "xmodel-parity", "sam-audit"):
         assert f"warning: {name}: pending: not in the repo yet" in out, name
