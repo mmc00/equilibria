@@ -24,10 +24,12 @@ fresh. This costs real agent runs: a few minutes and some money per prompt.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import random
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -43,30 +45,40 @@ from skill_yaml import LAST_RUN, read_prompts, skill_hash  # noqa: E402
 
 ROOT = DEV.parents[1]
 SKILLS = Path(".agents") / "skills"
+ALLOWED = ("Bash", "Read", "Grep", "Glob", "Edit", "Write")
 DENIED = (
     "Bash(git push:*)",
     "Bash(gh:*)",
     "Bash(git commit:*)",
+    "Bash(git -C:*)",
+    "Bash(git stash:*)",
+    "Bash(git branch:*)",
+    "Bash(git worktree:*)",
+    "Bash(gams:*)",
     "Bash(uv run python scripts/gtap/run_parity_gates.py:*)",
+    "Bash(python3 scripts/gtap/run_parity_gates.py:*)",
 )
 
 
 def commands_from_stream(lines: Iterable[str]) -> list[str]:
-    """The ``command`` of every Bash tool call in the agent's stream-json."""
-    out = []
+    """The ``command`` of every Bash tool call in the agent's stream-json whose
+    result was not an error: a denied or failed command does not count."""
+    calls: list[tuple[str, str]] = []
+    failed: set[str] = set()
     for line in lines:
         try:
             msg = json.loads(line)
         except (json.JSONDecodeError, ValueError):
             continue
-        if msg.get("type") != "assistant":
-            continue
         for block in (msg.get("message") or {}).get("content") or []:
-            if block.get("type") == "tool_use" and block.get("name") == "Bash":
+            if msg.get("type") == "assistant" and block.get("type") == "tool_use":
                 cmd = (block.get("input") or {}).get("command")
-                if isinstance(cmd, str):
-                    out.append(cmd)
-    return out
+                if block.get("name") == "Bash" and isinstance(cmd, str):
+                    calls.append((str(block.get("id")), cmd))
+            elif msg.get("type") == "user" and block.get("type") == "tool_result":
+                if block.get("is_error"):
+                    failed.add(str(block.get("tool_use_id")))
+    return [cmd for tid, cmd in calls if tid not in failed]
 
 
 def _stream_stats(lines: list[str]) -> tuple[str, int, int]:
@@ -124,14 +136,20 @@ def run_prompt(
     """One contained agent run of ``prompt`` in a throwaway worktree of HEAD."""
     tmp = Path(tempfile.mkdtemp(prefix=f"skill-eval-{skill}-"))
     work = tmp / "wt"
-    _git(repo, "worktree", "add", "--detach", str(work), "HEAD")
     try:
+        _git(repo, "worktree", "add", "--detach", str(work), "HEAD")
         target = work / SKILLS / skill
         link = work / ".claude" / "skills" / skill
         if target.exists():
             shutil.rmtree(target)
         if with_skill:
-            shutil.copytree(repo / SKILLS / skill, target)
+            # the agent must not read its own grading (prompts.yaml, last_run.md)
+            shutil.copytree(
+                repo / SKILLS / skill, target, ignore=shutil.ignore_patterns("evals")
+            )
+            if not (link.is_symlink() or link.exists()):
+                link.parent.mkdir(parents=True, exist_ok=True)
+                link.symlink_to(Path("../..") / SKILLS / skill)
         elif link.is_symlink() or link.exists():
             link.unlink()
         argv = [
@@ -143,8 +161,12 @@ def run_prompt(
             "--verbose",
             "--max-turns",
             str(max_turns),
+            "--permission-mode",
+            "dontAsk",
+            "--allowedTools",
+            *ALLOWED,
             "--disallowedTools",
-            " ".join(DENIED),
+            *DENIED,
         ]
         if model:
             argv += ["--model", model]
@@ -175,6 +197,7 @@ def run_prompt(
             capture_output=True,
         )
         shutil.rmtree(tmp, ignore_errors=True)
+        subprocess.run(["git", "worktree", "prune"], cwd=repo, capture_output=True)
 
 
 def judge_prompt(
@@ -196,14 +219,35 @@ def judge_prompt(
 
 
 def _ask(agent_cmd: list[str], text: str, timeout_s: int, model: str | None) -> str:
-    argv = [*agent_cmd, "-p", text, "--max-turns", "1"]
+    """One judge call: no tools, run from an empty temp folder, since ``text``
+    holds the agent's own (untrusted) answers."""
+    argv = [*agent_cmd, "-p", text, "--max-turns", "1", "--tools", ""]
     if model:
         argv += ["--model", model]
-    try:
-        out = subprocess.run(argv, capture_output=True, text=True, timeout=timeout_s)
-    except subprocess.TimeoutExpired:
-        return ""
+    with tempfile.TemporaryDirectory(prefix="skill-judge-") as cwd:
+        try:
+            out = subprocess.run(
+                argv, cwd=cwd, capture_output=True, text=True, timeout=timeout_s
+            )
+        except subprocess.TimeoutExpired:
+            return ""
     return out.stdout.strip()
+
+
+@contextlib.contextmanager
+def _interrupt_on_term():
+    """SIGTERM and SIGHUP (a closed terminal) raise KeyboardInterrupt, so the
+    worktree cleanup in ``run_prompt`` runs for them too."""
+
+    def handler(signum, frame):
+        raise KeyboardInterrupt
+
+    old = {s: signal.signal(s, handler) for s in (signal.SIGTERM, signal.SIGHUP)}
+    try:
+        yield
+    finally:
+        for s, h in old.items():
+            signal.signal(s, h)
 
 
 def golden_matches(
@@ -273,48 +317,49 @@ def main(argv: list[str] | None = None) -> int:
     rng = random.Random(args.seed)
     results, wins, pairs = [], 0, 0
     deltas = {"tool_calls": 0, "tool_errors": 0, "minutes": 0.0}
-    for p in prompts:
-        for _ in range(args.runs):
-            r = run_prompt(
-                p,
-                args.skill,
-                with_skill=True,
-                agent_cmd=agent,
-                timeout_s=args.timeout,
-                max_turns=args.max_turns,
-                model=args.model,
-            )
-            kind = p.get("kind")
-            if kind == "golden":
-                r["passed"] = golden_matches(
-                    p, r["answer"], agent, args.timeout, args.model
-                )
-            if kind == "author":
-                print(
-                    f"[author] {p.get('id')}: expect: {p.get('expect')}\n{r['answer']}\n"
-                )
-            if args.ablation:
-                bare = run_prompt(
+    with _interrupt_on_term():
+        for p in prompts:
+            for _ in range(args.runs):
+                r = run_prompt(
                     p,
                     args.skill,
-                    with_skill=False,
+                    with_skill=True,
                     agent_cmd=agent,
                     timeout_s=args.timeout,
                     max_turns=args.max_turns,
                     model=args.model,
                 )
-                text, label = judge_prompt(p, r["answer"], bare["answer"], rng)
-                pairs += 1
-                wins += (
-                    _ask(agent, text, args.timeout, args.model).strip().upper()[:1]
-                    == label
+                kind = p.get("kind")
+                if kind == "golden":
+                    r["passed"] = golden_matches(
+                        p, r["answer"], agent, args.timeout, args.model
+                    )
+                if kind == "author":
+                    print(
+                        f"[author] {p.get('id')}: expect: {p.get('expect')}\n{r['answer']}\n"
+                    )
+                if args.ablation:
+                    bare = run_prompt(
+                        p,
+                        args.skill,
+                        with_skill=False,
+                        agent_cmd=agent,
+                        timeout_s=args.timeout,
+                        max_turns=args.max_turns,
+                        model=args.model,
+                    )
+                    text, label = judge_prompt(p, r["answer"], bare["answer"], rng)
+                    pairs += 1
+                    wins += (
+                        _ask(agent, text, args.timeout, args.model).strip().upper()[:1]
+                        == label
+                    )
+                    for k in deltas:
+                        deltas[k] += bare[k] - r[k]
+                results.append({"id": p.get("id"), "kind": kind, "passed": r["passed"]})
+                print(
+                    f"{p.get('id')}: {'author' if kind == 'author' else ('pass' if r['passed'] else 'FAIL')}"
                 )
-                for k in deltas:
-                    deltas[k] += bare[k] - r[k]
-            results.append({"id": p.get("id"), "kind": kind, "passed": r["passed"]})
-            print(
-                f"{p.get('id')}: {'author' if kind == 'author' else ('pass' if r['passed'] else 'FAIL')}"
-            )
     commit = subprocess.run(
         ["git", "rev-parse", "--short", "HEAD"],
         cwd=ROOT,

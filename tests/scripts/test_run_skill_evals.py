@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import random
 import subprocess
 import sys
 import textwrap
+import time
 from pathlib import Path
 from typing import Any
 
@@ -200,7 +202,7 @@ def test_the_agent_is_contained(repo, tmp_path, monkeypatch):
         repo=repo,
     )
     argv = json.loads(spy.read_text())["argv"]
-    denied = argv[argv.index("--disallowedTools") + 1]
+    denied = argv[argv.index("--disallowedTools") + 1 :]
     for tool in (
         "Bash(git push:*)",
         "Bash(gh:*)",
@@ -263,3 +265,137 @@ def test_ablation_judge_order_is_random_and_labels_hidden():
         assert "ANSWER-WITH" in text and "ANSWER-WITHOUT" in text
         orders.append(with_skill_is)
     assert set(orders) == {"A", "B"}
+
+
+SPY_TREE = """
+    import json, os
+    from pathlib import Path
+    Path(os.environ["SPY"]).write_text(json.dumps({
+        "evals": Path(".agents/skills/demo/evals").exists(),
+        "link": os.path.lexists(".claude/skills/demo"),
+        "skill": Path(".claude/skills/demo/SKILL.md").exists(),
+    }))
+    print(json.dumps({"type": "result", "result": "ok"}))
+"""
+
+
+def test_the_agent_does_not_see_its_grading(repo, tmp_path, monkeypatch):
+    (repo / ".agents/skills/demo/evals/prompts.yaml").write_text("- id: p1\n")
+    spy = tmp_path / "spy.json"
+    monkeypatch.setenv("SPY", str(spy))
+    RE.run_prompt(
+        {"prompt": "go"},
+        "demo",
+        with_skill=True,
+        agent_cmd=_fake_agent(tmp_path, SPY_TREE),
+        timeout_s=60,
+        max_turns=5,
+        repo=repo,
+    )
+    assert json.loads(spy.read_text())["evals"] is False
+
+
+def test_a_skill_not_in_head_is_linked_for_the_run(repo, tmp_path, monkeypatch):
+    new = repo / ".agents/skills/fresh"
+    new.mkdir(parents=True)
+    (new / "SKILL.md").write_text("new skill\n")
+    spy = tmp_path / "spy.json"
+    monkeypatch.setenv("SPY", str(spy))
+    agent = _fake_agent(tmp_path, SPY_TREE.replace("demo", "fresh"))
+    RE.run_prompt(
+        {"prompt": "go"},
+        "fresh",
+        with_skill=True,
+        agent_cmd=agent,
+        timeout_s=60,
+        max_turns=5,
+        repo=repo,
+    )
+    seen = json.loads(spy.read_text())
+    assert seen["link"] is True and seen["skill"] is True
+
+
+def test_the_run_has_an_explicit_permission_mode_and_allowlist(
+    repo, tmp_path, monkeypatch
+):
+    spy = tmp_path / "spy.json"
+    monkeypatch.setenv("SPY", str(spy))
+    RE.run_prompt(
+        {"prompt": "go"},
+        "demo",
+        with_skill=True,
+        agent_cmd=_fake_agent(tmp_path, SPY),
+        timeout_s=60,
+        max_turns=5,
+        repo=repo,
+    )
+    argv = json.loads(spy.read_text())["argv"]
+    assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
+    assert "--allowedTools" in argv
+    denied = argv[argv.index("--disallowedTools") + 1 :]
+    for tool in (
+        "Bash(git -C:*)",
+        "Bash(git stash:*)",
+        "Bash(gams:*)",
+        "Bash(python3 scripts/gtap/run_parity_gates.py:*)",
+    ):
+        assert tool in denied, tool
+
+
+def test_a_denied_command_does_not_count_for_must_run():
+    stream = _stream(
+        ["uv run python scripts/gtap/cascade_orchestrator.py"], "x", errors=1
+    )
+    assert RE.commands_from_stream(stream.splitlines()) == []
+
+
+def test_the_judge_runs_with_no_tools_outside_the_repo(tmp_path, monkeypatch):
+    spy = tmp_path / "judge.json"
+    monkeypatch.setenv("SPY", str(spy))
+    agent = _fake_agent(
+        tmp_path,
+        """
+        import json, os, sys
+        from pathlib import Path
+        Path(os.environ["SPY"]).write_text(json.dumps({"cwd": os.getcwd(), "argv": sys.argv[1:]}))
+        print("A")
+    """,
+    )
+    assert RE._ask(agent, "pick", 60, None) == "A"
+    seen = json.loads(spy.read_text())
+    assert seen["argv"][seen["argv"].index("--tools") + 1] == ""
+    assert not Path(seen["cwd"]).resolve().is_relative_to(ROOT.resolve())
+
+
+def test_a_failed_worktree_add_leaves_nothing(repo, tmp_path, monkeypatch):
+    made = []
+    real = RE.tempfile.mkdtemp
+
+    def spy_mkdtemp(**kw):
+        made.append(real(**kw))
+        return made[-1]
+
+    monkeypatch.setattr(RE.tempfile, "mkdtemp", spy_mkdtemp)
+    monkeypatch.setattr(
+        RE, "_git", lambda *a: (_ for _ in ()).throw(KeyboardInterrupt())
+    )
+    with pytest.raises(KeyboardInterrupt):
+        RE.run_prompt(
+            {"prompt": "go"},
+            "demo",
+            with_skill=True,
+            agent_cmd=["true"],
+            timeout_s=60,
+            max_turns=5,
+            repo=repo,
+        )
+    assert made and not Path(made[0]).exists()
+
+
+def test_sigterm_becomes_keyboard_interrupt():
+    import signal
+
+    with RE._interrupt_on_term():
+        with pytest.raises(KeyboardInterrupt):
+            os.kill(os.getpid(), signal.SIGTERM)
+            time.sleep(1)

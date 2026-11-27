@@ -51,3 +51,21 @@ def test_block_scalar_anchor_or_nested_map_raises_with_line(text, line):
     with pytest.raises(SY.SubsetError) as err:
         SY.read_prompts(text)
     assert err.value.line == line
+
+
+def test_the_hash_ignores_dotfiles_and_git_ignored_files(tmp_path):
+    """Final review: a Finder .DS_Store or an ignored file must not stale the stamp."""
+    import subprocess
+
+    folder = tmp_path / "skill"
+    folder.mkdir()
+    (folder / "SKILL.md").write_text("x\n")
+    before = SY.skill_hash(folder)
+    (folder / ".DS_Store").write_bytes(b"\0finder")
+    assert SY.skill_hash(folder) == before
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    (tmp_path / ".gitignore").write_text("*.log\n")
+    (folder / "run.log").write_text("noise\n")
+    assert SY.skill_hash(folder) == before
+    (folder / "spec.md").write_text("new\n")
+    assert SY.skill_hash(folder) != before

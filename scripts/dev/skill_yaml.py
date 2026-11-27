@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import subprocess
 from pathlib import Path
 
 LAST_RUN = Path("evals") / "last_run.md"
@@ -127,11 +128,31 @@ def read_prompts(text: str) -> list[dict[str, str | list[str]]]:
     return out
 
 
+def _skill_files(folder: Path) -> list[Path]:
+    """The files git would carry for the folder (tracked, or untracked and not
+    ignored); outside a git repo, every file. Dotfiles (a Finder .DS_Store) never."""
+    out = subprocess.run(
+        ["git", "ls-files", "-co", "--exclude-standard", "-z", "."],
+        cwd=folder,
+        capture_output=True,
+    )
+    if out.returncode == 0:
+        files = [folder / p for p in out.stdout.decode().split("\0") if p]
+    else:
+        files = [p for p in folder.rglob("*") if p.is_file()]
+    return sorted(
+        p
+        for p in files
+        if p.is_file()
+        and not any(part.startswith(".") for part in p.relative_to(folder).parts)
+    )
+
+
 def skill_hash(folder: Path) -> str:
-    """sha256 over the sorted relative paths and bytes of every file in the skill's
-    folder but ``evals/last_run.md`` (and ``__pycache__``)."""
+    """sha256 over the sorted relative paths and bytes of the skill's files
+    (``_skill_files``) but ``evals/last_run.md`` and ``__pycache__``."""
     h = hashlib.sha256()
-    for path in sorted(p for p in folder.rglob("*") if p.is_file()):
+    for path in _skill_files(folder):
         rel = path.relative_to(folder)
         if rel == LAST_RUN or "__pycache__" in rel.parts:
             continue
