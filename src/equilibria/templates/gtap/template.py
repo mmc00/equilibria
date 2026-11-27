@@ -120,7 +120,6 @@ class GTAP:
 
         from equilibria.blocks.gtap.overwrite import overwrite
         from equilibria.family import run_setup as fd
-        from equilibria.family.capflex import require_ref_gdx
         from equilibria.family.gtap_periods import GTAPFamilyPeriodModel
         from equilibria.solver.gc_tuning import (
             _gc_family_scope,
@@ -146,8 +145,6 @@ class GTAP:
             shock_steps=None,
             shock_method="nonlinear",
         )
-        if savf == "capFlex":
-            require_ref_gdx(self.ref_gdx)
         rr = self.residual_region or list(self.params.sets.r)[-1]
         # as the old family driver: the load and the settle under one GC setup; the
         # loaded records frozen as soon as they are in

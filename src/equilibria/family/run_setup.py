@@ -223,8 +223,8 @@ def prepare_run(
     Pyomo model. ``params`` takes the closure's value-added subsidy basis and
     ``unit_sigma`` in place, as ``build_block_model`` does. ``freeze`` moves the loaded records to the GC's permanent
     generation before ``mp_build``; only for a caller inside a context that unfreezes.
-    Under capFlex ``ref_gdx`` gives ``params._capflex_risk`` (see ``family.capflex``), set
-    before the cache keys are taken."""
+    Under capFlex ``params._capflex_risk`` comes from the data (see ``family.capflex``),
+    set before the cache keys are taken."""
     from equilibria.family import cross_period
     from equilibria.family.disk_cache import cache_key, enable_jax_cache, load_or_build
     from equilibria.family.prep_square import ConditionalMasks
@@ -236,7 +236,7 @@ def prepare_run(
     )
     params.set_va_subsidy_basis(getattr(closure, "va_subsidy_basis", "gams"))
     params.set_unit_sigma(getattr(closure, "unit_sigma", "gams"))
-    stamp_capflex_risk(params, closure, ref_gdx)
+    stamp_capflex_risk(params, closure)
     root = Path(cache_root) if cache_root is not None else default_cache_root()
     if jax_cache:
         with phase("jax_cache_setup"):

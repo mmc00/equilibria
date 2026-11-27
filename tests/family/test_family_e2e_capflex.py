@@ -74,7 +74,6 @@ def _closure_flex():
     return comp_stat_closure(True, SAVF)
 
 
-@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_cache_key_differs_from_capfix(stamped):
     from equilibria.family.disk_cache import cache_key
     from tests.family._oracle import comp_stat_closure
@@ -112,7 +111,6 @@ def built(stamped, tmp_path_factory):
     return p, closure, rr, backend, state, mp
 
 
-@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_mparrays_rows_equal_pyomos_with_eq_savf_everywhere(built, reference):
     from equilibria.family.prep_capture import load
 
@@ -155,13 +153,11 @@ def core_run(reference, linsolve, tmp_path_factory):
     return model, code, calls
 
 
-@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_core_route_builds_no_pyomo_model(core_run):
     _, _, calls = core_run
     assert calls == {"ConcreteModel": 0, "PyomoNLP": 0, "identify_variables": 0}
 
 
-@pytest.mark.needs_gdxdump  # reads rore/rorg from the reference GDX
 def test_core_route_every_cell_equals_final_pkl(core_run, reference):
     from equilibria.family.prep_capture import load
 

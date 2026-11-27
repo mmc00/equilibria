@@ -946,42 +946,6 @@ def _build_block_model(
     return m, mp
 
 
-def _capflex_risk_from_gdx(ref_gdx, regions) -> dict:
-    """Fast path: read benchmark rore/rorg straight from the GAMS ref GDX (base period) and
-    return ``{region: rorg/rore(r)}``. GAMS already solved the benchmark, so we skip the
-    266s capFix twin-solve. Returns {} if the GDX lacks rore/rorg (falls back to the twin)."""
-    if ref_gdx is None:
-        return {}
-    try:
-        from pathlib import Path as _P
-
-        from _diff_core import gams_levels  # scripts/gtap on sys.path (parity env)
-
-        gp = _P(str(ref_gdx))
-        if not gp.exists():
-            return {}
-        rore = gams_levels(gp, "rore")
-        rorg = gams_levels(gp, "rorg")
-    except Exception:
-        return {}
-
-    def _pick(d, *cands):
-        for c in cands:
-            if c in d:
-                return float(d[c])
-        return None
-
-    rorg_b = _pick(rorg, ("base",), "base")
-    if rorg_b is None:
-        return {}
-    out: dict = {}
-    for r in regions:
-        rore_b = _pick(rore, (r, "base"), (str(r), "base"))
-        if rore_b and abs(rore_b) > 1e-12:
-            out[r] = rorg_b / rore_b
-    return out if len(out) == len(list(regions)) else {}
-
-
 def _calibrate_capflex_risk(
     params, sets, closure, residual_region, ref_gdx=None
 ) -> dict:
