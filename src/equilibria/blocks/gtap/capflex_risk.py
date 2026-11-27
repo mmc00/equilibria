@@ -58,3 +58,15 @@ def capflex_risk_from_data(params: Any) -> dict[str, float]:
         netinv[r] = xi - depr * kstock
     rorg = sum(rore[r] * netinv[r] for r in rore) / sum(netinv.values())
     return {r: rorg / rore[r] for r in rore}
+
+
+def stamp_capflex_risk(params: Any, closure: Any) -> None:
+    """Set ``params._capflex_risk`` from the data under capFlex, every time (so a
+    params object reused after its data changed, e.g. a RoRFlex sweep, never keeps an
+    earlier run's value), and remove it under any other closure (so it cannot move the
+    capFix cache keys or results). Both backends stamp before any cache key."""
+    if getattr(closure, "savf_flag", "capFix") != "capFlex":
+        if hasattr(params, "_capflex_risk"):
+            del params._capflex_risk
+        return
+    params._capflex_risk = capflex_risk_from_data(params)

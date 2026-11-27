@@ -82,13 +82,16 @@ def test_family_equals_pyomo(exp: str, tmp_path) -> None:
     rel = REL_JOHANSEN if exp in JOHANSEN else REL
     loose = LOOSE.get(exp, {})
     bad = mismatches(
-        {k: v for k, v in want.items() if k[0] not in loose},
         {k: v for k, v in got.items() if k[0] not in loose},
+        {k: v for k, v in want.items() if k[0] not in loose},
         rel,
     )
     for var, bound in loose.items():
-        cells = {k: v for k, v in want.items() if k[0] == var}
-        bad += mismatches(cells, {k: got[k] for k in cells if k in got}, bound)
+        bad += mismatches(
+            {k: v for k, v in got.items() if k[0] == var},
+            {k: v for k, v in want.items() if k[0] == var},
+            bound,
+        )
     assert not bad, f"{exp}: {len(bad)} of {len(got)} cells differ, first: {bad[:5]}"
 
 

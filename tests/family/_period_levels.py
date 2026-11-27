@@ -45,9 +45,10 @@ def levels(model: Any) -> dict[Cell, float]:
 def mismatches(
     got: Mapping[Cell, float], want: Mapping[Cell, float], rel: float
 ) -> list[str]:
-    """Cells present in ``want`` whose level differs from ``got`` beyond ``rel``
-    (relative, with an absolute floor of ``rel`` for cells near 0), or missing."""
-    bad = []
+    """Cells of ``want`` (the reference) that ``got`` lacks or puts beyond ``rel``
+    (relative, with an absolute floor of ``rel`` for cells near 0), and cells of
+    ``got`` that ``want`` lacks."""
+    bad = [f"{k}: extra" for k in got if k not in want]
     for k, w in want.items():
         if k not in got:
             bad.append(f"{k}: missing")

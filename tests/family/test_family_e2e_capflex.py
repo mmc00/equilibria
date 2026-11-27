@@ -3,8 +3,7 @@
 Same checks as ``test_family_e2e_ifsub0.py`` against the Pyomo capFlex run captured in
 the session (``capture_dir(..., savf="capFlex")``): no Pyomo model is built by the
 family route (spy on ``ConcreteModel.__init__``, ``PyomoNLP.__init__`` and
-``identify_variables``) and ``_calibrate_capflex_risk`` (Pyomo's twin solve) is never
-called; every Var cell of the three periods agrees with ``final.pkl`` (same
+``identify_variables``), capFlex ``risk`` comes from the data; every Var cell of the three periods agrees with ``final.pkl`` (same
 ``linsolve``) within 1e-9, identical fixed flags and bounds, code 1. Plus:
 ``MPArrays.build`` has ``eq_savf`` in every region and no ``eq_rorg`` per period,
 equal to Pyomo's row names. Iteration counts are reported, never asserted.
@@ -137,12 +136,6 @@ def core_run(reference, linsolve, tmp_path_factory):
     for k, v in {**_newton_mumps(), "EQUILIBRIA_GTAP_TR_LINSOLVE": linsolve}.items():
         mpatch.setenv(k, v)
     mpatch.setenv("EQUILIBRIA_FAMILY_CACHE", str(tmp_path_factory.mktemp("cache")))
-    import equilibria.templates.gtap.gtap_block_model as bm
-
-    def no_twin_solve(*a, **k):
-        raise AssertionError("_calibrate_capflex_risk (Pyomo twin solve) was called")
-
-    mpatch.setattr(bm, "_calibrate_capflex_risk", no_twin_solve)
     try:
         with _spies() as calls:
             model, code = _solve_shock(

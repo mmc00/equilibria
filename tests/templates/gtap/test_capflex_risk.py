@@ -100,16 +100,6 @@ def no_twin(monkeypatch):
 
 
 @pytest.mark.skipif(not has_dataset("nus333"), reason="nus333 not present")
-def test_pyomo_capflex_risk_is_the_formula(no_twin) -> None:
-    from equilibria.blocks.gtap.capflex_risk import capflex_risk_from_data
-    from equilibria.templates.gtap.gtap_block_model import _calibrate_capflex_risk
-
-    p = _params("nus333")
-    risk = _calibrate_capflex_risk(p, p.sets, _capflex_closure(), "ROW", ref_gdx=None)
-    assert risk == capflex_risk_from_data(p)
-
-
-@pytest.mark.skipif(not has_dataset("nus333"), reason="nus333 not present")
 def test_built_capflex_model_carries_the_formula_risk(no_twin) -> None:
     """Burfisher's case (no GDX): the risk the block reads is the formula, never 1.
     (The multi-period model folds ``risk`` to numbers, so it is read off ``params``.)"""
@@ -120,3 +110,26 @@ def test_built_capflex_model_carries_the_formula_risk(no_twin) -> None:
     want = capflex_risk_from_data(p)
     build_block_model(p, p.sets, _capflex_closure(), "ROW")
     assert p._capflex_risk == want
+
+
+@pytest.mark.skipif(not has_dataset("nus333"), reason="nus333 not present")
+def test_reused_params_follow_a_changed_rorflex(no_twin) -> None:
+    """A RoRFlex sweep on one params object: every capFlex build takes the risk of
+    the data it is built from, on Pyomo as on family (never an earlier run's)."""
+    from equilibria.blocks.gtap.capflex_risk import capflex_risk_from_data
+    from equilibria.family.capflex import stamp_capflex_risk
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+
+    p = _params("nus333")
+    build_block_model(p, p.sets, _capflex_closure(), "ROW")
+    first = dict(p._capflex_risk)
+    p.elasticities.rorflex = dict.fromkeys(p.elasticities.rorflex, 2.0)
+    want = capflex_risk_from_data(p)
+    assert want != first
+    build_block_model(p, p.sets, _capflex_closure(), "ROW")
+    assert p._capflex_risk == want
+    q = _params("nus333")
+    stamp_capflex_risk(q, _capflex_closure())
+    q.elasticities.rorflex = dict.fromkeys(q.elasticities.rorflex, 2.0)
+    stamp_capflex_risk(q, _capflex_closure())
+    assert q._capflex_risk == want

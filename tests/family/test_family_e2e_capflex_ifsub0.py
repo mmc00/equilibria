@@ -70,7 +70,7 @@ def test_family_capflex_ifsub0_equals_pyomo(family_ifsub0, pyomo_ifsub0):
     p_codes, p = pyomo_ifsub0
     assert f_codes["shock"] == p_codes["shock"] == "optimal"
     assert len(f) > 0
-    bad = mismatches(p, f, REL)
+    bad = mismatches(f, p, REL)
     assert not bad, f"{len(bad)} of {len(f)} cells differ, first: {bad[:10]}"
 
 

@@ -22,14 +22,16 @@ def _params():
 
 
 def test_risk_equals_pyomos():
+    """Family stamps what a Pyomo capFlex build stamps."""
     from equilibria.family.capflex import capflex_risk
-    from equilibria.templates.gtap.gtap_block_model import _calibrate_capflex_risk
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
 
-    p = _params()
+    p, q = _params(), _params()
     regions = [str(r) for r in p.sets.r]
     risk = capflex_risk(p)
     assert set(risk) == set(regions)
-    assert risk == _calibrate_capflex_risk(p, p.sets, _capflex(), regions[-1])
+    build_block_model(q, q.sets, _capflex(), regions[-1])
+    assert risk == q._capflex_risk
 
 
 def test_prepare_run_needs_no_gdx(monkeypatch, tmp_path):
@@ -88,15 +90,14 @@ def test_cross_period_path_follows_the_stamp(tmp_path):
     assert len(paths) == 3
 
 
-def test_stamp_refuses_a_stale_risk():
-    from equilibria.family.capflex import stamp_capflex_risk
+def test_stamp_replaces_a_stale_risk():
+    """A value left by anyone (another dataset, a hand edit) is replaced by the data's."""
+    from equilibria.family.capflex import capflex_risk, stamp_capflex_risk
 
     p = _params()
+    p._capflex_risk = dict.fromkeys(capflex_risk(p), 2.0)
     stamp_capflex_risk(p, _capflex())
-    stamp_capflex_risk(p, _capflex())  # same value: fine
-    p._capflex_risk = dict.fromkeys(p._capflex_risk, 2.0)
-    with pytest.raises(ValueError, match="stale"):
-        stamp_capflex_risk(p, _capflex())
+    assert p._capflex_risk == capflex_risk(p)
 
 
 def test_capfix_drops_a_stale_stamp_so_its_keys_do_not_move():

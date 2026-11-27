@@ -883,13 +883,9 @@ def _build_block_model(
     # BEFORE the multi-period model folds mutable params to numbers (gtap_model_multiperiod
     # substitutes every mutable ParamData by its value). Stash it on params so the
     # DemandUtilityBlock reads it in setup().
-    if (
-        str(getattr(closure, "savf_flag", "capFix")) == "capFlex"
-        and getattr(params, "_capflex_risk", None) is None
-    ):
-        params._capflex_risk = _calibrate_capflex_risk(
-            params, sets, closure, residual_region, ref_gdx=ref_gdx
-        )
+    from equilibria.blocks.gtap.capflex_risk import stamp_capflex_risk
+
+    stamp_capflex_risk(params, closure)
 
     mp = GTAPBlockMultiPeriodModel(
         sets, params, closure, residual_region=residual_region
@@ -944,18 +940,6 @@ def _build_block_model(
     if _mc is not None:
         _mc.save(_mc_key, m)
     return m, mp
-
-
-def _calibrate_capflex_risk(
-    params, sets, closure, residual_region, ref_gdx=None
-) -> dict:
-    """capFlex ``risk[r] = rorg/rore(r)`` at the benchmark, from the calibrated data as
-    GAMS ``cal.gms:680-684`` (``capflex_risk.capflex_risk_from_data``). No solve and no
-    GDX; ``sets``, ``closure``, ``residual_region`` and ``ref_gdx`` stay in the signature
-    for the callers. Raises when a region has no rate of return (never ``risk = 1``)."""
-    from equilibria.blocks.gtap.capflex_risk import capflex_risk_from_data
-
-    return capflex_risk_from_data(params)
 
 
 def _fisher_snapshot(pm: Any) -> tuple[dict[str, Any], Any]:
