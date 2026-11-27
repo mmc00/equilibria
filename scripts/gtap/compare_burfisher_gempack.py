@@ -103,16 +103,21 @@ def run(
     return cg.run(levels, xscale, har, BASEDATA, d / "updated.har", linear=linear)
 
 
-def solve(exp: str) -> tuple[dict, dict]:
-    """(levels, xscale) de equilibria en el ejercicio, con el cierre de la Tabla 3."""
+def solve(exp: str, backend: str = "pyomo") -> tuple[dict, dict]:
+    """(levels, xscale) of equilibria in the exercise, with Table 3's closure, on
+    ``backend`` (``"pyomo"`` or ``"family"``)."""
     from equilibria._local_refs import nus333_dir, path_capi_src
     from equilibria.blocks.gtap._derived_params import xscale_data
+    from equilibria.compare.gtap7_side import period_model_levels
 
     sys.path.insert(0, str(path_capi_src()))
-    m, p, codes = rb.solve_exercise(exp, nus333_dir())
-    if set(codes.values()) != {1}:
-        print(f"{exp:7s} equilibria no resolvio: {codes}", flush=True)
-    return cg.model_levels(m), dict(xscale_data(p, p.sets))
+    ex = rb.exercise(exp, nus333_dir(), backend=backend)
+    res = ex.run()
+    bad = {k: r["code"] for k, r in res.items() if k != "base" and r["code"] != "optimal"}
+    if bad:
+        print(f"{exp:7s} equilibria no resolvio: {bad}", flush=True)
+    p = ex.template.params
+    return period_model_levels(ex.model), dict(xscale_data(p, p.sets))
 
 
 def exercises(only: str, source: Source) -> list[str]:
@@ -145,6 +150,12 @@ def main() -> int:
     ap.add_argument("--save-eq-dir", type=Path, help="guardar los niveles resueltos")
     ap.add_argument("--json", type=Path, help="guardar los resultados en JSON")
     ap.add_argument(
+        "--backend",
+        choices=("pyomo", "family"),
+        default="pyomo",
+        help="the backend that solves each exercise (without --eq-dir)",
+    )
+    ap.add_argument(
         "--gempack-dir",
         type=lambda v: v if v in _TOOL else Path(v),
         default=BOOK,
@@ -170,7 +181,7 @@ def main() -> int:
                 continue
             levels, xscale = cg.load_eq_json(eq)
         else:
-            levels, xscale = solve(exp)
+            levels, xscale = solve(exp, a.backend)
             if a.save_eq_dir:
                 path = a.save_eq_dir / f"eq_burfisher_{exp.lower()}_levels.json.gz"
                 cg.save_eq_json(path, levels, xscale)
