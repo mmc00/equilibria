@@ -33,16 +33,13 @@ def test_supported_config_passes():
     run()
     run(if_sub=False)  # ifSUB=0 is supported
     run(savf_flag="capFlex")  # capFlex with ifSUB=1 is supported
+    run(savf_flag="capFlex", if_sub=False)  # and with ifSUB=0 (MAR-251)
     run(env={"EQUILIBRIA_GTAP_TR_LINSOLVE": "direct"})
 
 
 @pytest.mark.parametrize(
     "kw, needle",
     [
-        (
-            {"savf_flag": "capFlex", "if_sub": False},
-            "savf_flag='capFlex' with if_sub=False",
-        ),
         ({"savf_flag": "capSFix"}, "savf_flag='capSFix'"),
         ({"savf_flag": "capShrFix"}, "savf_flag='capShrFix'"),
         ({"savf_flag": "capFixDp"}, "savf_flag='capFixDp'"),
@@ -184,9 +181,6 @@ def test_solve_shock_family_route_refuses_before_any_work(monkeypatch):
         mod._solve_shock("gtap7_3x3", 1, "capFix", solve_nlp=True, backend="family")
     with pytest.raises(NotImplementedError, match="savf_flag='capSFix'"):
         mod._solve_shock("gtap7_3x3", 1, "capSFix", solve_nlp=True, backend="family")
-    # ifSUB=0 and capFlex are lifted separately, not crossed (before any work)
-    with pytest.raises(NotImplementedError, match="capFlex' with if_sub=False"):
-        mod._solve_shock("gtap7_3x3", 0, "capFlex", solve_nlp=True, backend="family")
     monkeypatch.setenv("EQUILIBRIA_GTAP_SOLVER", "scipy_newton_tr")
     with pytest.raises(NotImplementedError, match="SOLVE_NLP"):
         mod._solve_shock("gtap7_3x3", 1, "capFix", solve_nlp=False, backend="family")
