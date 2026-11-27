@@ -88,9 +88,9 @@ Reference: [the three generic pieces and the template wiring](references/pieces.
 | Failure | Fix |
 |---|---|
 | `NotImplementedError` in `residual` when the family model runs | `FamilyPeriodModel.residual` is a stub: build `GenericFamilyPeriodModel`, not the GTAP class. |
-| `residual` is nonzero after you deactivate a row | It counted every row. `GenericFamilyPeriodModel.residual` takes the max over active rows only (`ps.system.F(ps.x0())[ps.active]`), as the solver measures it (4cc279cb). |
+| `residual` is nonzero after you deactivate a row | It counted every row. `GenericFamilyPeriodModel.residual` takes the max over active rows only (`ps.system.F(ps.x0())[ps.active]`), as the solver measures it (4cc279cb). Do not answer from reading: run `uv run pytest -q -p no:cacheprovider -o addopts= tests/family/test_generic_periods.py` and say what it shows. |
 | Newton stops at 1e-7 | `newton_tr` reads `ftol` from `EQUILIBRIA_GTAP_TR_FTOL` (1e-7) when it is not passed: `newton_family(tol=...)` passes it explicitly. |
-| Levels go to 0 or negative | Level blocks bound `Reals` vars below by `LEVEL_FLOOR` = 1e-5. GTAP's `MPArrays.build` only knows `NonNegativeReals`; use `build_arrays`, which takes bounds from `StateModel.lower/upper`. |
+| Levels go to 0 or negative | Level blocks bound `Reals` vars below by `LEVEL_FLOOR` = 1e-5. GTAP's `MPArrays.build` only knows `NonNegativeReals`; use `build_arrays`, which takes bounds from `StateModel.lower/upper`. `newton_family` passes those `lb`/`ub` to `newton_tr` (`src/equilibria/solver/newton_family.py`), so the family Newton keeps the floor: the bug is in how the arrays were built, not in Newton. |
 | `ValueError: not square: N rows, M free cells` | An instrument or the numeraire is free, or a row is missing. Count free cells against active rows of the period and fix the closure in the template (the `INSTRUMENTS` tuple), not the solver. `tests/family/test_newton_family.py::test_not_square_raises` shows the case. |
 | Recorder fails on a block | It records `+ - * / ** neg sqrt log exp`, `math.prod` and `sum`. Rewrite the block with those; never fall back to Pyomo. |
 | The no-Pyomo test fails on `"pyomo" in sys.modules` | The recorder imports `pyomo.environ`. Assert the `_spies()` counts (0 ConcreteModel, 0 PyomoNLP, 0 identify_variables) instead. |
