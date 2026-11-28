@@ -399,6 +399,11 @@ tests/templates/gtap_julia/test_variables.py
 tests/templates/gtap_logvalue/test_blocks_form.py
 tests/templates/gtap_logvalue/test_blocks_solve.py
 tests/templates/gtap_logvalue/test_derived_params.py
+tests/templates/manage/test_convert.py
+tests/templates/manage/test_data.py
+tests/templates/manage/test_names.py
+tests/templates/manage/test_rescale.py
+tests/templates/manage/test_residuals.py
 tests/templates/pep_pyomo/test_pep_coverage_matrix.py
 tests/templates/pep_pyomo/test_pep_phase23.py
 tests/templates/pep_pyomo/test_pep_pyomo_build.py
