@@ -1477,7 +1477,6 @@
  "tests/family/test_driver_hook.py::test_off_by_default": 0.0012850060001028396,
  "tests/family/test_driver_hook.py::test_wraps_and_reuses_the_recording": 3.4405351739999332,
  "tests/family/test_driver_hook.py::test_wraps_newton_tr_only": 0.00032334299999092764,
- "tests/family/test_family_driver_guards.py::test_active_overwrite_hooks_are_refused": 0.0002881820000766311,
  "tests/family/test_family_driver_guards.py::test_argument_refusals_name_the_setting[kw0-savf_flag='capFlex' with if_sub=False]": 0.0004908550000664036,
  "tests/family/test_family_driver_guards.py::test_argument_refusals_name_the_setting[kw1-savf_flag='capSFix']": 0.0003838139999743362,
  "tests/family/test_family_driver_guards.py::test_argument_refusals_name_the_setting[kw10-shock_method]": 0.0003697839999858843,
@@ -4095,5 +4094,13 @@
  "tests/templates/gtap/test_capflex_risk_oracle.py::test_the_twin_is_close_to_gams_but_not_equal[nus333]": 0.0,
  "tests/family/test_period_levels.py::test_a_cell_missing_from_the_run_is_a_mismatch": 0.001,
  "tests/family/test_period_levels.py::test_a_cell_the_reference_lacks_is_a_mismatch": 0.001,
- "tests/family/test_period_levels.py::test_equal_cells_within_the_bound_match": 0.001
+ "tests/family/test_period_levels.py::test_equal_cells_within_the_bound_match": 0.001,
+ "tests/examples/test_burfisher_notebooks_family.py::test_overwrite_notebook_on_family_equals_pyomo[ME9A]": 12.29,
+ "tests/family/test_gtap_family_template.py::test_family_runs_an_overwrite_hook": 0.64,
+ "tests/family/test_gtap_family_template.py::test_no_family_cache_under_hooks": 25.36,
+ "tests/family/test_mp_build.py::test_activating_a_period_keeps_hook_rows_out_of_base_and_check": 0.07,
+ "tests/family/test_mp_build.py::test_build_after_clear_has_no_hook_rows": 0.23,
+ "tests/family/test_mp_build.py::test_build_keeps_hook_rows_in_the_shock_only": 1.6,
+ "tests/family/test_overwrite_pairing.py::test_hook_rows_pair_as_on_pyomo[ME9A]": 11.48,
+ "tests/family/test_overwrite_targets.py::test_target_row_is_zero_at_pyomos_shock_point[ME9A]": 2.57
 }
