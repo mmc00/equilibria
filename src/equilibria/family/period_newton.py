@@ -122,9 +122,11 @@ def _period_system(run: FamilyRun, mp1: MPArrays, period: str) -> tuple[Any, Any
     """The square and system-build steps of ``_solve_period_inner`` on the recipe's
     arrays ``mp1``: ``(sq, mp_sq, ss)``."""
     from equilibria.family.cell_index import CellIndex
+    from equilibria.family.overwrite_targets import anchor_targets
     from equilibria.family.prep_square import square
     from equilibria.family.squared_system import ArrayIncidence, SquaredSystem
 
+    anchor_targets(run, mp1, period)  # @overwrite targets: to the check, in the shock
     with phase("square"):
         if run.cell_index is None or not run.cell_index.fits(mp1):
             run.cell_index = CellIndex(mp1)
