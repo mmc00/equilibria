@@ -4064,5 +4064,10 @@
  "tests/parity/test_validate_reference.py::test_residuals_read_only_the_requested_period": 0.00047060199995030416,
  "tests/parity/test_validate_reference.py::test_the_default_gdx_is_the_data_reference": 0.020034410000107528,
  "tests/scripts/test_bench.py::test_bench_reads_the_gate_measure": 0.00023787600002833642,
- "tests/scripts/test_bench.py::test_delta_counts_a_variable_new_or_gone": 0.00033156400013467646
+ "tests/scripts/test_bench.py::test_delta_counts_a_variable_new_or_gone": 0.00033156400013467646,
+ "tests/babel/gdx/test_reader_manage.py::test_uel_keeps_the_empty_label": 2.58,
+ "tests/babel/gdx/test_reader_manage.py::test_xp_has_every_record": 0.01,
+ "tests/babel/gdx/test_reader_manage.py::test_scalar_rescale": 0.01,
+ "tests/babel/gdx/test_reader_manage.py::test_every_symbol_matches_gdxdump[bau]": 6.56,
+ "tests/babel/gdx/test_reader_manage.py::test_every_symbol_matches_gdxdump[bridge]": 0.27
 }
