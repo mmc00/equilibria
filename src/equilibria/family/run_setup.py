@@ -97,11 +97,6 @@ def check_supported(
         if name.startswith("EQUILIBRIA_DEBUG_") and env.get(name):
             refuse(f"{name}")
 
-    from equilibria.blocks.gtap.overwrite import overwrite
-
-    if overwrite.active():
-        refuse("@overwrite hooks")
-
 
 CACHE_ENV = "EQUILIBRIA_FAMILY_CACHE"
 
@@ -226,8 +221,12 @@ def prepare_run(
     params.set_va_subsidy_basis(getattr(closure, "va_subsidy_basis", "gams"))
     params.set_unit_sigma(getattr(closure, "unit_sigma", "gams"))
     stamp_capflex_risk(params, closure)
+    from equilibria.blocks.gtap.overwrite import overwrite
+
     root = Path(cache_root) if cache_root is not None else default_cache_root()
-    if jax_cache:
+    # under @overwrite hooks nothing is cached (they change the equations and are in
+    # no key): no records, pairings or settle (their keys are None), no JAX programs
+    if jax_cache and not overwrite.active():
         with phase("jax_cache_setup"):
             enable_jax_cache(root)
     # one key for the single- and cross-period records (and the pairings next to them)

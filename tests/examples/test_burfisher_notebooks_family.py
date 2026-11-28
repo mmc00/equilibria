@@ -1,6 +1,8 @@
 """The four Burfisher notebooks that change the closure with ``@overwrite`` (TBL65B,
 ME3C, TBL94, ME9A) give on the family (JAX) backend what they give on Pyomo (MAR-251):
-every Var cell of every period at 1e-9 and the same printed results.
+every Var cell of every period at 1e-9, and the notebook prints what it printed on
+main (``GOLDEN``; not the Pyomo run's stdout, which under these solver settings also
+carries Pyomo's component-replacement warnings).
 
 Each run is the notebook's own code in its own process (hooks last the whole process,
 #214), with ``backend="family"`` added to its ``GTAP(...)`` for the family run. Both
@@ -16,6 +18,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests._printed import GOLDEN
 from tests._printed import mismatches as printed_mismatches
 from tests.examples.test_burfisher_notebooks import NB_DIR, _code
 from tests.family._period_levels import mismatches
@@ -78,8 +81,8 @@ def _run_notebook(exp: str, backend: str, tmp_path: Path) -> tuple[str, dict]:
     [e if e in IN_CI else pytest.param(e, marks=pytest.mark.slow) for e in OVERWRITE],
 )
 def test_overwrite_notebook_on_family_equals_pyomo(exp: str, tmp_path: Path) -> None:
-    p_out, want = _run_notebook(exp, "pyomo", tmp_path)
+    _, want = _run_notebook(exp, "pyomo", tmp_path)
     f_out, got = _run_notebook(exp, "family", tmp_path)
     bad = mismatches(got, want, REL)
     assert not bad, f"{exp}: {len(bad)} of {len(want)} cells differ, first: {bad[:5]}"
-    assert printed_mismatches(f_out.splitlines(), p_out.splitlines()) == []
+    assert printed_mismatches(f_out.splitlines(), GOLDEN["notebooks"][exp]) == []

@@ -103,13 +103,99 @@ def test_family_refuses_before_any_solve(env, options, named) -> None:
     assert calls == []
 
 
-def test_family_refuses_overwrite_hook(env) -> None:
+def _register_wage_hooks() -> None:
+    """TBL65B's closure on gtap7_3x3: unskilled labour unemployment in the USA, with
+    the real wage fixed (``tests/templates/gtap/_unemployment.py`` on nus333)."""
+    from pyomo.environ import value
+
+    from equilibria.blocks.gtap import (
+        ClosureBlock,
+        ShockBlock,
+        overwrite,
+        ppriv_tornqvist,
+    )
+
+    @overwrite(ShockBlock, period="shock")
+    def unemployment(b):
+        b.endogenous("aft", ("USA", "UnSkLab"))
+
+    @overwrite(ClosureBlock, period="shock")
+    def real_wage(b):
+        b.equation(
+            "eq_wreal",
+            ("USA", "UnSkLab"),
+            lambda m, r, f: m.pft[r, f] == value(m.pft[r, f]) * ppriv_tornqvist(m, r),
+        )
+
+
+def test_family_runs_an_overwrite_hook(env) -> None:
+    """The family template builds under @overwrite hooks: the freed cell is not
+    exogenous at the shock, and still is at the check."""
     from equilibria.blocks.gtap.overwrite import overwrite
 
-    monkeypatch, tmp_path = env
-    monkeypatch.setattr(type(overwrite), "active", lambda self: True)
-    with pytest.raises(NotImplementedError, match="@overwrite"):
-        _gtap(tmp_path).build(("base", "check", "shock"))
+    _, tmp_path = env
+    _register_wage_hooks()
+    try:
+        model = _gtap(tmp_path).build(("base", "check", "shock"))
+    finally:
+        overwrite.clear()
+    assert ("USA", "UnSkLab") not in model.exogenous_cells("aft", "shock")
+    assert ("USA", "UnSkLab") in model.exogenous_cells("aft", "check")
+
+
+_CACHE_RUN = """
+import sys
+from pathlib import Path
+from tests.family.test_gtap_family_template import _register_wage_hooks
+from tests.family.test_sp_arrays import _params
+from tests.family.test_squared_system import _route_closure
+from equilibria.core.exercise import Exercise
+from equilibria.templates.gtap.recipe import gtap_static
+from equilibria.templates.gtap.template import GTAP
+
+if sys.argv[2] == "hooks":
+    _register_wage_hooks()
+gtap = GTAP(_params("gtap7_3x3"), _route_closure(), backend="family",
+            cache_root=Path(sys.argv[1]), jax_cache=True)
+out = Exercise(gtap, gtap_static()).run()
+assert out["shock"]["code"] == "optimal", out
+"""
+
+
+def _cache_files(tmp_path, hooks: str) -> list:
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    cache = tmp_path / hooks
+    script = tmp_path / f"run_{hooks}.py"
+    script.write_text(_CACHE_RUN, encoding="utf-8")
+    env = {
+        **os.environ,
+        **_newton_mumps(),
+        "EQUILIBRIA_GTAP_TR_LINSOLVE": "direct",
+        "PYTHONPATH": os.pathsep.join([str(root), str(root / "src")]),
+    }
+    r = subprocess.run(
+        [sys.executable, str(script), str(cache), hooks],
+        capture_output=True,
+        text=True,
+        timeout=1800,
+        env=env,
+        cwd=root,
+    )
+    assert r.returncode == 0, r.stderr[-3000:]
+    return [f for f in cache.rglob("*") if f.is_file()] if cache.exists() else []
+
+
+def test_no_family_cache_under_hooks(env, tmp_path) -> None:
+    """Under @overwrite hooks a family run writes nothing to its cache root (records,
+    pairings, compiled JAX programs); without them the same run does."""
+    load_params(DS)
+    assert _cache_files(tmp_path, "plain")
+    assert _cache_files(tmp_path, "hooks") == []
 
 
 def test_trade_balance_refused_on_pyomo() -> None:
