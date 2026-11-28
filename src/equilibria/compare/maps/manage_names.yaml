@@ -1,0 +1,320 @@
+# MANAGE-WB (Ghana, one-year baseline): GAMS names <-> equilibria. ADR-0009.
+#
+# The GAMS side is every equation and variable family of the 2015 solve, as the
+# CONVERT dictionary of the recorded run names them
+# (data/manage/gha_gtap9/gams_mcp_baseline_y2015_nlpec-ipopt/gha2015_dict.txt;
+# tests/templates/manage/test_names.py checks it is complete). equilibria keeps
+# GAMS's names (equation e_xfac, variable xfac), so a paired row will read
+# {gams: xfac, equilibria: xfac}.
+#
+# Until a block declares a family, its row is GAMS-only, with the plan's task
+# (specs/2026-11-27-manage-template-plan.md) in its why. Groups as in the design's
+# equation inventory (specs/templates/manage/changes/manage-template/design.md).
+model: manage
+
+equations:
+  - {gams: e_px, why: "pending: Task 3 (production)"}
+  - {gams: e_pp, why: "pending: Task 3 (production)"}
+  - {gams: e_xap, why: "pending: Task 3 (production)"}
+  - {gams: e_pap, why: "pending: Task 3 (production)"}
+  - {gams: e_xfac, why: "pending: Task 3 (production)"}
+  - {gams: e_pxfac, why: "pending: Task 3 (production)"}
+  - {gams: e_pxfacInd, why: "pending: Task 3 (production)"}
+  - {gams: e_lambdaxfac, why: "pending: Task 3 (production)"}
+  - {gams: e_yieldLnd, why: "pending: Task 3 (production)"}
+  - {gams: e_x, why: "pending: Task 4 (make matrix)"}
+  - {gams: e_xp, why: "pending: Task 4 (make matrix)"}
+  - {gams: e_p, why: "pending: Task 4 (make matrix)"}
+  - {gams: e_xs, why: "pending: Task 4 (make matrix)"}
+  - {gams: e_facty, why: "pending: Task 6 (factor markets)"}
+  - {gams: e_kapy, why: "pending: Task 6 (factor markets)"}
+  - {gams: e_yh, why: "pending: Task 7 (institutions)"}
+  - {gams: e_yhDsp, why: "pending: Task 7 (institutions)"}
+  - {gams: e_deprate, why: "pending: Task 8 (demography)"}
+  - {gams: e_aps, why: "pending: Task 7 (institutions)"}
+  - {gams: e_hhtr, why: "pending: Task 7 (institutions)"}
+  - {gams: e_yfh, why: "pending: Task 7 (institutions)"}
+  - {gams: e_savh, why: "pending: Task 7 (institutions)"}
+  - {gams: e_pindh, why: "pending: Task 7 (institutions)"}
+  - {gams: e_FundT, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_FundG, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_FundP, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_FundF, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_FundPrice, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_FundPriceD, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_interest, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_ygov, why: "pending: Task 7 (government)"}
+  - {gams: e_tPit, why: "pending: Task 7 (government)"}
+  - {gams: e_tCIT, why: "pending: Task 7 (government)"}
+  - {gams: e_tVat, why: "pending: Task 7 (government)"}
+  - {gams: e_tPaf, why: "pending: Task 7 (government)"}
+  - {gams: e_ygPit, why: "pending: Task 7 (government)"}
+  - {gams: e_ygCit, why: "pending: Task 7 (government)"}
+  - {gams: e_ygPaf, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotFacLand, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotFacNatres, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotFacLab, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotFacCap, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotpsb, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotPrd, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotPhn, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotExp, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotImp, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotEmi, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotEmiXP, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotPit, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotCit, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotVatDom, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotVatImp, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTotPaf, why: "pending: Task 7 (government)"}
+  - {gams: e_ygTot, why: "pending: Task 7 (government)"}
+  - {gams: e_gtax, why: "pending: Task 7 (government)"}
+  - {gams: e_govTr, why: "pending: Task 7 (government)"}
+  - {gams: e_primaryBalance, why: "pending: Task 7 (government)"}
+  - {gams: e_fiscalBalance, why: "pending: Task 7 (government)"}
+  - {gams: e_govBalance, why: "pending: Task 7 (government)"}
+  - {gams: e_rgovBalance, why: "pending: Task 7 (government)"}
+  - {gams: e_entrY, why: "pending: Task 7 (institutions)"}
+  - {gams: e_savEntr, why: "pending: Task 7 (institutions)"}
+  - {gams: e_entrTr, why: "pending: Task 7 (institutions)"}
+  - {gams: e_dtransfers, why: "pending: Task 7 (institutions)"}
+  - {gams: e_rowtransfers, why: "pending: Task 7 (institutions)"}
+  - {gams: e_inv, why: "pending: Task 8 (capital)"}
+  - {gams: e_kstocke, why: "pending: Task 8 (capital)"}
+  - {gams: e_ror, why: "pending: Task 8 (capital)"}
+  - {gams: e_rorc, why: "pending: Task 8 (capital)"}
+  - {gams: e_rore, why: "pending: Task 8 (capital)"}
+  - {gams: e_grK, why: "pending: Task 8 (capital)"}
+  - {gams: e_popAge, why: "pending: Task 8 (demography)"}
+  - {gams: e_Birth, why: "pending: Task 8 (demography)"}
+  - {gams: e_pop, why: "pending: Task 8 (demography)"}
+  - {gams: e_hpop, why: "pending: Task 8 (demography)"}
+  - {gams: e_consScale, why: "pending: Task 5 (final demand)"}
+  - {gams: e_cdeInt, why: "pending: Task 5 (final demand)"}
+  - {gams: e_xakh, why: "pending: Task 5 (final demand)"}
+  - {gams: e_uh, why: "pending: Task 5 (final demand)"}
+  - {gams: e_mmuh, why: "pending: Task 5 (final demand)"}
+  - {gams: e_xakShr, why: "pending: Task 5 (final demand)"}
+  - {gams: e_pfh, why: "pending: Task 5 (final demand)"}
+  - {gams: e_xaoa, why: "pending: Task 5 (final demand)"}
+  - {gams: e_xak, why: "pending: Task 5 (final demand)"}
+  - {gams: e_xakf, why: "pending: Task 5 (final demand)"}
+  - {gams: e_pxak, why: "pending: Task 5 (final demand)"}
+  - {gams: e_pf, why: "pending: Task 5 (final demand)"}
+  - {gams: e_yf, why: "pending: Task 5 (final demand)"}
+  - {gams: e_pma, why: "pending: Task 4 (trade)"}
+  - {gams: e_pda, why: "pending: Task 4 (trade)"}
+  - {gams: e_xat, why: "pending: Task 4 (trade)"}
+  - {gams: e_xdd, why: "pending: Task 4 (trade)"}
+  - {gams: e_xm, why: "pending: Task 4 (trade)"}
+  - {gams: e_pa, why: "pending: Task 4 (trade)"}
+  - {gams: e_paf, why: "pending: Task 4 (trade)"}
+  - {gams: e_nrgInt, why: "pending: Task 10 (emissions and land)"}
+  - {gams: e_elyInt, why: "pending: Task 10 (emissions and land)"}
+  - {gams: e_ps, why: "pending: Task 4 (trade)"}
+  - {gams: e_xds, why: "pending: Task 4 (trade)"}
+  - {gams: e_eds, why: "pending: Task 4 (trade)"}
+  - {gams: e_pe, why: "pending: Task 4 (trade)"}
+  - {gams: e_pwe, why: "pending: Task 4 (trade)"}
+  - {gams: e_pwm, why: "pending: Task 4 (trade)"}
+  - {gams: e_pxfac_preTax, why: "pending: Task 6 (factor markets)"}
+  - {gams: e_atCap, why: "pending: Task 8 (capital)"}
+  - {gams: e_trent, why: "pending: Task 8 (capital)"}
+  - {gams: e_xfacFp, why: "pending: Task 6 (factor markets)"}
+  - {gams: e_xfmSup, why: "pending: Task 6 (factor markets)"}
+  - {gams: e_pfmSup, why: "pending: Task 6 (factor markets)"}
+  - {gams: e_pfmSupD, why: "pending: Task 6 (factor markets)"}
+  - {gams: e_unemp, why: "pending: Task 6 (factor markets)"}
+  - {gams: e_trentAvg, why: "pending: Task 8 (capital)"}
+  - {gams: e_xpNew, why: "pending: Task 3 (production)"}
+  - {gams: e_totexp, why: "pending: Task 8 (macro)"}
+  - {gams: e_rtotexp, why: "pending: Task 8 (macro)"}
+  - {gams: e_pexp, why: "pending: Task 8 (macro)"}
+  - {gams: e_totimp, why: "pending: Task 8 (macro)"}
+  - {gams: e_rtotimp, why: "pending: Task 8 (macro)"}
+  - {gams: e_pimp, why: "pending: Task 8 (macro)"}
+  - {gams: e_gdpmp, why: "pending: Task 8 (macro)"}
+  - {gams: e_pgdpmp, why: "pending: Task 8 (macro)"}
+  - {gams: e_savf, why: "pending: Task 8 (macro)"}
+  - {gams: e_rgdppc, why: "pending: Task 10 (reporting)"}
+  - {gams: e_gdpfc, why: "pending: Task 10 (reporting)"}
+  - {gams: e_rgdpfc, why: "pending: Task 10 (reporting)"}
+  - {gams: e_pgdpfc, why: "pending: Task 10 (reporting)"}
+  - {gams: e_rshrGDP, why: "pending: Task 10 (reporting)"}
+  - {gams: e_rshrGDPGov, why: "pending: Task 8 (macro)"}
+  - {gams: e_nshrGDP, why: "pending: Task 10 (reporting)"}
+  - {gams: e_GdpCompShr, why: "pending: Task 10 (reporting)"}
+  - {gams: e_GdpCompShrX, why: "pending: Task 10 (reporting)"}
+  - {gams: e_GdpCompShrM, why: "pending: Task 10 (reporting)"}
+  - {gams: e_cpi, why: "pending: Task 8 (macro)"}
+  - {gams: e_kaps, why: "pending: Task 8 (capital)"}
+  - {gams: e_depr, why: "pending: Task 8 (capital)"}
+  - {gams: e_prodInv, why: "pending: Task 8 (capital)"}
+  - {gams: e_kstock, why: "pending: Task 8 (capital)"}
+  - {gams: e_emiComm, why: "pending: Task 10 (emissions and land)"}
+  - {gams: e_emiFact, why: "pending: Task 10 (emissions and land)"}
+  - {gams: e_emiProd, why: "pending: Task 10 (emissions and land)"}
+  - {gams: e_emiTot, why: "pending: Task 10 (emissions and land)"}
+  - {gams: e_emiGHG, why: "pending: Task 10 (emissions and land)"}
+  - {gams: e_emiInv, why: "pending: Task 10 (emissions and land)"}
+  - {gams: e_emiInt, why: "pending: Task 10 (emissions and land)"}
+  - {gams: e_emiSecA, why: "pending: Task 10 (emissions and land)"}
+  - {gams: e_debtGDP, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_dCarbon, why: "pending: Task 10 (emissions and land)"}
+  - {gams: e_lCovArea, why: "pending: Task 10 (emissions and land)"}
+  - {gams: e_builtUpArea, why: "pending: Task 10 (emissions and land)"}
+  - {gams: e_avgDebtInt, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_DebtStk, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_debtPay, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_debtInterest, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_debtPrincipal, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_debtNew, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_debtNewT, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_DebtStkT, why: "pending: Task 7 (funds and debt)"}
+  - {gams: e_walras, why: "pending: Task 8 (macro)"}
+  - {gams: e_BOT, why: "pending: Task 8 (macro)"}
+  - {gams: e_BOTGdp, why: "pending: Task 8 (macro)"}
+  - {gams: e_ElecMix, why: "pending: Task 4 (make matrix)"}
+  - {gams: e_SectTot, why: "pending: Task 10 (reporting)"}
+  - {gams: e_rgdpmp, why: "pending: Task 8 (macro)"}
+  - {gams: e_ggdppc, why: "pending: Task 10 (reporting)"}
+  - {gams: e_SectShr, why: "pending: Task 10 (reporting)"}
+  - {gams: e_dummy, why: "pending: Task 10 (reporting)"}
+
+variables:
+  - {gams: xfac, why: "pending: Task 3 (production)"}
+  - {gams: pxfac, why: "pending: Task 3 (production)"}
+  - {gams: pxfacInd, why: "pending: Task 3 (production)"}
+  - {gams: pxfac_preTax, why: "pending: Task 6 (factor markets)"}
+  - {gams: lambdaxfac, why: "pending: Task 3 (production)"}
+  - {gams: yieldLnd, why: "pending: Task 3 (production)"}
+  - {gams: px, why: "pending: Task 3 (production)"}
+  - {gams: pp, why: "pending: Task 3 (production)"}
+  - {gams: xp, why: "pending: Task 4 (make matrix)"}
+  - {gams: x, why: "pending: Task 4 (make matrix)"}
+  - {gams: p, why: "pending: Task 4 (make matrix)"}
+  - {gams: xs, why: "pending: Task 4 (make matrix)"}
+  - {gams: ps, why: "pending: Task 4 (trade)"}
+  - {gams: ElecMix, why: "pending: Task 4 (make matrix)"}
+  - {gams: facty, why: "pending: Task 6 (factor markets)"}
+  - {gams: kapy, why: "pending: Task 6 (factor markets)"}
+  - {gams: yh, why: "pending: Task 7 (institutions)"}
+  - {gams: yhDsp, why: "pending: Task 7 (institutions)"}
+  - {gams: aps, why: "pending: Task 7 (institutions)"}
+  - {gams: pindh, why: "pending: Task 7 (institutions)"}
+  - {gams: savh, why: "pending: Task 7 (institutions)"}
+  - {gams: FundT, why: "pending: Task 7 (funds and debt)"}
+  - {gams: FundG, why: "pending: Task 7 (funds and debt)"}
+  - {gams: FundF, why: "pending: Task 7 (funds and debt)"}
+  - {gams: FundP, why: "pending: Task 7 (funds and debt)"}
+  - {gams: FundPrice, why: "pending: Task 7 (funds and debt)"}
+  - {gams: FundPriceD, why: "pending: Task 7 (funds and debt)"}
+  - {gams: interest, why: "pending: Task 7 (funds and debt)"}
+  - {gams: totTr, why: "pending: Task 7 (institutions)"}
+  - {gams: avgDebtInt, why: "pending: Task 7 (funds and debt)"}
+  - {gams: debtStk, why: "pending: Task 7 (funds and debt)"}
+  - {gams: debtStkT, why: "pending: Task 7 (funds and debt)"}
+  - {gams: debtGDP, why: "pending: Task 7 (funds and debt)"}
+  - {gams: debtPay, why: "pending: Task 7 (funds and debt)"}
+  - {gams: debtInterest, why: "pending: Task 7 (funds and debt)"}
+  - {gams: debtPrincipal, why: "pending: Task 7 (funds and debt)"}
+  - {gams: debtNew, why: "pending: Task 7 (funds and debt)"}
+  - {gams: debtNewT, why: "pending: Task 7 (funds and debt)"}
+  - {gams: ror, why: "pending: Task 8 (capital)"}
+  - {gams: rorc, why: "pending: Task 8 (capital)"}
+  - {gams: rore, why: "pending: Task 8 (capital)"}
+  - {gams: grK, why: "pending: Task 8 (capital)"}
+  - {gams: yg, why: "pending: Task 7 (government)"}
+  - {gams: ygTot, why: "pending: Task 7 (government)"}
+  - {gams: ygov, why: "pending: Task 7 (government)"}
+  - {gams: gtax, why: "pending: Task 7 (government)"}
+  - {gams: ygPit, why: "pending: Task 7 (government)"}
+  - {gams: ygCit, why: "pending: Task 7 (government)"}
+  - {gams: ygPaf, why: "pending: Task 7 (government)"}
+  - {gams: fiscalBalance, why: "pending: Task 7 (government)"}
+  - {gams: primaryBalance, why: "pending: Task 7 (government)"}
+  - {gams: govBalance, why: "pending: Task 7 (government)"}
+  - {gams: rgovBalance, why: "pending: Task 7 (government)"}
+  - {gams: entrY, why: "pending: Task 7 (institutions)"}
+  - {gams: savEntr, why: "pending: Task 7 (institutions)"}
+  - {gams: savf, why: "pending: Task 8 (macro)"}
+  - {gams: bot, why: "pending: Task 8 (macro)"}
+  - {gams: botGDP, why: "pending: Task 8 (macro)"}
+  - {gams: transfers, why: "pending: Task 7 (institutions)"}
+  - {gams: yf, why: "pending: Task 5 (final demand)"}
+  - {gams: xfd, why: "pending: Task 7 (institutions)"}
+  - {gams: pf, why: "pending: Task 5 (final demand)"}
+  - {gams: cdeInt, why: "pending: Task 5 (final demand)"}
+  - {gams: consScale, why: "pending: Task 5 (final demand)"}
+  - {gams: uh, why: "pending: Task 5 (final demand)"}
+  - {gams: mmuh, why: "pending: Task 5 (final demand)"}
+  - {gams: hpop, why: "pending: Task 8 (demography)"}
+  - {gams: xakShr, why: "pending: Task 5 (final demand)"}
+  - {gams: xak, why: "pending: Task 5 (final demand)"}
+  - {gams: pxak, why: "pending: Task 5 (final demand)"}
+  - {gams: xa, why: "pending: Task 3 (production)"}
+  - {gams: xat, why: "pending: Task 4 (trade)"}
+  - {gams: pa, why: "pending: Task 4 (trade)"}
+  - {gams: paf, why: "pending: Task 4 (trade)"}
+  - {gams: xd, why: "pending: Task 4 (trade)"}
+  - {gams: pd, why: "pending: Task 4 (trade)"}
+  - {gams: pda, why: "pending: Task 4 (trade)"}
+  - {gams: xe, why: "pending: Task 4 (trade)"}
+  - {gams: pe, why: "pending: Task 4 (trade)"}
+  - {gams: pwe, why: "pending: Task 4 (trade)"}
+  - {gams: xm, why: "pending: Task 4 (trade)"}
+  - {gams: pwm, why: "pending: Task 4 (trade)"}
+  - {gams: pma, why: "pending: Task 4 (trade)"}
+  - {gams: xfmSup, why: "pending: Task 6 (factor markets)"}
+  - {gams: pfmSup, why: "pending: Task 6 (factor markets)"}
+  - {gams: pfmSupD, why: "pending: Task 6 (factor markets)"}
+  - {gams: atFmSup, why: "pending: Task 8 (capital)"}
+  - {gams: trent, why: "pending: Task 8 (capital)"}
+  - {gams: trentAvg, why: "pending: Task 8 (capital)"}
+  - {gams: kaps, why: "pending: Task 8 (capital)"}
+  - {gams: prodInv, why: "pending: Task 8 (capital)"}
+  - {gams: kstock, why: "pending: Task 8 (capital)"}
+  - {gams: kstocke, why: "pending: Task 8 (capital)"}
+  - {gams: depr, why: "pending: Task 8 (capital)"}
+  - {gams: pop, why: "pending: Task 8 (demography)"}
+  - {gams: unemp, why: "pending: Task 6 (factor markets)"}
+  - {gams: deprate, why: "pending: Task 8 (demography)"}
+  - {gams: popAge, why: "pending: Task 8 (demography)"}
+  - {gams: emiComm, why: "pending: Task 10 (emissions and land)"}
+  - {gams: emiFact, why: "pending: Task 10 (emissions and land)"}
+  - {gams: emiXP, why: "pending: Task 10 (emissions and land)"}
+  - {gams: emiTot, why: "pending: Task 10 (emissions and land)"}
+  - {gams: emiGHG, why: "pending: Task 10 (emissions and land)"}
+  - {gams: emiInv, why: "pending: Task 10 (emissions and land)"}
+  - {gams: emiInt, why: "pending: Task 10 (emissions and land)"}
+  - {gams: emiSecA, why: "pending: Task 10 (emissions and land)"}
+  - {gams: elyInt, why: "pending: Task 10 (emissions and land)"}
+  - {gams: nrgInt, why: "pending: Task 10 (emissions and land)"}
+  - {gams: dCarbon, why: "pending: Task 10 (emissions and land)"}
+  - {gams: lCovArea, why: "pending: Task 10 (emissions and land)"}
+  - {gams: totExp, why: "pending: Task 8 (macro)"}
+  - {gams: rTotExp, why: "pending: Task 8 (macro)"}
+  - {gams: pexp, why: "pending: Task 8 (macro)"}
+  - {gams: totimp, why: "pending: Task 8 (macro)"}
+  - {gams: rtotimp, why: "pending: Task 8 (macro)"}
+  - {gams: pimp, why: "pending: Task 8 (macro)"}
+  - {gams: pgdpmp, why: "pending: Task 8 (macro)"}
+  - {gams: gdpmp, why: "pending: Task 8 (macro)"}
+  - {gams: rgdppc, why: "pending: Task 10 (reporting)"}
+  - {gams: ggdppc, why: "pending: Task 10 (reporting)"}
+  - {gams: pgdpfc, why: "pending: Task 10 (reporting)"}
+  - {gams: gdpfc, why: "pending: Task 10 (reporting)"}
+  - {gams: rgdpfc, why: "pending: Task 10 (reporting)"}
+  - {gams: rshrGDP, why: "pending: Task 10 (reporting)"}
+  - {gams: nshrGDP, why: "pending: Task 10 (reporting)"}
+  - {gams: GdpCompShr, why: "pending: Task 10 (reporting)"}
+  - {gams: cpi, why: "pending: Task 8 (macro)"}
+  - {gams: walras, why: "pending: Task 8 (macro)"}
+  - {gams: chixFacL, why: "pending: Task 8 (macro)"}
+  - {gams: tVat, why: "pending: Task 7 (government)"}
+  - {gams: tPIT, why: "pending: Task 7 (government)"}
+  - {gams: tCIT, why: "pending: Task 7 (government)"}
+  - {gams: tPaf, why: "pending: Task 7 (government)"}
+  - {gams: SectTot, why: "pending: Task 10 (reporting)"}
+  - {gams: SectShr, why: "pending: Task 10 (reporting)"}
+  - {gams: dummy, why: "pending: Task 10 (reporting)"}
