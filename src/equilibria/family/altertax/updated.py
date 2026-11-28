@@ -45,8 +45,10 @@ VKB      pi[r] * kstock[r]                          2377
 from __future__ import annotations
 
 import dataclasses
+import weakref
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -246,6 +248,77 @@ def _trade_prices_cell(P: _Period, s: str, c: str, d: str) -> dict[str, float]:
     return {"pefob": pefob, "pmcif": pmcif, "pm": pm}
 
 
+_TRADE_FIXED: dict[int, tuple[tuple, dict[str, np.ndarray]]] = {}
+
+
+def _trade_fixed(P: _Period, C: list[str], R: list[str], M: list[str]) -> dict:
+    """The level-free factors of :func:`_trade_prices_cell` over the (s, c, d) grid
+    (``amgm`` over (m, s, c, d)), through the same macros cell by cell. Built once per
+    params (and grid) and shared: as ``mp_margin_params``, it assumes the params are
+    not edited after load; dropped when they are collected."""
+    from equilibria.blocks.gtap import _ifsub_macros as mac
+
+    p = P.p
+    key = (tuple(C), tuple(R), tuple(M))
+    hit = _TRADE_FIXED.get(id(p))
+    if hit is not None and hit[0] == key:
+        return hit[1]
+    shape = (len(R), len(C), len(R))
+    fob, tmarg, mtax, chipm = (np.empty(shape) for _ in range(4))
+    amgm = np.empty((len(M), *shape))
+    for i, s in enumerate(R):
+        for j, c in enumerate(C):
+            for k, d in enumerate(R):
+                fob[i, j, k] = (
+                    1.0 + mac._safe(p, "taxes.rtxs", (s, c, d)) + mac.etax_value(p, s, c, d)
+                )
+                tmarg[i, j, k] = P.tmarg.get((s, c, d), 0.0)
+                mtax[i, j, k] = mac.mtax_value(p, d, c, s)
+                chipm[i, j, k] = mac.chipm_value(p, s, c, d)
+                for m_i, m in enumerate(M):
+                    amgm[m_i, i, j, k] = P.amgm.get((m, s, c, d), 0.0)
+    out = {"fob": fob, "tmarg": tmarg, "mtax": mtax, "chipm": chipm, "amgm": amgm}
+    try:
+        weakref.finalize(p, _TRADE_FIXED.pop, id(p), None)
+    except TypeError:  # not weak-referenceable: no cache
+        return out
+    _TRADE_FIXED[id(p)] = (key, out)
+    return out
+
+
+def _trade_arrays(P: _Period, els: dict) -> dict[str, np.ndarray]:
+    """:func:`_trade_prices_cell` over the whole (s, c, d) grid, in its operation
+    order (bit for bit): ``{"pefob", "pmcif", "pm"}``, built once per period."""
+    hit = P.dense.get(("_trade",))
+    if hit is not None:
+        return hit
+    C, R, M = els["COMM"], els["REG"], list(P.p.sets.marg)
+    f = _trade_fixed(P, C, R, M)
+    pefob = f["fob"] * _dense(P, "pe", [R, C, R])
+    ptmg = _dense(P, "ptmg", [M])
+    lam = _dense(P, "lambdamg", [M, R, C, R])
+    pwmg: Any = 0  # as ``sum``: an int start
+    for m_i in range(len(M)):
+        pwmg = pwmg + f["amgm"][m_i] * ptmg[m_i] / (lam[m_i] + 1e-12)
+    pmcif = pefob + pwmg * f["tmarg"]
+    imptx = _dense(P, "imptx", [R, C, R])
+    pm = (1.0 + imptx + f["mtax"]) * pmcif / f["chipm"]
+    hit = P.dense[("_trade",)] = {"pefob": pefob, "pmcif": pmcif, "pm": pm}
+    return hit
+
+
+def _trade_array(pvar: str) -> Callable[[_Period, dict], np.ndarray]:
+    """:func:`_trade` over the whole (COMM, REG, REG) grid."""
+
+    def f(P: _Period, els: dict) -> np.ndarray:
+        C, R = els["COMM"], els["REG"]
+        price = _trade_arrays(P, els)[pvar]
+        val = price * _dense(P, "xw", [R, C, R]) / IN_SCALE
+        return np.ascontiguousarray(val.transpose(1, 0, 2))
+
+    return f
+
+
 def _trade(pvar: str) -> Callable[[_Period, str, str, str], float]:
     def f(P: _Period, c: str, s: str, d: str) -> float:
         return _trade_prices(P, s, c, d)[pvar] * _g(P["xw"], (s, c, d)) / IN_SCALE
@@ -371,6 +444,9 @@ _ARRAY: dict[str, Callable[[_Period, dict], np.ndarray]] = {
     "MAKS": _make_array(False),
     "MAKB": _make_array(True),
     "VXSB": _vxsb_array,
+    "VFOB": _trade_array("pefob"),
+    "VCIF": _trade_array("pmcif"),
+    "VMSB": _trade_array("pm"),
     "VTWR": _vtwr_array,
 }
 

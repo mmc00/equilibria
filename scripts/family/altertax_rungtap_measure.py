@@ -56,6 +56,9 @@ def measure(dataset: str, trade_balance: str, decomp_steps: int | str = "auto") 
     from equilibria.family.altertax.updated import updated_headers
     from equilibria.family.altertax.volume import volume_headers
 
+    import time
+
+    t_start = time.perf_counter()
     d = ROOT / "data" / "gtap7" / dataset
     ref = d / REF
     prm = ref / "parameters.prm"
@@ -73,6 +76,7 @@ def measure(dataset: str, trade_balance: str, decomp_steps: int | str = "auto") 
         decomp_steps=steps,
         residual_region=rres,
     )
+    t_solved = time.perf_counter()
     res = run.result.results["shock"]
     out: dict = {
         "dataset": dataset,
@@ -87,6 +91,12 @@ def measure(dataset: str, trade_balance: str, decomp_steps: int | str = "auto") 
         "outputs": [],
     }
     cmp = gates.compare_all(run, ref)  # sl4dump folder: no waivers, labels off
+    # wall seconds: the exercise (params, solve, decomposition path) and compare_all
+    # (it builds the output headers and runs every gate against the reference)
+    out["seconds"] = {
+        "exercise": t_solved - t_start,
+        "compare_all": time.perf_counter() - t_solved,
+    }
     out["outputs"] = cmp["outputs"]
     out["waivers"] = cmp["waivers"]
     # every Newton solve and path step; one failed solve fails the run
@@ -145,6 +155,13 @@ def _main() -> int:
         round(res["minutes"], 2),
         "ratio_it",
         res["ratio_iterations"],
+    )
+    sec = res["seconds"]
+    print(
+        "seconds exercise",
+        round(sec["exercise"], 1),
+        "compare_all",
+        round(sec["compare_all"], 1),
     )
     if res["decomp_path"]:
         dp = res["decomp_path"]
