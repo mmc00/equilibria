@@ -49,6 +49,10 @@ templates = [
   "src/equilibria/templates/pep_",
   "src/equilibria/simulations/pep",
 ]
+"templates/manage" = [
+  "src/equilibria/templates/manage/",
+  "src/equilibria/manage.py",
+]
 "templates/simple_open" = [
   "src/equilibria/templates/simple_open",
   "src/equilibria/baseline/simple_open_",
@@ -99,6 +103,7 @@ parity = [
   "docs/site/api/templates_pep_pyomo.md",
   "docs/notes/pep/pep_*.md",
 ]
+"templates/manage" = ["docs/site/guide/templates.md"]
 "templates/simple_open" = ["docs/site/guide/templates.md"]
 templates = ["docs/site/guide/templates.md", "docs/notes/guides/simulations_api.md"]
 blocks = [

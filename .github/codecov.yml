@@ -54,6 +54,11 @@ component_management:
     paths:
     - ^src/equilibria/templates/pep_(?!cri_|levels\.py|parity_pipeline\.py|scenario_parity\.py)
     - ^src/equilibria/simulations/pep
+  - component_id: templates_manage
+    name: templates/manage
+    paths:
+    - ^src/equilibria/templates/manage/
+    - ^src/equilibria/manage\.py
   - component_id: templates_simple_open
     name: templates/simple_open
     paths:

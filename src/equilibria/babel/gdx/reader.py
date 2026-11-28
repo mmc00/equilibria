@@ -592,10 +592,15 @@ def read_uel_from_bytes(data: bytes) -> list[str]:
         if pos >= len(data):
             break
 
+        # One length byte, then the label. A label may be empty ('' is a valid
+        # UEL) and up to 255 characters long (GAMS's limit); stopping at an empty
+        # or a long label truncated the UEL, and every record whose key lies past
+        # it was then dropped by _decode_records (MANAGE's GHA_BaU.gdx: 270 of
+        # 1,532 UELs, xp 0 of 102 records).
         elem_len: int = data[pos]
         pos += 1
 
-        if elem_len == 0 or elem_len > 64 or pos + elem_len > len(data):
+        if pos + elem_len > len(data):
             break
 
         element: str = data[pos : pos + elem_len].decode("utf-8", errors="replace")
