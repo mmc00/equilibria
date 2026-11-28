@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import struct
 import zlib
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, BinaryIO
 
@@ -592,10 +593,15 @@ def read_uel_from_bytes(data: bytes) -> list[str]:
         if pos >= len(data):
             break
 
+        # One length byte, then the label. A label may be empty ('' is a valid
+        # UEL) and up to 255 characters long (GAMS's limit); stopping at an empty
+        # or a long label truncated the UEL, and every record whose key lies past
+        # it was then dropped by _decode_records (MANAGE's GHA_BaU.gdx: 270 of
+        # 1,532 UELs, xp 0 of 102 records).
         elem_len: int = data[pos]
         pos += 1
 
-        if elem_len == 0 or elem_len > 64 or pos + elem_len > len(data):
+        if pos + elem_len > len(data):
             break
 
         element: str = data[pos : pos + elem_len].decode("utf-8", errors="replace")
@@ -1089,8 +1095,19 @@ def _decode_records(
     nfields: int,
     symbol_name: str = "",
 ) -> dict[tuple[str, ...], tuple[float, ...]]:
-    """Decode the records of a _DATA_ section (``nfields`` values per record:
-    1 for a parameter, 5 for a variable or equation).
+    """The records of a _DATA_ section by key (``nfields`` values per record:
+    1 for a parameter, 5 for a variable or equation). See ``_iter_records``."""
+    return dict(_iter_records(section, elements, nfields, symbol_name))
+
+
+def _iter_records(
+    section: bytes,
+    elements: list[str],
+    nfields: int,
+    symbol_name: str = "",
+) -> Iterator[tuple[tuple[str, ...], tuple[float, ...]]]:
+    """Yield the records of a _DATA_ section in file order (``nfields`` values
+    per record: 1 for a parameter or a set, 5 for a variable or equation).
 
     Format (checked against gdxdump on every Par/Var/Equ of five GDX -- gtap7 3x3
     ifsub0/ifsub1, gtap7_nlp, pep2 Parameters, pep results --
@@ -1101,9 +1118,8 @@ def _decode_records(
     and ``nfields`` value tokens (``_VALUE_SPECIAL``; 0x0A -> 8-byte double).
     0xFF ends the section. An unknown value token is an error.
     """
-    values: dict[tuple[str, ...], tuple[float, ...]] = {}
     if not section:
-        return values
+        return
 
     pos = 0
     dim = section[pos]
@@ -1166,9 +1182,7 @@ def _decode_records(
         except (IndexError, struct.error):
             break  # ran off the end of an over-sliced section; stop cleanly
 
-        values[key] = tuple(vals)
-
-    return values
+        yield key, tuple(vals)
 
 
 def read_set_elements(
@@ -1231,16 +1245,14 @@ def _decode_set_section(
     """
     Decode a _DATA_ section for a set.
 
-    Same key-delta scheme as ``_decode_variable_section`` (see its docstring
-    for the byte-verified format), except a set record carries ONE trailing
-    marker byte (the element's optional explanatory-text field — 0x05 =
-    empty/no text, matching ``_VALUE_SPECIAL``) instead of the 5 numeric
-    value fields a variable/equation record carries. Header:
-    ``dim u8 | -1 i32 | dim×(minElem i32, maxElem i32)``, then per record a
-    key-delta byte (identical scheme to ``decode_parameter_delta``) followed
-    by the 1-byte text marker. 0xFF ends the section. Verified byte-exact
-    against gdxdump-known set contents (reg/comm/t/endw/mapa0, both a plain
-    and a zlib-per-section-compressed GDX).
+    A set record is a parameter record: the key, then ONE value token, the
+    number of the element's explanatory text (``_iter_records``). 0x05 (0)
+    means no text; an element with a text carries 0x06 (text 1) or 0x0A and an
+    8-byte double, so reading the value as a single marker byte desynchronised
+    the section after the first texted element (MANAGE ``g``: 1 of 16; 810 sets
+    in 106 of the repository's GDX, every GTAP ``out.gdx`` among them).
+    Elements are returned in file order, repeats included (equilibria's own
+    writer repeats elements in ``v7_consolidated.gdx``).
 
     Args:
         section: Raw bytes of the _DATA_ section (marker already stripped).
@@ -1253,56 +1265,7 @@ def _decode_set_section(
     Returns:
         List of index tuples representing set elements.
     """
-    result: list[tuple[str, ...]] = []
     if not section or expected_records == 0:
-        return result
-
-    pos = 0
-    dim = section[pos]
-    pos += 1
-    pos += 4  # skip the -1 lead sentinel (i32)
-
-    mins: list[int] = []
-    sizes: list[int] = []
-    for _ in range(dim):
-        mn = struct.unpack_from("<i", section, pos)[0]
-        pos += 4
-        mx = struct.unpack_from("<i", section, pos)[0]
-        pos += 4
-        mins.append(mn)
-        sizes.append(get_integer_size(mx - mn + 1))
-
-    last = [0] * max(dim, 1)
-    while pos < len(section):
-        b = section[pos]
-        pos += 1
-        if b == 0xFF:  # EOF
-            break
-
-        if dim == 0:
-            pass  # scalar set element: delta byte present, no index bytes
-        elif b > dim:
-            last[dim - 1] += b - dim
-        else:
-            afdim = b
-            for d in range(afdim - 1, dim):
-                sz = sizes[d]
-                idx = int.from_bytes(section[pos : pos + sz], "little")
-                pos += sz
-                last[d] = idx + mins[d]
-
-        if dim == 0:
-            key: tuple[str, ...] = ()
-        else:
-            try:
-                key = tuple(elements[last[d] - 1] for d in range(dim))
-            except IndexError:
-                break  # corrupt / over-run; stop decoding this section
-
-        if pos >= len(section):
-            break
-        pos += 1  # consume the 1-byte text marker (0x05 = no text)
-
-        result.append(key)
-
-    return result
+        return []
+    del dimension  # the section header carries it
+    return [key for key, _ in _iter_records(section, elements, 1, "<set>")]
