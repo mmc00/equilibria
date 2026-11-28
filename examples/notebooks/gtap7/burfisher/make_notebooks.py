@@ -183,7 +183,7 @@ gc = GTAPClosureConfig(
 """
 def _solve_core(model: str, option: str) -> str:
     """The solve: ``Exercise`` builds the model inside ``run()``; ``model`` names
-    the solved Pyomo model the comparison reads."""
+    the solved model the comparison reads, on either backend (Pyomo or family)."""
     return f"""\
 # Like GAMS compStat, the base is not solved: its levels are the reference of the
 # Fisher indices of check and shock.
@@ -193,7 +193,7 @@ ex = Exercise(
     shock=SHOCK,
 )
 res = ex.run()
-{model} = ex.model.pyomo
+{model} = ex.model
 codes = {{k: r["code"] for k, r in res.items() if r["code"] != "not solved"}}
 print("codes:", codes)
 assert set(codes.values()) == {{"optimal"}}, codes
@@ -209,12 +209,11 @@ def _solve_johansen_core(model: str) -> str:
 
 def _compare_johansen(exp: str, model: str) -> str:
     return (
-        "import compare_burfisher_gempack as cbg\n"
-        "import compare_gempack_levels as cg\n\n"
+        "import compare_burfisher_gempack as cbg\n\n"
         f'EXP = "{exp}"\n'
         f"BOOK = {GEMPACK_BOOK}\n"
         'GOVERNMENT = {"qgd", "qgm"}  # government demand: the open gap of #201\n'
-        f"report = cbg.run(EXP, cg.model_levels({model}), dict(xscale_data(p, p.sets)), "
+        f"report = cbg.run(EXP, period_model_levels({model}), dict(xscale_data(p, p.sets)), "
         "BOOK, linear=True)\n"
         "cells = [c for c in report.cells if c.variable not in GOVERNMENT]\n"
         "gov = max(c.d for c in report.cells if c.variable in GOVERNMENT)\n"
@@ -281,6 +280,7 @@ def _setup(hooked: bool) -> str:
         + "from equilibria._local_refs import nus333_dir, path_capi_src\n"
         + hooks
         + "from equilibria.blocks.gtap._derived_params import xscale_data\n"
+        "from equilibria.compare.gtap7_side import period_model_levels\n"
         "from equilibria.templates.gtap import GTAPParameters\n"
         + _IMPORTS
         + "sys.path.insert(0, str(path_capi_src()))  # the PATH solver's Python bindings\n"
@@ -326,11 +326,10 @@ def _compare(exp: str, checked: bool) -> str:
         else ""
     )
     return (
-        "import compare_burfisher_gempack as cbg\n"
-        "import compare_gempack_levels as cg\n\n"
+        "import compare_burfisher_gempack as cbg\n\n"
         f'EXP = "{exp}"\n'
         f"GRAGG = {GEMPACK_GRAGG}\n"
-        "report = cbg.run(EXP, cg.model_levels(m), dict(xscale_data(p, p.sets)), "
+        "report = cbg.run(EXP, period_model_levels(m), dict(xscale_data(p, p.sets)), "
         "GRAGG)\n"
         "o = report.overall\n"
         'w = o["pct_within"]\n'
