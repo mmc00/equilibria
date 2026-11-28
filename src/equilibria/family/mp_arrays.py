@@ -127,16 +127,11 @@ class MPArrays:
         Row cells come in recording order, not Pyomo's (sorted within a period)."""
         from equilibria.blocks.gtap import _derived_params as dp
         from equilibria.blocks.gtap.closure import FISHER_AUX_EQS, FISHER_AUX_VARS
-        from equilibria.blocks.gtap.overwrite import overwrite
-        from equilibria.blocks.gtap.periods import PERIODS
+        from equilibria.blocks.gtap.periods import PERIODS, SHOCK
         from equilibria.blocks.gtap.shock import SHOCK_INSTRUMENTS
         from equilibria.family.cross_period import mq_keys, refresh_aggregates
         from equilibria.templates.gtap.instruments import is_free_cell
 
-        if overwrite.active():
-            # ``shock_only`` would keep the hooks' rows in the shock period only and
-            # anchor their targets to the check; not ported.
-            raise NotImplementedError("family backend: @overwrite hooks")
         periods = list(PERIODS)
         n_t = len(periods)
         endo = dict(getattr(state, "_endogenous_instrument_cells", {}) or {})
@@ -165,11 +160,15 @@ class MPArrays:
             lb = np.full(len(keys), 0.0 if name in state.nonneg_vars else -np.inf)
             vars_[name] = VarArr(keys, value, fixed, lb, np.full(len(keys), np.inf))
 
+        # the @overwrite hooks' rows exist in the shock only, as Pyomo's
+        # ``overwrite.shock_only`` deletes their other cells: no step can turn them on
+        shock_rows = frozenset(getattr(state, "_shock_rows", ()) or ())
         rows: dict[str, RowArr] = {}
         for fam, recs in backend.records.items():
             if fam in FISHER_AUX_EQS or fam in cross.records:
                 continue
-            keys = [(*idx, t) for t in periods for idx, _ in recs]
+            at = (SHOCK,) if fam in shock_rows else periods
+            keys = [(*idx, t) for t in at for idx, _ in recs]
             rows[fam] = RowArr(keys, np.ones(len(keys), dtype=bool))
         for fam, recs in cross.records.items():
             keys = [tuple(idx) for idx, _ in recs]
@@ -198,7 +197,7 @@ class MPArrays:
             exogenous=frozenset(getattr(state, "_exogenous_instruments", ())),
             endogenous_instrument_cells=endo,
             targets=targets,
-            shock_rows=frozenset(getattr(state, "_shock_rows", ()) or ()),
+            shock_rows=shock_rows,
             fctts=dp.fctts_data(params, params.sets),
             residual_region=getattr(state, "_residual_region", None),
             base_calibrated=base_calibrated,

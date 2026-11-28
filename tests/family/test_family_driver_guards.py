@@ -130,7 +130,8 @@ def test_missing_solve_nlp_key_is_refused():
         run_setup.check_supported(**GOOD, env=env)
 
 
-def test_active_overwrite_hooks_are_refused():
+def test_active_overwrite_hooks_pass_the_guards():
+    """@overwrite runs on family (MAR-251): active hooks are no refusal reason."""
     from equilibria.blocks.gtap.overwrite import overwrite
 
     @overwrite(object)
@@ -138,8 +139,7 @@ def test_active_overwrite_hooks_are_refused():
         return None
 
     try:
-        with pytest.raises(NotImplementedError, match="overwrite"):
-            run()
+        run()
     finally:
         overwrite.clear()
 

@@ -176,15 +176,65 @@ def test_build_attributes(case):
     assert cp.vars["pa"].value is not mp.vars["pa"].value
 
 
-def test_build_refuses_overwrite_hooks(case, monkeypatch):
-    from equilibria.blocks.gtap.overwrite import overwrite
-    from equilibria.family.mp_arrays import MPArrays
+def _nus333_mp(tmp_path):
+    """``prepare_run``'s arrays for nus333 under the TBL65B closure (no cache key
+    under hooks, so nothing is shared across these tests)."""
+    from equilibria.family.run_setup import prepare_run
+    from tests.templates.gtap._nus333 import closure, nus333_params
 
-    monkeypatch.setattr(overwrite, "active", lambda: True)
-    with pytest.raises(NotImplementedError, match="overwrite"):
-        MPArrays.build(
-            case["state"], case["backend"], case["cross"], params=case["params"]
-        )
+    _, mp = prepare_run(
+        nus333_params(), closure(), "ROW", cache_root=tmp_path, jax_cache=False
+    )
+    return mp
+
+
+def _active(row) -> set:
+    return {row.keys[i] for i in np.flatnonzero(row.active)}
+
+
+def _fixed(var, cell: tuple) -> dict:
+    return {k[-1]: bool(var.fixed[i]) for i, k in enumerate(var.keys) if k[:-1] == cell}
+
+
+def test_build_keeps_hook_rows_in_the_shock_only(tmp_path):
+    """TBL65B's hooks rule only in the shock, as on Pyomo (``shock_only``): the real
+    wage row is active at the shock alone and ``aft[USA,LABOR]`` is free there only."""
+    from typing import Any, cast
+
+    from equilibria.blocks.gtap.overwrite import overwrite
+    from equilibria.templates.gtap.gtap_block_model import build_block_model
+    from tests.templates.gtap._nus333 import closure, nus333_params
+    from tests.templates.gtap._unemployment import register_unemployment_hooks
+
+    register_unemployment_hooks()
+    try:
+        mp = _nus333_mp(tmp_path)
+        p = nus333_params()
+        m, _ = cast(Any, build_block_model(p, p.sets, closure(), "ROW"))
+    finally:
+        overwrite.clear()
+    assert _active(mp.rows["eq_wreal"]) == {("USA", "LABOR", "shock")}
+    assert _active(mp.rows["eq_wreal"]) == {
+        tuple(k) for k in m.eq_wreal if m.eq_wreal[k].active
+    }
+    want = {t: bool(m.aft["USA", "LABOR", t].fixed) for t in ("base", "check", "shock")}
+    assert want == {"base": True, "check": True, "shock": False}
+    assert _fixed(mp.vars["aft"], ("USA", "LABOR")) == want
+
+
+def test_build_after_clear_has_no_hook_rows(tmp_path):
+    """Hooks of one exercise do not reach the next build after ``overwrite.clear()``."""
+    from equilibria.blocks.gtap.overwrite import overwrite
+    from tests.templates.gtap._unemployment import register_unemployment_hooks
+
+    register_unemployment_hooks()
+    try:
+        assert "eq_wreal" in _nus333_mp(tmp_path / "a").rows
+    finally:
+        overwrite.clear()
+    mp = _nus333_mp(tmp_path / "b")
+    assert "eq_wreal" not in mp.rows
+    assert set(_fixed(mp.vars["aft"], ("USA", "LABOR")).values()) == {True}
 
 
 def test_sp_reference_from_composed_state_is_bitwise_todays(case):
@@ -201,3 +251,28 @@ def test_sp_reference_from_composed_state_is_bitwise_todays(case):
         for attr in ("value", "fixed", "lb", "ub"):
             a, b = getattr(g, attr), getattr(w, attr)
             assert a.dtype == b.dtype and a.tobytes() == b.tobytes(), (name, attr)
+
+
+def test_activating_a_period_keeps_hook_rows_out_of_base_and_check(tmp_path):
+    """Turning a period's rows on (``activate_rows``, the recipe's
+    ``freeze_inactive``) never turns a hook row on in base or check: those cells do
+    not exist, as Pyomo's ``shock_only`` deleted them."""
+    from equilibria.blocks.gtap.overwrite import overwrite
+    from equilibria.family.periods import FamilyPeriodModel
+    from tests.templates.gtap._unemployment import register_unemployment_hooks
+
+    register_unemployment_hooks()
+    try:
+        mp = _nus333_mp(tmp_path)
+    finally:
+        overwrite.clear()
+    model = FamilyPeriodModel(mp)
+    for period, want in (
+        ("base", set()),
+        ("check", set()),
+        ("shock", {("USA", "LABOR", "shock")}),
+    ):
+        model.activate_rows(period)
+        assert _active(mp.rows["eq_wreal"]) == want, period
+        model.set_all_rows_active("eq_wreal", period, True)
+        assert _active(mp.rows["eq_wreal"]) == want, period

@@ -510,3 +510,65 @@ def test_build_block_model_warns_on_stale_hooks():
         build_block_model(p, p.sets, closure(), "ROW", base_calibrated=True)
     with pytest.warns(StaleOverwriteWarning, match="unemployment"):
         build_block_model(p, p.sets, closure(), "ROW")
+
+
+def _recording_pa_xaa() -> Any:
+    """A family ``RecordingModel`` with ``pa`` and ``xaa`` for USA's households."""
+    import numpy as np
+
+    from equilibria.family.recorder import RecordingModel
+
+    sets = {"r": ["USA"], "i": ["A", "B"], "aa": ["hhd"]}
+    doms = ("r", "i", "aa")
+    return RecordingModel(
+        sets,
+        {},
+        {"pa": (doms, np.array([1.5, 0.8])), "xaa": (doms, np.array([2.0, 3.0]))},
+    )
+
+
+def test_ppriv_tornqvist_records_on_a_recording_model() -> None:
+    """The family recorder gets a node that evaluates to Pyomo's value at the same
+    levels (MAR-251: Pyomo's exp/log reject recorder nodes)."""
+    from pyomo.environ import ConcreteModel, Set, Var, value
+
+    from equilibria.blocks.gtap import ppriv_tornqvist
+    from equilibria.family.recorder import Node
+
+    got = ppriv_tornqvist(_recording_pa_xaa(), "USA")
+    assert isinstance(got, Node)
+
+    cm = ConcreteModel()
+    cm.r, cm.i, cm.aa = (
+        Set(initialize=["USA"]),
+        Set(initialize=["A", "B"]),
+        Set(initialize=["hhd"]),
+    )
+    cm.pa = Var(
+        cm.r,
+        cm.i,
+        cm.aa,
+        initialize={("USA", "A", "hhd"): 1.5, ("USA", "B", "hhd"): 0.8},
+    )
+    cm.xaa = Var(
+        cm.r,
+        cm.i,
+        cm.aa,
+        initialize={("USA", "A", "hhd"): 2.0, ("USA", "B", "hhd"): 3.0},
+    )
+    want = value(ppriv_tornqvist(cm, "USA"))
+    assert got.evaluate() == pytest.approx(want, rel=1e-14, abs=1e-14)
+
+
+def test_pyomo_exp_in_a_hook_names_the_fix() -> None:
+    """A hook rule that calls Pyomo's exp on the family recorder fails saying what to
+    use instead, not with an AttributeError on a recorder node."""
+    from pyomo.environ import exp
+
+    from equilibria.blocks.gtap.overwrite import _Row
+
+    row = _Row(
+        ("r",), {("USA",): lambda m, r: m.pa[r, "A", "hhd"] == exp(m.pa[r, "A", "hhd"])}
+    )
+    with pytest.raises(TypeError, match=r"equilibria\.blocks\.gtap\.overwrite\.exp"):
+        row.symbolic("eq_bad").build_expression(_recording_pa_xaa(), ("USA",))

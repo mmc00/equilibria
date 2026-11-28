@@ -118,7 +118,6 @@ class GTAP:
         settled seed (``calibrate_base_cached``). No Pyomo model is built."""
         import dataclasses
 
-        from equilibria.blocks.gtap.overwrite import overwrite
         from equilibria.family import run_setup as fd
         from equilibria.family.gtap_periods import GTAPFamilyPeriodModel
         from equilibria.solver.gc_tuning import (
@@ -127,10 +126,6 @@ class GTAP:
             _gc_freeze_now,
         )
 
-        if overwrite.active():
-            raise NotImplementedError(
-                "family backend: @overwrite hooks are not supported"
-            )
         savf = str(getattr(self.closure, "savf_flag", "capFix"))
         # the closure and environment settings; the recipe's are refused by its
         # first step (check_backend), which sees them
