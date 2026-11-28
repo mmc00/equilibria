@@ -15,17 +15,18 @@ The row instance of each family must equal GAMS's (``gha2015_dict.txt``).
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from tests.templates.manage._helpers import (
+    SOLUTION_FLOOR,
     convert_point,
     convert_rows,
     gams_rows,
     group_model,
     put_levels,
 )
-from tests.templates.manage.conftest import SOLUTION_FLOOR
 
 from equilibria.templates.manage.blocks import PRODUCTION_FAMILIES
 from equilibria.templates.manage.calibration import calibrate, to_arrays
@@ -61,6 +62,28 @@ def test_instance_production(pm, cal, data, dict_path: Path) -> None:  # noqa: A
     assert {f: len(ours[f]) for f in COUNTS} == COUNTS
     for fam in PRODUCTION_FAMILIES:
         assert set(ours[fam]) == gams[fam], fam
+
+
+def test_guard_rejects_an_alpha_cell_outside_flagxfac(data) -> None:  # noqa: ANN001
+    """CESTree writes a row per non-zero share, GAMS per flagXFac cell: calibrate
+    refuses data where the two rules part."""
+    flag = set(data.sets["flagXfac"])
+    name = "p_alphaXfac"
+    node, par, act, v = next(iter(data.params[name]))
+    # a node with no flagXFac cell in this activity, given a share there
+    stray = next(n for (n, *_rest) in sorted(flag) if (n, act, v) not in flag)
+    cells = {**data.params[name], (stray, par, act, v): 0.1}
+    with pytest.raises(ValueError, match="CESTree's rows"):
+        calibrate(replace(data, params={**data.params, name: cells}))
+
+
+def test_guard_rejects_a_year_dependent_parameter(data) -> None:  # noqa: ANN001
+    name = next(k for k in data.params if k.lower() == "p_as")
+    cells = dict(data.params[name])
+    key = next(k for k in cells if k[-1] == "2015")
+    cells[key] += 1.0
+    with pytest.raises(ValueError, match="differs between"):
+        calibrate(replace(data, params={**data.params, name: cells}))
 
 
 def _worst(rows: dict[str, dict]) -> dict[str, float]:

@@ -4137,5 +4137,7 @@
  "tests/templates/manage/test_production.py::test_instance_production": 3.29,
  "tests/templates/manage/test_production.py::test_production_residuals_2015": 0.18,
  "tests/templates/manage/test_production.py::test_production_residuals_2014": 0.06,
- "tests/templates/manage/test_production.py::test_production_rows_are_gams_rows_at_the_start": 0.44
+ "tests/templates/manage/test_production.py::test_production_rows_are_gams_rows_at_the_start": 0.44,
+ "tests/templates/manage/test_production.py::test_guard_rejects_an_alpha_cell_outside_flagxfac": 0.01,
+ "tests/templates/manage/test_production.py::test_guard_rejects_a_year_dependent_parameter": 0.01
 }

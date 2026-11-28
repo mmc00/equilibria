@@ -184,7 +184,7 @@ equations:
 variables:
   - {gams: xfac, equilibria: xfac}
   - {gams: pxfac, equilibria: pxfac}
-  - {gams: pxfacInd, equilibria: pxfacInd}
+  - {gams: pxfacInd, equilibria: pxfacInd, why: "domain differs: equilibria declares it over fpPar, GAMS over fpNest (the cells of fpPar are the same)"}
   - {gams: pxfac_preTax, why: "pending: Task 6 (factor markets)"}
   - {gams: lambdaxfac, equilibria: lambdaxfac}
   - {gams: yieldLnd, equilibria: yieldLnd}

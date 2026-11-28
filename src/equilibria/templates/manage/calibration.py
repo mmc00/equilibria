@@ -69,7 +69,8 @@ VARIABLES: dict[str, tuple[str, ...]] = {
 }
 
 # GAMS's domain of each parameter ("t": the year, read at the base year; every
-# one of these is the same in 2014 and 2015 in GHA).
+# one of these is the same in 2014 and 2015 in GHA, which ``_check_year_free``
+# asserts).
 PARAMETERS: dict[str, tuple[str, ...]] = {
     "p_alphaXfac": ("fpNest", "fpPar", "a", "v"),
     "p_sigmaXFac": ("fpPar", "a", "v"),
@@ -244,10 +245,77 @@ def _lambda_free(
     return out
 
 
+def _check_year_free(params: Mapping[str, Cells]) -> None:
+    """``PARAMETERS`` are read at ``BASE_YEAR`` but the solve reads them at 2015
+    (``e_yieldLnd``, ``e_pp``): they must not differ between the two years."""
+    for name, dom in PARAMETERS.items():
+        if "t" not in dom:
+            continue
+        at = dom.index("t")
+        by_year: dict[str, dict[tuple[str, ...], float]] = {}
+        for key, value in params.get(name.lower(), {}).items():
+            by_year.setdefault(key[at], {})[(*key[:at], *key[at + 1 :])] = value
+        base, solve = by_year.get(BASE_YEAR, {}), by_year.get(SOLVE_YEAR, {})
+        diff = sorted(
+            k
+            for k in base.keys() | solve.keys()
+            if base.get(k, 0.0) != solve.get(k, 0.0)
+        )
+        if diff:
+            raise ValueError(
+                f"{name} differs between {BASE_YEAR} and {SOLVE_YEAR} "
+                f"({len(diff)} cells, e.g. {diff[0]}): the calibration reads {BASE_YEAR}"
+            )
+
+
+def _check_tree_rows(
+    values: Mapping[str, np.ndarray],
+    sets: Mapping[str, tuple[str, ...]],
+    gdx_sets: Mapping[str, tuple[tuple[str, ...], ...]],
+) -> None:
+    """``CESTree`` writes a row where a share is non-zero; GAMS writes it where
+    ``flagXFac`` and ``aact`` hold and ``actfPNest`` has the node
+    (model.inc:1253, 1307, 1361). The two must give the same rows."""
+    nodes, parents, acts = sets["fpNest"], sets["fpPar"], sets["a"]
+    alpha = values["p_alphaXfac"]
+    ours = {
+        "e_xfac": {
+            (nodes[i], acts[k])
+            for i, k in zip(*np.nonzero(alpha.sum(axis=1)), strict=True)
+        },
+        "e_pxfac": {
+            (parents[j], acts[k])
+            for j, k in zip(*np.nonzero(alpha.sum(axis=0)), strict=True)
+        },
+    }
+    additive = {p for p, f in zip(parents, values["isAdditiveCes"], strict=True) if f}
+    ours["e_pxfacInd"] = {(p, a) for p, a in ours["e_pxfac"] if p in additive}
+    act = {n for (n,) in gdx_sets["actfpnest"]}
+    live = {a for (a,) in gdx_sets["aact"]}
+    rows = {(n, a) for n, a, _v in gdx_sets["flagxfac"] if n in act and a in live}
+    has_share = {
+        (nodes[i], acts[k]) for i, k in zip(*np.nonzero(alpha.sum(axis=1)), strict=True)
+    }
+    gams = {
+        "e_xfac": rows & has_share,
+        "e_pxfac": {(n, a) for n, a in rows if n in parents},
+    }
+    gams["e_pxfacInd"] = {(p, a) for p, a in gams["e_pxfac"] if p in additive}
+    for fam, cells in ours.items():
+        if cells != gams[fam]:
+            extra, missing = sorted(cells - gams[fam]), sorted(gams[fam] - cells)
+            raise ValueError(
+                f"{fam}: CESTree's rows (non-zero p_alphaXfac) differ from GAMS's "
+                f"(flagXFac, aact, actfPNest): {len(extra)} extra {extra[:3]}, "
+                f"{len(missing)} missing {missing[:3]}"
+            )
+
+
 def calibrate(data: ManageData) -> Calibration:
     """The arrays of the production group, from GAMS's calibration."""
     gdx_sets, params = _lower(data.sets), _lower(data.params)
     _check_switches(params, gdx_sets)
+    _check_year_free(params)
     sets = {s: tuple(e for (e,) in gdx_sets[s.lower()]) for s in SETS}
 
     values: dict[str, Any] = {}
@@ -271,6 +339,7 @@ def calibrate(data: ManageData) -> Calibration:
         if key[0] in sets["i"] and key[1] in sets["a"]
     }
     values["sam"] = _array(sam_ia, ("i", "a"), sets, what="sam")
+    _check_tree_rows(values, sets, gdx_sets)
     values["lambdaxfac_free"] = _lambda_free(data, sets, gdx_sets)
 
     base = to_arrays(data.base, sets)

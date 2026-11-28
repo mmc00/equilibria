@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from tests.templates.manage.conftest import SOLUTION_FLOOR
+from tests.templates.manage._helpers import SOLUTION_FLOOR
 
 from equilibria.templates.manage.convert import (
     ConvertRows,

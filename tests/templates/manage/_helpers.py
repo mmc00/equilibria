@@ -40,6 +40,10 @@ GROUPS: dict[str, Callable[[Calibration], tuple[Block, ...]]] = {
 
 MIN_SCALE = 1e-3  # %minScale% of the s() macro, model.inc:1206
 
+# The floor of every residual test: GAMS's own rows at its 2015 solution are at
+# most this (measured 2.79e-9, test_convert.test_solution_floor).
+SOLUTION_FLOOR = 3e-9
+
 
 class Given(Block):
     """Test-only block: declares the variables of other groups, fixed."""
