@@ -4100,5 +4100,13 @@
  "tests/babel/gdx/test_reader_manage.py::test_xp_has_every_record": 0.01,
  "tests/babel/gdx/test_reader_manage.py::test_scalar_rescale": 0.01,
  "tests/babel/gdx/test_reader_manage.py::test_every_symbol_matches_gdxdump[bau]": 6.56,
- "tests/babel/gdx/test_reader_manage.py::test_every_symbol_matches_gdxdump[bridge]": 0.27
+ "tests/babel/gdx/test_reader_manage.py::test_every_symbol_matches_gdxdump[bridge]": 0.27,
+ "tests/babel/gdx/test_reader_sets.py::test_every_set_has_its_record_count[gtap7_3x3_out]": 0.1,
+ "tests/babel/gdx/test_reader_sets.py::test_every_set_has_its_record_count[gtap7_3x4_consolidated]": 0.22,
+ "tests/babel/gdx/test_reader_sets.py::test_every_set_has_its_record_count[manage_bau]": 2.15,
+ "tests/babel/gdx/test_reader_sets.py::test_every_set_has_its_record_count[manage_bridge]": 0.02,
+ "tests/babel/gdx/test_reader_sets.py::test_texted_sets_of_manage": 2.07,
+ "tests/babel/gdx/test_reader_sets.py::test_repeated_elements_are_kept": 0.02,
+ "tests/babel/gdx/test_reader_sets.py::test_every_set_matches_gdxdump[manage_bau]": 3.93,
+ "tests/babel/gdx/test_reader_sets.py::test_every_set_matches_gdxdump[manage_bridge]": 0.15
 }
