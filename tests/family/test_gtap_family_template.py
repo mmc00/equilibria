@@ -82,8 +82,6 @@ _UNSUPPORTED = [
     ({"seed_from_prior": True}, "seed_from_prior"),
     ({"mute_welfare": False}, "mute_welfare"),
     ({"base_calibrated": True, "solve_check": False}, "solve_check"),
-    ({"shock_steps": (0.5, 1.0)}, "shock_steps"),
-    ({"shock_method": "johansen"}, "johansen"),
 ]
 
 

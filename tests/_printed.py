@@ -11,7 +11,10 @@ line (each notebook asserts its codes itself), Pyomo's warnings, the body of the
 residual panel, and the notebooks' "largest differences" table: its rows are the
 near-zero cells (``qxs`` ~1e-5) that move in the 4th digit between Linux and the
 Mac, sorted by differences that tie at 0.000% (the CI listed other cells), while
-the headline (cells, % within, largest difference) does not move. Kept, with the solve code read as the old one: a printed code,
+the headline (cells, % within) does not move. The Johansen notebooks' ``largest
+difference:`` line is held to ``LARGEST_DIFF_ABS`` percentage points instead of
+``rel``: its cell can be one of those flows (TBL64: ``qxs`` USA,SER,USA ~1.6e-5,
+0.026% on the Mac, 0.029% on Linux). Kept, with the solve code read as the old one: a printed code,
 a ``{'code': ..., 'residual': ...}`` dict (its residual value masked) and the
 panel's title, which says whether the solve succeeded. Every kept line must have
 the same text and the same numbers, a number within ``rel`` (another CPU moves the
@@ -50,6 +53,9 @@ _PANEL_TITLE = re.compile(r"^╔═*\s*(.*?)\s*═*╗$")
 _TABLE_ROW = re.compile(r"^\S+\s+(?:pre|post|period)\s{2}")
 _RESIDUAL = re.compile(r"('residual': )[^,}]+")
 _NUMBER = re.compile(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?")
+# the Johansen notebooks' headline against the book, printed in % with 3 decimals
+_LARGEST_DIFF = "largest difference:"
+LARGEST_DIFF_ABS = 0.005
 
 
 def _as_old(line: str) -> str:
@@ -87,8 +93,9 @@ def mismatches(got: list[str], want: list[str], *, rel: float = 1e-9) -> list[st
         if _NUMBER.sub("#", a) != _NUMBER.sub("#", b):
             out.append(f"line {i}: {a!r} != {b!r}")
             continue
+        tol = LARGEST_DIFF_ABS if b.startswith(_LARGEST_DIFF) else 1e-12
         for x, y in zip(_NUMBER.findall(a), _NUMBER.findall(b), strict=True):
             fx, fy = float(x), float(y)
-            if abs(fx - fy) > 1e-12 + rel * max(abs(fx), abs(fy)):
+            if abs(fx - fy) > tol + rel * max(abs(fx), abs(fy)):
                 out.append(f"line {i}: {x} != {y} in {b!r}")
     return out

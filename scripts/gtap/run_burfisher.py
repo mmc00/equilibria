@@ -274,21 +274,23 @@ def as_shock(rows: list[tuple[str, tuple, float]]) -> dict[str, dict[tuple, floa
     return out
 
 
-def solve_exercise(
+def exercise(
     exp: str,
     har: Path,
     *,
     shock_method: str = "nonlinear",
     rows: list[tuple[str, tuple, float]] | None = None,
+    backend: str = "pyomo",
 ):
-    """Builds the exercise, applies its shocks and solves base/check/shock.
-
-    ``shock_method="johansen"``: the shock as one linear step from check, as the
-    book's Johansen exercises (no SHOCK_STEPS). ``rows`` replaces the exercise's
-    shocks (same form as EXERCISES). It runs on the core driver
-    (``Exercise(GTAP(...), gtap_static(...))``); the codes are ints by period."""
+    """The exercise on the core driver, not yet run: Burfisher's closure (capFlex,
+    ifSUB=0, residual ROW), base not solved, check solved, welfare muted, the shock
+    in ``SHOCK_STEPS`` (or as one Johansen step). ``rows`` replaces the exercise's
+    shocks (same form as EXERCISES). ``backend``: ``"pyomo"`` or ``"family"``."""
+    from equilibria.core.exercise import Exercise
     from equilibria.templates.gtap import GTAPParameters
     from equilibria.templates.gtap.gtap_contract import GTAPClosureConfig
+    from equilibria.templates.gtap.recipe import gtap_static
+    from equilibria.templates.gtap.template import GTAP
 
     prm, shocks = EXERCISES[exp]
     if rows is not None:
@@ -312,20 +314,15 @@ def solve_exercise(
         numeraire="pnum",
     )
     steps = SHOCK_STEPS if shock_method == "nonlinear" else None
-    return _solve_on_core(p, gc, as_shock(shocks), steps, shock_method)
-
-
-def _solve_on_core(p, gc, shock, steps, shock_method):
-    """``solve_exercise`` on the core driver: same model, closure and options
-    (base not solved, check solved, welfare muted). Codes as ints: the skipped
-    base is 1, ``"code N"`` is N."""
-    from equilibria.core.driver import NOT_SOLVED
-    from equilibria.core.exercise import Exercise
-    from equilibria.templates.gtap.recipe import gtap_static
-    from equilibria.templates.gtap.template import GTAP
-
-    ex = Exercise(
-        GTAP(p, gc, residual_region="ROW", base_calibrated=False, ref_gdx=None),
+    return Exercise(
+        GTAP(
+            p,
+            gc,
+            residual_region="ROW",
+            base_calibrated=False,
+            ref_gdx=None,
+            backend=backend,
+        ),
         gtap_static(
             "gtap",
             solve_check=True,
@@ -333,8 +330,26 @@ def _solve_on_core(p, gc, shock, steps, shock_method):
             shock_steps=steps,
             shock_method=shock_method,
         ),
-        shock=shock,
+        shock=as_shock(shocks),
     )
+
+
+def solve_exercise(
+    exp: str,
+    har: Path,
+    *,
+    shock_method: str = "nonlinear",
+    rows: list[tuple[str, tuple, float]] | None = None,
+):
+    """Builds the exercise, applies its shocks and solves base/check/shock on Pyomo.
+
+    ``shock_method="johansen"``: the shock as one linear step from check, as the
+    book's Johansen exercises (no SHOCK_STEPS). ``rows`` replaces the exercise's
+    shocks (same form as EXERCISES). Returns the Pyomo model, the parameters and
+    the codes as ints by period: the skipped base is 1, ``"code N"`` is N."""
+    from equilibria.core.driver import NOT_SOLVED
+
+    ex = exercise(exp, har, shock_method=shock_method, rows=rows)
     res = ex.run()
     codes = {}
     for period, r in res.items():
@@ -348,7 +363,7 @@ def _solve_on_core(p, gc, shock, steps, shock_method):
         else:
             raise ValueError(f"{period}: unknown core status {code!r}")
     model = cast("Any", ex.model)
-    return model.pyomo, p, codes
+    return model.pyomo, ex.template.params, codes
 
 
 GAMS_PREFIXES = ["a_", "c_", "f_", "r_"]

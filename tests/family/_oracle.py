@@ -123,27 +123,13 @@ def oracle(dataset: str, if_sub: bool = False, savf_flag: Savf = "capFix") -> Or
 
 
 def _stamped_copy(p: Any, closure: Any, dataset: str, if_sub: bool) -> Any:
+    """A copy of ``p`` with capFlex's ``risk`` stamped from the data (no GDX)."""
     import copy
-    import sys
-
-    import pytest
 
     from equilibria.family.capflex import stamp_capflex_risk
 
-    saved = sys.path[:]  # the parity module edits ``sys.path`` on import
-    try:
-        from tests.templates.gtap.test_gtap7_gempack_parity import _reference_gdx
-
-        gdx = _reference_gdx(dataset, int(if_sub))
-    finally:
-        # ``_diff_core`` (and the parity module) stay in sys.modules after this restore
-        sys.path[:] = saved
-    if gdx is None or not gdx.exists():
-        pytest.skip(f"no GAMS reference GDX for {dataset}")
     q = copy.deepcopy(p)
-    with pytest.MonkeyPatch.context() as mp:
-        mp.syspath_prepend(str(_ROOT / "scripts" / "gtap"))
-        stamp_capflex_risk(q, closure, gdx)
+    stamp_capflex_risk(q, closure)
     return q
 
 

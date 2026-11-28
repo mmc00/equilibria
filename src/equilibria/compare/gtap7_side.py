@@ -127,6 +127,19 @@ def model_levels(m: Any) -> dict[str, dict[tuple[str, ...], float]]:
     }
 
 
+def period_model_levels(model: Any) -> dict[str, dict[tuple[str, ...], float]]:
+    """``model_levels`` read through the ``PeriodModel`` protocol, so a run on either
+    backend (Pyomo or family) gives the same ``{var: {(indices..., period): level}}``."""
+    out: dict[str, dict[tuple[str, ...], float]] = {}
+    for v in EQ_VARS:
+        cells: dict[tuple[str, ...], float] = {}
+        for period in model.periods:
+            for idx, x in model.values(v, period).items():
+                cells[(*idx, period)] = float(x)
+        out[v] = cells
+    return out
+
+
 # GEMPACK set name of each dimension label of gtap7.yaml
 _SET = {
     "REG": "REG",

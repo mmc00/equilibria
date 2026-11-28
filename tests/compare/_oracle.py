@@ -774,6 +774,10 @@ EX17_RTOL = 1e-6
 #   una extrapolacion lineal.
 # ---------------------------------------------------------------------------
 EX18_FIX = "book"  # compare_burfisher_gempack's source: the book's runs
+# The stored equilibria levels were regenerated for MAR-251 (capFlex risk from the
+# GAMS GDX instead of a capFix twin): TBL46A's largest difference moved from
+# 1.4881e-04 (above, the levels before) to 1.4896e-04, same cell; TBL45A's did not
+# move at 5 digits. Same cells, same within-counts.
 EX18_EQ = {
     e: dataset_dir("nus333_equilibria_burfisher_levels")
     / f"eq_burfisher_{e}_levels.json.gz"
@@ -815,7 +819,7 @@ EX18_WITHIN = {
     "tbl46a": {1e-3: 414, 5e-3: 414, 1e-2: 414},
     "tbl45a": {1e-3: 317, 5e-3: 396, 1e-2: 411},
 }
-EX18_MAX = {"tbl46a": 1.4881e-04, "tbl45a": 2.0767e-02}
+EX18_MAX = {"tbl46a": 1.4896e-04, "tbl45a": 2.0767e-02}
 EX18_MAX_CELL = {
     "tbl46a": ("qst", ("post", ("USA", "SER"))),
     "tbl45a": ("qxw", ("post", ("USA", "MFG"))),

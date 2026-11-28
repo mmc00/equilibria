@@ -104,12 +104,6 @@ def check_backend(options: Mapping[str, Any]) -> Step:
                 "base_calibrated=True with solve_check=False (the check copied "
                 "from the base)",
             ),
-            ("shock_steps", options.get("shock_steps"), "shock_steps"),
-            (
-                "shock_method",
-                options.get("shock_method") != "nonlinear",
-                f"shock_method={options.get('shock_method')!r}",
-            ),
         )
         for _, bad, what in refused:
             if bad:
