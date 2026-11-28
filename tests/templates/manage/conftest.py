@@ -8,6 +8,10 @@ import pytest
 
 from equilibria.sources import reference
 
+# The floor of every residual test: GAMS's own rows at its 2015 solution are at
+# most this (measured 2.79e-9, test_convert.test_solution_floor).
+SOLUTION_FLOOR = 3e-9
+
 
 def gams_run() -> Path:
     """The nlpec-ipopt run: GHA_BaU.gdx (both years) and the CONVERT files."""

@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests.templates.manage.conftest import SOLUTION_FLOOR
 
 from equilibria.templates.manage.convert import (
     ConvertRows,
@@ -71,7 +72,7 @@ def test_solution_floor(rows: ConvertRows, run_dir: Path) -> None:
     Measured 2026-11-27: 2.79e-9, in e_dCarbon(f-AEZ4,pastureLand) (a land-cover
     row whose terms are about 1e6); no row is nan."""
     res = rows.residuals(read_levels(run_dir / "gha2015_solution.gms"))
-    assert max(abs(r) for r in res) <= 3e-9
+    assert max(abs(r) for r in res) <= SOLUTION_FLOOR
 
 
 # Families whose GAMS row does not hold at the 2014 levels, measured 2026-11-27.

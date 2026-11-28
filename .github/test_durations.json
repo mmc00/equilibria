@@ -4128,5 +4128,14 @@
  "tests/templates/manage/test_rescale.py::test_lcovarea_rule_from_run_gms": 0.01,
  "tests/templates/manage/test_residuals.py::test_zero_at_the_calibrated_base": 0.02,
  "tests/templates/manage/test_residuals.py::test_a_moved_value_shows_in_its_rows_only": 0.01,
- "tests/templates/manage/test_residuals.py::test_unknown_family_is_an_error": 0.01
+ "tests/templates/manage/test_residuals.py::test_unknown_family_is_an_error": 0.01,
+ "tests/blocks/test_ces_tree.py::test_ces_tree_two_level_cd_limit": 0.01,
+ "tests/blocks/test_ces_tree.py::test_ces_tree_multiple_parents": 0.01,
+ "tests/blocks/test_ces_tree.py::test_ces_tree_leontief_parent": 0.01,
+ "tests/blocks/test_ces_tree.py::test_ces_tree_additive": 0.01,
+ "tests/blocks/test_ces_tree.py::test_ces_tree_leaves_from_another_family_are_not_written_yet": 0.01,
+ "tests/templates/manage/test_production.py::test_instance_production": 3.29,
+ "tests/templates/manage/test_production.py::test_production_residuals_2015": 0.18,
+ "tests/templates/manage/test_production.py::test_production_residuals_2014": 0.06,
+ "tests/templates/manage/test_production.py::test_production_rows_are_gams_rows_at_the_start": 0.44
 }

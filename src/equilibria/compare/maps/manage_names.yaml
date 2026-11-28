@@ -13,15 +13,15 @@
 model: manage
 
 equations:
-  - {gams: e_px, why: "pending: Task 3 (production)"}
-  - {gams: e_pp, why: "pending: Task 3 (production)"}
-  - {gams: e_xap, why: "pending: Task 3 (production)"}
-  - {gams: e_pap, why: "pending: Task 3 (production)"}
-  - {gams: e_xfac, why: "pending: Task 3 (production)"}
-  - {gams: e_pxfac, why: "pending: Task 3 (production)"}
-  - {gams: e_pxfacInd, why: "pending: Task 3 (production)"}
-  - {gams: e_lambdaxfac, why: "pending: Task 3 (production)"}
-  - {gams: e_yieldLnd, why: "pending: Task 3 (production)"}
+  - {gams: e_px, equilibria: e_px}
+  - {gams: e_pp, equilibria: e_pp}
+  - {gams: e_xap, equilibria: e_xap}
+  - {gams: e_pap, equilibria: e_pap}
+  - {gams: e_xfac, equilibria: e_xfac}
+  - {gams: e_pxfac, equilibria: e_pxfac}
+  - {gams: e_pxfacInd, equilibria: e_pxfacInd}
+  - {gams: e_lambdaxfac, equilibria: e_lambdaxfac}
+  - {gams: e_yieldLnd, equilibria: e_yieldLnd}
   - {gams: e_x, why: "pending: Task 4 (make matrix)"}
   - {gams: e_xp, why: "pending: Task 4 (make matrix)"}
   - {gams: e_p, why: "pending: Task 4 (make matrix)"}
@@ -126,7 +126,7 @@ equations:
   - {gams: e_pfmSupD, why: "pending: Task 6 (factor markets)"}
   - {gams: e_unemp, why: "pending: Task 6 (factor markets)"}
   - {gams: e_trentAvg, why: "pending: Task 8 (capital)"}
-  - {gams: e_xpNew, why: "pending: Task 3 (production)"}
+  - {gams: e_xpNew, equilibria: e_xpNew}
   - {gams: e_totexp, why: "pending: Task 8 (macro)"}
   - {gams: e_rtotexp, why: "pending: Task 8 (macro)"}
   - {gams: e_pexp, why: "pending: Task 8 (macro)"}
@@ -182,14 +182,14 @@ equations:
   - {gams: e_dummy, why: "pending: Task 10 (reporting)"}
 
 variables:
-  - {gams: xfac, why: "pending: Task 3 (production)"}
-  - {gams: pxfac, why: "pending: Task 3 (production)"}
-  - {gams: pxfacInd, why: "pending: Task 3 (production)"}
+  - {gams: xfac, equilibria: xfac}
+  - {gams: pxfac, equilibria: pxfac}
+  - {gams: pxfacInd, equilibria: pxfacInd}
   - {gams: pxfac_preTax, why: "pending: Task 6 (factor markets)"}
-  - {gams: lambdaxfac, why: "pending: Task 3 (production)"}
-  - {gams: yieldLnd, why: "pending: Task 3 (production)"}
-  - {gams: px, why: "pending: Task 3 (production)"}
-  - {gams: pp, why: "pending: Task 3 (production)"}
+  - {gams: lambdaxfac, equilibria: lambdaxfac}
+  - {gams: yieldLnd, equilibria: yieldLnd}
+  - {gams: px, equilibria: px}
+  - {gams: pp, equilibria: pp}
   - {gams: xp, why: "pending: Task 4 (make matrix)"}
   - {gams: x, why: "pending: Task 4 (make matrix)"}
   - {gams: p, why: "pending: Task 4 (make matrix)"}
@@ -252,7 +252,7 @@ variables:
   - {gams: xakShr, why: "pending: Task 5 (final demand)"}
   - {gams: xak, why: "pending: Task 5 (final demand)"}
   - {gams: pxak, why: "pending: Task 5 (final demand)"}
-  - {gams: xa, why: "pending: Task 3 (production)"}
+  - {gams: xa, equilibria: xa}
   - {gams: xat, why: "pending: Task 4 (trade)"}
   - {gams: pa, why: "pending: Task 4 (trade)"}
   - {gams: paf, why: "pending: Task 4 (trade)"}
