@@ -24,6 +24,24 @@ Tried and dropped: the settle cache (`EQUILIBRIA_FAMILY_SETTLE_CACHE=1` with
 costs) and a fixed K=4 path (auto takes the Richardson extrapolation of K=2 and K=4, so
 a fixed K=4 gives other numbers).
 
+### The floor is the computation, not the setup
+
+The same AlterTax run three times in one Python process (imports, caches and compiled
+programs already in memory from the second run on): the exercise (params, solve and the
+decomposition path, `seconds.exercise` of the measure script) took 168.6, 148.5 and
+143.6 s, `compare_all` 21.2, 14.9 and 18.4 s. GEMPACK takes about 127 s with everything
+included. So items 1 and 4 below help but cannot win alone; the gap is in the
+computation itself: two Newton solves of the base, one of the shock, and the path
+(four Newton steps plus the headers and changes at each point, which `012b0983` cut
+from about 57 to 35 s of Python).
+
+Winning needs a change of numerical method, in this order of size:
+
+- A GEMPACK-like shock: Johansen steps with Gragg extrapolation and the decomposition
+  accumulated inside the same steps (the recipe has `shock_method="johansen"`; the
+  family route refuses it today). This needs its own ADR.
+- Item 3 below within the current Newton method: at most one solve less (~20 s).
+
 ## Approach
 
 1. Persist, per family cache key and period, what `_period_system` builds and does not
