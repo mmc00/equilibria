@@ -108,6 +108,7 @@ tests/docs/test_jax_backend_page.py
 tests/docs/test_translations_keep_code.py
 tests/doctor/test_dependencies.py
 tests/examples/test_burfisher_notebooks.py
+tests/examples/test_burfisher_notebooks_family.py
 tests/examples/test_cge_examples_run.py
 tests/family/test_activity_names.py
 tests/family/test_altertax_closure.py
