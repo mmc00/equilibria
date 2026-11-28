@@ -85,6 +85,8 @@ class FamilyBackend:
                         cells.append((tuple(idx), res))
                 if cells:
                     self.records[name] = cells
+        for n, recs in self.records.items():  # saved with the records (see save)
+            self._term_table(n, recs)
 
     _SAVED = ("records", "var_domains", "param_domains", "sets")
 
@@ -101,7 +103,14 @@ class FamilyBackend:
         fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
         try:
             with os.fdopen(fd, "wb") as fh:
-                pickle.dump({k: getattr(self, k) for k in self._SAVED}, fh, protocol=5)
+                data = {k: getattr(self, k) for k in self._SAVED}
+                # the term tables too: a warm run then skips their DFS over every term
+                data["_term_tables"] = {
+                    n: hit
+                    for n, hit in self.__dict__.get("_term_tables", {}).items()
+                    if self.records.get(n) is hit[0]
+                }
+                pickle.dump(data, fh, protocol=5)
                 fh.flush()
                 os.fsync(fh.fileno())
             os.replace(tmp, path)  # never leave a half-written cache behind
@@ -121,6 +130,8 @@ class FamilyBackend:
         backend = cls()
         for k in cls._SAVED:
             setattr(backend, k, data[k])
+        if "_term_tables" in data:  # same pickle: each table's records are ours
+            backend.__dict__["_term_tables"] = data["_term_tables"]
         return backend
 
     def layout(self, state: Any) -> Any:
@@ -138,15 +149,19 @@ class FamilyBackend:
         domains = {**self.var_domains, **self.param_domains}
         return VarLayout.from_state(state.sets, domains, values, free)
 
-    def families(self, layout: Any) -> list[CompiledFamily]:
+    def _term_table(self, name: str, recs: Any) -> TermTable:
+        """The ``TermTable`` of family ``name``, built once per records object."""
         tables = self.__dict__.setdefault("_term_tables", {})
-        out = []
-        for n, recs in self.records.items():
-            hit = tables.get(n)
-            if hit is None or hit[0] is not recs:
-                hit = tables[n] = (recs, TermTable(recs))
-            out.append(compile_family(n, recs, layout, hit[1]))
-        return out
+        hit = tables.get(name)
+        if hit is None or hit[0] is not recs:
+            hit = tables[name] = (recs, TermTable(recs))
+        return hit[1]
+
+    def families(self, layout: Any) -> list[CompiledFamily]:
+        return [
+            compile_family(n, recs, layout, self._term_table(n, recs))
+            for n, recs in self.records.items()
+        ]
 
     def system(self, layout: Any) -> FamilySystem:
         return FamilySystem.from_families(self.families(layout), layout)

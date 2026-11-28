@@ -22,10 +22,16 @@ from equilibria.family.mp_arrays import MPArrays, _name
 
 
 def _ranks(names: list[str]) -> np.ndarray:
-    order = sorted(range(len(names)), key=lambda i: names[i])
+    order = sorted(range(len(names)), key=names.__getitem__)
     rank = np.empty(len(names), dtype=np.int64)
     rank[np.asarray(order, dtype=np.int64)] = np.arange(len(names), dtype=np.int64)
     return rank
+
+
+def _names(comp: str, keys: list[tuple]) -> list[str]:
+    """``[_name(comp, k) for k in keys]`` without a call per cell."""
+    pre = comp + "["
+    return [pre + ",".join(k) + "]" if k else comp for k in keys]
 
 
 class CellIndex:
@@ -38,10 +44,10 @@ class CellIndex:
         self.row_names: list[str] = []
         for n, v in mp.vars.items():
             self.var_off[n] = len(self.col_names)
-            self.col_names += [_name(n, k) for k in v.keys]
+            self.col_names += _names(n, v.keys)
         for n, r in mp.rows.items():
             self.row_off[n] = len(self.row_names)
-            self.row_names += [_name(n, k) for k in r.keys]
+            self.row_names += _names(n, r.keys)
         self.col_rank = _ranks(self.col_names)
         self.row_rank = _ranks(self.row_names)
         self._period_ids: dict[tuple[str, str, str], np.ndarray] = {}

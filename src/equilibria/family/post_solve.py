@@ -69,16 +69,42 @@ def writeback(mp: MPArrays, sq: Squared, x: np.ndarray) -> int:
     Returns the count written. A column ``mp`` lacks raises ``KeyError``."""
     if len(x) != len(sq.col_names):
         raise ValueError(f"{len(x)} values for {len(sq.col_names)} columns")
-    by_var: dict[str, tuple[list[int], list[float]]] = {}
-    for name, val in zip(sq.col_names, x, strict=True):
+    xs = np.asarray(x, dtype=float)
+    for comp, var, cols, pos in _writeback_plan(mp, sq):
+        var.value[pos] = xs[cols]
+    return len(x)
+
+
+def _writeback_plan(mp: MPArrays, sq: Squared) -> list[tuple[str, Any, Any, Any]]:
+    """``(var, its arrays, columns of sq, cell positions)`` per variable, in first
+    appearance order. Kept on ``sq`` while its ``col_names`` and the arrays of ``mp``
+    are the same objects (``Squared`` says not to mutate the names)."""
+    hit = sq.__dict__.get("_writeback_plan")
+    if (
+        hit is not None
+        and hit[0] is sq.col_names
+        and hit[1] is mp
+        and all(mp.vars.get(comp) is var for comp, var, _, _ in hit[2])
+    ):
+        return hit[2]
+    by_var: dict[str, tuple[list[int], list[int]]] = {}
+    for j, name in enumerate(sq.col_names):
         comp, key = _split(name)
         v = mp.var(comp)
-        pos, vals = by_var.setdefault(comp, ([], []))
+        cols, pos = by_var.setdefault(comp, ([], []))
+        cols.append(j)
         pos.append(v.pos(key))
-        vals.append(float(val))
-    for comp, (pos, vals) in by_var.items():
-        mp.vars[comp].value[np.array(pos, dtype=np.int64)] = vals
-    return len(x)
+    plan = [
+        (
+            comp,
+            mp.vars[comp],
+            np.array(cols, dtype=np.int64),
+            np.array(pos, dtype=np.int64),
+        )
+        for comp, (cols, pos) in by_var.items()
+    ]
+    sq.__dict__["_writeback_plan"] = (sq.col_names, mp, plan)
+    return plan
 
 
 # ── freeze_period and the pabs pins ─────────────────────────────────────────
@@ -483,6 +509,57 @@ def _margin_params(bm: Any, sets: Any) -> dict[str, tuple[int, dict]]:
     return {"tmarg": (3, tmarg), "amgm": (4, amgm)}
 
 
+_TRADE_PARAM_CACHE: dict[int, tuple[Any, Any, tuple, dict]] = {}
+
+
+def _trade_param_cells(
+    params: Any, mp_params: dict, cells: list[tuple], M: list[str], _param: Callable
+) -> dict[str, Any]:
+    """The Params of the trade-price formulas over ``cells``: ``amgm`` per margin,
+    ``rtxs``, ``tmarg``, ``mtax`` and ``chipm``, the 0 / 1 defaults applied. They read
+    no level, so they are built once per ``params.benchmark`` and ``params.taxes`` (and
+    cells); as ``mp_margin_params``, the arrays are shared and must not be changed."""
+    bm, tx = params.benchmark, params.taxes
+    key = tuple(cells)
+    hit = _TRADE_PARAM_CACHE.get(id(bm))
+    if hit is not None and hit[0] is tx and hit[1] is mp_params and hit[2] == key:
+        return hit[3]
+
+    def params_cell(fn):
+        return np.fromiter((fn(c) for c in cells), np.float64, len(cells))
+
+    amgm_mp = mp_params["amgm"][1]
+    amgm = {}
+    for mm in M:
+        if hasattr(bm, "amgm"):
+            amgm[mm] = params_cell(lambda c, mm=mm: _param(bm.amgm, (mm, *c)))
+        else:
+            amgm[mm] = params_cell(lambda c, mm=mm: amgm_mp.get((mm, *c), 0.0))
+    if hasattr(tx, "rtxs"):
+        rtxs = params_cell(lambda c: _param(tx.rtxs, c))
+    else:
+        rtxs = np.zeros(len(cells))
+    # tmarg is dim-3 (no period axis); its dim-4 fallback is always the 0.0 default.
+    tmarg = params_cell(lambda c: mp_params["tmarg"][1].get(c, 0.0))
+    tmarg[tmarg == 0.0] = 0.0
+    if hasattr(tx, "mtax"):
+        mtax = params_cell(lambda c: _param(tx.mtax, (c[2], c[1])))
+    else:
+        mtax = np.zeros(len(cells))
+    if hasattr(bm, "chipm"):
+        chipm = params_cell(lambda c: _param(bm.chipm, c, 1.0))
+        chipm[chipm == 0.0] = 1.0  # ``or 1.0``
+    else:
+        chipm = np.ones(len(cells))
+    out = {"amgm": amgm, "rtxs": rtxs, "tmarg": tmarg, "mtax": mtax, "chipm": chipm}
+    try:
+        weakref.finalize(bm, _TRADE_PARAM_CACHE.pop, id(bm), None)
+    except TypeError:  # not weak-referenceable: no cache
+        return out
+    _TRADE_PARAM_CACHE[id(bm)] = (tx, mp_params, key, out)
+    return out
+
+
 def recompute_ifsub_report_vars(
     mp: MPArrays, params: Any, state: Any, period: str
 ) -> int:
@@ -566,7 +643,6 @@ def recompute_ifsub_report_vars(
     # the operation order of the cell formulas, so every value is the same float.
     pe_t = tab("pe")
     if pe_t is not None:
-        bm, tx = params.benchmark, params.taxes
         cells = [(r, i, rp) for r in R for i in I for rp in R if (r, i, rp) in pe_t]
 
         def per_cell(comp, keys, default=0.0):
@@ -579,42 +655,21 @@ def recompute_ifsub_report_vars(
             out[ok] = mp.vars[comp].value[idx[ok]]
             return out
 
-        def params_cell(fn):
-            return np.fromiter((fn(c) for c in cells), np.float64, len(cells))
-
+        fixed = _trade_param_cells(params, mp_params, cells, M, _param)
         pe = per_cell("pe", cells)
-        amgm_mp = mp_params["amgm"][1]
         pwmg = np.zeros(len(cells))
         for mm in M:
-            if hasattr(bm, "amgm"):
-                amgm = params_cell(lambda c, mm=mm: _param(bm.amgm, (mm, *c)))
-            else:
-                amgm = params_cell(lambda c, mm=mm: amgm_mp.get((mm, *c), 0.0))
+            amgm = fixed["amgm"][mm]
             ptmg = _pv("ptmg", (mm, period))
             lam = per_cell("lambdamg", [(mm, *c) for c in cells], 1.0)
             lam[lam == 0.0] = 1.0  # ``or 1.0``
             pwmg = pwmg + amgm * ptmg / (lam + 1e-12)
-        if hasattr(tx, "rtxs"):
-            rtxs = params_cell(lambda c: _param(tx.rtxs, c))
-        else:
-            rtxs = np.zeros(len(cells))
+        rtxs = fixed["rtxs"]
         etax = per_cell("etax", [(r, i) for r, i, _ in cells])
         pefob = (1.0 + rtxs + etax) * pe
-        # tmarg is dim-3 (no period axis); its dim-4 fallback is always the 0.0 default.
-        tmarg = params_cell(lambda c: mp_params["tmarg"][1].get(c, 0.0))
-        tmarg[tmarg == 0.0] = 0.0
-        pmcif = pefob + pwmg * tmarg
+        pmcif = pefob + pwmg * fixed["tmarg"]
         imptx = per_cell("imptx", cells)
-        if hasattr(tx, "mtax"):
-            mtax = params_cell(lambda c: _param(tx.mtax, (c[2], c[1])))
-        else:
-            mtax = np.zeros(len(cells))
-        if hasattr(bm, "chipm"):
-            chipm = params_cell(lambda c: _param(bm.chipm, c, 1.0))
-            chipm[chipm == 0.0] = 1.0  # ``or 1.0``
-        else:
-            chipm = np.ones(len(cells))
-        pm = (1.0 + imptx + mtax) * pmcif / (chipm + 1e-12)
+        pm = (1.0 + imptx + fixed["mtax"]) * pmcif / (fixed["chipm"] + 1e-12)
         for vn, vals in (
             ("pwmg", pwmg),
             ("pefob", pefob),

@@ -98,8 +98,11 @@ _XXHS = ("XXHS", "XXHS", "HISTORY OF THIS HEADER ARRAY FILE", ())
 UPDATED_HEADERS: tuple[str, ...] = (*(m[0] for m in _META), "XXHS")
 
 
-class _Period:
-    """Levels of one period of the arrays as ``{var: {cell without period: value}}``."""
+class _Period(dict):
+    """Levels of one period of the arrays as ``{var: {cell without period: value}}``.
+
+    A ``dict`` of the variables read so far: ``P[var]`` is a plain lookup (millions of
+    them while the headers are built), and ``__missing__`` reads a new one."""
 
     def __init__(self, run: AltertaxRun, period: str) -> None:
         from equilibria.blocks.gtap._derived_params import xscale_data
@@ -116,19 +119,18 @@ class _Period:
         from equilibria.blocks.gtap._derived_params import fctts_data
 
         self.fctts = fctts_data(run.params, run.params.sets)
-        self._cache: dict[str, dict[tuple[str, ...], float]] = {}
         self._vars = mp.vars
         self.trade: dict[tuple[str, str, str], dict[str, float]] = {}
+        self.dense: dict[tuple, np.ndarray] = {}  # see _dense
 
-    def __getitem__(self, name: str) -> dict[tuple[str, ...], float]:
-        if name not in self._cache:
-            v = self._vars[name]
-            self._cache[name] = {
-                tuple(k[:-1]): float(x)
-                for k, x in zip(v.keys, v.value, strict=True)
-                if k[-1] == self.period
-            }
-        return self._cache[name]
+    def __missing__(self, name: str) -> dict[tuple[str, ...], float]:
+        v = self._vars[name]
+        hit = self[name] = {
+            tuple(k[:-1]): float(x)
+            for k, x in zip(v.keys, v.value, strict=True)
+            if k[-1] == self.period
+        }
+        return hit
 
     def unscale(self, r: str, agent: str) -> float:
         """Divisor that takes a model quantity of ``agent`` in ``r`` to data units."""
@@ -284,6 +286,95 @@ def _vtwr(P: _Period, m: str, c: str, s: str, d: str) -> float:
     return _g(P["ptmg"], (m,)) * amgm * tmarg * _g(P["xw"], (s, c, d)) / lam / IN_SCALE
 
 
+def _dense_table(table: dict, axes: list[list[str]]) -> np.ndarray:
+    """``table.get(cell, 0.0)`` over the grid ``axes`` (one label list per key element);
+    a cell with a label outside ``axes`` is not on the grid."""
+    pos = [{e: i for i, e in enumerate(a)} for a in axes]
+    out = np.zeros([len(a) for a in axes], dtype=np.float64)
+    n = len(axes)
+    for cell, x in table.items():
+        if len(cell) != n:
+            continue
+        try:
+            ix = tuple(p[e] for p, e in zip(pos, cell, strict=True))
+        except KeyError:
+            continue
+        out[ix] = x
+    return out
+
+
+def _dense(P: _Period, name: str, axes: list[list[str]]) -> np.ndarray:
+    """``_g(P[name], cell)`` over the grid ``axes``, built once per period."""
+    key = (name, tuple(tuple(a) for a in axes))
+    hit = P.dense.get(key)
+    if hit is None:
+        hit = P.dense[key] = _dense_table(P[name], axes)
+    return hit
+
+
+def _firm_array(kind: str) -> Callable[[_Period, dict], np.ndarray]:
+    """:func:`_firm` over the whole (COMM, ACTS, REG) grid, same operation order."""
+
+    def f(P: _Period, els: dict) -> np.ndarray:
+        C, A, R = els["COMM"], els["ACTS"], els["REG"]
+        dom = kind[1] == "D"
+        q = _dense(P, "xda" if dom else "xma", [R, C, A])
+        price = _dense(P, "pd" if dom else "pmt", [R, C])[:, :, None]
+        if kind[3] == "P":
+            price = price * (1.0 + _dense(P, "dintx" if dom else "mintx", [R, C, A]))
+        xs = np.array([[P.xscale.get((r, a), 1.0) for a in A] for r in R])
+        unscale = (IN_SCALE * xs)[:, None, :]
+        return np.ascontiguousarray((price * q / unscale).transpose(1, 2, 0))
+
+    return f
+
+
+def _make_array(basic: bool) -> Callable[[_Period, dict], np.ndarray]:
+    """:func:`_make` over the whole (COMM, ACTS, REG) grid, same operation order."""
+
+    def f(P: _Period, els: dict) -> np.ndarray:
+        C, A, R = els["COMM"], els["ACTS"], els["REG"]
+        price = _dense(P, "p_rai", [R, A, C])
+        if basic:
+            price = price * (1.0 + _dense(P, "prdtx_rai", [R, A, C]))
+        val = price * _dense(P, "x", [R, A, C]) / IN_SCALE
+        return np.ascontiguousarray(val.transpose(2, 1, 0))
+
+    return f
+
+
+def _vxsb_array(P: _Period, els: dict) -> np.ndarray:
+    """:func:`_vxsb` over the whole (COMM, REG, REG) grid."""
+    C, R = els["COMM"], els["REG"]
+    val = _dense(P, "pd", [R, C])[:, :, None] * _dense(P, "xw", [R, C, R]) / IN_SCALE
+    return np.ascontiguousarray(val.transpose(1, 0, 2))
+
+
+def _vtwr_array(P: _Period, els: dict) -> np.ndarray:
+    """:func:`_vtwr` over the whole (MARG, COMM, REG, REG) grid, same operation order."""
+    M, C, R = els["MARG"], els["COMM"], els["REG"]
+    ptmg = _dense(P, "ptmg", [M])[:, None, None, None]
+    amgm = _dense_table(P.amgm, [M, R, C, R])
+    tmarg = _dense_table(P.tmarg, [R, C, R])[None]
+    xw = _dense(P, "xw", [R, C, R])[None]
+    lam = _dense(P, "lambdamg", [M, R, C, R]) + 1e-12
+    val = ptmg * amgm * tmarg * xw / lam / IN_SCALE
+    return np.ascontiguousarray(val.transpose(0, 2, 1, 3))
+
+
+# Headers built as whole arrays (bit for bit the cell functions of _VALUE)
+_ARRAY: dict[str, Callable[[_Period, dict], np.ndarray]] = {
+    "VDFB": _firm_array("VDFB"),
+    "VMFB": _firm_array("VMFB"),
+    "VDFP": _firm_array("VDFP"),
+    "VMFP": _firm_array("VMFP"),
+    "MAKS": _make_array(False),
+    "MAKB": _make_array(True),
+    "VXSB": _vxsb_array,
+    "VTWR": _vtwr_array,
+}
+
+
 _VALUE: dict[str, Callable[..., float]] = {
     "VDFB": _firm("VDFB"),
     "VMFB": _firm("VMFB"),
@@ -341,10 +432,13 @@ def _build_headers(run: AltertaxRun, period: str) -> dict[str, HeaderArray]:
         if name not in _VALUE:
             continue
         lists = [els[x] for x in sets]
-        arr = np.zeros([len(x) for x in lists], dtype=np.float64)
-        fn = _VALUE[name]
-        for ix in np.ndindex(arr.shape):
-            arr[ix] = fn(P, *(lists[d][i] for d, i in enumerate(ix)))
+        if name in _ARRAY:
+            arr = _ARRAY[name](P, els)
+        else:
+            arr = np.zeros([len(x) for x in lists], dtype=np.float64)
+            fn = _VALUE[name]
+            for ix in np.ndindex(arr.shape):
+                arr[ix] = fn(P, *(lists[d][i] for d, i in enumerate(ix)))
         out[name] = HeaderArray(
             name=name,
             coeff_name=coeff,

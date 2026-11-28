@@ -433,6 +433,8 @@ def record_cross_period(
     backend.var_domains = dict(rec.var_domains)
     backend.param_domains = dict(rec.param_domains)
     backend.sets = rec.sets
+    for n, recs in backend.records.items():  # saved with the records
+        backend._term_table(n, recs)
     return backend
 
 
@@ -581,6 +583,11 @@ class _MqRows:
         sub = FamilyBackend()
         sub.records = {f: backend.records[f] for f in fams}
         sub.var_domains, sub.sets = self.var_domains, sets
+        if isinstance(backend, FamilyBackend):  # its term tables (cached on disk)
+            sub.__dict__["_term_tables"] = {
+                f: (sub.records[f], backend._term_table(f, sub.records[f]))
+                for f in fams
+            }
         self.system = sub.system(layout)
         self.off: dict[str, int] = {}
         o = 0
