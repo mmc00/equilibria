@@ -4,7 +4,11 @@
 PR 4 recorder (``scripts/dev/record_pr4_old_route.py``, committed in 6a6fd1bf and
 deleted with the old drivers by PR 4 of gtap-on-core); two runs were identical. The
 seven ``on_core_*`` cases (test_gtap_on_core_solve, commit f50dad93) were recorded
-later by the same recorder on a checkout of 2c0d882a, two identical runs again. Each case is
+later by the same recorder on a checkout of 2c0d882a, two identical runs again. MAR-251
+(capFlex risk from the data, not a capFix twin) re-recorded three nus333 capFlex cases
+from the core route, the old driver being gone: ``burfisher_nonlinear`` and
+``burfisher_johansen`` (c8861e93, up to 4.1e-7) and ``on_core_overwrite_nus333`` (up to
+1.9e-7, two identical runs); they now hold the core to itself. Each case is
 the old side of one old-vs-core equality test. The core is compared against it with
 a tolerance (``tests/_golden.py``): another CPU moves the last bits.
 """

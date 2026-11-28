@@ -23,9 +23,12 @@ of the `USA` to `ROW` route for `MFG`.
 
 ```{note}
 These examples run on the Pyomo backend (the default). The family (JAX)
-backend runs none of them yet: `capFlex`, and so `gtap_default()`, needs a GAMS
-GDX there, the shock goes in a single step and `@overwrite` is refused. That
-work is MAR-251.
+backend runs the first three too (`GTAP(..., backend="family")`): `capFlex`
+takes its `risk` from the data as GAMS does (`cal.gms`), with no GAMS GDX, and
+the shock can go in steps or as one Johansen step. All 37 Burfisher exercises
+of `scripts/gtap/run_burfisher.py` give the same numbers on both backends. The
+three `@overwrite` cases are still refused there, and the family backend has no
+EV yet: that work is MAR-251.
 ```
 
 ## Default: RunGTAP's standard closure

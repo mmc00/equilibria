@@ -55,8 +55,6 @@ def check_supported(
     mute_welfare: bool,
     seed_from_prior: bool,
     solve_check: bool,
-    shock_steps: tuple[float, ...] | None,
-    shock_method: str,
     env: Mapping[str, str] | None = None,
 ) -> None:
     """Raise ``NotImplementedError`` naming the first setting the family route cannot run."""
@@ -65,12 +63,7 @@ def check_supported(
     def refuse(what: str) -> None:
         raise NotImplementedError(f"family backend: {what} is not supported")
 
-    if savf_flag == "capFlex":
-        if not if_sub:
-            refuse(
-                "savf_flag='capFlex' with if_sub=False (capFlex runs with ifSUB=1 only)"
-            )
-    elif savf_flag != "capFix":
+    if savf_flag not in ("capFix", "capFlex"):
         refuse(f"savf_flag={savf_flag!r} (only 'capFix' and 'capFlex')")
     if mode != "gtap":
         refuse(f"mode={mode!r} (only 'gtap')")
@@ -82,10 +75,6 @@ def check_supported(
         refuse("mute_welfare=False")
     if not solve_check:
         refuse("solve_check=False (the route runs base, check and shock)")
-    if shock_steps:
-        refuse("shock_steps")
-    if shock_method != "nonlinear":
-        refuse(f"shock_method={shock_method!r} (only 'nonlinear')")
     if env.get("EQUILIBRIA_GTAP_SOLVER") != "scipy_newton_tr":
         refuse(
             f"EQUILIBRIA_GTAP_SOLVER={env.get('EQUILIBRIA_GTAP_SOLVER')!r} "
@@ -223,8 +212,8 @@ def prepare_run(
     Pyomo model. ``params`` takes the closure's value-added subsidy basis and
     ``unit_sigma`` in place, as ``build_block_model`` does. ``freeze`` moves the loaded records to the GC's permanent
     generation before ``mp_build``; only for a caller inside a context that unfreezes.
-    Under capFlex ``ref_gdx`` gives ``params._capflex_risk`` (see ``family.capflex``), set
-    before the cache keys are taken."""
+    Under capFlex ``params._capflex_risk`` comes from the data (see ``family.capflex``),
+    set before the cache keys are taken."""
     from equilibria.family import cross_period
     from equilibria.family.disk_cache import cache_key, enable_jax_cache, load_or_build
     from equilibria.family.prep_square import ConditionalMasks
@@ -236,7 +225,7 @@ def prepare_run(
     )
     params.set_va_subsidy_basis(getattr(closure, "va_subsidy_basis", "gams"))
     params.set_unit_sigma(getattr(closure, "unit_sigma", "gams"))
-    stamp_capflex_risk(params, closure, ref_gdx)
+    stamp_capflex_risk(params, closure)
     root = Path(cache_root) if cache_root is not None else default_cache_root()
     if jax_cache:
         with phase("jax_cache_setup"):

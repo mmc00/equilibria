@@ -20,8 +20,6 @@ GOOD: dict[str, Any] = dict(  # noqa: C408
     mute_welfare=True,
     seed_from_prior=False,
     solve_check=True,
-    shock_steps=None,
-    shock_method="nonlinear",
 )
 
 
@@ -33,16 +31,13 @@ def test_supported_config_passes():
     run()
     run(if_sub=False)  # ifSUB=0 is supported
     run(savf_flag="capFlex")  # capFlex with ifSUB=1 is supported
+    run(savf_flag="capFlex", if_sub=False)  # and with ifSUB=0 (MAR-251)
     run(env={"EQUILIBRIA_GTAP_TR_LINSOLVE": "direct"})
 
 
 @pytest.mark.parametrize(
     "kw, needle",
     [
-        (
-            {"savf_flag": "capFlex", "if_sub": False},
-            "savf_flag='capFlex' with if_sub=False",
-        ),
         ({"savf_flag": "capSFix"}, "savf_flag='capSFix'"),
         ({"savf_flag": "capShrFix"}, "savf_flag='capShrFix'"),
         ({"savf_flag": "capFixDp"}, "savf_flag='capFixDp'"),
@@ -51,8 +46,6 @@ def test_supported_config_passes():
         ({"seed_from_prior": True}, "seed_from_prior"),
         ({"mute_welfare": False}, "mute_welfare"),
         ({"solve_check": False}, "solve_check"),
-        ({"shock_steps": (0.5, 1.0)}, "shock_steps"),
-        ({"shock_method": "johansen"}, "shock_method"),
     ],
 )
 def test_argument_refusals_name_the_setting(kw, needle):
@@ -157,8 +150,7 @@ def test_user_shocks_are_not_a_refusal_reason():
     import inspect
 
     assert not any(
-        "shock" in p and p not in ("shock_steps", "shock_method")
-        for p in inspect.signature(run_setup.check_supported).parameters
+        "shock" in p for p in inspect.signature(run_setup.check_supported).parameters
     )
 
 
@@ -184,9 +176,6 @@ def test_solve_shock_family_route_refuses_before_any_work(monkeypatch):
         mod._solve_shock("gtap7_3x3", 1, "capFix", solve_nlp=True, backend="family")
     with pytest.raises(NotImplementedError, match="savf_flag='capSFix'"):
         mod._solve_shock("gtap7_3x3", 1, "capSFix", solve_nlp=True, backend="family")
-    # ifSUB=0 and capFlex are lifted separately, not crossed (before any work)
-    with pytest.raises(NotImplementedError, match="capFlex' with if_sub=False"):
-        mod._solve_shock("gtap7_3x3", 0, "capFlex", solve_nlp=True, backend="family")
     monkeypatch.setenv("EQUILIBRIA_GTAP_SOLVER", "scipy_newton_tr")
     with pytest.raises(NotImplementedError, match="SOLVE_NLP"):
         mod._solve_shock("gtap7_3x3", 1, "capFix", solve_nlp=False, backend="family")
@@ -411,17 +400,3 @@ def test_family_newton_analyses_mumps_with_the_values(monkeypatch):
     monkeypatch.setattr(ntr, "newton_tr", fake)
     period_newton._newton(SS(), _any(sq))
     assert seen["mumps_values_at_analysis"] is True
-
-
-def test_solve_shock_family_capflex_without_a_gdx_refuses_before_loading(monkeypatch):
-    mod = _parity_module()
-    monkeypatch.setenv("EQUILIBRIA_GTAP_SOLVER", "scipy_newton_tr")
-    monkeypatch.setenv("EQUILIBRIA_GTAP_TR_LINSOLVE", "mumps")
-    monkeypatch.setattr(mod, "_reference_gdx", lambda *a, **k: None)
-    monkeypatch.setattr(
-        mod,
-        "dataset_dir",
-        lambda *a, **k: pytest.fail("the dataset was touched before the refusal"),
-    )
-    with pytest.raises(NotImplementedError, match="capFlex.*needs rore/rorg"):
-        mod._solve_shock("gtap7_3x3", 1, "capFlex", solve_nlp=True, backend="family")

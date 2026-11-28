@@ -84,3 +84,12 @@ def test_the_result_dict_keeps_its_code() -> None:
     old = ["{'code': 1, 'residual': 8.589158046959055e-14}"]
     assert mismatches(["{'code': 'optimal', 'residual': 5.1e-13}"], old) == []
     assert mismatches(["{'code': 'code 2', 'residual': 5.1e-13}"], old)
+
+
+def test_the_largest_difference_line_moves_by_at_most_its_band() -> None:
+    """TBL64's headline: 0.029% on Linux against 0.026% on the Mac passes, a move
+    past ``LARGEST_DIFF_ABS`` does not, and every other line keeps ``rel``."""
+    old = ["largest difference: 0.026%"]
+    assert mismatches(["largest difference: 0.029%"], old) == []
+    assert mismatches(["largest difference: 0.032%"], old)
+    assert mismatches(["within 0.5%: 99.29%"], ["within 0.5%: 99.28%"])

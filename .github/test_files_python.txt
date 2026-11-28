@@ -142,10 +142,12 @@ tests/family/test_driver_hook.py
 tests/family/test_family_driver_guards.py
 tests/family/test_family_e2e.py
 tests/family/test_family_e2e_capflex.py
+tests/family/test_family_e2e_capflex_ifsub0.py
 tests/family/test_family_e2e_gate.py
 tests/family/test_family_e2e_ifsub0.py
 tests/family/test_family_gempack_parity.py
 tests/family/test_family_multishock.py
+tests/family/test_family_shock_steps.py
 tests/family/test_fscale.py
 tests/family/test_gate1_all_families.py
 tests/family/test_gate1_fidelity.py
@@ -166,6 +168,7 @@ tests/family/test_mp_build.py
 tests/family/test_newton_family.py
 tests/family/test_pairing_cache.py
 tests/family/test_parity_rules.py
+tests/family/test_period_levels.py
 tests/family/test_phases.py
 tests/family/test_photo_freshness.py
 tests/family/test_photos.py
@@ -263,6 +266,7 @@ tests/scripts/test_regen_nus333.py
 tests/scripts/test_regenerate_gams.py
 tests/scripts/test_regenerate_gempack.py
 tests/scripts/test_regenerate_paper.py
+tests/scripts/test_run_burfisher_family.py
 tests/scripts/test_run_burfisher_routes.py
 tests/scripts/test_run_gempack_matrix_out.py
 tests/scripts/test_run_parity_gates_exige_solvers.py
@@ -300,7 +304,9 @@ tests/templates/gtap/test_blocks_no_demand_fix.py
 tests/templates/gtap/test_calibrate_reuse_model.py
 tests/templates/gtap/test_capfixdp_closure.py
 tests/templates/gtap/test_capflex_closure.py
+tests/templates/gtap/test_capflex_risk.py
 tests/templates/gtap/test_capflex_risk_on_core.py
+tests/templates/gtap/test_capflex_risk_oracle.py
 tests/templates/gtap/test_cd_sigma_guard.py
 tests/templates/gtap/test_closure_gtap_default.py
 tests/templates/gtap/test_coverage_matrix.py
