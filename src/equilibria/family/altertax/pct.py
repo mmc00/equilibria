@@ -23,6 +23,7 @@ A reader for a ``.sl4`` is :func:`equilibria.babel.har.sl4.read_sl4_changes`;
 
 from __future__ import annotations
 
+import itertools
 from pathlib import Path
 
 import numpy as np
@@ -71,6 +72,8 @@ def _changes(run: AltertaxRun, pre: str, post: str) -> tuple[Pct, dict[str, set]
     xscale = dict(xscale_data(run.params, run.params.sets))
     # pfactwld: FIXED overrides the gtap7.yaml row (pwfact)
     out, zero = gempack_pct(levels, xscale, pre, post, skip=FIXED)
+    # the zero cells read only ``pre``: kept for zero_base_cells while the levels hold
+    run._zero_base[(pre, _levels_digest(run))] = zero
     A, B = _Period(run, pre), _Period(run, post)
     for name, (var, perm, _) in FIXED.items():
         one = 1.0 if name in POWER else 0.0
@@ -98,7 +101,24 @@ def zero_base_cells(run: AltertaxRun, pre: str = "check") -> dict[str, set]:
     reports 0. A % change on a zero flow is undefined: GEMPACK still reports the value of
     its price-difference formula there (``E_qes2`` holds for every cell regardless of the
     weight), so these cells are not comparable and are excluded from the gate."""
-    return _changes(run, pre, pre)[1]
+    hit = run._zero_base.get((pre, _levels_digest(run)))
+    if hit is None:
+        hit = _changes(run, pre, pre)[1]
+    return {n: set(c) for n, c in hit.items()}
+
+
+def _levels_digest(run: AltertaxRun) -> bytes:
+    """Digest of the arrays ``gempack_pct`` reads (levels and cell keys of
+    :data:`EQ_VARS`): equal digests, equal zero cells."""
+    import hashlib
+
+    h = hashlib.blake2b(digest_size=16)
+    for n in EQ_VARS:
+        v = run.result.mp.vars[n]
+        h.update(n.encode())
+        h.update(repr(len(v.keys)).encode())
+        h.update(np.ascontiguousarray(v.value, dtype=np.float64).tobytes())
+    return h.digest()
 
 
 def read_sl4dump(path: Path) -> Sl4Changes:
@@ -138,9 +158,20 @@ def gempack_changes(changes: Sl4Changes | Pct) -> Pct:
     for name, ch in changes.changes.items():
         if ch.kind != "p":
             continue
+        values = np.asarray(ch.values)
+        els = ch.set_elements
+        if tuple(len(e) for e in els) == values.shape:  # C order, as np.ndindex
+            out[name] = dict(
+                zip(
+                    itertools.product(*els),
+                    map(float, values.ravel().tolist()),
+                    strict=True,
+                )
+            )
+            continue
         out[name] = {
-            tuple(ch.set_elements[d][i] for d, i in enumerate(ix)): float(ch.values[ix])
-            for ix in np.ndindex(ch.values.shape)
+            tuple(els[d][i] for d, i in enumerate(ix)): float(values[ix])
+            for ix in np.ndindex(values.shape)
         }
     return out
 

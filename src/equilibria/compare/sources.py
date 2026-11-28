@@ -44,7 +44,7 @@ def _no_period_dim(dimension: int, period_dim: int | None) -> str:
 
 def _as_index(key: Any) -> Index:
     if isinstance(key, tuple):
-        return tuple(str(k) for k in key)
+        return tuple(map(str, key))
     if key is None:
         return ()
     return (str(key),)

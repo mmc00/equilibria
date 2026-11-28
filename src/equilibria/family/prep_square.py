@@ -97,27 +97,25 @@ _REQUIRED_ROWS = ("eq_va", "eq_xfteq")
 # ── Key lookups (cached on the arrays: keys never change) ───────────────────
 
 
-def _grid(obj: VarArr | RowArr) -> np.ndarray:
-    """The keys as a (cells, dims) string array."""
-    c = obj.__dict__.setdefault("_kgrid", [])
-    if not c:
-        c.append(np.array(obj.keys, dtype=str).reshape(len(obj.keys), -1))
-    return c[0]
-
-
 def _codes(obj: VarArr | RowArr, j: int) -> tuple[np.ndarray, dict[str, int]]:
-    """Integer code of each cell's j-th key element, and the element -> code map."""
+    """Integer code of each cell's j-th key element (as a string), and the element ->
+    code map; codes in order of first appearance."""
     cache = obj.__dict__.setdefault("_kcodes", {})
     if j not in cache:
-        vocab, inv = np.unique(_grid(obj)[:, j], return_inverse=True)
-        cache[j] = (inv.astype(np.int64), {str(s): i for i, s in enumerate(vocab)})
+        vocab: dict[str, int] = {}
+        inv = np.fromiter(
+            (vocab.setdefault(str(k[j]), len(vocab)) for k in obj.keys),
+            dtype=np.int64,
+            count=len(obj.keys),
+        )
+        cache[j] = (inv, vocab)
     return cache[j]
 
 
 def _in_set(obj: VarArr | RowArr, flags: set[tuple], ndim: int) -> np.ndarray:
     """Cells whose first ``ndim`` key elements are in ``flags`` (tuples of that size)."""
     out = np.zeros(len(obj.keys), dtype=bool)
-    if not flags or _grid(obj).shape[1] < ndim:
+    if not flags or not obj.keys or len(obj.keys[0]) < ndim:
         return out
     code = np.zeros(len(obj.keys), dtype=np.int64)
     maps = []
@@ -127,11 +125,18 @@ def _in_set(obj: VarArr | RowArr, flags: set[tuple], ndim: int) -> np.ndarray:
         code += inv * stride
         maps.append((vocab, stride))
         stride *= max(len(vocab), 1)
-    want = []
-    for f in flags:
-        if all(f[j] in maps[j][0] for j in range(ndim)):
-            want.append(sum(maps[j][0][f[j]] * maps[j][1] for j in range(ndim)))
-    return np.isin(code, np.array(want, dtype=np.int64)) if want else out
+    # code of each flag, as arrays over the flags; -1 marks an element outside the vocab
+    fl = list(flags)
+    n = len(fl)
+    want = np.zeros(n, dtype=np.int64)
+    known = np.ones(n, dtype=bool)
+    for j in range(ndim):
+        vocab, step = maps[j]
+        c = np.fromiter((vocab.get(f[j], -1) for f in fl), dtype=np.int64, count=n)
+        known &= c >= 0
+        want += c * step
+    want = want[known]
+    return np.isin(code, want) if len(want) else out
 
 
 def _pos_map(obj: VarArr | RowArr) -> dict[tuple, int]:

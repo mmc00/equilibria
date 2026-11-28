@@ -51,6 +51,8 @@ class AltertaxRun:
     # ``updated.headers_at``'s value headers per period, built once; not an init field,
     # so ``dataclasses.replace`` (the decomp path's points) starts with none
     _headers: dict = field(default_factory=dict, init=False, repr=False, compare=False)
+    # ``pct.zero_base_cells`` per (pre period, digest of the levels it reads)
+    _zero_base: dict = field(default_factory=dict, init=False, repr=False, compare=False)
 
     def solve_records(self) -> list[dict]:
         """Every Newton solve of the run (``AltertaxResult.solves``: settle, check, shock

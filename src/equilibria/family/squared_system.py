@@ -347,14 +347,14 @@ def _flat_index(var: Any, doms: tuple[str, ...], sets: dict[str, list[str]]):
     # the labels themselves, not id(sets): a freed dict's id can be reused
     key = (doms, tuple(tuple(sets[d]) for d in doms))
     if key not in cache:
-        pos = [{e: i for i, e in enumerate(sets[d])} for d in doms]
-        shape = [len(sets[d]) for d in doms]
-        flat = np.empty(len(var.keys), dtype=np.int64)
-        for n, k in enumerate(var.keys):
-            f = 0
-            for p, size, e in zip(pos, shape, k, strict=True):
-                f = f * size + p[e]
-            flat[n] = f
+        n = len(var.keys)
+        if any(len(k) != len(doms) for k in var.keys):
+            raise ValueError(f"a key whose length is not that of {doms}")
+        flat = np.zeros(n, dtype=np.int64)
+        for j, d in enumerate(doms):  # one dimension at a time, C order
+            p = {e: i for i, e in enumerate(sets[d])}
+            col = np.fromiter((p[k[j]] for k in var.keys), dtype=np.int64, count=n)
+            flat = flat * len(sets[d]) + col
         cache[key] = flat
     return cache[key]
 

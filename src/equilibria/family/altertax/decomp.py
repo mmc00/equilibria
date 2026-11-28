@@ -81,10 +81,11 @@ from equilibria.babel.har.symbols import HeaderArray
 from equilibria.babel.har.writer import write_har
 from equilibria.family.altertax.run import AltertaxRun
 from equilibria.family.altertax.updated import (
+    _dense,
     _elements,
     _g,
     _Period,
-    _trade_prices,
+    _trade_arrays,
     headers_at,
 )
 
@@ -241,40 +242,44 @@ def changes_between(
     )
     nc, na, nr, ne, nm = len(comm), len(acts), len(reg), len(endw), len(marg)
 
-    def pct(var: str, key_of: Callable[..., tuple[str, ...]], shape: tuple[int, ...]):
-        return _fill(shape, lambda *ix: _ratio(A[var], B[var], key_of(*ix)))
+    def pct(var: str, axes: list[list[str]], perm: tuple[int, ...]) -> np.ndarray:
+        """:func:`_ratio` of every cell of ``var`` on the grid ``axes`` (the model's key
+        order), the axes then put in the header's order ``perm``."""
+        x0 = _dense(A, var, axes).transpose(perm)
+        x1 = _dense(B, var, axes).transpose(perm)
+        out = np.zeros(x0.shape)
+        nz = x0 != 0.0
+        out[nz] = 100.0 * (x1[nz] / x0[nz] - 1.0)
+        return out
 
     def final(var: str, agent: str) -> np.ndarray:
-        return pct(var, lambda c, r: (reg[r], comm[c], agent), (nc, nr))
+        return pct(var, [reg, comm, [agent]], (1, 0, 2))[:, :, 0]
 
     def pfob_at(P: _Period) -> np.ndarray:
-        return _fill(
-            (nc, nr, nr),
-            lambda c, s, d: _trade_prices(P, reg[s], comm[c], reg[d])["pefob"],
-        )
+        return _trade_arrays(P, els)["pefob"].transpose(1, 0, 2)
 
     p0, p1 = pfob_at(A), pfob_at(B)
     return {
-        "qca": pct("x", lambda c, a, r: (reg[r], acts[a], comm[c]), (nc, na, nr)),
-        "qfe": pct("xf", lambda e, a, r: (reg[r], endw[e], acts[a]), (ne, na, nr)),
-        "qfm": pct("xma", lambda c, a, r: (reg[r], comm[c], acts[a]), (nc, na, nr)),
-        "qfd": pct("xda", lambda c, a, r: (reg[r], comm[c], acts[a]), (nc, na, nr)),
+        "qca": pct("x", [reg, acts, comm], (2, 1, 0)),
+        "qfe": pct("xf", [reg, endw, acts], (1, 2, 0)),
+        "qfm": pct("xma", [reg, comm, acts], (1, 2, 0)),
+        "qfd": pct("xda", [reg, comm, acts], (1, 2, 0)),
         "qpm": final("xma", "hhd"),
         "qpd": final("xda", "hhd"),
         "qgm": final("xma", "gov"),
         "qgd": final("xda", "gov"),
         "qim": final("xma", "inv"),
         "qid": final("xda", "inv"),
-        "qxs": pct("xw", lambda c, s, d: (reg[s], comm[c], reg[d]), (nc, nr, nr)),
-        "qo": pct("xp", lambda a, r: (reg[r], acts[a]), (na, nr)),
-        "kb": pct("kstock", lambda r: (reg[r],), (nr,)),
-        "pop": pct("pop", lambda r: (reg[r],), (nr,)),
+        "qxs": pct("xw", [reg, comm, reg], (1, 0, 2)),
+        "qo": pct("xp", [reg, acts], (1, 0)),
+        "kb": pct("kstock", [reg], (0,)),
+        "pop": pct("pop", [reg], (0,)),
         "pfob": 100.0
         * (_div(p1, p0) - (p0 != 0.0)),  # 100 * (p1/p0 - 1), 0 where p0 = 0
-        "pds": pct("pd", lambda c, r: (reg[r], comm[c]), (nc, nr)),
-        "pinv": pct("pi", lambda r: (reg[r],), (nr,)),
-        "psave": pct("psave", lambda r: (reg[r],), (nr,)),
-        "pt": pct("ptmg", lambda m: (marg[m],), (nm,)),
+        "pds": pct("pd", [reg, comm], (1, 0)),
+        "pinv": pct("pi", [reg], (0,)),
+        "psave": pct("psave", [reg], (0,)),
+        "pt": pct("ptmg", [marg], (0,)),
     }
 
 

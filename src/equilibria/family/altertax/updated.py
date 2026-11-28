@@ -45,8 +45,10 @@ VKB      pi[r] * kstock[r]                          2377
 from __future__ import annotations
 
 import dataclasses
+import weakref
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -98,8 +100,11 @@ _XXHS = ("XXHS", "XXHS", "HISTORY OF THIS HEADER ARRAY FILE", ())
 UPDATED_HEADERS: tuple[str, ...] = (*(m[0] for m in _META), "XXHS")
 
 
-class _Period:
-    """Levels of one period of the arrays as ``{var: {cell without period: value}}``."""
+class _Period(dict):
+    """Levels of one period of the arrays as ``{var: {cell without period: value}}``.
+
+    A ``dict`` of the variables read so far: ``P[var]`` is a plain lookup (millions of
+    them while the headers are built), and ``__missing__`` reads a new one."""
 
     def __init__(self, run: AltertaxRun, period: str) -> None:
         from equilibria.blocks.gtap._derived_params import xscale_data
@@ -116,19 +121,18 @@ class _Period:
         from equilibria.blocks.gtap._derived_params import fctts_data
 
         self.fctts = fctts_data(run.params, run.params.sets)
-        self._cache: dict[str, dict[tuple[str, ...], float]] = {}
         self._vars = mp.vars
         self.trade: dict[tuple[str, str, str], dict[str, float]] = {}
+        self.dense: dict[tuple, np.ndarray] = {}  # see _dense
 
-    def __getitem__(self, name: str) -> dict[tuple[str, ...], float]:
-        if name not in self._cache:
-            v = self._vars[name]
-            self._cache[name] = {
-                tuple(k[:-1]): float(x)
-                for k, x in zip(v.keys, v.value, strict=True)
-                if k[-1] == self.period
-            }
-        return self._cache[name]
+    def __missing__(self, name: str) -> dict[tuple[str, ...], float]:
+        v = self._vars[name]
+        hit = self[name] = {
+            tuple(k[:-1]): float(x)
+            for k, x in zip(v.keys, v.value, strict=True)
+            if k[-1] == self.period
+        }
+        return hit
 
     def unscale(self, r: str, agent: str) -> float:
         """Divisor that takes a model quantity of ``agent`` in ``r`` to data units."""
@@ -244,6 +248,77 @@ def _trade_prices_cell(P: _Period, s: str, c: str, d: str) -> dict[str, float]:
     return {"pefob": pefob, "pmcif": pmcif, "pm": pm}
 
 
+_TRADE_FIXED: dict[int, tuple[tuple, dict[str, np.ndarray]]] = {}
+
+
+def _trade_fixed(P: _Period, C: list[str], R: list[str], M: list[str]) -> dict:
+    """The level-free factors of :func:`_trade_prices_cell` over the (s, c, d) grid
+    (``amgm`` over (m, s, c, d)), through the same macros cell by cell. Built once per
+    params (and grid) and shared: as ``mp_margin_params``, it assumes the params are
+    not edited after load; dropped when they are collected."""
+    from equilibria.blocks.gtap import _ifsub_macros as mac
+
+    p = P.p
+    key = (tuple(C), tuple(R), tuple(M))
+    hit = _TRADE_FIXED.get(id(p))
+    if hit is not None and hit[0] == key:
+        return hit[1]
+    shape = (len(R), len(C), len(R))
+    fob, tmarg, mtax, chipm = (np.empty(shape) for _ in range(4))
+    amgm = np.empty((len(M), *shape))
+    for i, s in enumerate(R):
+        for j, c in enumerate(C):
+            for k, d in enumerate(R):
+                fob[i, j, k] = (
+                    1.0 + mac._safe(p, "taxes.rtxs", (s, c, d)) + mac.etax_value(p, s, c, d)
+                )
+                tmarg[i, j, k] = P.tmarg.get((s, c, d), 0.0)
+                mtax[i, j, k] = mac.mtax_value(p, d, c, s)
+                chipm[i, j, k] = mac.chipm_value(p, s, c, d)
+                for m_i, m in enumerate(M):
+                    amgm[m_i, i, j, k] = P.amgm.get((m, s, c, d), 0.0)
+    out = {"fob": fob, "tmarg": tmarg, "mtax": mtax, "chipm": chipm, "amgm": amgm}
+    try:
+        weakref.finalize(p, _TRADE_FIXED.pop, id(p), None)
+    except TypeError:  # not weak-referenceable: no cache
+        return out
+    _TRADE_FIXED[id(p)] = (key, out)
+    return out
+
+
+def _trade_arrays(P: _Period, els: dict) -> dict[str, np.ndarray]:
+    """:func:`_trade_prices_cell` over the whole (s, c, d) grid, in its operation
+    order (bit for bit): ``{"pefob", "pmcif", "pm"}``, built once per period."""
+    hit = P.dense.get(("_trade",))
+    if hit is not None:
+        return hit
+    C, R, M = els["COMM"], els["REG"], list(P.p.sets.marg)
+    f = _trade_fixed(P, C, R, M)
+    pefob = f["fob"] * _dense(P, "pe", [R, C, R])
+    ptmg = _dense(P, "ptmg", [M])
+    lam = _dense(P, "lambdamg", [M, R, C, R])
+    pwmg: Any = 0  # as ``sum``: an int start
+    for m_i in range(len(M)):
+        pwmg = pwmg + f["amgm"][m_i] * ptmg[m_i] / (lam[m_i] + 1e-12)
+    pmcif = pefob + pwmg * f["tmarg"]
+    imptx = _dense(P, "imptx", [R, C, R])
+    pm = (1.0 + imptx + f["mtax"]) * pmcif / f["chipm"]
+    hit = P.dense[("_trade",)] = {"pefob": pefob, "pmcif": pmcif, "pm": pm}
+    return hit
+
+
+def _trade_array(pvar: str) -> Callable[[_Period, dict], np.ndarray]:
+    """:func:`_trade` over the whole (COMM, REG, REG) grid."""
+
+    def f(P: _Period, els: dict) -> np.ndarray:
+        C, R = els["COMM"], els["REG"]
+        price = _trade_arrays(P, els)[pvar]
+        val = price * _dense(P, "xw", [R, C, R]) / IN_SCALE
+        return np.ascontiguousarray(val.transpose(1, 0, 2))
+
+    return f
+
+
 def _trade(pvar: str) -> Callable[[_Period, str, str, str], float]:
     def f(P: _Period, c: str, s: str, d: str) -> float:
         return _trade_prices(P, s, c, d)[pvar] * _g(P["xw"], (s, c, d)) / IN_SCALE
@@ -282,6 +357,98 @@ def _vtwr(P: _Period, m: str, c: str, s: str, d: str) -> float:
     tmarg = P.tmarg.get((s, c, d), 0.0)
     lam = _g(P["lambdamg"], (m, s, c, d)) + 1e-12  # as ``_xmgm`` of ifsub_arrays
     return _g(P["ptmg"], (m,)) * amgm * tmarg * _g(P["xw"], (s, c, d)) / lam / IN_SCALE
+
+
+def _dense_table(table: dict, axes: list[list[str]]) -> np.ndarray:
+    """``table.get(cell, 0.0)`` over the grid ``axes`` (one label list per key element);
+    a cell with a label outside ``axes`` is not on the grid."""
+    pos = [{e: i for i, e in enumerate(a)} for a in axes]
+    out = np.zeros([len(a) for a in axes], dtype=np.float64)
+    n = len(axes)
+    for cell, x in table.items():
+        if len(cell) != n:
+            continue
+        try:
+            ix = tuple(p[e] for p, e in zip(pos, cell, strict=True))
+        except KeyError:
+            continue
+        out[ix] = x
+    return out
+
+
+def _dense(P: _Period, name: str, axes: list[list[str]]) -> np.ndarray:
+    """``_g(P[name], cell)`` over the grid ``axes``, built once per period."""
+    key = (name, tuple(tuple(a) for a in axes))
+    hit = P.dense.get(key)
+    if hit is None:
+        hit = P.dense[key] = _dense_table(P[name], axes)
+    return hit
+
+
+def _firm_array(kind: str) -> Callable[[_Period, dict], np.ndarray]:
+    """:func:`_firm` over the whole (COMM, ACTS, REG) grid, same operation order."""
+
+    def f(P: _Period, els: dict) -> np.ndarray:
+        C, A, R = els["COMM"], els["ACTS"], els["REG"]
+        dom = kind[1] == "D"
+        q = _dense(P, "xda" if dom else "xma", [R, C, A])
+        price = _dense(P, "pd" if dom else "pmt", [R, C])[:, :, None]
+        if kind[3] == "P":
+            price = price * (1.0 + _dense(P, "dintx" if dom else "mintx", [R, C, A]))
+        xs = np.array([[P.xscale.get((r, a), 1.0) for a in A] for r in R])
+        unscale = (IN_SCALE * xs)[:, None, :]
+        return np.ascontiguousarray((price * q / unscale).transpose(1, 2, 0))
+
+    return f
+
+
+def _make_array(basic: bool) -> Callable[[_Period, dict], np.ndarray]:
+    """:func:`_make` over the whole (COMM, ACTS, REG) grid, same operation order."""
+
+    def f(P: _Period, els: dict) -> np.ndarray:
+        C, A, R = els["COMM"], els["ACTS"], els["REG"]
+        price = _dense(P, "p_rai", [R, A, C])
+        if basic:
+            price = price * (1.0 + _dense(P, "prdtx_rai", [R, A, C]))
+        val = price * _dense(P, "x", [R, A, C]) / IN_SCALE
+        return np.ascontiguousarray(val.transpose(2, 1, 0))
+
+    return f
+
+
+def _vxsb_array(P: _Period, els: dict) -> np.ndarray:
+    """:func:`_vxsb` over the whole (COMM, REG, REG) grid."""
+    C, R = els["COMM"], els["REG"]
+    val = _dense(P, "pd", [R, C])[:, :, None] * _dense(P, "xw", [R, C, R]) / IN_SCALE
+    return np.ascontiguousarray(val.transpose(1, 0, 2))
+
+
+def _vtwr_array(P: _Period, els: dict) -> np.ndarray:
+    """:func:`_vtwr` over the whole (MARG, COMM, REG, REG) grid, same operation order."""
+    M, C, R = els["MARG"], els["COMM"], els["REG"]
+    ptmg = _dense(P, "ptmg", [M])[:, None, None, None]
+    amgm = _dense_table(P.amgm, [M, R, C, R])
+    tmarg = _dense_table(P.tmarg, [R, C, R])[None]
+    xw = _dense(P, "xw", [R, C, R])[None]
+    lam = _dense(P, "lambdamg", [M, R, C, R]) + 1e-12
+    val = ptmg * amgm * tmarg * xw / lam / IN_SCALE
+    return np.ascontiguousarray(val.transpose(0, 2, 1, 3))
+
+
+# Headers built as whole arrays (bit for bit the cell functions of _VALUE)
+_ARRAY: dict[str, Callable[[_Period, dict], np.ndarray]] = {
+    "VDFB": _firm_array("VDFB"),
+    "VMFB": _firm_array("VMFB"),
+    "VDFP": _firm_array("VDFP"),
+    "VMFP": _firm_array("VMFP"),
+    "MAKS": _make_array(False),
+    "MAKB": _make_array(True),
+    "VXSB": _vxsb_array,
+    "VFOB": _trade_array("pefob"),
+    "VCIF": _trade_array("pmcif"),
+    "VMSB": _trade_array("pm"),
+    "VTWR": _vtwr_array,
+}
 
 
 _VALUE: dict[str, Callable[..., float]] = {
@@ -341,10 +508,13 @@ def _build_headers(run: AltertaxRun, period: str) -> dict[str, HeaderArray]:
         if name not in _VALUE:
             continue
         lists = [els[x] for x in sets]
-        arr = np.zeros([len(x) for x in lists], dtype=np.float64)
-        fn = _VALUE[name]
-        for ix in np.ndindex(arr.shape):
-            arr[ix] = fn(P, *(lists[d][i] for d, i in enumerate(ix)))
+        if name in _ARRAY:
+            arr = _ARRAY[name](P, els)
+        else:
+            arr = np.zeros([len(x) for x in lists], dtype=np.float64)
+            fn = _VALUE[name]
+            for ix in np.ndindex(arr.shape):
+                arr[ix] = fn(P, *(lists[d][i] for d, i in enumerate(ix)))
         out[name] = HeaderArray(
             name=name,
             coeff_name=coeff,
