@@ -112,7 +112,19 @@ class _Row(NamedTuple):
         class _Eq(SymbolicEquation):
             def build_expression(self, pyomo_model, indices):
                 rule = rules.get(tuple(indices))
-                return None if rule is None else rule(pyomo_model, *indices)
+                if rule is None:
+                    return None
+                try:
+                    return rule(pyomo_model, *indices)
+                except AttributeError as e:
+                    if "is_potentially_variable" not in str(e):
+                        raise
+                    raise TypeError(
+                        f"{name}{tuple(indices)}: the rule calls a Pyomo function "
+                        "(exp, log, ...) on the family recorder; use "
+                        "equilibria.blocks.gtap.overwrite.exp / .log, which work on "
+                        "both backends"
+                    ) from e
 
         return _Eq(name=name, domains=self.domains)
 
@@ -450,6 +462,38 @@ def shock_only(m: Any) -> None:
                 )
 
 
+def _is_node(x: Any) -> bool:
+    """A node of the family recorder (``equilibria.family.recorder.Node``), checked
+    without importing family (blocks must not load it)."""
+    return (
+        type(x).__name__ == "Node"
+        and type(x).__module__ == "equilibria.family.recorder"
+    )
+
+
+def exp(x: Any) -> Any:
+    """``exp`` for a hook rule on either backend: the family recorder's on a recorder
+    node, Pyomo's otherwise (Pyomo's rejects recorder nodes)."""
+    if _is_node(x):
+        from equilibria.family.recorder import intrinsic
+
+        return intrinsic("exp")(x)
+    from pyomo.environ import exp as pyomo_exp
+
+    return pyomo_exp(x)
+
+
+def log(x: Any) -> Any:
+    """``log`` for a hook rule on either backend (see ``exp``)."""
+    if _is_node(x):
+        from equilibria.family.recorder import intrinsic
+
+        return intrinsic("log")(x)
+    from pyomo.environ import log as pyomo_log
+
+    return pyomo_log(x)
+
+
 def ppriv_tornqvist(m: Any, r: str) -> Any:
     """Indice Tornqvist del consumo de hogares de ``r`` contra la base.
 
@@ -459,7 +503,7 @@ def ppriv_tornqvist(m: Any, r: str) -> Any:
     Tornqvist +9,2574 y ``ppriv`` +9,2580. Las constantes de base se leen al
     construir la fila, cuando las Vars tienen sus niveles de base.
     """
-    from pyomo.environ import exp, log, value
+    from pyomo.environ import value
 
     hh = [i for i in m.i if float(value(m.xaa[r, i, "hhd"])) > 0.0]
     pa0 = {i: float(value(m.pa[r, i, "hhd"])) for i in hh}
