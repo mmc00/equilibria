@@ -93,3 +93,66 @@ def test_target_row_is_zero_at_pyomos_shock_point(exp: str, tmp_path: Path) -> N
     assert r["again"] == r["after"]  # anchoring twice is anchoring once
     if exp == "ME9A":  # its check is not its base: the base anchor is off
         assert max(abs(v) for v in r["before"].values()) > 1e-6, r["before"]
+
+
+def _price_target(check: float):
+    """A ``b.target`` on a price that is exactly 1.0 at the base (every GTAP price
+    is), recorded as ``BlockEdit.target`` records it, on arrays whose check holds
+    ``check``: ``(run, mp, records)``."""
+    from types import SimpleNamespace
+
+    import numpy as np
+    from pyomo.environ import value
+
+    from equilibria.blocks.gtap.overwrite import Target
+    from equilibria.family.mp_arrays import MPArrays, RowArr, VarArr
+    from equilibria.family.recorder import RecordingModel
+
+    sets = {"r": ["USA"]}
+    m = RecordingModel(
+        sets,
+        {},
+        {"pft": (("r",), np.array([1.0])), "pf_target": (("r",), np.array([1.0]))},
+    )
+    res = m.pft["USA"] == m.pf_target["USA"] * float(value(m.pft["USA"]))
+    records = {"eq_pf_target": [(("USA",), res)]}
+    keys = [("USA", t) for t in ("base", "check", "shock")]
+    vars_ = {
+        "pft": VarArr(
+            keys,
+            np.array([1.0, check, check * 0.99]),
+            *(np.zeros(3, bool), np.zeros(3), np.full(3, np.inf)),
+        ),
+        "pf_target": VarArr(
+            keys,
+            np.array([1.0, 1.0, 0.99]),
+            *(np.ones(3, bool), np.zeros(3), np.full(3, np.inf)),
+        ),
+    }
+    mp = MPArrays(
+        vars_,
+        {"eq_pf_target": RowArr([("USA", "shock")], np.ones(1, bool))},
+        targets={"pf_target": Target(("r",), [(("USA",), lambda m, r: m.pft[r])])},
+    )
+    backend = SimpleNamespace(records=records, var_domains=m.var_domains, sets=sets)
+    return SimpleNamespace(backend=backend), mp, records
+
+
+@pytest.mark.parametrize("check", [1.05, 1.0])
+def test_a_target_whose_base_quantity_is_one_anchors(check: float) -> None:
+    """The recorder folds ``target x 1.0`` to ``target``: the anchor still applies,
+    also when the check is exactly 1.0 again (anchoring twice)."""
+    from equilibria.family.overwrite_targets import (
+        anchor_targets,
+        leaf_reader,
+        node_value,
+    )
+
+    run, mp, records = _price_target(check)
+    for _ in range(2):
+        anchor_targets(run, mp, "shock")
+        ((_, res),) = records["eq_pf_target"]
+        leaf = leaf_reader(run.backend, mp, "shock")
+        assert node_value(res.lhs, leaf) - node_value(res.rhs, leaf) == pytest.approx(
+            0.0, abs=1e-15
+        )

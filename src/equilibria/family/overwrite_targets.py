@@ -58,13 +58,13 @@ def leaf_reader(backend: Any, mp: Any, period: str) -> Leaf:
     return leaf
 
 
-def _target_leaf(rhs: Any) -> Node:
-    """The target Var of ``target x Q`` as ``BlockEdit.target`` records it."""
-    if isinstance(rhs, Node) and rhs.op == "mul":
-        for arg in rhs.args:
-            if isinstance(arg, Node) and arg.op == "v":
-                return arg
-    raise ValueError(f"b.target row: expected target x constant, got {rhs!r}")
+def _target_leaf(backend: Any, name: str, idx: tuple) -> Node:
+    """The leaf of the target Var ``name`` at the single-period cell ``idx``, built
+    from its domains: the recorded right-hand side is not parsed, since the recorder
+    folds ``target x 1.0`` to ``target`` (every GTAP price is 1.0 at the base)."""
+    doms = backend.var_domains[name]
+    cells = list(itertools.product(*(backend.sets[d] for d in doms)))
+    return Node("v", (name, cells.index(tuple(idx)), 1.0, not doms))
 
 
 def anchor_targets(run: Any, mp: Any, period: str) -> None:
@@ -82,8 +82,21 @@ def anchor_targets(run: Any, mp: Any, period: str) -> None:
         fam = target_row(name)
         if fam not in records:
             continue
-        # a new list: the backend's compiled tables are keyed by the list itself
+        # target x quantity[check] as a node of its own: ``*`` would fold a 1.0 (or 0.0)
+        # away and the row would lose its target; a new list for the backend's tables
         records[fam] = [
-            (idx, Residual(res.lhs, _target_leaf(res.rhs) * node_value(res.lhs, leaf)))
+            (
+                idx,
+                Residual(
+                    res.lhs,
+                    Node(
+                        "mul",
+                        (
+                            _target_leaf(run.backend, name, idx),
+                            node_value(res.lhs, leaf),
+                        ),
+                    ),
+                ),
+            )
             for idx, res in records[fam]
         ]
