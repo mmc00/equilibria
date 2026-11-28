@@ -47,6 +47,7 @@ tests/blocks/gtap/test_seed_cache_prune.py
 tests/blocks/gtap/test_shock_block.py
 tests/blocks/gtap/test_shock_instruments_fase2.py
 tests/blocks/test_block_equations.py
+tests/blocks/test_ces_tree.py
 tests/blocks/test_no_block_registry.py
 tests/blocks/test_pep_commodity_balance_init.py
 tests/blocks/test_pep_macro_closure_init.py
@@ -402,6 +403,7 @@ tests/templates/gtap_logvalue/test_derived_params.py
 tests/templates/manage/test_convert.py
 tests/templates/manage/test_data.py
 tests/templates/manage/test_names.py
+tests/templates/manage/test_production.py
 tests/templates/manage/test_rescale.py
 tests/templates/manage/test_residuals.py
 tests/templates/pep_pyomo/test_pep_coverage_matrix.py

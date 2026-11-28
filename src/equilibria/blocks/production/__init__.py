@@ -17,6 +17,7 @@ from pydantic import Field
 
 from equilibria.blocks._levels import LevelBlock, eq
 from equilibria.blocks.base import Block, ParameterSpec, VariableSpec
+from equilibria.blocks.production.ces_tree import CESTree as CESTree
 from equilibria.core.calibration_phase import CalibrationPhase
 from equilibria.core.parameters import Parameter
 from equilibria.core.sets import SetManager
