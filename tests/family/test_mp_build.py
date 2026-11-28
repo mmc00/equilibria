@@ -251,3 +251,28 @@ def test_sp_reference_from_composed_state_is_bitwise_todays(case):
         for attr in ("value", "fixed", "lb", "ub"):
             a, b = getattr(g, attr), getattr(w, attr)
             assert a.dtype == b.dtype and a.tobytes() == b.tobytes(), (name, attr)
+
+
+def test_activating_a_period_keeps_hook_rows_out_of_base_and_check(tmp_path):
+    """Turning a period's rows on (``activate_rows``, the recipe's
+    ``freeze_inactive``) never turns a hook row on in base or check: those cells do
+    not exist, as Pyomo's ``shock_only`` deleted them."""
+    from equilibria.blocks.gtap.overwrite import overwrite
+    from equilibria.family.periods import FamilyPeriodModel
+    from tests.templates.gtap._unemployment import register_unemployment_hooks
+
+    register_unemployment_hooks()
+    try:
+        mp = _nus333_mp(tmp_path)
+    finally:
+        overwrite.clear()
+    model = FamilyPeriodModel(mp)
+    for period, want in (
+        ("base", set()),
+        ("check", set()),
+        ("shock", {("USA", "LABOR", "shock")}),
+    ):
+        model.activate_rows(period)
+        assert _active(mp.rows["eq_wreal"]) == want, period
+        model.set_all_rows_active("eq_wreal", period, True)
+        assert _active(mp.rows["eq_wreal"]) == want, period
