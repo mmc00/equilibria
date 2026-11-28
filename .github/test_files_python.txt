@@ -167,6 +167,7 @@ tests/family/test_mar246_headers_golden.py
 tests/family/test_mp_arrays.py
 tests/family/test_mp_build.py
 tests/family/test_newton_family.py
+tests/family/test_overwrite_pairing.py
 tests/family/test_overwrite_targets.py
 tests/family/test_pairing_cache.py
 tests/family/test_parity_rules.py
